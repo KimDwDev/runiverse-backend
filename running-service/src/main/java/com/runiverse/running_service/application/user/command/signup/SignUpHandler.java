@@ -9,6 +9,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -21,6 +23,7 @@ public class SignUpHandler implements SignUpUsecase {
 
     @Override
     public SignUpResult handle(SignUpCommand command) {
+        System.out.println("작동중");
 
         // 1. 이메일 중복 확인
         // 2. 비밀번호 해시화
@@ -29,7 +32,9 @@ public class SignUpHandler implements SignUpUsecase {
         // 5. DB 저장
         // 6. 결과 반환
 
-        return null;
+        UUID userId = UUID.randomUUID();
+
+        return new SignUpResult(userId);
     }
 
 }

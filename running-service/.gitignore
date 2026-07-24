@@ -38,3 +38,4 @@ out/
 
 ### 기타 ###
 .env
+api.http
