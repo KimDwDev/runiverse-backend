@@ -17,6 +17,10 @@ repositories {
 	mavenCentral()
 }
 
+configurations {
+	mockitoAgent
+}
+
 dependencies {
     // 환경변수 설정
 	developmentOnly platform("me.paulschwarz:spring-dotenv-bom:5.0.1")
@@ -47,6 +51,10 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-websocket-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	mockitoAgent('org.mockito:mockito-core') {
+		transitive = false
+	}
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
@@ -54,4 +62,6 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
 }
