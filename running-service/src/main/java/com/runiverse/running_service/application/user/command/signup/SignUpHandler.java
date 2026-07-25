@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.user.command.signup;
 
+import com.runiverse.running_service.application.user.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.user.port.in.SignUpUsecase;
 import com.runiverse.running_service.application.user.port.out.CheckEmailDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.GenerateUserIdPort;
@@ -27,7 +28,7 @@ public class SignUpHandler implements SignUpUsecase {
     public SignUpResult handle(SignUpCommand command) {
         // 1. 이메일 중복 확인
         boolean emailExists = checkEmailDuplicatePort.existsByEmail(command.email());
-        if (emailExists) throw new DuplicateRequestException("이메일이 존재합니다.");
+        if (emailExists) throw new EmailAlreadyExistsException();
 
         // 2. 비밀번호 해시화
         String hashedPassword = passwordHashPort.hash(command.password());
