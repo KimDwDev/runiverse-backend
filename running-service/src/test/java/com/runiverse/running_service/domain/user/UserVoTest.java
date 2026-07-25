@@ -5,6 +5,7 @@ import com.runiverse.running_service.domain.user.vo.Description;
 import com.runiverse.running_service.domain.user.vo.Email;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.user.exception.*;
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,7 +43,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new UserId(uuidV4))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidUserIdFormatException.class)
                     .hasMessage("사용자 ID는 UUIDv7 형식이어야 합니다.");
         }
 
@@ -51,7 +52,7 @@ public class UserVoTest {
         void createUserIdWithNullFails() {
 
             assertThatThrownBy(() -> new UserId(null))
-                    .isInstanceOf(NullPointerException.class)
+                    .isInstanceOf(UserIdRequiredException.class)
                     .hasMessage("사용자 ID는 필수입니다.");
         }
 
@@ -99,7 +100,7 @@ public class UserVoTest {
             String value = "invalid-email";
 
             assertThatThrownBy(() -> new Email(value))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidEmailFormatException.class);
         }
 
         @Test
@@ -110,7 +111,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new Email(value))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidEmailFormatException.class);
         }
 
         @Test
@@ -121,7 +122,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new Email(value))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidEmailFormatException.class);
         }
 
         @Test
@@ -132,7 +133,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new Email(value))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(EmailRequiredException.class);
         }
 
         @Test
@@ -140,7 +141,7 @@ public class UserVoTest {
         void createEmailWithNullFails() {
             // when & then
             assertThatThrownBy(() -> new Email(null))
-                    .isInstanceOf(NullPointerException.class);
+                    .isInstanceOf(EmailRequiredException.class);
         }
 
         @Test
@@ -151,7 +152,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new Email(value))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(EmailTooLongException.class);
         }
 
         @Test
@@ -214,9 +215,9 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new PasswordHash(value))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidPasswordHashFormatException.class)
                     .hasMessage(
-                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다"
+                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다."
                     );
         }
 
@@ -228,9 +229,9 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new PasswordHash(value))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidPasswordHashFormatException.class)
                     .hasMessage(
-                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다"
+                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다."
                     );
         }
 
@@ -239,7 +240,7 @@ public class UserVoTest {
         void createPasswordHashWithNullFails() {
             // when & then
             assertThatThrownBy(() -> new PasswordHash(null))
-                    .isInstanceOf(NullPointerException.class)
+                    .isInstanceOf(PasswordHashRequiredException.class)
                     .hasMessage("비밀번호 해시는 필수입니다.");
         }
 
@@ -313,7 +314,7 @@ public class UserVoTest {
 
             // when & then
             assertThatThrownBy(() -> new Description(value))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(DescriptionTooLongException.class)
                     .hasMessage("소개는 100자를 초과할 수 없습니다.");
         }
 
@@ -322,7 +323,7 @@ public class UserVoTest {
         void createDescriptionWithNullFails() {
             // when & then
             assertThatThrownBy(() -> new Description(null))
-                    .isInstanceOf(NullPointerException.class)
+                    .isInstanceOf(DescriptionRequiredException.class)
                     .hasMessage("소개는 null일 수 없습니다.");
         }
 
