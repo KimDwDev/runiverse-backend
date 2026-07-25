@@ -10,11 +10,13 @@ import com.runiverse.running_service.application.user.port.out.SaveRefreshTokenP
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class LoginHandler implements LoginUsecase {
 
     private final LoadUserByEmailPort loadUserByEmailPort;
