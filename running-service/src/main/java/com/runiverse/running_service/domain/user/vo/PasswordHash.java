@@ -1,5 +1,8 @@
 package com.runiverse.running_service.domain.user.vo;
 
+import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
+import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
+
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -10,10 +13,8 @@ public record PasswordHash(String value) {
     );
 
     public PasswordHash {
-        Objects.requireNonNull(value, "비밀번호 해시는 필수입니다.");
+        if (value == null) throw new PasswordHashRequiredException();
 
-        if (!value.isEmpty() && !ARGON2_PATTERN.matcher(value).matches()) {
-            throw new IllegalArgumentException("비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다");
-        }
+        if (!value.isEmpty() && !ARGON2_PATTERN.matcher(value).matches()) throw new InvalidPasswordHashFormatException();
     }
 }
