@@ -1,0 +1,344 @@
+package com.runiverse.running_service.domain.user;
+
+
+import com.runiverse.running_service.domain.user.vo.Description;
+import com.runiverse.running_service.domain.user.vo.Email;
+import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.UserId;
+import static org.assertj.core.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
+
+public class UserVoTest {
+
+    // UserId 테스트
+    @Nested
+    @DisplayName("userId 테스트")
+    class UserIdTest {
+
+        @Test
+        @DisplayName("UUIDv7으로 사용자 ID를 생성할 수 있다.")
+        void createUserIdWithUuidV7Success() {
+
+            // given
+            UUID uuidV7 = UUID.fromString("0190a5b4-3c2d-7e1f-8a2b-123456789abc");
+
+            // when
+            UserId userId = new UserId(uuidV7);
+
+            // then -> uuid7로 만든게 맞는지 확인
+            assertThat(userId.value()).isEqualTo(uuidV7);
+            assertThat(userId.value().version()).isEqualTo(7);
+        }
+
+        @Test
+        @DisplayName("uuid v7이 아니면 예외가 발생한다")
+        void createUserIdWithUuidV4Fails() {
+            // given
+            UUID uuidV4 = UUID.randomUUID();
+
+            // when & then
+            assertThatThrownBy(() -> new UserId(uuidV4))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("사용자 ID는 UUIDv7 형식이어야 합니다.");
+        }
+
+        @Test
+        @DisplayName("UserId가 null이면 예외가 발생한다")
+        void createUserIdWithNullFails() {
+
+            assertThatThrownBy(() -> new UserId(null))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessage("사용자 ID는 필수입니다.");
+        }
+
+        @Test
+        @DisplayName("같은 UUID를 가진 UserId는 같은 값 객체이다")
+        void equalsTest() {
+            // given
+            UUID uuid = UUID.fromString("0190a5b4-3c2d-7e1f-8a2b-123456789abc");
+
+            UserId first = new UserId(uuid);
+            UserId second = new UserId(uuid);
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first)
+                    .isNotSameAs(second);
+        }
+    }
+    
+    // Email 테스트
+    @Nested
+    @DisplayName("Email 테스트")
+    class EmailTest {
+
+        @Test
+        @DisplayName("올바른 이메일은 생성할 수 있다.")
+        void createEmailSuccess() {
+            // given
+            String value = "user@example.com";
+
+            // when
+            Email email = new Email(value);
+
+            // then
+            assertThat(email.value()).isEqualTo(value);
+        }
+
+        @Test
+        @DisplayName("잘못된 이메일 형식이면 예외가 발생한다.")
+        void createInvalidEmailFails() {
+            // given
+            String value = "invalid-email";
+
+            assertThatThrownBy(() -> new Email(value))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("골뱅이 뒤의 도메인이 없으면 예외가 발생한다")
+        void createEmailWithoutDomainFails() {
+            // given
+            String value = "user@";
+
+            // when & then
+            assertThatThrownBy(() -> new Email(value))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("골뱅이 앞의 사용자 이름이 없으면 예외가 발생한다")
+        void createEmailWithoutLocalPartFails() {
+            // given
+            String value = "@example.com";
+
+            // when & then
+            assertThatThrownBy(() -> new Email(value))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("이메일이 빈 문자열이면 예외가 발생한다")
+        void createEmptyEmailFails() {
+            // given
+            String value = "";
+
+            // when & then
+            assertThatThrownBy(() -> new Email(value))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("이메일이 null이면 예외가 발생한다")
+        void createEmailWithNullFails() {
+            // when & then
+            assertThatThrownBy(() -> new Email(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("이메일이 최대 길이를 초과하면 예외가 발생한다")
+        void createEmailOverMaxLengthFails() {
+            // given
+            String value = "a".repeat(245) + "@example.com";
+
+            // when & then
+            assertThatThrownBy(() -> new Email(value))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("같은 문자열을 가진 Email은 같은 값 객체이다")
+        void emailEqualsTest() {
+            // given
+            Email first = new Email("user@example.com");
+            Email second = new Email("user@example.com");
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first).isNotSameAs(second);
+        }
+    }
+
+    // PasswordHash 테스트
+    @Nested
+    @DisplayName("PasswordHash 테스트")
+    class PasswordHashTest {
+
+        private static final String VALID_ARGON2ID_HASH =
+                "$argon2id$v=19$m=65536,t=3,p=1$" +
+                        "c29tZXNhbHQ$" +
+                        "c29tZWhhc2h2YWx1ZQ";
+
+        @Test
+        @DisplayName("올바른 Argon2id 해시는 생성할 수 있다")
+        void createPasswordHashSuccess() {
+            // given
+            String value = VALID_ARGON2ID_HASH;
+
+            // when
+            PasswordHash passwordHash = new PasswordHash(value);
+
+            // then
+            assertThat(passwordHash.value()).isEqualTo(value);
+        }
+
+        @Test
+        @DisplayName("OAuth 사용자는 빈 비밀번호 해시를 가질 수 있다")
+        void createEmptyPasswordHashSuccess() {
+            // given
+            String value = "";
+
+            // when
+            PasswordHash passwordHash = new PasswordHash(value);
+
+            // then
+            assertThat(passwordHash.value()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("평문 비밀번호는 비밀번호 해시로 사용할 수 없다")
+        void createPasswordHashWithPlainTextFails() {
+            // given
+            String value = "password1234";
+
+            // when & then
+            assertThatThrownBy(() -> new PasswordHash(value))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage(
+                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다"
+                    );
+        }
+
+        @Test
+        @DisplayName("잘못된 Argon2id 해시 형식이면 예외가 발생한다")
+        void createInvalidArgon2idHashFails() {
+            // given
+            String value = "$argon2id$invalid-hash";
+
+            // when & then
+            assertThatThrownBy(() -> new PasswordHash(value))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage(
+                            "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다"
+                    );
+        }
+
+        @Test
+        @DisplayName("비밀번호 해시가 null이면 예외가 발생한다")
+        void createPasswordHashWithNullFails() {
+            // when & then
+            assertThatThrownBy(() -> new PasswordHash(null))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessage("비밀번호 해시는 필수입니다.");
+        }
+
+        @Test
+        @DisplayName("같은 해시를 가진 PasswordHash는 같은 값 객체이다")
+        void passwordHashEqualsTest() {
+            // given
+            PasswordHash first = new PasswordHash(VALID_ARGON2ID_HASH);
+            PasswordHash second = new PasswordHash(VALID_ARGON2ID_HASH);
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first).isNotSameAs(second);
+        }
+    }
+
+    // Description 테스트
+    @Nested
+    @DisplayName("Description 테스트")
+    class DescriptionTest {
+
+        @Test
+        @DisplayName("100자 이하의 소개는 생성할 수 있다")
+        void createDescriptionSuccess() {
+            // given
+            String value = "함께 즐겁게 달려요!";
+
+            // when
+            Description description = new Description(value);
+
+            // then
+            assertThat(description.value()).isEqualTo(value);
+        }
+
+        @Test
+        @DisplayName("빈 소개는 생성할 수 있다")
+        void createEmptyDescriptionSuccess() {
+            // given
+            String value = "";
+
+            // when
+            Description description = new Description(value);
+
+            // then
+            assertThat(description.value()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("소개가 정확히 100자이면 생성할 수 있다")
+        void createDescriptionWithMaxLengthSuccess() {
+            // given
+            String value = "가".repeat(100);
+
+            // when
+            Description description = new Description(value);
+
+            // then
+            assertThat(description.value())
+                    .hasSize(100)
+                    .isEqualTo(value);
+        }
+
+        @Test
+        @DisplayName("소개가 100자를 초과하면 예외가 발생한다")
+        void createDescriptionOverMaxLengthFails() {
+            // given
+            String value = "가".repeat(101);
+
+            // when & then
+            assertThatThrownBy(() -> new Description(value))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("소개는 100자를 초과할 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("소개가 null이면 예외가 발생한다")
+        void createDescriptionWithNullFails() {
+            // when & then
+            assertThatThrownBy(() -> new Description(null))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessage("소개는 null일 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("같은 소개를 가진 Description은 같은 값 객체이다")
+        void descriptionEqualsTest() {
+            // given
+            Description first = new Description("함께 달려요!");
+            Description second = new Description("함께 달려요!");
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first).isNotSameAs(second);
+        }
+    }
+}
