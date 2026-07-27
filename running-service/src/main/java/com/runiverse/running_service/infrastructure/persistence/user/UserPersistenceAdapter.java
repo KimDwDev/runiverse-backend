@@ -1,15 +1,19 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.application.user.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.user.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.user.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
-public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort {
+public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort {
 
     private final EntityManager entityManager;
 
@@ -41,5 +45,29 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         entityManager.persist(entity);
 
         return user;
+    }
+
+    @Override
+    public Optional<User> loadByEmail(String email) {
+        return entityManager.createQuery(
+            """
+            SELECT u 
+            FROM UserJpaEntity u 
+            WHERE u.email = :email
+            """, UserJpaEntity.class
+        )
+                .setParameter("email", email)
+                .getResultStream()
+                .findFirst()
+                .map(this::toDomain);
+    }
+    private User toDomain(UserJpaEntity entity) {
+        return new User(
+                entity.getUserId(),
+                entity.getEmail(),
+                entity.getPasswordHash(),
+                entity.isAlertConsent(),
+                Objects.requireNonNullElse(entity.getDescription(), "")
+        );
     }
 }

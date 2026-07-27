@@ -1,5 +1,9 @@
 package com.runiverse.running_service.domain.user.vo;
 
+import com.runiverse.running_service.domain.user.exception.EmailRequiredException;
+import com.runiverse.running_service.domain.user.exception.EmailTooLongException;
+import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
+
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -10,21 +14,15 @@ public record Email(String value) {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
 
     public Email {
-        Objects.requireNonNull(value, "이메일은 필수입니다.");
+        if (value == null) throw new EmailRequiredException();
 
         value = value.trim();
 
-        if (value.isEmpty()) {
-            throw new IllegalArgumentException("이메일은 비어 있을 수 없습니다.");
-        }
+        if (value.isEmpty()) throw new EmailRequiredException();
 
-        if (value.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("이메일은 254자를 초과할 수 없습니다.");
-        }
+        if (value.length() > MAX_LENGTH) throw new EmailTooLongException();
 
-        if (!EMAIL_PATTERN.matcher(value).matches()) {
-            throw new IllegalArgumentException("올바른 이메일 형식이 아닙니다.");
-        }
+        if (!EMAIL_PATTERN.matcher(value).matches()) throw new InvalidEmailFormatException();
     }
 
 }

@@ -1,9 +1,14 @@
 package com.runiverse.running_service.presentation.user.controller;
 
+import com.runiverse.running_service.application.user.command.login.LoginCommand;
+import com.runiverse.running_service.application.user.command.login.LoginResult;
 import com.runiverse.running_service.application.user.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.user.command.signup.SignUpResult;
+import com.runiverse.running_service.application.user.port.in.LoginUsecase;
 import com.runiverse.running_service.application.user.port.in.SignUpUsecase;
+import com.runiverse.running_service.presentation.user.request.LoginRequest;
 import com.runiverse.running_service.presentation.user.request.SignUpRequest;
+import com.runiverse.running_service.presentation.user.response.LoginResponse;
 import com.runiverse.running_service.presentation.user.response.SignUpResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +22,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-public class SignUpController {
+public class AuthController {
 
     private final SignUpUsecase signUpUsecase;
+    private final LoginUsecase loginUsecase;
 
     @PostMapping("/signup")
     public ResponseEntity<SignUpResponse> signUp(
@@ -36,4 +42,25 @@ public class SignUpController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new SignUpResponse(result.userId()));
     }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request
+            ) {
+
+        LoginCommand command = new LoginCommand(
+                request.email(),
+                request.password()
+        );
+
+        LoginResult result = loginUsecase.handle(command);
+
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(new LoginResponse(
+                        result.userId(),
+                        result.accessToken(),
+                        result.refreshToken()
+                ));
+    }
+
 }

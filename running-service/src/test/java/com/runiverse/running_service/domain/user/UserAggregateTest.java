@@ -1,6 +1,7 @@
 package com.runiverse.running_service.domain.user;
 
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.exception.*;
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -132,7 +133,7 @@ public class UserAggregateTest {
                                 PASSWORD_HASH
                         )
                 )
-                        .isInstanceOf(IllegalArgumentException.class)
+                        .isInstanceOf(InvalidUserIdFormatException.class)
                         .hasMessage("사용자 ID는 UUIDv7 형식이어야 합니다.");
             }
 
@@ -150,7 +151,7 @@ public class UserAggregateTest {
                                 PASSWORD_HASH
                         )
                 )
-                        .isInstanceOf(IllegalArgumentException.class);
+                        .isInstanceOf(InvalidEmailFormatException.class);
             }
 
             @Test
@@ -167,7 +168,7 @@ public class UserAggregateTest {
                                 invalidPasswordHash
                         )
                 )
-                        .isInstanceOf(IllegalArgumentException.class);
+                        .isInstanceOf(InvalidPasswordHashFormatException.class);
             }
 
             @Test
@@ -186,7 +187,7 @@ public class UserAggregateTest {
                                 longDescription
                         )
                 )
-                        .isInstanceOf(IllegalArgumentException.class)
+                        .isInstanceOf(DescriptionTooLongException.class)
                         .hasMessage("소개는 100자를 초과할 수 없습니다.");
             }
         }
