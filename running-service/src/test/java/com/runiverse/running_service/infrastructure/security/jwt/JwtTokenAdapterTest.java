@@ -7,12 +7,19 @@ import com.runiverse.running_service.infrastructure.security.jwt.config.JwtEncod
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,25 +29,29 @@ public class JwtTokenAdapterTest {
 
     private static final String ISSUER = "runiverse";
     private static final String AUDIENCE = "runiverse-api";
+    private static final String ACCESS_SECRET = "access-secret-for-test-must-be-at-least-32-bytes";
+    private static final String REFRESH_SECRET = "refresh-secret-for-test-must-be-at-least-32-bytes";
     private static final Duration ACCESS_TTL = Duration.ofMinutes(30);
     private static final Duration REFRESH_TTL = Duration.ofDays(14);
-
+    private JwtEncoderConfig jwtEncoderConfig;
+    private JwtDecoderConfig jwtDecoderConfig;
+    private JwtProperties jwtProperties;
     private JwtTokenAdapter jwtTokenAdapter;
     private JwtDecoder accessTokenDecoder;
     private UserId userId;
 
     @BeforeEach
     void setUp() {
-        JwtProperties jwtProperties = new JwtProperties(
+        jwtProperties = new JwtProperties(
                 ISSUER,
                 AUDIENCE,
-                new JwtProperties.TokenSpec("access-secret-for-test-must-be-at-least-32-bytes", ACCESS_TTL),
-                new JwtProperties.TokenSpec("refresh-secret-for-test-must-be-at-least-32-bytes", REFRESH_TTL)
+                new JwtProperties.TokenSpec(ACCESS_SECRET, ACCESS_TTL),
+                new JwtProperties.TokenSpec(REFRESH_SECRET, REFRESH_TTL)
         );
 
         // 목이 아닌 실제 빈을 조립해 발급-검증 경로가 맞물리는지 확인한다
-        JwtEncoderConfig jwtEncoderConfig = new JwtEncoderConfig();
-        JwtDecoderConfig jwtDecoderConfig = new JwtDecoderConfig();
+        jwtEncoderConfig = new JwtEncoderConfig();
+        jwtDecoderConfig = new JwtDecoderConfig();
         accessTokenDecoder = jwtDecoderConfig.accessTokenDecoder(jwtProperties);
 
         jwtTokenAdapter = new JwtTokenAdapter(
@@ -110,5 +121,66 @@ public class JwtTokenAdapterTest {
         // when & then
         assertThatThrownBy(() -> accessTokenDecoder.decode(refreshToken))
                 .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    @DisplayName("발급한 refresh token을 파싱하면 원래 userId가 나온다")
+    void parseReturnUserIdFromRefreshToken() {
+        // given
+        String refreshToken = jwtTokenAdapter.generateRefreshToken(userId);
+
+        // when and then
+        assertThat(jwtTokenAdapter.parse(refreshToken)).contains(userId);
+    }
+
+    @Test
+    @DisplayName("access token은 키가 달라 refresh token으로 파싱되지 않는다")
+    void parseRejectAccessToken() {
+        // given
+        String accessToken = jwtTokenAdapter.generateAccessToken(userId);
+        // when and then
+        assertThat(jwtTokenAdapter.parse(accessToken)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("JWT 형식이 아니면 빈 값을 반환한다")
+    void parseRejectMalFormedToken() {
+        // when and then
+        assertThat(jwtTokenAdapter.parse("not-a-jwt")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("만료된 refresh token은 빈 값을 반환한다")
+    void parseRejectsExpiredToken() {
+        // given
+        String expiredToken = signRefreshToken(
+                Instant.now().minus(Duration.ofHours(2)),   // 2시간 전 발급
+                Instant.now().minus(Duration.ofHours(1))    // 1시간 전 만료
+        );
+
+        // when & then
+        assertThat(jwtTokenAdapter.parse(expiredToken)).isEmpty();
+    }
+
+    /**
+     * 만료 시각을 직접 지정한 refresh token을 발급한다.
+     * JwtTokenAdapter는 TTL을 현재 시각 기준으로만 계산해 과거 만료를 만들 수 없으므로,
+     * 같은 키를 쓰는 인코더로 클레임을 직접 조립한다.
+     */
+    private String signRefreshToken(Instant issuedAt, Instant expiresAt) {
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(ISSUER)
+                .audience(List.of(AUDIENCE))
+                .subject(userId.value().toString())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .id(UUID.randomUUID().toString())
+                .claim("typ", "refresh")
+                .build();
+
+        return jwtEncoderConfig.refreshTokenEncoder(jwtProperties)
+                .encode(JwtEncoderParameters.from(
+                        JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
     }
 }
