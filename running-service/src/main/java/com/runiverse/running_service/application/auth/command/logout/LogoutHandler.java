@@ -1,7 +1,6 @@
-package com.runiverse.running_service.application.user.command.logout;
+package com.runiverse.running_service.application.auth.command.logout;
 
-import com.runiverse.running_service.application.user.port.in.LogoutUsecase;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
 import org.springframework.stereotype.Service;
 
 @Service

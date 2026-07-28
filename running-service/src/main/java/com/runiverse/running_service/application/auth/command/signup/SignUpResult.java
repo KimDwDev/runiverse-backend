@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.user.command.signup;
+package com.runiverse.running_service.application.auth.command.signup;
 
 import java.util.UUID;
 

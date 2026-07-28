@@ -1,12 +1,12 @@
-package com.runiverse.running_service.application.user.command.login;
+package com.runiverse.running_service.application.auth.command.login;
 
-import com.runiverse.running_service.application.user.exception.InvalidEmailCredentialsException;
-import com.runiverse.running_service.application.user.exception.InvalidPasswordCredentialsException;
-import com.runiverse.running_service.application.user.port.in.LoginUsecase;
-import com.runiverse.running_service.application.user.port.out.GenerateTokenPort;
-import com.runiverse.running_service.application.user.port.out.LoadUserByEmailPort;
-import com.runiverse.running_service.application.user.port.out.PasswordHashPort;
-import com.runiverse.running_service.application.user.port.out.SaveRefreshTokenPort;
+import com.runiverse.running_service.application.auth.exception.InvalidEmailCredentialsException;
+import com.runiverse.running_service.application.auth.exception.InvalidPasswordCredentialsException;
+import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
+import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
+import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
+import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

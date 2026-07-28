@@ -1,11 +1,11 @@
 package com.runiverse.running_service.presentation.user.controller;
 
-import com.runiverse.running_service.application.user.command.login.LoginCommand;
-import com.runiverse.running_service.application.user.command.login.LoginResult;
-import com.runiverse.running_service.application.user.command.signup.SignUpCommand;
-import com.runiverse.running_service.application.user.command.signup.SignUpResult;
-import com.runiverse.running_service.application.user.port.in.LoginUsecase;
-import com.runiverse.running_service.application.user.port.in.SignUpUsecase;
+import com.runiverse.running_service.application.auth.command.login.LoginCommand;
+import com.runiverse.running_service.application.auth.command.login.LoginResult;
+import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
+import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
+import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
+import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.presentation.user.request.LoginRequest;
 import com.runiverse.running_service.presentation.user.request.SignUpRequest;
 import com.runiverse.running_service.presentation.user.response.LoginResponse;

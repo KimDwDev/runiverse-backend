@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.security;
 
-import com.runiverse.running_service.application.user.port.out.PasswordHashPort;
+import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;

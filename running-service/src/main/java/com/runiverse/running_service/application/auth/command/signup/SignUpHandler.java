@@ -1,13 +1,12 @@
-package com.runiverse.running_service.application.user.command.signup;
+package com.runiverse.running_service.application.auth.command.signup;
 
-import com.runiverse.running_service.application.user.exception.EmailAlreadyExistsException;
-import com.runiverse.running_service.application.user.port.in.SignUpUsecase;
-import com.runiverse.running_service.application.user.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.user.port.out.GenerateUserIdPort;
-import com.runiverse.running_service.application.user.port.out.PasswordHashPort;
-import com.runiverse.running_service.application.user.port.out.SaveUserPort;
+import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
+import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
+import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
+import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.sun.jdi.request.DuplicateRequestException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

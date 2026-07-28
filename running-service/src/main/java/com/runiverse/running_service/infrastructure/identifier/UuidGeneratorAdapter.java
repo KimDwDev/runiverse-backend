@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.identifier;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.user.port.out.GenerateUserIdPort;
+import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;

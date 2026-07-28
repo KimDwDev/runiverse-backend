@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.user.command.logout;
+package com.runiverse.running_service.application.auth.command.logout;
 
 import java.util.UUID;
 

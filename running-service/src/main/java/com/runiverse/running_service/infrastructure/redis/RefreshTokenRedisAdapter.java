@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.redis;
 
-import com.runiverse.running_service.application.user.port.out.SaveRefreshTokenPort;
+import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenPort;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
 import lombok.RequiredArgsConstructor;

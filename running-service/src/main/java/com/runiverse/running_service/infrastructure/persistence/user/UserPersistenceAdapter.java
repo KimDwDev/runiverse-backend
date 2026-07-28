@@ -1,8 +1,8 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
-import com.runiverse.running_service.application.user.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.user.port.out.LoadUserByEmailPort;
-import com.runiverse.running_service.application.user.port.out.SaveUserPort;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
+import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;

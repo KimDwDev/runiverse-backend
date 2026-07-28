@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.security.jwt;
 
-import com.runiverse.running_service.application.user.port.out.GenerateTokenPort;
+import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
