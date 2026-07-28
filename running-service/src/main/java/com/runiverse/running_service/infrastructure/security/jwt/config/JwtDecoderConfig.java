@@ -6,17 +6,21 @@ import com.runiverse.running_service.infrastructure.security.jwt.validator.Audie
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 
 @Configuration
 public class JwtDecoderConfig {
     @Bean
     public JwtDecoder accessTokenDecoder(JwtProperties properties) {
+        return decoder(properties.accessToken().secret(), properties);
+    }
+    @Bean
+    public JwtDecoder refreshTokenDecoder(JwtProperties properties) {
+        return decoder(properties.refreshToken().secret(), properties);
+    }
+    private JwtDecoder decoder(String secret, JwtProperties properties) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder
-                .withSecretKey(JwtSecretKeyFactory.create(properties.accessToken().secret()))
+                .withSecretKey(JwtSecretKeyFactory.create(secret))
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
 

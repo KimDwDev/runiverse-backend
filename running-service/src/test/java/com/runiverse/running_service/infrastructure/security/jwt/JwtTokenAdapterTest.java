@@ -46,6 +46,7 @@ public class JwtTokenAdapterTest {
         jwtTokenAdapter = new JwtTokenAdapter(
                 jwtEncoderConfig.accessTokenEncoder(jwtProperties),
                 jwtEncoderConfig.refreshTokenEncoder(jwtProperties),
+                jwtDecoderConfig.refreshTokenDecoder(jwtProperties),
                 jwtProperties
         );
 
