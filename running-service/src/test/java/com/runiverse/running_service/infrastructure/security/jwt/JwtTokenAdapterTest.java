@@ -2,6 +2,8 @@ package com.runiverse.running_service.infrastructure.security.jwt;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.infrastructure.security.jwt.config.JwtDecoderConfig;
+import com.runiverse.running_service.infrastructure.security.jwt.config.JwtEncoderConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,12 +39,13 @@ public class JwtTokenAdapterTest {
         );
 
         // 목이 아닌 실제 빈을 조립해 발급-검증 경로가 맞물리는지 확인한다
-        JwtConfig jwtConfig = new JwtConfig();
-        accessTokenDecoder = jwtConfig.accessTokenDecoder(jwtProperties);
+        JwtEncoderConfig jwtEncoderConfig = new JwtEncoderConfig();
+        JwtDecoderConfig jwtDecoderConfig = new JwtDecoderConfig();
+        accessTokenDecoder = jwtDecoderConfig.accessTokenDecoder(jwtProperties);
 
         jwtTokenAdapter = new JwtTokenAdapter(
-                jwtConfig.accessTokenEncoder(jwtProperties),
-                jwtConfig.refreshTokenEncoder(jwtProperties),
+                jwtEncoderConfig.accessTokenEncoder(jwtProperties),
+                jwtEncoderConfig.refreshTokenEncoder(jwtProperties),
                 jwtProperties
         );
 
