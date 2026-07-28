@@ -16,7 +16,8 @@ public class SecurityConfig {
     // 토큰 없이 접근 할 수 있는 경로
     private static final String[] PUBLIC_ENDPOINTS = {
             "/auth/signup",
-            "/auth/login"
+            "/auth/login",
+            "/auth/refresh"
     };
 
     @Bean

@@ -7,13 +7,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -22,9 +22,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class RefreshTokenRedisAdapterTest {
 
-    // "test-refresh-token"의 SHA-256 (sha256sum으로 확인한 값)
-    private static final String REFRESH_TOKEN = "test-refresh-token";
-    private static final String EXPECTED_FINGERPRINT =
+    // 지문 계산은 Sha256RefreshTokenHashAdapter의 책임이라 여기서는 해시 형태의 값만 쓴다
+    private static final String HASHED_REFRESH_TOKEN =
             "0a9b110d5e553bd98e9965c70a601c15c36805016ba60d54f20f5830c39edcde";
 
     private static final Duration REFRESH_TTL = Duration.ofDays(14);
@@ -37,6 +36,7 @@ public class RefreshTokenRedisAdapterTest {
 
     private RefreshTokenRedisAdapter refreshTokenRedisAdapter;
     private UserId userId;
+    private String expectedKey;
 
     @BeforeEach
     void setUp() {
@@ -49,6 +49,7 @@ public class RefreshTokenRedisAdapterTest {
 
         refreshTokenRedisAdapter = new RefreshTokenRedisAdapter(redisTemplate, jwtProperties);
         userId = new UserId(UuidCreator.getTimeOrderedEpoch());
+        expectedKey = "user:" + userId.value() + ":refresh_token";
     }
 
     @Test
@@ -58,37 +59,44 @@ public class RefreshTokenRedisAdapterTest {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         // when
-        refreshTokenRedisAdapter.save(userId, REFRESH_TOKEN);
+        refreshTokenRedisAdapter.save(userId, HASHED_REFRESH_TOKEN);
 
         // then
-        verify(valueOperations).set(
-                "user:" + userId.value() + ":refresh_token",
-                EXPECTED_FINGERPRINT,
-                REFRESH_TTL
-        );
+        verify(valueOperations).set(expectedKey, HASHED_REFRESH_TOKEN, REFRESH_TTL);
     }
 
     @Test
-    @DisplayName("토큰 원문이 아니라 SHA-256 지문을 저장한다")
-    void saveStoresFingerprintInsteadOfRawToken() {
+    @DisplayName("저장된 해시를 그대로 반환한다")
+    void loadReturnsStoredHash() {
         // given
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-
-        ArgumentCaptor<String> storedValue = ArgumentCaptor.forClass(String.class);
+        when(valueOperations.get(expectedKey)).thenReturn(HASHED_REFRESH_TOKEN);
 
         // when
-        refreshTokenRedisAdapter.save(userId, REFRESH_TOKEN);
+        Optional<String> loaded = refreshTokenRedisAdapter.load(userId);
 
         // then
-        verify(valueOperations).set(
-                org.mockito.ArgumentMatchers.anyString(),
-                storedValue.capture(),
-                org.mockito.ArgumentMatchers.any(Duration.class)
-        );
+        assertThat(loaded).contains(HASHED_REFRESH_TOKEN);
+    }
 
-        assertThat(storedValue.getValue())
-                .isNotEqualTo(REFRESH_TOKEN)
-                .hasSize(64)
-                .isEqualTo(EXPECTED_FINGERPRINT);
+    @Test
+    @DisplayName("저장된 값이 없으면 빈 Optional을 반환한다")
+    void loadReturnsEmptyWhenAbsent() {
+        // given
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(expectedKey)).thenReturn(null);
+
+        // when & then
+        assertThat(refreshTokenRedisAdapter.load(userId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("user:{userId}:refresh_token 키를 삭제한다")
+    void deleteRemovesKey() {
+        // when
+        refreshTokenRedisAdapter.delete(userId);
+
+        // then
+        verify(redisTemplate).delete(expectedKey);
     }
 }
