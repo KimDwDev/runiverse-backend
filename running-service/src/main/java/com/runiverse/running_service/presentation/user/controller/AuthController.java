@@ -1,14 +1,19 @@
 package com.runiverse.running_service.presentation.user.controller;
 
-import com.runiverse.running_service.application.user.command.login.LoginCommand;
-import com.runiverse.running_service.application.user.command.login.LoginResult;
-import com.runiverse.running_service.application.user.command.signup.SignUpCommand;
-import com.runiverse.running_service.application.user.command.signup.SignUpResult;
-import com.runiverse.running_service.application.user.port.in.LoginUsecase;
-import com.runiverse.running_service.application.user.port.in.SignUpUsecase;
+import com.runiverse.running_service.application.auth.command.login.LoginCommand;
+import com.runiverse.running_service.application.auth.command.login.LoginResult;
+import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
+import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
+import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
+import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
+import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
+import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
+import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.presentation.user.request.LoginRequest;
+import com.runiverse.running_service.presentation.user.request.ReissueRequest;
 import com.runiverse.running_service.presentation.user.request.SignUpRequest;
 import com.runiverse.running_service.presentation.user.response.LoginResponse;
+import com.runiverse.running_service.presentation.user.response.ReissueResponse;
 import com.runiverse.running_service.presentation.user.response.SignUpResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +25,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final SignUpUsecase signUpUsecase;
     private final LoginUsecase loginUsecase;
+    private final ReissueUsecase reissueUsecase;
 
     @PostMapping("/signup")
     public ResponseEntity<SignUpResponse> signUp(
@@ -63,4 +69,18 @@ public class AuthController {
                 ));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<ReissueResponse> reissue(
+            @Valid @RequestBody ReissueRequest request
+            ) {
+        ReissueCommand command = new ReissueCommand(
+                request.refreshToken()
+        );
+        ReissueResult result = reissueUsecase.handle(command);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(new ReissueResponse(
+                        result.accessToken(),
+                        result.refreshToken()
+                ));
+    }
 }

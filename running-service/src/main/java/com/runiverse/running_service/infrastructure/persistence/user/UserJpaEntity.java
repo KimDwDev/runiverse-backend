@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "Users")
+@Table(name = "users")
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // 다른 객체에서 생성되지 않도록 하는 속성
 public class UserJpaEntity {
 
