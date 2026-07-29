@@ -2,11 +2,13 @@ package com.runiverse.running_service.presentation.user.controller;
 
 import com.runiverse.running_service.application.auth.command.login.LoginCommand;
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
+import com.runiverse.running_service.application.auth.command.logout.LogoutCommand;
 import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
 import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
+import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
 import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.presentation.user.request.LoginRequest;
@@ -19,10 +21,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("auth")
@@ -31,6 +34,7 @@ public class AuthController {
 
     private final SignUpUsecase signUpUsecase;
     private final LoginUsecase loginUsecase;
+    private final LogoutUsecase logoutUsecase;
     private final ReissueUsecase reissueUsecase;
 
     @PostMapping("/signup")
@@ -67,6 +71,18 @@ public class AuthController {
                         result.accessToken(),
                         result.refreshToken()
                 ));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @AuthenticationPrincipal Jwt jwt
+            ) {
+        LogoutCommand command = new LogoutCommand(
+                UUID.fromString(jwt.getSubject()),
+                jwt.getId()
+        );
+        logoutUsecase.handle(command);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/refresh")

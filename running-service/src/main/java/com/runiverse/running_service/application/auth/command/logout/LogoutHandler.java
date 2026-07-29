@@ -16,14 +16,12 @@ public class LogoutHandler implements LogoutUsecase {
     private final BlockAccessTokenPort blockAccessTokenPort;
 
     @Override
-    public LogoutResult handle(LogoutCommand command) {
+    public void handle(LogoutCommand command) {
 
         // 1. cache에서 데이터를 refresh token을 찾고 삭제 -> 검증 후 삭제
         deleteRefreshTokenPort.delete(new UserId(command.userId()));
 
         // 2. black list에 access token 등록
         blockAccessTokenPort.block(command.accessTokenId());
-
-        return new LogoutResult(command.userId());
     }
 }
