@@ -1,5 +1,6 @@
 package com.runiverse.running_service.presentation.common.security;
 
+import com.runiverse.running_service.infrastructure.security.jwt.validator.BlockedTokenValidator;
 import com.runiverse.running_service.infrastructure.security.jwt.validator.ExpiredTokenValidator;
 import com.runiverse.running_service.presentation.common.exception.AuthErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
@@ -45,11 +46,16 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         objectMapper.writeValue(response.getWriter(), body);
     }
     private AuthErrorCode resolve(AuthenticationException authException) {
-        // 만료는 ExpiredTokenValidator가 심어둔 코드로 판별한다
+        // 만료와 블랙리스트는 각 validator가 심어둔 코드로 판별한다
         if (authException.getCause() instanceof JwtValidationException validationException) {
+            // 만료
             boolean expired = validationException.getErrors().stream()
                     .anyMatch(error -> ExpiredTokenValidator.ERROR_CODE.equals(error.getErrorCode()));
             if (expired) return AuthErrorCode.TOKEN_EXPIRED;
+            // 블랙리스트
+            boolean blocked = validationException.getErrors().stream()
+                    .anyMatch(error -> BlockedTokenValidator.ERROR_CODE.equals(error.getErrorCode()));
+            if (blocked) return AuthErrorCode.TOKEN_BLOCKED;
         }
         // 토큰을 아예 보내지 않은 경우
         if (authException instanceof InsufficientAuthenticationException) {

@@ -1,8 +1,10 @@
 package com.runiverse.running_service.infrastructure.security.jwt.config;
 
+import com.runiverse.running_service.application.auth.port.out.CheckBlockedAccessTokenPort;
 import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
 import com.runiverse.running_service.infrastructure.security.jwt.key.JwtSecretKeyFactory;
 import com.runiverse.running_service.infrastructure.security.jwt.validator.AudienceValidator;
+import com.runiverse.running_service.infrastructure.security.jwt.validator.BlockedTokenValidator;
 import com.runiverse.running_service.infrastructure.security.jwt.validator.ExpiredTokenValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,12 +14,16 @@ import org.springframework.security.oauth2.jwt.*;
 @Configuration
 public class JwtDecoderConfig {
     @Bean
-    public JwtDecoder accessTokenDecoder(JwtProperties properties) {
+    public JwtDecoder accessTokenDecoder(
+            JwtProperties properties,
+            CheckBlockedAccessTokenPort checkBlockedAccessTokenPort
+    ) {
         NimbusJwtDecoder decoder = decoder(properties.accessToken().secret());
         decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(
-                new JwtIssuerValidator(properties.issuer()),
-                new AudienceValidator(properties.audience()),
-                new ExpiredTokenValidator()
+                new JwtIssuerValidator(properties.issuer()), // ISSUER 체크
+                new AudienceValidator(properties.audience()), // AUDIENCE 체크
+                new ExpiredTokenValidator(), // 만료 토큰 체크
+                new BlockedTokenValidator(checkBlockedAccessTokenPort) // 블랙리스트 체크
         ));
         return decoder;
     }
