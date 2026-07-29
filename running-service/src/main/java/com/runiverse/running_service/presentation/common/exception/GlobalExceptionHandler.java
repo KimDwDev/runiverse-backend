@@ -75,6 +75,7 @@ public class GlobalExceptionHandler {
             case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_EMAIL_CREDENTIALS,
                  INVALID_PASSWORD_CREDENTIALS,
+                 INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN -> HttpStatus.UNAUTHORIZED;
         };
     }
