@@ -15,7 +15,11 @@ public enum ErrorCode {
     PASSWORD_HASH_REQUIRED("PASSWORD_HASH_REQUIRED", "비밀번호 해시는 필수입니다."),
     INVALID_PASSWORD_HASH_FORMAT("INVALID_PASSWORD_HASH_FORMAT", "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다."),
     DESCRIPTION_REQUIRED("DESCRIPTION_REQUIRED", "소개는 null일 수 없습니다."),
-    DESCRIPTION_TOO_LONG("DESCRIPTION_TOO_LONG", "소개는 100자를 초과할 수 없습니다.");
+    DESCRIPTION_TOO_LONG("DESCRIPTION_TOO_LONG", "소개는 100자를 초과할 수 없습니다."),
+    PROVIDER_REQUIRED("PROVIDER_REQUIRED", "소셜 로그인 제공자는 필수입니다"),
+    UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
+    PROVIDER_ID_REQUIRED("PROVIDER_ID_REQUIRED", "소셜 계정 식별자를 가져오지 못했습니다."),
+    PROVIDER_ID_TOO_LONG("PROVIDER_ID_TOO_LONG", "소셜 계정 식별자 길이가 허용 범위를 벗어났습니다.");
     private final String code;
     private final String message;
 }

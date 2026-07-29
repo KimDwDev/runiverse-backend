@@ -33,7 +33,7 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("도메인 예외: {} - {}", e.getErrorCode().getCode(), e.getErrorCode().getMessage());
         return respond(
-                HttpStatus.BAD_REQUEST,
+                HttpStatus.INTERNAL_SERVER_ERROR,
                 e.getErrorCode().getCode(),
                 e.getErrorCode().getMessage()
         );
