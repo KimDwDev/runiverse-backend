@@ -24,8 +24,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
-        return ResponseEntity.status(toStatus(errorCode))
-                .body(new ErrorResponse(errorCode.getCode(), errorCode.getMessage()));
+        return respond(toStatus(errorCode), errorCode.getCode(), errorCode.getMessage());
     }
     // 도메인 검증 예외
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
@@ -33,8 +32,11 @@ public class GlobalExceptionHandler {
             com.runiverse.running_service.domain.common.exception.BusinessException e
     ) {
         log.warn("도메인 예외: {} - {}", e.getErrorCode().getCode(), e.getErrorCode().getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(e.getErrorCode().getCode(), e.getErrorCode().getMessage()));
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                e.getErrorCode().getCode(),
+                e.getErrorCode().getMessage()
+        );
     }
     // @Valid 검증 실패
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -43,21 +45,21 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(" "));
         log.warn("요청 검증 실패: {}", message);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(
-                   CommonErrorCode.INVALID_REQUEST.getCode(),
-                   message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
-                ));
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
+        );
     }
     // JSON 문법 오류 등 본문 자체를 읽지 못한 경우
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException e) {
         log.warn("요청 본문 파싱 실패: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(
-                        CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
-                        CommonErrorCode.MALFORMED_REQUEST_BODY.getMessage()
-                ));
+        return respond(
+            HttpStatus.BAD_REQUEST,
+                CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
+                CommonErrorCode.MALFORMED_REQUEST_BODY.getMessage()
+        );
     }
     // 예상 못한 예외
     @ExceptionHandler(Exception.class)
@@ -68,6 +70,16 @@ public class GlobalExceptionHandler {
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage()
                 ));
+    }
+
+    // 노출 대상이 아닌 경우 전부 500으로 대체
+    private ResponseEntity<ErrorResponse> respond(HttpStatus status, String code, String message) {
+        if (!ErrorExposurePolicy.isExposed(status, code)) {
+            log.warn("비노출 대상이라 500으로 대체: {} {}", status.value(), code);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ErrorExposurePolicy.masked());
+        }
+        return ResponseEntity.status(status).body(new ErrorResponse(code, message));
     }
 
     private HttpStatus toStatus(ErrorCode errorCode) {
