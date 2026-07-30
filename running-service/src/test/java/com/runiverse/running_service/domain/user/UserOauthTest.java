@@ -5,7 +5,6 @@ import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatEx
 import com.runiverse.running_service.domain.user.exception.LastSignInMethodException;
 import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedException;
 import com.runiverse.running_service.domain.user.exception.OauthNotLinkedException;
-import com.runiverse.running_service.domain.user.exception.UnsupportedProviderException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 
 import static org.assertj.core.api.Assertions.*;
@@ -35,7 +34,7 @@ public class UserOauthTest {
         @DisplayName("소셜 회원가입 시 유저 생성과 연결이 함께 이루어진다")
         void registerWithOauthSuccess() {
             // when
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // then -> 연결 없는 소셜 유저가 만들어지면 로그인할 방법이 없다
             assertThat(user.getUserId().value()).isEqualTo(USER_ID);
@@ -46,21 +45,13 @@ public class UserOauthTest {
         }
 
         @Test
-        @DisplayName("지원하지 않는 provider면 회원가입에 실패한다")
-        void registerWithUnsupportedProviderFails() {
-            // when & then
-            assertThatThrownBy(() -> User.registerWithOauth(USER_ID, EMAIL, "facebook", KAKAO_ID))
-                    .isInstanceOf(UnsupportedProviderException.class);
-        }
-
-        @Test
         @DisplayName("UUIDv7이 아니면 회원가입에 실패한다")
         void registerWithInvalidUserIdFails() {
             // given
             UUID uuidV4 = UUID.randomUUID();
 
             // when & then
-            assertThatThrownBy(() -> User.registerWithOauth(uuidV4, EMAIL, "kakao", KAKAO_ID))
+            assertThatThrownBy(() -> User.registerWithOauth(uuidV4, EMAIL, Provider.KAKAO, KAKAO_ID))
                     .isInstanceOf(InvalidUserIdFormatException.class);
         }
     }
@@ -76,7 +67,7 @@ public class UserOauthTest {
             User user = new User(USER_ID, EMAIL, PASSWORD_HASH);
 
             // when
-            user.linkOauth("kakao", KAKAO_ID);
+            user.linkOauth(Provider.KAKAO, KAKAO_ID);
 
             // then
             assertThat(user.getOauthUsers()).hasSize(1);
@@ -87,10 +78,10 @@ public class UserOauthTest {
         @DisplayName("서로 다른 provider는 함께 연결할 수 있다")
         void linkMultipleProvidersSuccess() {
             // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // when
-            user.linkOauth("google", GOOGLE_ID);
+            user.linkOauth(Provider.GOOGLE, GOOGLE_ID);
 
             // then
             assertThat(user.getOauthUsers()).hasSize(2);
@@ -102,25 +93,14 @@ public class UserOauthTest {
         @DisplayName("이미 연결된 provider를 다시 연결하면 예외가 발생한다")
         void linkDuplicateProviderFails() {
             // given -> 한 유저는 같은 provider를 두 번 연결할 수 없다
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // when & then
-            assertThatThrownBy(() -> user.linkOauth("kakao", "9999999999"))
+            assertThatThrownBy(() -> user.linkOauth(Provider.KAKAO, "9999999999"))
                     .isInstanceOf(OauthAlreadyLinkedException.class)
                     .hasMessage("이미 연결된 소셜 계정입니다.");
 
             assertThat(user.getOauthUsers()).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("provider 대소문자가 달라도 중복으로 판정된다")
-        void linkDuplicateProviderIgnoringCaseFails() {
-            // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
-
-            // when & then
-            assertThatThrownBy(() -> user.linkOauth("KAKAO", "9999999999"))
-                    .isInstanceOf(OauthAlreadyLinkedException.class);
         }
     }
 
@@ -133,10 +113,10 @@ public class UserOauthTest {
         void unlinkLastOauthWithPasswordSuccess() {
             // given
             User user = new User(USER_ID, EMAIL, PASSWORD_HASH);
-            user.linkOauth("kakao", KAKAO_ID);
+            user.linkOauth(Provider.KAKAO, KAKAO_ID);
 
             // when
-            user.unlinkOauth("kakao");
+            user.unlinkOauth(Provider.KAKAO);
 
             // then -> 비밀번호로 로그인할 수 있으니 계정이 잠기지 않는다
             assertThat(user.getOauthUsers()).isEmpty();
@@ -147,11 +127,11 @@ public class UserOauthTest {
         @DisplayName("소셜 전용 유저도 연결이 둘 이상이면 해제할 수 있다")
         void unlinkOneOfMultipleOauthSuccess() {
             // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
-            user.linkOauth("google", GOOGLE_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
+            user.linkOauth(Provider.GOOGLE, GOOGLE_ID);
 
             // when
-            user.unlinkOauth("kakao");
+            user.unlinkOauth(Provider.KAKAO);
 
             // then
             assertThat(user.getOauthUsers()).hasSize(1);
@@ -163,10 +143,10 @@ public class UserOauthTest {
         @DisplayName("소셜 전용 유저의 마지막 연결은 해제할 수 없다")
         void unlinkLastSignInMethodFails() {
             // given -> 해제하면 아무 방법으로도 로그인할 수 없게 된다
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // when & then
-            assertThatThrownBy(() -> user.unlinkOauth("kakao"))
+            assertThatThrownBy(() -> user.unlinkOauth(Provider.KAKAO))
                     .isInstanceOf(LastSignInMethodException.class)
                     .hasMessage("마지막 로그인 수단은 해제할 수 없습니다.");
 
@@ -177,23 +157,12 @@ public class UserOauthTest {
         @DisplayName("연결된 적 없는 provider를 해제하면 예외가 발생한다")
         void unlinkNotLinkedProviderFails() {
             // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // when & then -> 존재 확인이 먼저라 '마지막 수단' 예외가 아니어야 한다
-            assertThatThrownBy(() -> user.unlinkOauth("google"))
+            assertThatThrownBy(() -> user.unlinkOauth(Provider.GOOGLE))
                     .isInstanceOf(OauthNotLinkedException.class)
                     .hasMessage("연결되지 않은 소셜 계정입니다.");
-        }
-
-        @Test
-        @DisplayName("지원하지 않는 provider를 해제하면 예외가 발생한다")
-        void unlinkUnsupportedProviderFails() {
-            // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
-
-            // when & then
-            assertThatThrownBy(() -> user.unlinkOauth("facebook"))
-                    .isInstanceOf(UnsupportedProviderException.class);
         }
     }
 
@@ -205,7 +174,7 @@ public class UserOauthTest {
         @DisplayName("연결 목록은 외부에서 수정할 수 없다")
         void oauthUsersIsUnmodifiable() {
             // given -> 여기서 수정이 되면 linkOauth의 검증을 우회할 수 있다
-            User user = User.registerWithOauth(USER_ID, EMAIL, "kakao", KAKAO_ID);
+            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
             // when & then
             assertThatThrownBy(() -> user.getOauthUsers().clear())

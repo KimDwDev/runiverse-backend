@@ -47,24 +47,22 @@ public class User {
     }
 
     // 소셜 회원가입: 유저 생성과 연결을 진행
-    public static User registerWithOauth(UUID userId, String email, String provider, String providerId) {
+    public static User registerWithOauth(UUID userId, String email, Provider provider, String providerId) {
         User user = new User(userId, email); // oauth용 유저 생성
         user.linkOauth(provider, providerId);
         return user;
     }
 
     // oauth 연결
-    public void linkOauth(String provider, String providerId) {
-        Provider target = Provider.from(provider);
-        if (hasProvider(target)) throw new OauthAlreadyLinkedException();   // 하나의
-        oauthUsers.add(new OauthUser(userId, target, providerId));
+    public void linkOauth(Provider provider, String providerId) {
+        if (hasProvider(provider)) throw new OauthAlreadyLinkedException();   // 하나의
+        oauthUsers.add(new OauthUser(userId, provider, providerId));
     }
 
     // oauth와 연결 끊기
-    public void unlinkOauth(String provider) {
-        Provider target = Provider.from(provider);
+    public void unlinkOauth(Provider provider) {
         OauthUser found = oauthUsers.stream()
-                .filter(o -> o.isSameProvider(target))
+                .filter(o -> o.isSameProvider(provider))
                 .findFirst()
                 .orElseThrow(OauthNotLinkedException::new);
         if (isLastSignInMethod()) throw new LastSignInMethodException();    // I3
