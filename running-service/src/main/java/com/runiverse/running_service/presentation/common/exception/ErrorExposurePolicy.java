@@ -13,6 +13,7 @@ public final class ErrorExposurePolicy {
             ErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
             ErrorCode.INVALID_CREDENTIALS.getCode(),
             ErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
+            ErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),
             AuthErrorCode.TOKEN_EXPIRED.getCode(),
             AuthErrorCode.TOKEN_BLOCKED.getCode()
     );
