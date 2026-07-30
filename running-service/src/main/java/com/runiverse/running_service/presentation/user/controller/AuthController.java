@@ -3,18 +3,19 @@ package com.runiverse.running_service.presentation.user.controller;
 import com.runiverse.running_service.application.auth.command.login.LoginCommand;
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
 import com.runiverse.running_service.application.auth.command.logout.LogoutCommand;
+import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginCommand;
+import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginResult;
 import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
 import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
-import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
-import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
-import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
-import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
+import com.runiverse.running_service.application.auth.port.in.*;
 import com.runiverse.running_service.presentation.user.request.LoginRequest;
+import com.runiverse.running_service.presentation.user.request.OauthLoginRequest;
 import com.runiverse.running_service.presentation.user.request.ReissueRequest;
 import com.runiverse.running_service.presentation.user.request.SignUpRequest;
 import com.runiverse.running_service.presentation.user.response.LoginResponse;
+import com.runiverse.running_service.presentation.user.response.OauthLoginResponse;
 import com.runiverse.running_service.presentation.user.response.ReissueResponse;
 import com.runiverse.running_service.presentation.user.response.SignUpResponse;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ public class AuthController {
     private final SignUpUsecase signUpUsecase;
     private final LoginUsecase loginUsecase;
     private final LogoutUsecase logoutUsecase;
+    private final OauthLoginUsecase oauthLoginUsecase;
     private final ReissueUsecase reissueUsecase;
 
     @PostMapping("/signup")
@@ -83,6 +85,25 @@ public class AuthController {
         );
         logoutUsecase.handle(command);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/oauth/{provider}")
+    public ResponseEntity<OauthLoginResponse> oauthLogin(
+            @PathVariable String provider,
+            @Valid @RequestBody OauthLoginRequest request
+            ) {
+        OauthLoginCommand command = new OauthLoginCommand(
+                provider,
+                request.authorizationCode(),
+                request.codeVerifier()
+        );
+        OauthLoginResult result = oauthLoginUsecase.handle(command);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(new OauthLoginResponse(
+                        result.userId(),
+                        result.accessToken(),
+                        result.refreshToken()
+                ));
     }
 
     @PostMapping("/refresh")
