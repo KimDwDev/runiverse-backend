@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
+import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
