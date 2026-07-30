@@ -33,7 +33,6 @@ public class UserJpaEntity {
 
     @Column(
             name = "hash_password",
-            nullable = false,
             length = 255
     )
     private String passwordHash;
