@@ -7,6 +7,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.io.Serializable;
@@ -64,4 +66,15 @@ public class OauthUserJpaEntity {
         private UUID userId;
         private Provider provider;
     }
+
+    // FK 제약
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "user_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_oauth_user_users")
+    )
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private UserJpaEntity user;
 }
