@@ -88,7 +88,8 @@ public class GlobalExceptionHandler {
             case INVALID_EMAIL_CREDENTIALS,
                  INVALID_PASSWORD_CREDENTIALS,
                  INVALID_CREDENTIALS,
-                 INVALID_REFRESH_TOKEN -> HttpStatus.UNAUTHORIZED;
+                 INVALID_REFRESH_TOKEN,
+                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
         };
     }
 }
