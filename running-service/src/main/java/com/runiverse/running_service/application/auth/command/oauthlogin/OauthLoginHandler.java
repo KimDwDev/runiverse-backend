@@ -1,12 +1,12 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
+import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
 import com.runiverse.running_service.application.auth.port.out.*;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +21,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
     @Override
     public OauthLoginResult handle(OauthLoginCommand command) {
         // 1. provider 검증
-        Provider provider = Provider.from(command.provider());
+        Provider provider = resolveProvider(command.provider());
 
         // 2. 인가 코드 + verifier
         OauthProfile oauthProfile = exchangeOauthCodePort.exchange(
@@ -44,4 +44,11 @@ public class OauthLoginHandler implements OauthLoginUsecase {
         return new OauthLoginResult(user.getUserId().value(), accessToken, refreshToken);
     }
 
+    private Provider resolveProvider(String value) {
+        try {
+            return Provider.from(value);
+        } catch (com.runiverse.running_service.domain.user.exception.UnsupportedProviderException e) {
+            throw new UnsupportedProviderException();
+        }
+    }
 }

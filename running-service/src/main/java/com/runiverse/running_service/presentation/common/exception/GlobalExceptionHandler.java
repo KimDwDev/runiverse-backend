@@ -91,6 +91,7 @@ public class GlobalExceptionHandler {
                  INVALID_REFRESH_TOKEN,
                  OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED -> HttpStatus.FORBIDDEN;
+            case UNSUPPORTED_PROVIDER -> HttpStatus.BAD_REQUEST;
         };
     }
 }
