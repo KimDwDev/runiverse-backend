@@ -40,7 +40,7 @@ public class UserOauthTest {
             assertThat(user.getUserId().value()).isEqualTo(USER_ID);
             assertThat(user.getEmail().value()).isEqualTo(EMAIL);
             assertThat(user.getPasswordHash().value()).isEmpty();
-            assertThat(user.getOauthUsers()).hasSize(1);
+            assertThat(user.getOauthUser()).isPresent();
             assertThat(user.hasProvider(Provider.KAKAO)).isTrue();
         }
 
@@ -70,23 +70,23 @@ public class UserOauthTest {
             user.linkOauth(Provider.KAKAO, KAKAO_ID);
 
             // then
-            assertThat(user.getOauthUsers()).hasSize(1);
+            assertThat(user.getOauthUser()).isPresent();
             assertThat(user.hasProvider(Provider.KAKAO)).isTrue();
         }
 
         @Test
-        @DisplayName("서로 다른 provider는 함께 연결할 수 있다")
-        void linkMultipleProvidersSuccess() {
-            // given
+        @DisplayName("이미 연결된 유저는 다른 provider를 연결할 수 없다")
+        void linkAnotherProviderFails() {
+            // given -> 한 유저는 소셜 계정을 하나만 가진다
             User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
 
-            // when
-            user.linkOauth(Provider.GOOGLE, GOOGLE_ID);
+            // when & then
+            assertThatThrownBy(() -> user.linkOauth(Provider.GOOGLE, GOOGLE_ID))
+                    .isInstanceOf(OauthAlreadyLinkedException.class)
+                    .hasMessage("이미 연결된 소셜 계정입니다.");
 
-            // then
-            assertThat(user.getOauthUsers()).hasSize(2);
             assertThat(user.hasProvider(Provider.KAKAO)).isTrue();
-            assertThat(user.hasProvider(Provider.GOOGLE)).isTrue();
+            assertThat(user.hasProvider(Provider.GOOGLE)).isFalse();
         }
 
         @Test
@@ -100,7 +100,7 @@ public class UserOauthTest {
                     .isInstanceOf(OauthAlreadyLinkedException.class)
                     .hasMessage("이미 연결된 소셜 계정입니다.");
 
-            assertThat(user.getOauthUsers()).hasSize(1);
+            assertThat(user.getOauthUser()).isPresent();
         }
     }
 
@@ -119,24 +119,8 @@ public class UserOauthTest {
             user.unlinkOauth(Provider.KAKAO);
 
             // then -> 비밀번호로 로그인할 수 있으니 계정이 잠기지 않는다
-            assertThat(user.getOauthUsers()).isEmpty();
+            assertThat(user.getOauthUser()).isEmpty();
             assertThat(user.hasProvider(Provider.KAKAO)).isFalse();
-        }
-
-        @Test
-        @DisplayName("소셜 전용 유저도 연결이 둘 이상이면 해제할 수 있다")
-        void unlinkOneOfMultipleOauthSuccess() {
-            // given
-            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
-            user.linkOauth(Provider.GOOGLE, GOOGLE_ID);
-
-            // when
-            user.unlinkOauth(Provider.KAKAO);
-
-            // then
-            assertThat(user.getOauthUsers()).hasSize(1);
-            assertThat(user.hasProvider(Provider.KAKAO)).isFalse();
-            assertThat(user.hasProvider(Provider.GOOGLE)).isTrue();
         }
 
         @Test
@@ -150,7 +134,7 @@ public class UserOauthTest {
                     .isInstanceOf(LastSignInMethodException.class)
                     .hasMessage("마지막 로그인 수단은 해제할 수 없습니다.");
 
-            assertThat(user.getOauthUsers()).hasSize(1);
+            assertThat(user.getOauthUser()).isPresent();
         }
 
         @Test
@@ -167,28 +151,17 @@ public class UserOauthTest {
     }
 
     @Nested
-    @DisplayName("컬렉션 캡슐화 테스트")
-    class EncapsulationTest {
+    @DisplayName("연결 조회 테스트")
+    class OauthUserQueryTest {
 
         @Test
-        @DisplayName("연결 목록은 외부에서 수정할 수 없다")
-        void oauthUsersIsUnmodifiable() {
-            // given -> 여기서 수정이 되면 linkOauth의 검증을 우회할 수 있다
-            User user = User.registerWithOauth(USER_ID, EMAIL, Provider.KAKAO, KAKAO_ID);
-
-            // when & then
-            assertThatThrownBy(() -> user.getOauthUsers().clear())
-                    .isInstanceOf(UnsupportedOperationException.class);
-        }
-
-        @Test
-        @DisplayName("연결이 없는 유저의 목록은 비어 있다")
-        void localUserHasNoOauthUsers() {
+        @DisplayName("연결이 없는 유저의 조회 결과는 비어 있다")
+        void localUserHasNoOauthUser() {
             // given
             User user = new User(USER_ID, EMAIL, PASSWORD_HASH);
 
             // when & then
-            assertThat(user.getOauthUsers()).isEmpty();
+            assertThat(user.getOauthUser()).isEmpty();
             assertThat(user.hasProvider(Provider.KAKAO)).isFalse();
         }
     }
