@@ -24,6 +24,8 @@ public enum ErrorCode {
     BIRTHDAY_REQUIRED("BIRTHDAY_REQUIRED", "생년월일은 필수입니다."),
     INVALID_BIRTHDAY("INVALID_BIRTHDAY", "1900년 이전 생년월일은 허용하지 않는다."),
     AVG_PACE_OUT_OF_RANGE("AVG_PACE_OUT_OF_RANGE", "평균 페이스가 허용 범위를 벗어났습니다."),
+    WEIGHT_REQUIRED("WEIGHT_REQUIRED", "몸무게는 필수입니다."),
+    WEIGHT_OUT_OF_RANGE("WEIGHT_OUT_OF_RANGE", "몸무게가 허용 범위를 벗어났습니다."),
     PROVIDER_REQUIRED("PROVIDER_REQUIRED", "소셜 로그인 제공자는 필수입니다"),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
     PROVIDER_ID_REQUIRED("PROVIDER_ID_REQUIRED", "소셜 계정 식별자를 가져오지 못했습니다."),
