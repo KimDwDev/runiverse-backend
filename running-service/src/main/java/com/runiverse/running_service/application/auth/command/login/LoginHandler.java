@@ -45,7 +45,9 @@ public class LoginHandler implements LoginUsecase {
         // 5. refresh token redis 저장
         saveRefreshTokenPort.save(user.getUserId(), hashedRefreshToken);
 
-        // 6. 반환
+        // 6. 온보딩 완료 여부 조회
+
+        // 7. 반환
         return new LoginResult(user.getUserId().value(), accessToken, refreshToken);
     }
 }
