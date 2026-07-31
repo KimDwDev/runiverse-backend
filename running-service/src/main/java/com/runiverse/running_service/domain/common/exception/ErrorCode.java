@@ -21,6 +21,8 @@ public enum ErrorCode {
     INVALID_NICKNAME_LENGTH("INVALID_NICKNAME_LENGTH", "닉네임은 2자 이상 16자 이하로 작성해주시길 바랍니다."),
     GENDER_REQUIRED("GENDER_REQUIRED", "성별은 필수입니다."),
     UNSUPPORTED_GENDER("UNSUPPORTED_GENDER", "지원하지 않는 성별입니다."),
+    BIRTHDAY_REQUIRED("BIRTHDAY_REQUIRED", "생년월일은 필수입니다."),
+    INVALID_BIRTHDAY("INVALID_BIRTHDAY", "올바른 생년월일이 아닙니다."),
     PROVIDER_REQUIRED("PROVIDER_REQUIRED", "소셜 로그인 제공자는 필수입니다"),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
     PROVIDER_ID_REQUIRED("PROVIDER_ID_REQUIRED", "소셜 계정 식별자를 가져오지 못했습니다."),
