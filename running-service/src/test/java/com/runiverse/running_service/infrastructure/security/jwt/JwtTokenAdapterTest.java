@@ -131,7 +131,7 @@ public class JwtTokenAdapterTest {
         // given
         String refreshToken = jwtTokenAdapter.generateRefreshToken(userId);
 
-        // when and then
+        // when & then
         assertThat(jwtTokenAdapter.parse(refreshToken)).contains(userId);
     }
 
@@ -140,14 +140,14 @@ public class JwtTokenAdapterTest {
     void parseRejectAccessToken() {
         // given
         String accessToken = jwtTokenAdapter.generateAccessToken(userId);
-        // when and then
+        // when & then
         assertThat(jwtTokenAdapter.parse(accessToken)).isEmpty();
     }
 
     @Test
     @DisplayName("JWT 형식이 아니면 빈 값을 반환한다")
     void parseRejectMalFormedToken() {
-        // when and then
+        // when & then
         assertThat(jwtTokenAdapter.parse("not-a-jwt")).isEmpty();
     }
 

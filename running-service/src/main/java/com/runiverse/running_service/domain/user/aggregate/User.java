@@ -1,9 +1,12 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
+import com.runiverse.running_service.domain.user.exception.LastSignInMethodException;
+import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedException;
+import com.runiverse.running_service.domain.user.exception.OauthNotLinkedException;
 import com.runiverse.running_service.domain.user.vo.*;
 import lombok.Getter;
 
-import java.util.UUID;
+import java.util.*;
 
 @Getter
 public class User {
@@ -12,6 +15,9 @@ public class User {
     private final PasswordHash passwordHash;
     private final boolean alertConsent;
     private final Description description;
+
+    // 내부 저장
+    private OauthUser oauthUser;
 
     // 생성자 부분 작성
     public User(UUID userId, String email, String passwordHash, boolean alertConsent, String description) {
@@ -27,14 +33,43 @@ public class User {
         this(userId, email, passwordHash, alertConsent, "");
     }
 
-    // oauth로 회원가입 할때 사용하는 생성자
-    public User(UUID userId, String email) {
-        this(userId, email, "", false, "");
-    }
-
     // alertConsent, description이 없는 경우
     public User(UUID userId, String email, String passwordHash) {
         this(userId, email, passwordHash, false, "");
     }
 
+    // oauth로 회원가입 할때 사용하는 생성자
+    public User(UUID userId, String email) {
+        this(userId, email, "", false, "");
+    }
+
+    // 소셜 회원가입: 유저 생성과 연결을 진행
+    public static User registerWithOauth(UUID userId, String email, Provider provider, String providerId) {
+        User user = new User(userId, email); // oauth용 유저 생성
+        user.linkOauth(provider, providerId);
+        return user;
+    }
+
+    // oauth 연결
+    public void linkOauth(Provider provider, String providerId) {
+        if (oauthUser != null) throw new OauthAlreadyLinkedException();   // 하나의
+        oauthUser = new OauthUser(userId, provider, providerId);
+    }
+
+    // oauth와 연결 끊기
+    public void unlinkOauth(Provider provider) {
+        if (!hasProvider(provider)) throw new OauthNotLinkedException();
+        if (isLastSignInMethod()) throw new LastSignInMethodException();    // I3
+        oauthUser = null;
+    }
+
+    public boolean hasProvider(Provider provider) {
+        return oauthUser != null && oauthUser.isSameProvider(provider);
+    }
+    public Optional<OauthUser> getOauthUser() {
+        return Optional.ofNullable(oauthUser);
+    }
+    private boolean isLastSignInMethod() {
+        return passwordHash.value().isEmpty();
+    }
 }

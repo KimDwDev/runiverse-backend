@@ -33,7 +33,7 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("도메인 예외: {} - {}", e.getErrorCode().getCode(), e.getErrorCode().getMessage());
         return respond(
-                HttpStatus.BAD_REQUEST,
+                HttpStatus.INTERNAL_SERVER_ERROR,
                 e.getErrorCode().getCode(),
                 e.getErrorCode().getMessage()
         );
@@ -88,7 +88,10 @@ public class GlobalExceptionHandler {
             case INVALID_EMAIL_CREDENTIALS,
                  INVALID_PASSWORD_CREDENTIALS,
                  INVALID_CREDENTIALS,
-                 INVALID_REFRESH_TOKEN -> HttpStatus.UNAUTHORIZED;
+                 INVALID_REFRESH_TOKEN,
+                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
+            case OAUTH_EMAIL_NOT_PROVIDED -> HttpStatus.FORBIDDEN;
+            case UNSUPPORTED_PROVIDER -> HttpStatus.BAD_REQUEST;
         };
     }
 }

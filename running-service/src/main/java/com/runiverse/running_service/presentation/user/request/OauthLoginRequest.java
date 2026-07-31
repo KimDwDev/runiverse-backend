@@ -1,0 +1,10 @@
+package com.runiverse.running_service.presentation.user.request;
+
+import jakarta.validation.constraints.NotBlank;
+
+public record OauthLoginRequest(
+        @NotBlank(message = "인가 코드는 필수 입니다.")
+        String authorizationCode,
+        String codeVerifier
+) {
+}
