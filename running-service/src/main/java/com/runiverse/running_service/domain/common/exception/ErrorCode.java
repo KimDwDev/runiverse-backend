@@ -19,6 +19,8 @@ public enum ErrorCode {
     NICKNAME_REQUIRED("NICKNAME_REQUIRED", "닉네임은 필수입니다."),
     INVALID_NICKNAME_FORMAT("INVALID_NICKNAME_FORMAT", "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."),
     INVALID_NICKNAME_LENGTH("INVALID_NICKNAME_LENGTH", "닉네임은 2자 이상 16자 이하로 작성해주시길 바랍니다."),
+    GENDER_REQUIRED("GENDER_REQUIRED", "성별은 필수입니다."),
+    UNSUPPORTED_GENDER("UNSUPPORTED_GENDER", "지원하지 않는 성별입니다."),
     PROVIDER_REQUIRED("PROVIDER_REQUIRED", "소셜 로그인 제공자는 필수입니다"),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
     PROVIDER_ID_REQUIRED("PROVIDER_ID_REQUIRED", "소셜 계정 식별자를 가져오지 못했습니다."),
