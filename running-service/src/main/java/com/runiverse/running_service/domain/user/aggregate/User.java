@@ -6,10 +6,7 @@ import com.runiverse.running_service.domain.user.exception.OauthNotLinkedExcepti
 import com.runiverse.running_service.domain.user.vo.*;
 import lombok.Getter;
 
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Getter
 public class User {
@@ -20,7 +17,7 @@ public class User {
     private final Description description;
 
     // 내부 저장
-    private final Set<OauthUser> oauthUsers = new LinkedHashSet<>();
+    private OauthUser oauthUser;
 
     // 생성자 부분 작성
     public User(UUID userId, String email, String passwordHash, boolean alertConsent, String description) {
@@ -55,27 +52,24 @@ public class User {
 
     // oauth 연결
     public void linkOauth(Provider provider, String providerId) {
-        if (hasProvider(provider)) throw new OauthAlreadyLinkedException();   // 하나의
-        oauthUsers.add(new OauthUser(userId, provider, providerId));
+        if (oauthUser != null) throw new OauthAlreadyLinkedException();   // 하나의
+        oauthUser = new OauthUser(userId, provider, providerId);
     }
 
     // oauth와 연결 끊기
     public void unlinkOauth(Provider provider) {
-        OauthUser found = oauthUsers.stream()
-                .filter(o -> o.isSameProvider(provider))
-                .findFirst()
-                .orElseThrow(OauthNotLinkedException::new);
+        if (!hasProvider(provider)) throw new OauthNotLinkedException();
         if (isLastSignInMethod()) throw new LastSignInMethodException();    // I3
-        oauthUsers.remove(found);
+        oauthUser = null;
     }
 
     public boolean hasProvider(Provider provider) {
-        return oauthUsers.stream().anyMatch(o -> o.isSameProvider(provider));
+        return oauthUser != null && oauthUser.isSameProvider(provider);
     }
-    public Set<OauthUser> getOauthUsers() {
-        return Collections.unmodifiableSet(oauthUsers);
+    public Optional<OauthUser> getOauthUser() {
+        return Optional.ofNullable(oauthUser);
     }
     private boolean isLastSignInMethod() {
-        return passwordHash.value().isEmpty() && oauthUsers.size() == 1;
+        return passwordHash.value().isEmpty();
     }
 }

@@ -24,7 +24,6 @@ import java.util.UUID;
                 columnNames = {"provider", "provider_id"}
         )
 )
-@IdClass(OauthUserJpaEntity.PK.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OauthUserJpaEntity {
     // PK가 (user_id, provider) 이다
@@ -32,7 +31,6 @@ public class OauthUserJpaEntity {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Id
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, updatable = false, length = 20)
     private Provider provider;
@@ -58,17 +56,8 @@ public class OauthUserJpaEntity {
         return new OauthUserJpaEntity(userId, provider, providerId);
     }
 
-    // @IdClass 규약
-    @Getter
-    @NoArgsConstructor
-    @EqualsAndHashCode
-    public static class PK implements Serializable {
-        private UUID userId;
-        private Provider provider;
-    }
-
     // FK 제약
-    @ManyToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "user_id",
             insertable = false,

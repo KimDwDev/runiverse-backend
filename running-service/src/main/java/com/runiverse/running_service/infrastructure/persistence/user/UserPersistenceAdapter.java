@@ -46,7 +46,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         );
 
         entityManager.persist(entity);
-        user.getOauthUsers().forEach(oauth -> entityManager.persist((
+        user.getOauthUser().ifPresent(oauth -> entityManager.persist((
                 OauthUserJpaEntity.create(
                         oauth.getUserId().value(),
                         oauth.getProvider(),
