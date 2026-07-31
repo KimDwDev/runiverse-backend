@@ -84,12 +84,15 @@ public class GlobalExceptionHandler {
 
     private HttpStatus toStatus(ErrorCode errorCode) {
         return switch (errorCode) {
-            case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
+            case ALREADY_ONBOARD,
+                 EMAIL_ALREADY_EXISTS,
+                 NICKNAME_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_EMAIL_CREDENTIALS,
                  INVALID_PASSWORD_CREDENTIALS,
                  INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN,
-                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
+                 OAUTH_CODE_EXCHANGE_FAILED,
+                 USER_NOT_FOUND -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER -> HttpStatus.BAD_REQUEST;
         };

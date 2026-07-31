@@ -11,6 +11,9 @@ public final class ErrorExposurePolicy {
 
     private static final Set<String> EXPOSED_CODES = Set.of(
             ErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
+            ErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
+            ErrorCode.USER_NOT_FOUND.getCode(),
+            ErrorCode.ALREADY_ONBOARD.getCode(),
             ErrorCode.INVALID_CREDENTIALS.getCode(),
             ErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
             ErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),
