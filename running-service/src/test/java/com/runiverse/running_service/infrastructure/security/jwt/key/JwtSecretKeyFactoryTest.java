@@ -25,7 +25,7 @@ public class JwtSecretKeyFactoryTest {
     @Test
     @DisplayName("32바이트 미만 시크릿은 거부한다")
     void createRejectsShortSecret() {
-        // when and then
+        // when & then
         assertThatThrownBy(() -> JwtSecretKeyFactory.create("a".repeat(31)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("31바이트");
@@ -34,7 +34,7 @@ public class JwtSecretKeyFactoryTest {
     @Test
     @DisplayName("시크릿이 비어 있으면 거부한다")
     void createRejectsBlankSecret() {
-        // when and then
+        // when & then
         assertThatThrownBy(() -> JwtSecretKeyFactory.create(null))
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> JwtSecretKeyFactory.create("  "))

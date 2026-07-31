@@ -46,7 +46,7 @@ public class AudienceValidatorTest {
         // given
         Jwt jwt = jwtWithAudience(null);
 
-        // when and then
+        // when & then
         assertThat(validator.validate(jwt).hasErrors()).isTrue();
     }
     private Jwt jwtWithAudience(List<String> audiences) {
