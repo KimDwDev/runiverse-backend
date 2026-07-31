@@ -1,5 +1,6 @@
 package com.runiverse.running_service.infrastructure.security;
 
+import com.runiverse.running_service.presentation.common.security.JwtAuthenticationEntryPoint;
 import org.bouncycastle.util.Strings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,8 +23,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-        HttpSecurity http,
-        JwtDecoder accessTokenDecoder) throws Exception {
+            HttpSecurity http,
+            JwtDecoder accessTokenDecoder, JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session
@@ -34,7 +35,11 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.decoder(accessTokenDecoder)))
+                        .jwt(jwt -> jwt.decoder(accessTokenDecoder))
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                )
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .build();

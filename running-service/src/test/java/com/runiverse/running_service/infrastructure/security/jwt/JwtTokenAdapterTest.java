@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.security.jwt;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.auth.port.out.CheckBlockedAccessTokenPort;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.infrastructure.security.jwt.config.JwtDecoderConfig;
 import com.runiverse.running_service.infrastructure.security.jwt.config.JwtEncoderConfig;
@@ -33,6 +34,7 @@ public class JwtTokenAdapterTest {
     private static final String REFRESH_SECRET = "refresh-secret-for-test-must-be-at-least-32-bytes";
     private static final Duration ACCESS_TTL = Duration.ofMinutes(30);
     private static final Duration REFRESH_TTL = Duration.ofDays(14);
+    private static final CheckBlockedAccessTokenPort NEVER_BLOCKED = accessTokenId -> false;
     private JwtEncoderConfig jwtEncoderConfig;
     private JwtDecoderConfig jwtDecoderConfig;
     private JwtProperties jwtProperties;
@@ -52,7 +54,7 @@ public class JwtTokenAdapterTest {
         // 목이 아닌 실제 빈을 조립해 발급-검증 경로가 맞물리는지 확인한다
         jwtEncoderConfig = new JwtEncoderConfig();
         jwtDecoderConfig = new JwtDecoderConfig();
-        accessTokenDecoder = jwtDecoderConfig.accessTokenDecoder(jwtProperties);
+        accessTokenDecoder = jwtDecoderConfig.accessTokenDecoder(jwtProperties, NEVER_BLOCKED);
 
         jwtTokenAdapter = new JwtTokenAdapter(
                 jwtEncoderConfig.accessTokenEncoder(jwtProperties),
