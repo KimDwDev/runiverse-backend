@@ -20,7 +20,9 @@ public final class ErrorExposurePolicy {
             ErrorCode.UNSUPPORTED_PROVIDER.getCode(),
             ErrorCode.INVALID_REFRESH_TOKEN.getCode(),
             AuthErrorCode.TOKEN_EXPIRED.getCode(),
-            AuthErrorCode.TOKEN_BLOCKED.getCode()
+            AuthErrorCode.TOKEN_BLOCKED.getCode(),
+            AuthErrorCode.INVALID_TOKEN.getCode(),
+            AuthErrorCode.AUTHENTICATION_REQUIRED.getCode()
     );
     private ErrorExposurePolicy() {} // 다른 곳에서 사용하지 못하도록
     // 400 에러나 내가 노출을 허용한 에러에 경우를 검증하는 메서드
