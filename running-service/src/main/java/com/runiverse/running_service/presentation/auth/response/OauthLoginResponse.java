@@ -1,8 +1,8 @@
-package com.runiverse.running_service.presentation.user.response;
+package com.runiverse.running_service.presentation.auth.response;
 
 import java.util.UUID;
 
-public record LoginResponse(
+public record OauthLoginResponse(
         UUID userId,
         String accessToken,
         String refreshToken,
