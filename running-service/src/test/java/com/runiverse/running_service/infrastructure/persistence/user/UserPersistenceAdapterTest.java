@@ -2,7 +2,11 @@ package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.domain.user.vo.UserId;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +17,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -256,6 +262,139 @@ public class UserPersistenceAdapterTest {
         // then
         verify(entityManager, times(1)).persist(any(UserJpaEntity.class));
         verify(entityManager, times(0)).persist(any(OauthUserJpaEntity.class));
+    }
+
+    @Test
+    @DisplayName("userId로 유저를 조회해 도메인 User로 변환한다")
+    void loadByIdReturnsUser() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "test@example.com", PASSWORD_HASH, false, null
+        );
+
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        Optional<User> result = userPersistenceAdapter.loadById(new UserId(userId));
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().getUserId().value()).isEqualTo(userId);
+        assertThat(result.get().getEmail().value()).isEqualTo("test@example.com");
+    }
+
+    @Test
+    @DisplayName("userId에 해당하는 유저가 없으면 빈 Optional을 반환한다")
+    void loadByIdReturnsEmpty() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when
+        Optional<User> result = userPersistenceAdapter.loadById(new UserId(userId));
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("온보딩 행이 있으면 true를 반환한다")
+    void existsByUserIdReturnsTrue() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+
+        givenCountQueryReturns("userId", userId, 1L);
+
+        // when
+        boolean result = userPersistenceAdapter.existsByUserId(new UserId(userId));
+
+        // then -> 이 검사가 새면 이미 온보딩한 유저가 PK 중복으로 500을 받는다
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("온보딩 행이 없으면 false를 반환한다")
+    void existsByUserIdReturnsFalse() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+
+        givenCountQueryReturns("userId", userId, 0L);
+
+        // when
+        boolean result = userPersistenceAdapter.existsByUserId(new UserId(userId));
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("같은 닉네임이 있으면 true를 반환한다")
+    void existsByNicknameReturnsTrue() {
+        // given
+        givenCountQueryReturns("nickname", "러너킴", 1L);
+
+        // when
+        boolean result = userPersistenceAdapter.existsByNickname(new Nickname("러너킴"));
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("닉네임 조회에는 정규화된 값이 넘어간다")
+    void existsByNicknamePassesTrimmedValue() {
+        // given -> VO가 trim한 값으로 조회해야 저장 값과 어긋나지 않는다
+        givenCountQueryReturns("nickname", "러너킴", 0L);
+
+        // when
+        boolean result = userPersistenceAdapter.existsByNickname(new Nickname("  러너킴  "));
+
+        // then
+        assertThat(result).isFalse();
+        verify(countQuery).setParameter("nickname", "러너킴");
+    }
+
+    @Test
+    @DisplayName("온보딩을 저장하면 user_onboard 행을 영속화한다")
+    void saveOnboardPersistsOnboardRow() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        User user = new User(userId, "test@example.com", PASSWORD_HASH);
+        user.completeOnboarding(
+                "러너킴", "MALE", LocalDate.of(1999, 5, 20),
+                330, new BigDecimal("70.5"), new BigDecimal("175.0")
+        );
+        UserOnboard onboard = user.getOnboard().orElseThrow();
+
+        // when
+        userPersistenceAdapter.saveOnboard(onboard);
+
+        // then -> VO가 껍질을 벗고 원시 값으로 내려가야 한다
+        ArgumentCaptor<UserOnboardJpaEntity> captor =
+                ArgumentCaptor.forClass(UserOnboardJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        UserOnboardJpaEntity entity = captor.getValue();
+        assertThat(entity.getUserId()).isEqualTo(userId);
+        assertThat(entity.getNickname()).isEqualTo("러너킴");
+        assertThat(entity.getGender()).isEqualTo(Gender.MALE);
+        assertThat(entity.getBirthday()).isEqualTo(LocalDate.of(1999, 5, 20));
+        assertThat(entity.getAvgPace()).isEqualTo(330);
+        assertThat(entity.getWeight()).isEqualByComparingTo("70.5");
+        assertThat(entity.getHeight()).isEqualByComparingTo("175.0");
+    }
+
+    private void givenCountQueryReturns(String parameterName, Object value, long count) {
+        when(entityManager.createQuery(anyString(), eq(Long.class)))
+                .thenReturn(countQuery);
+
+        when(countQuery.setParameter(parameterName, value))
+                .thenReturn(countQuery);
+
+        when(countQuery.getSingleResult())
+                .thenReturn(count);
     }
 
     private void givenProviderQueryReturns(String providerId, Stream<UserJpaEntity> found) {
