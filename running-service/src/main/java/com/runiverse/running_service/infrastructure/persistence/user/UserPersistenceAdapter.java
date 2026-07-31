@@ -4,8 +4,15 @@ import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplica
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
+import com.runiverse.running_service.application.user.port.out.ExistsOnboardPort;
+import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
+import com.runiverse.running_service.application.user.port.out.SaveOnboardPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.domain.user.vo.UserId;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,7 +23,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
-        LoadUserByProviderPort {
+        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort {
 
     private final EntityManager entityManager;
 
@@ -61,6 +68,12 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     }
 
     @Override
+    public Optional<User> loadById(UserId userId) {
+        return Optional.ofNullable(entityManager.find(UserJpaEntity.class, userId.value()))
+                .map(this::toDomain);
+    }
+
+    @Override
     public Optional<User> loadByEmail(String email) {
         return entityManager.createQuery(
             """
@@ -100,5 +113,46 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 .getResultStream()
                 .findFirst()
                 .map(this::toDomain);
+    }
+
+    @Override
+    public boolean existsByUserId(UserId userId) {
+        Long count = entityManager.createQuery(
+    """
+            SELECT COUNT(o)
+            FROM UserOnboardJpaEntity o
+            WHERE o.userId = :userId
+            """, Long.class
+        )
+                .setParameter("userId", userId.value())
+                .getSingleResult();
+        return count > 0;
+    }
+
+    @Override
+    public boolean existsByNickname(Nickname nickname) {
+        Long count = entityManager.createQuery(
+    """
+           SELECT COUNT(o) 
+           FROM UserOnboardJpaEntity o 
+           WHERE o.nickname = :nickname
+           """, Long.class
+        )
+                .setParameter("nickname", nickname.value())
+                .getSingleResult();
+        return count > 0;
+    }
+
+    @Override
+    public void saveOnboard(UserOnboard onboard) {
+        entityManager.persist(UserOnboardJpaEntity.create(
+            onboard.getUserId().value(),
+                onboard.getNickname().value(),
+                onboard.getGender(),
+                onboard.getBirthday().value(),
+                onboard.getAvgPace().secondPerKm(),
+                onboard.getWeight().value(),
+                onboard.getHeight().value()
+        ));
     }
 }
