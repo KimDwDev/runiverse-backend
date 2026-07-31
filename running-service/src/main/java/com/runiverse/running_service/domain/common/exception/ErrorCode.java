@@ -28,6 +28,8 @@ public enum ErrorCode {
     WEIGHT_OUT_OF_RANGE("WEIGHT_OUT_OF_RANGE", "몸무게가 허용 범위를 벗어났습니다."),
     HEIGHT_REQUIRED("HEIGHT_REQUIRED", "키는 필수입니다."),
     HEIGHT_OUT_OF_RANGE("HEIGHT_OUT_OF_RANGE", "키가 허용 범위를 벗어났습니다."),
+    ONBOARDING_ALREADY_COMPLETED("ONBOARDING_ALREADY_COMPLETED", "이미 온보딩을 완료했습니다."),
+    ONBOARDING_NOT_COMPLETED("ONBOARDING_NOT_COMPLETED", "온보딩을 먼저 완료해야 합니다."),
     PROVIDER_REQUIRED("PROVIDER_REQUIRED", "소셜 로그인 제공자는 필수입니다"),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
     PROVIDER_ID_REQUIRED("PROVIDER_ID_REQUIRED", "소셜 계정 식별자를 가져오지 못했습니다."),
