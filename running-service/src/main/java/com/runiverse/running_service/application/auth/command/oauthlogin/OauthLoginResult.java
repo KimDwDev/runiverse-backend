@@ -5,6 +5,7 @@ import java.util.UUID;
 public record OauthLoginResult(
         UUID userId,
         String accessToken,
-        String refreshToken
+        String refreshToken,
+        boolean isOnboarded
 ) {
 }

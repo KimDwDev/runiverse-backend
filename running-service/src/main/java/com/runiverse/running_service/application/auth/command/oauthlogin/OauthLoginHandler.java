@@ -17,6 +17,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
     private final GenerateTokenPort generateTokenPort;
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final SaveRefreshTokenHashPort saveRefreshTokenHashPort;
+    private final CheckOnboardPort checkOnboardPort;
 
     @Override
     public OauthLoginResult handle(OauthLoginCommand command) {
@@ -41,9 +42,10 @@ public class OauthLoginHandler implements OauthLoginUsecase {
         saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
 
         // 6. 온보딩 완료 여부 조회
+        boolean isOnboarded = checkOnboardPort.existsByUserId(user.getUserId());
 
         // 7. 반환
-        return new OauthLoginResult(user.getUserId().value(), accessToken, refreshToken);
+        return new OauthLoginResult(user.getUserId().value(), accessToken, refreshToken, isOnboarded);
     }
 
     private Provider resolveProvider(String value) {

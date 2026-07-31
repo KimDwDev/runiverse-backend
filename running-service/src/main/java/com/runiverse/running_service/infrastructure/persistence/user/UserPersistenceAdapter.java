@@ -1,9 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
-import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
-import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
-import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.auth.port.out.*;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
@@ -23,7 +20,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
-        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort {
+        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort, CheckOnboardPort {
 
     private final EntityManager entityManager;
 
