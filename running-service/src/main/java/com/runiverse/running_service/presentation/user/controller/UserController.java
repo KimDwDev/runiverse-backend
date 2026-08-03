@@ -25,7 +25,7 @@ public class UserController {
 
     private final CompleteOnboardUsecase completeOnboardUsecase;
 
-    @PostMapping("/onboard")
+    @PostMapping("/onboarding")
     public ResponseEntity<OnboardResponse> completeOnboard(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody OnboardRequest request) {
