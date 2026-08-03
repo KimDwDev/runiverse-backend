@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - dev
+  push:
+    branches:
+      - dev
 
 # workflows가 git repo에 접근할 수 있는 권한 설정
 permissions:
@@ -52,3 +55,62 @@ jobs:
   # 통합테스트 추가 예정
 
   # docker build
+  runiverse-backend-docker-build:
+    name: running-service 도커 이미지 빌드
+    needs: runiverse-backend-test
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        working-directory: running-service
+
+    steps:
+      # repo에 있는 정보를 사용할 수 있게 해준다
+      - name: Checkout backend
+        uses: actions/checkout@v6
+
+      # java 21 설치
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            running-service/*.gradle*
+            running-service/gradle/wrapper/gradle-wrapper.properties
+
+      # gradlew 권한 부여
+      - name: Grant execute permission for Gradle
+        run: chmod +x gradlew
+
+      # 실행 가능한 jar 생성
+      - name: Build bootJar
+        run: ./gradlew bootJar -x test --no-daemon
+
+      # buildIdx 세팅 (레이어 캐시 사용을 위해 필요)
+      - name: BuildIdx 세팅
+        uses: docker/setup-buildx-action@v3
+
+      # dockerhub 로그인 - 비밀번호는 토큰을 사용할 예정입니다.
+      - name: Dockerhub 로그인
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      # docker build 후 캐싱
+      - name: Docker 빌드 후 push (with cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: running-service
+          file: running-service/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64
+          # docker image 관리
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:${{github.sha}}
+          # caching 작업 - 모든 빌드단계 레이어 캐싱 즉 max를 설정해서 용량은 많이 쓰지만 성능은 높인다.
+          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:buildcache,mode=max
