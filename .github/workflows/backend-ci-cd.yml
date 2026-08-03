@@ -1,0 +1,41 @@
+name: Backend CI/CD
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+# workflows가 git repo에 접근할 수 있는 권한 설정
+permissions:
+  contents: read
+
+# 같은 dev 브런치는 업데이트가 되면 가장 최신것만 실행됨
+concurrency:
+  group: dev
+  cancel-in-progress: true
+
+jobs:
+  running-service-backend-test:
+    name: running-service 테스트 진행
+    runs-on: ubuntu-24.04
+
+    steps:
+      # repo에 있는 정보를 사용할 수 있게 해준다.
+      - name: Checkout backend
+        uses: actions/checkout@v6
+
+      # java 21 설치
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # gradlew 권한 부여
+      - name: Grant execute permission for Gradle
+        run: chmod +x gradlew
+
+      # 단위 테스트 진행
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon
