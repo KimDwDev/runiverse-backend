@@ -1,0 +1,91 @@
+package com.runiverse.running_service.domain.user.aggregate;
+
+import com.runiverse.running_service.domain.user.exception.*;
+import com.runiverse.running_service.domain.user.vo.*;
+import lombok.Getter;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+
+@Getter
+public class User {
+    private final UserId userId;
+    private final Email email;
+    private final PasswordHash passwordHash;
+    private final boolean alertConsent;
+    private final Description description;
+
+    // 내부 저장
+    private OauthUser oauthUser;
+
+    // 유저 온보드
+    private UserOnboard onboard;
+
+    // 생성자 부분 작성
+    public User(UUID userId, String email, String passwordHash, boolean alertConsent, String description) {
+        this.userId = new UserId(userId);
+        this.email = new Email(email);
+        this.passwordHash = new PasswordHash(passwordHash);
+        this.alertConsent = alertConsent;
+        this.description = new Description(description);
+    }
+
+    // 로컬 회원가입 할때 사용하는 생성자
+    public User(UUID userId, String email, String passwordHash, boolean alertConsent) {
+        this(userId, email, passwordHash, alertConsent, "");
+    }
+
+    // alertConsent, description이 없는 경우
+    public User(UUID userId, String email, String passwordHash) {
+        this(userId, email, passwordHash, false, "");
+    }
+
+    // oauth로 회원가입 할때 사용하는 생성자
+    public User(UUID userId, String email) {
+        this(userId, email, "", false, "");
+    }
+
+    // 소셜 회원가입: 유저 생성과 연결을 진행
+    public static User registerWithOauth(UUID userId, String email, Provider provider, String providerId) {
+        User user = new User(userId, email); // oauth용 유저 생성
+        user.linkOauth(provider, providerId);
+        return user;
+    }
+
+    // oauth 연결
+    public void linkOauth(Provider provider, String providerId) {
+        if (oauthUser != null) throw new OauthAlreadyLinkedException();   // 하나의
+        oauthUser = new OauthUser(userId, provider, providerId);
+    }
+
+    // oauth와 연결 끊기
+    public void unlinkOauth(Provider provider) {
+        if (!hasProvider(provider)) throw new OauthNotLinkedException();
+        if (isLastSignInMethod()) throw new LastSignInMethodException();    // I3
+        oauthUser = null;
+    }
+
+    public boolean hasProvider(Provider provider) {
+        return oauthUser != null && oauthUser.isSameProvider(provider);
+    }
+    public Optional<OauthUser> getOauthUser() {
+        return Optional.ofNullable(oauthUser);
+    }
+    private boolean isLastSignInMethod() {
+        return passwordHash.value().isEmpty();
+    }
+
+    public void completeOnboarding(String nickname, String gender, LocalDate birthday,
+                                   int avgPace, BigDecimal weight, BigDecimal height) {
+        if (onboard != null) throw new OnboardingAlreadyCompletedException();
+        this.onboard = new UserOnboard(userId, nickname, gender, birthday, avgPace, weight, height);
+    }
+    public void updateOnboarding(String nickname, String gender, LocalDate birthday,
+                                 Integer avgPace, BigDecimal weight, BigDecimal height)  {
+        if (onboard == null) throw new OnboardingNotCompletedException();
+        this.onboard = onboard.change(nickname, gender, birthday, avgPace, weight, height);
+    }
+    public boolean hasOnboarded() { return onboard != null; }
+    public Optional<UserOnboard> getOnboard() { return Optional.ofNullable(onboard); }
+}
