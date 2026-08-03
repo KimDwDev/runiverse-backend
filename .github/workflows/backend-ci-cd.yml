@@ -101,7 +101,7 @@ jobs:
 
       # docker build 후 캐싱
       - name: Docker 빌드 후 push (with cache)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: running-service
           file: running-service/Dockerfile
@@ -109,8 +109,8 @@ jobs:
           platforms: linux/amd64
           # docker image 관리
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:latest
-            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:${{github.sha}}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.RUNNING_SERVICE_TEST_IMAGE }}:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.RUNNING_SERVICE_TEST_IMAGE }}:${{github.sha}}
           # caching 작업 - 모든 빌드단계 레이어 캐싱 즉 max를 설정해서 용량은 많이 쓰지만 성능은 높인다.
-          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.DOCKER_MAIN_BACKEND_TEST_SERVER_IMG }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.RUNNING_SERVICE_TEST_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ vars.RUNNING_SERVICE_TEST_IMAGE }}:buildcache,mode=max
