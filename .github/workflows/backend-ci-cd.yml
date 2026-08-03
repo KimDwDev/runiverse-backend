@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  running-service-backend-test:
+  # junit을 이용해서 단위테스트를 진행 (mock데이터 임으로 문제없이 진행해야 한다.)
+  runiverse-backend-test:
     name: running-service 테스트 진행
     runs-on: ubuntu-24.04
 
@@ -47,3 +48,7 @@ jobs:
       # 단위 테스트 진행
       - name: Run unit tests
         run: ./gradlew test --no-daemon
+
+  # 통합테스트 추가 예정
+
+  # docker build
