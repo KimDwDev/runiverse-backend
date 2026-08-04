@@ -19,7 +19,6 @@ cd running-service
 - `docs/architecture.md` — 클린 아키텍처 + DDD 레이어 규칙·구현 스타일 (코드 작성 전 필독)
 - `docs/code-convention.md` — 네이밍·API 표면·PR 규칙 / `docs/commit-convention.md` — 커밋·브랜치 규칙
 - `docs/api-spec-v1.md` — API 명세 / `docs/erd.md` — DB 스키마 / `docs/api-spec-context.md` — 기능명세·기획 맥락
-- `docs/api-spec-prompt.md` — 스펙 문서 작성·수정 시 적용하는 공통 컨벤션 (에러 포맷·네이밍·단위 규칙)
 
 스펙 문서는 초안이며 자주 바뀐다 — 구현 전 다시 읽고, 코드와 어긋나면 사용자에게 확인한다.
 
