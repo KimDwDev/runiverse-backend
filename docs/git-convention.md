@@ -29,7 +29,7 @@
 ## 브랜치 규칙
 
 ```text
-<type>/<domain>
+<type>/<description>
 ```
 
 > 예: `feat/oauth-login`, `fix/token-refresh`
