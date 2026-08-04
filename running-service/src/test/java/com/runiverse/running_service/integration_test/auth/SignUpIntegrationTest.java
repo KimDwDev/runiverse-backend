@@ -7,9 +7,6 @@ import com.runiverse.running_service.application.auth.exception.EmailAlreadyExis
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import com.runiverse.running_service.integration_test.fake.FakePasswordHasher;
-import com.runiverse.running_service.integration_test.fake.FakeUserIdGenerator;
-import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,14 +19,11 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     private SignUpHandler signUpHandler;
     @BeforeEach
     void setUp() {
-        // Fake는 상태를 가지므로 테스트마다 새로 만든다
-        userStore = new InMemoryUserStore();
-        passwordHasher = new FakePasswordHasher();
         signUpHandler = new SignUpHandler(
-                userStore,
-                passwordHasher,
-                new FakeUserIdGenerator(),
-                userStore
+                userStore,        // CheckEmailDuplicatePort
+                passwordHasher,   // PasswordHashPort
+                userIdGenerator,  // GenerateUserIdPort
+                userStore         // SaveUserPort
         );
     }
     @Test
