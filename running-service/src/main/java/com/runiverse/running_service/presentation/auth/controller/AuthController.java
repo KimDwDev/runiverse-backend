@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.user.controller;
+package com.runiverse.running_service.presentation.auth.controller;
 
 import com.runiverse.running_service.application.auth.command.login.LoginCommand;
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
@@ -10,14 +10,14 @@ import com.runiverse.running_service.application.auth.command.reissue.ReissueRes
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 import com.runiverse.running_service.application.auth.port.in.*;
-import com.runiverse.running_service.presentation.user.request.LoginRequest;
-import com.runiverse.running_service.presentation.user.request.OauthLoginRequest;
-import com.runiverse.running_service.presentation.user.request.ReissueRequest;
-import com.runiverse.running_service.presentation.user.request.SignUpRequest;
-import com.runiverse.running_service.presentation.user.response.LoginResponse;
-import com.runiverse.running_service.presentation.user.response.OauthLoginResponse;
-import com.runiverse.running_service.presentation.user.response.ReissueResponse;
-import com.runiverse.running_service.presentation.user.response.SignUpResponse;
+import com.runiverse.running_service.presentation.auth.request.LoginRequest;
+import com.runiverse.running_service.presentation.auth.request.OauthLoginRequest;
+import com.runiverse.running_service.presentation.auth.request.ReissueRequest;
+import com.runiverse.running_service.presentation.auth.request.SignUpRequest;
+import com.runiverse.running_service.presentation.auth.response.LoginResponse;
+import com.runiverse.running_service.presentation.auth.response.OauthLoginResponse;
+import com.runiverse.running_service.presentation.auth.response.ReissueResponse;
+import com.runiverse.running_service.presentation.auth.response.SignUpResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -71,7 +71,8 @@ public class AuthController {
                 .body(new LoginResponse(
                         result.userId(),
                         result.accessToken(),
-                        result.refreshToken()
+                        result.refreshToken(),
+                        result.isOnboarded()
                 ));
     }
 
@@ -102,7 +103,8 @@ public class AuthController {
                 .body(new OauthLoginResponse(
                         result.userId(),
                         result.accessToken(),
-                        result.refreshToken()
+                        result.refreshToken(),
+                        result.isOnboarded()
                 ));
     }
 

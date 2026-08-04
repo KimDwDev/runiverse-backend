@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.user.request;
+package com.runiverse.running_service.presentation.auth.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

@@ -1,11 +1,11 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
-import com.runiverse.running_service.domain.user.exception.LastSignInMethodException;
-import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedException;
-import com.runiverse.running_service.domain.user.exception.OauthNotLinkedException;
+import com.runiverse.running_service.domain.user.exception.*;
 import com.runiverse.running_service.domain.user.vo.*;
 import lombok.Getter;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 
 @Getter
@@ -18,6 +18,9 @@ public class User {
 
     // 내부 저장
     private OauthUser oauthUser;
+
+    // 유저 온보드
+    private UserOnboard onboard;
 
     // 생성자 부분 작성
     public User(UUID userId, String email, String passwordHash, boolean alertConsent, String description) {
@@ -72,4 +75,17 @@ public class User {
     private boolean isLastSignInMethod() {
         return passwordHash.value().isEmpty();
     }
+
+    public void completeOnboarding(String nickname, String gender, LocalDate birthday,
+                                   int avgPace, BigDecimal weight, BigDecimal height) {
+        if (onboard != null) throw new OnboardingAlreadyCompletedException();
+        this.onboard = new UserOnboard(userId, nickname, gender, birthday, avgPace, weight, height);
+    }
+    public void updateOnboarding(String nickname, String gender, LocalDate birthday,
+                                 Integer avgPace, BigDecimal weight, BigDecimal height)  {
+        if (onboard == null) throw new OnboardingNotCompletedException();
+        this.onboard = onboard.change(nickname, gender, birthday, avgPace, weight, height);
+    }
+    public boolean hasOnboarded() { return onboard != null; }
+    public Optional<UserOnboard> getOnboard() { return Optional.ofNullable(onboard); }
 }
