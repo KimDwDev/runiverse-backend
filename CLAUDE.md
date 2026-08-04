@@ -26,3 +26,5 @@ cd running-service
 
 - `BusinessException`/`ErrorCode`가 application·domain 양쪽 `common/exception/`에 중복 존재 — 참조 시 어느 쪽인지 확인.
 - `.env` 등 시크릿 파일은 절대 커밋하지 않고, 키 값은 출력 시 마스킹한다.
+- 요청 없이 공개 API 계약(요청·응답 형식)이나 의존성(라이브러리)을 변경하지 않는다.
+- 문제를 우회하는 해결 금지 — 테스트 약화·빈 catch·기능 삭제로 오류를 없애지 않는다.
