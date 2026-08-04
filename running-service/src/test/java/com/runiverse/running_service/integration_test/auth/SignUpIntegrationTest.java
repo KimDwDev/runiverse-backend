@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpResul
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
+import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.FakePasswordHasher;
 import com.runiverse.running_service.integration_test.fake.FakeUserIdGenerator;
 import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
@@ -15,11 +16,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("회원가입 통합 테스트")
-public class SignUpIntegrationTest {
+public class SignUpIntegrationTest extends IntegrationTestSupport {
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
-    private InMemoryUserStore userStore;
-    private FakePasswordHasher passwordHasher;
     private SignUpHandler signUpHandler;
     @BeforeEach
     void setUp() {
