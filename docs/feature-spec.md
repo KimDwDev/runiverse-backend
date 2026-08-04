@@ -1,8 +1,6 @@
-# Runiverse API 참고자료
+# Runiverse 기능 명세서
 
-> 화면 명세·도메인 제약 참고자료. 전체 테이블·컬럼·타입·enum·단위는 `erd.md`가 단일 출처.
-
-## 1. 기능명세서 (전체 화면)
+## 1. 기능 명세서 (전체 화면)
 
 > 화면 순서는 사용자 흐름 기준: 인증·온보딩 → 홈·매칭 → 러닝 → 기록·대회 → 피드 → 프로필·설정 → 공통.
 
@@ -129,18 +127,14 @@
 - 매칭 확정/실패, 세션 시작 리마인더, 새 팔로워, 피드 좋아요/댓글, 대회 접수 시작 — 알림 종류별로 눌렀을 때 최적 화면으로 랜딩 ("대회 접수 시작"은 전체 대회 대상이 아니라 `user_running_contests`로 북마크한 대회에 한해서만 발송)
 - 인앱 알림함(목록 조회 화면) 없음 — 푸시로만 발송, 클릭 시 랜딩만 함. `notification` 테이블/조회 API 불필요, 디바이스 등록(`user_device`) API만 유지
 
-## 2. 와이어프레임
-
-원본(Runiverse UI/UX 와이어프레임)을 직접 참고. UI 흐름 참고용.
-
-## 3. ERD·도메인 제약 (전체 스키마는 `erd.md`)
+## 2. 도메인 제약
 
 > 전체 테이블·컬럼·타입·PK 규칙·enum 매핑·단위는 `erd.md`가 단일 출처. 여기서는 API 작성에 필요한 도메인 제약·설계 맥락만 남긴다.
 > 핵심만: `users.user_id`=UUID(그 외 PK=bigint/Long) / 소프트 삭제=`feed`·`comment`·`running_room`(`deleted_at`) / `delete_*`=편집이력·탈퇴 스냅샷.
 
 **API 리소스 네이밍**: DB 테이블명(`running_room`, `running_player` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성됨.
 
-**매칭·러닝 도메인 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리 — 매칭 시작 = 대기 풀(`running_player`)에 들어가는 것이라 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·매칭 성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번). 핵심 2건: ① 러닝 시작 = 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계) ② 메시지 네이밍 규칙 = 클라 발신 현재형/서버 발신 과거형. 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_room.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음. 러닝 사진은 서버 저장 없음(디바이스 갤러리 전용). API 표면 필드명은 `camelCase` 통일(DB 컬럼은 Postgres `snake_case`, 백엔드에서 매핑). enum 값은 DB·API 동일한 영문 코드(값 목록은 `erd.md` §6).
+**매칭·러닝 도메인 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리 — 매칭 시작 = 대기 풀(`running_player`)에 들어가는 것이라 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·매칭 성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번). 핵심 2건: ① 러닝 시작 = 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계) ② 메시지 네이밍 규칙 = 클라 발신 현재형/서버 발신 과거형. 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_room.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음. 러닝 사진은 서버 저장 없음(디바이스 갤러리 전용).
 
 `user_device.is_active`: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). **기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차)** — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
 
@@ -171,7 +165,3 @@ badge 획득 조건/기준을 저장하는 테이블은 ERD에 없음 — 서버
 삭제 처리 방식: `users`/`badge`는 하드delete + 아카이브 — 삭제 API 호출 시 원본 로우를 실제 DELETE하기 전에 `delete_user`/`delete_badge`에 스냅샷 먼저 저장(감사/로그 용도, 복구 기능 없음). `feed`는 `deleted_at` 소프트delete(복구 가능·조회 제외 처리).
 `comment`는 답글 유무로 분기(레딧 방식, 두 경우 모두 `delete_comment` 스냅샷 먼저 저장): 답글 없으면 하드delete, 답글 있으면 톰스톤 — row 유지 + `comment` 내용 비움 + `deleted_at` 기록, 목록에서 "삭제된 댓글입니다" 자리표시로 노출하고 답글 스레드 유지.
 리소스별로 삭제 방식이 다르므로 API 설계 시 각각 구분해서 반영할 것.
-
-## 4. 기획서 (서비스 맥락)
-
-Runiverse는 "혼자 뛰지만 함께 뛰는" 원격 동반 러닝 플랫폼. 예약 매칭으로 각자의 위치에서 동시에 러닝을 시작하고, 종료 후 기록을 비교한다. 프로필·피드·팔로우 기능의 목적은 일회성 매칭 경험을 지속적인 러닝 관계와 커뮤니티로 발전시키는 것 — 프로필은 러너 간 신뢰도를 높여 매칭 품질을 개선하고, 피드는 함께 달린 기억을 축적해 지속적인 러닝 습관 형성으로 이어지도록 하는 역할을 한다. 결제 관련 기능은 없음.

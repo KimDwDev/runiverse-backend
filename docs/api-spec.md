@@ -1,4 +1,4 @@
-# Runiverse API 명세서 v1
+# Runiverse API 명세서
 
 > 구성: 엔드포인트 목록(색인) → 상세 명세 0~13. ERD 기준: `erd.md`.
 
