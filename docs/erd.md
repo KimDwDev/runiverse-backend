@@ -22,6 +22,7 @@
 ## 1. 도메인 A — 유저 · 인증
 
 ### users
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_id | UUID | PK | |
@@ -34,6 +35,7 @@
 | created_at / updated_at | timestamptz | NOT NULL | |
 
 ### user_onboard
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_onboard_id | bigint | PK | |
@@ -49,6 +51,7 @@
 > `users`=계정/인증, `user_onboard`=온보딩 프로필(온보딩 완료 = row 존재). 조회 시 eager fetch 권장.
 
 ### oauth_user
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | oauth_user_id | bigint | PK | |
@@ -61,6 +64,7 @@
 > UNIQUE (user_id, provider) — 유저당 provider 1개.
 
 ### user_profile_image
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_profile_image_id | bigint | PK | |
@@ -72,6 +76,7 @@
 > **현재 사진 = 유저별 최신 row**(`created_at` DESC). 변경 = 새 row INSERT(이력 보존), 되돌리기 = 옛 key 재INSERT.
 
 ### user_device
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_device_id | bigint | PK | |
@@ -88,6 +93,7 @@
 ## 2. 도메인 B — 매칭 · 러닝
 
 ### running_room
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴 |
@@ -99,6 +105,7 @@
 | deleted_at | timestamptz | nullable | **[2차]** 관리자 부정 방 숨김용 — 1차 미사용 |
 
 ### running_player
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
@@ -113,6 +120,7 @@
 > `running_player`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
 
 ### running_room_session (연결 테이블)
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_player_id | bigint | PK, FK → running_player, ON DELETE CASCADE | 한 플레이어 = 최대 한 방 (PK가 유일성 보장 — 여러 방 동시 링크 차단). 플레이어 삭제(탈퇴 CASCADE 포함) 시 링크도 연쇄 삭제 |
@@ -123,6 +131,7 @@
 > **row 트리거**: 링크 생성 = 방 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_player`도 DELETE) / 확정 후 이탈 = 링크 유지 + `running_player.status=LEFT`(어느 방에서 나갔는지 = 페널티 근거) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
 
 ### running_record
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_record_id | bigint | PK | |
@@ -143,6 +152,7 @@
 > UNIQUE (running_room_id, user_id) WHERE running_room_id IS NOT NULL — 매칭 러닝은 유저당 방별 1기록 (솔로는 room null이라 제외).
 
 ### running_split (구간별)
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_split_id | bigint | PK | |
@@ -165,6 +175,7 @@
 ## 3. 도메인 C — 소셜 (팔로우 · 피드 · 댓글 · 뱃지)
 
 ### follow
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | follower_id | UUID | PK1, FK → users | 팔로우 거는 쪽 |
@@ -172,6 +183,7 @@
 | created_at | timestamptz | NOT NULL | 맞팔(양방향 존재) = "친구/지인". 회원탈퇴 시 CASCADE 삭제 |
 
 ### user_follow_stat
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_id | UUID | PK, FK → users | |
@@ -182,6 +194,7 @@
 > 동기화: 팔로우/언팔로우/탈퇴를 같은 트랜잭션에서 ±1 처리. 드리프트 대비 주기적 재계산 배치 권장.
 
 ### feed
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | feed_id | bigint | PK | |
@@ -195,6 +208,7 @@
 | deleted_at | timestamptz | nullable |  |
 
 ### feed_image
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | feed_image_id | bigint | PK | |
@@ -205,6 +219,7 @@
 | created_at | timestamptz | NOT NULL | |
 
 ### feed_like
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | feed_id | bigint | PK1, FK → feed | |
@@ -212,6 +227,7 @@
 | created_at | timestamptz | NOT NULL | |
 
 ### comment
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | comment_id | bigint | PK | |
@@ -224,6 +240,7 @@
 | deleted_at | timestamptz | nullable |  |
 
 ### comment_like
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | comment_id | bigint | PK1, FK → comment | |
@@ -231,6 +248,7 @@
 | created_at | timestamptz | NOT NULL | |
 
 ### badge
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | badge_id | bigint | PK | |
@@ -240,6 +258,7 @@
 | created_at | timestamptz | NOT NULL | |
 
 ### user_badge
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_id | UUID | PK1, FK → users | |
@@ -251,6 +270,7 @@
 ## 4. 도메인 D — 대회
 
 ### running_contests
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_contests_id | bigint | PK | |
@@ -264,6 +284,7 @@
 | created_at / updated_at | timestamptz | NOT NULL | |
 
 ### user_running_contests (북마크)
+
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_id | UUID | PK1, FK → users | |
@@ -277,6 +298,7 @@
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 다이어그램 제외. 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
 
 ### delete_user
+
 회원탈퇴 스냅샷(최소 정보만).
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -286,6 +308,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | created_at | timestamptz | NOT NULL | 스냅샷 시각 |
 
 ### delete_feed
+
 피드 수정 이력(수정 시마다 이전 내용 스냅샷 — 신고 시 원본 확인용).
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -296,6 +319,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | created_at | timestamptz | NOT NULL | 스냅샷 시각 |
 
 ### delete_comment
+
 댓글 삭제/수정 이력.
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -308,6 +332,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | created_at | timestamptz | NOT NULL | 스냅샷 시각 |
 
 ### delete_badge
+
 뱃지 삭제 이력.
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
