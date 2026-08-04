@@ -19,12 +19,12 @@ cd running-service
 - `docs/architecture.md` — 클린 아키텍처 + DDD 레이어 규칙·구현 스타일 (코드 작성 전 필독)
 - `docs/code-convention.md` — 네이밍·테스트 규칙 / `docs/git-convention.md` — 커밋·브랜치·PR 규칙 / `docs/api-convention.md` — API 표면 규칙 (에러 포맷·페이지네이션·인증·단위 접미사)
 - `docs/api-spec.md` — API 명세 / `docs/erd.md` — DB 스키마 / `docs/feature-spec.md` — 기능 명세·도메인 제약
-
-스펙 문서는 초안이며 자주 바뀐다 — 구현 전 다시 읽고, 코드와 어긋나면 사용자에게 확인한다.
+  - 초안이며 자주 바뀐다 — 구현 전 다시 읽고, 코드와 어긋나면 사용자에게 확인한다.
+  - 길다 — 통째로 읽지 말고 해당 기능의 섹션만 찾아 읽는다.
 
 ## 주의사항
 
-- `BusinessException`/`ErrorCode`가 application·domain 양쪽 `common/exception/`에 중복 존재 — 참조 시 어느 쪽인지 확인.
+- `BusinessException`/`ErrorCode`가 domain(VO 검증)·application(유스케이스)에 같은 이름으로 존재 — import 시 레이어 확인.
 - `.env` 등 시크릿 파일은 절대 커밋하지 않고, 키 값은 출력 시 마스킹한다.
 - 요청 없이 공개 API 계약(요청·응답 형식)이나 의존성(라이브러리)을 변경하지 않는다.
 - 문제를 우회하는 해결 금지 — 테스트 약화·빈 catch·기능 삭제로 오류를 없애지 않는다.
