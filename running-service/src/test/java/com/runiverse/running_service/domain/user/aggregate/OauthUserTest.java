@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.user.domain.aggregate;
+package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;

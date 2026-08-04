@@ -1,4 +1,5 @@
-package com.runiverse.running_service.unit_test.infrastructure.oauth.kakao;
+package com.runiverse.running_service.infrastructure.oauth.kakao;
+
 
 import com.runiverse.running_service.infrastructure.oauth.kakao.KakaoOauthClient;
 

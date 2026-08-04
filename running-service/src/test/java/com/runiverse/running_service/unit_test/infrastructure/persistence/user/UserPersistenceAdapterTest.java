@@ -1,5 +1,8 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
+import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
+
 import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
 

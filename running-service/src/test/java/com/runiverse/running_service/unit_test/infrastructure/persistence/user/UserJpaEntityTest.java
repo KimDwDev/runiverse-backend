@@ -1,5 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
+import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

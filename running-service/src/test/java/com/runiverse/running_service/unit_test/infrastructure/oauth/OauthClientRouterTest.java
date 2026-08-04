@@ -1,5 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.oauth;
 
+import com.runiverse.running_service.infrastructure.oauth.OauthClientRouter;
+
 import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
