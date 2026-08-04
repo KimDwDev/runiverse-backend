@@ -9,9 +9,7 @@
 
 ## API 표면
 
-- 필드명 camelCase + 단위 접미사 (`...Meters`, `...Seconds` 등)
-- ID 타입: `userId`만 UUID, 그 외 ID는 Long
-- DB 컬럼은 snake_case
+- 엔드포인트·DTO 필드 등 API 표면 규칙은 [api-convention.md](api-convention.md)를 따른다.
 
 ## PR
 
