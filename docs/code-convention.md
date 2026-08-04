@@ -4,7 +4,7 @@
 
 - Java 코드는 Google Java Style을 따른다.
 - 포맷팅은 루트 `.editorconfig`를 따른다.
-- 커밋 및 브랜치 규칙은 [commit-convention.md](commit-convention.md)를 따른다.
+- 커밋·브랜치·PR 규칙은 [commit-convention.md](commit-convention.md)를 따른다.
 - API 표면(엔드포인트·DTO 필드) 규칙은 [api-convention.md](api-convention.md)를 따른다.
 - 이 문서의 규칙을 우선하며, 규칙에 정의되지 않은 사항은 주변 코드의 구현 스타일을 따른다.
 
@@ -24,7 +24,3 @@
 - 테스트 메서드 이름과 `@DisplayName`은 행위가 드러나도록 작성한다.
 - 내부 구현보다 외부에서 관찰 가능한 결과를 검증한다.
 - 불필요한 mock과 과도한 `verify()`를 사용하지 않는다.
-
-## PR
-
-- 기본 브랜치는 `dev`이며, `.github/pull_request_template.md` 양식을 채워 작성한다.

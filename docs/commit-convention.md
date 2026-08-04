@@ -36,3 +36,7 @@
 
 - **소문자**만 사용하고, 여러 단어는 **kebab-case(`-`)** 로 잇는다.
 - `<type>`은 커밋 타입의 소문자 표기를 쓴다 (`feat`, `fix`, `docs`, `refactor`, …).
+
+## PR
+
+- 기본 브랜치는 `dev`이며, `.github/pull_request_template.md` 양식을 채워 작성한다.
