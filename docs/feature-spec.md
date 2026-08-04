@@ -138,9 +138,9 @@
 > 전체 테이블·컬럼·타입·PK 규칙·enum 매핑·단위는 `erd.md`가 단일 출처. 여기서는 API 작성에 필요한 도메인 제약·설계 맥락만 남긴다.
 > 핵심만: `users.user_id`=UUID(그 외 PK=bigint/Long) / 소프트 삭제=`feed`·`comment`·`running_room`(`deleted_at`) / `delete_*`=편집이력·탈퇴 스냅샷.
 
-**API 리소스 네이밍**: DB 테이블명(`running_room`, `running_player` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec-v1.md` 5~6번이 이 기준으로 작성됨.
+**API 리소스 네이밍**: DB 테이블명(`running_room`, `running_player` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성됨.
 
-**매칭·러닝 도메인 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리 — 매칭 시작 = 대기 풀(`running_player`)에 들어가는 것이라 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·매칭 성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec-v1.md` 5번). 핵심 2건: ① 러닝 시작 = 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계) ② 메시지 네이밍 규칙 = 클라 발신 현재형/서버 발신 과거형. 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_room.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음. 러닝 사진은 서버 저장 없음(디바이스 갤러리 전용). API 표면 필드명은 `camelCase` 통일(DB 컬럼은 Postgres `snake_case`, 백엔드에서 매핑). enum 값은 DB·API 동일한 영문 코드(값 목록은 `erd.md` §6).
+**매칭·러닝 도메인 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리 — 매칭 시작 = 대기 풀(`running_player`)에 들어가는 것이라 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·매칭 성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번). 핵심 2건: ① 러닝 시작 = 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계) ② 메시지 네이밍 규칙 = 클라 발신 현재형/서버 발신 과거형. 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_room.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음. 러닝 사진은 서버 저장 없음(디바이스 갤러리 전용). API 표면 필드명은 `camelCase` 통일(DB 컬럼은 Postgres `snake_case`, 백엔드에서 매핑). enum 값은 DB·API 동일한 영문 코드(값 목록은 `erd.md` §6).
 
 `user_device.is_active`: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). **기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차)** — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
 

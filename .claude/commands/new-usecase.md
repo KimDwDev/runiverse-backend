@@ -6,7 +6,7 @@ argument-hint: <도메인> <기능명> (예 - auth withdraw)
 새 유스케이스를 이 프로젝트의 클린 아키텍처 패턴에 맞게 스캐폴딩해줘: $ARGUMENTS
 
 시작 전에 반드시:
-1. `docs/api-spec-v1.md`에서 해당 기능의 API 명세(요청/응답 필드, 에러 케이스)를 찾아 읽는다.
+1. `docs/api-spec.md`에서 해당 기능의 API 명세(요청/응답 필드, 에러 케이스)를 찾아 읽는다.
 2. `docs/erd.md`에서 관련 테이블·컬럼·enum을 확인한다.
 3. 기존 구현 예시로 `application/auth/command/signup`과 `login` 패키지를 참고해 동일한 스타일로 작성한다.
 
