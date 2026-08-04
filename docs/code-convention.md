@@ -4,7 +4,7 @@
 
 - Java 코드는 Google Java Style을 따른다.
 - 포맷팅은 루트 `.editorconfig`를 따른다.
-- 커밋·브랜치·PR 규칙은 [commit-convention.md](commit-convention.md)를 따른다.
+- 커밋·브랜치·PR 규칙은 [git-convention.md](git-convention.md)를 따른다.
 - API 표면(엔드포인트·DTO 필드) 규칙은 [api-convention.md](api-convention.md)를 따른다.
 - 이 문서의 규칙을 우선하며, 규칙에 정의되지 않은 사항은 주변 코드의 구현 스타일을 따른다.
 

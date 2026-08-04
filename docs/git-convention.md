@@ -1,4 +1,4 @@
-# Git Commit Convention
+# Git Convention
 
 ## 커밋 메시지
 
@@ -12,7 +12,7 @@
 
 - 하나의 커밋에는 **하나의 논리적인 변경 사항만** 담는다.
 
-### Commit Type
+### 커밋 타입
 
 | Type | 설명 |
 |:-----|:-----|

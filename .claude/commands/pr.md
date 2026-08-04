@@ -4,7 +4,7 @@ description: PR 템플릿 양식으로 dev 대상 PR 생성
 
 현재 브랜치의 작업으로 PR을 만들어줘.
 
-1. 현재 브랜치가 `docs/commit-convention.md`의 브랜치 규칙에 맞는지 확인한다 (`dev`에서 직접 PR 금지).
+1. 현재 브랜치가 `docs/git-convention.md`의 브랜치 규칙에 맞는지 확인한다 (`dev`에서 직접 PR 금지).
 2. `git log dev..HEAD`와 `git diff dev...HEAD`로 이 브랜치의 전체 변경사항을 파악한다.
 3. 푸시가 안 된 커밋이 있으면 push 여부를 확인받고 푸시한다.
 4. `.github/pull_request_template.md` 양식을 채워 `gh pr create --base dev`로 PR을 생성한다:
