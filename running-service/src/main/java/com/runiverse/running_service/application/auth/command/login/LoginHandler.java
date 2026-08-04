@@ -20,6 +20,7 @@ public class LoginHandler implements LoginUsecase {
     private final GenerateTokenPort generateTokenPort;
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final SaveRefreshTokenHashPort saveRefreshTokenPort;
+    private final CheckOnboardPort checkOnboardPort;
 
     @Override
     public LoginResult handle(LoginCommand command) {
@@ -45,7 +46,10 @@ public class LoginHandler implements LoginUsecase {
         // 5. refresh token redis 저장
         saveRefreshTokenPort.save(user.getUserId(), hashedRefreshToken);
 
-        // 6. 반환
-        return new LoginResult(user.getUserId().value(), accessToken, refreshToken);
+        // 6. 온보딩 완료 여부 조회
+        boolean isOnboarded = checkOnboardPort.existsByUserId(user.getUserId());
+
+        // 7. 반환
+        return new LoginResult(user.getUserId().value(), accessToken, refreshToken, isOnboarded);
     }
 }

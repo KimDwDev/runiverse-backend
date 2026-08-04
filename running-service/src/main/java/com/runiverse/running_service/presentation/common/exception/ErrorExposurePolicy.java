@@ -11,13 +11,17 @@ public final class ErrorExposurePolicy {
 
     private static final Set<String> EXPOSED_CODES = Set.of(
             ErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
+            ErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
+            ErrorCode.ALREADY_ONBOARD.getCode(),
             ErrorCode.INVALID_CREDENTIALS.getCode(),
             ErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
             ErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),
             ErrorCode.UNSUPPORTED_PROVIDER.getCode(),
             ErrorCode.INVALID_REFRESH_TOKEN.getCode(),
             AuthErrorCode.TOKEN_EXPIRED.getCode(),
-            AuthErrorCode.TOKEN_BLOCKED.getCode()
+            AuthErrorCode.TOKEN_BLOCKED.getCode(),
+            AuthErrorCode.INVALID_TOKEN.getCode(),
+            AuthErrorCode.AUTHENTICATION_REQUIRED.getCode()
     );
     private ErrorExposurePolicy() {} // 다른 곳에서 사용하지 못하도록
     // 400 에러나 내가 노출을 허용한 에러에 경우를 검증하는 메서드
