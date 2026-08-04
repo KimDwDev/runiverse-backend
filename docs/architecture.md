@@ -1,6 +1,6 @@
 # Architecture
 
-헥사고날 + DDD. 패키지 루트는 `com.runiverse.running_service`, 의존 방향은 항상 안쪽(domain)으로 향한다.
+클린 아키텍처 + DDD. 패키지 루트는 `com.runiverse.running_service`, 의존 방향은 항상 안쪽(domain)으로 향한다.
 
 ```
 presentation → application(port/in) → domain

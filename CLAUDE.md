@@ -16,7 +16,7 @@ cd running-service
 
 ## 문서 인덱스 — 구현 전 반드시 해당 문서를 읽을 것
 
-- `docs/architecture.md` — 헥사고날 레이어 규칙·구현 스타일 (코드 작성 전 필독)
+- `docs/architecture.md` — 클린 아키텍처 레이어 규칙·구현 스타일 (코드 작성 전 필독)
 - `docs/code-convention.md` — 네이밍·API 표면·PR 규칙 / `docs/commit-convention.md` — 커밋·브랜치 규칙
 - `docs/api-spec-v1.md` — API 명세 / `docs/erd.md` — DB 스키마 / `docs/api-spec-context.md` — 기능명세·기획 맥락
 
