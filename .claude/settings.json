@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(./gradlew compileTestJava:*)",
+      "Bash(cd running-service && ./gradlew build:*)",
+      "Bash(cd running-service && ./gradlew test:*)",
+      "Bash(cd running-service && ./gradlew compileJava:*)",
+      "Bash(cd running-service && ./gradlew compileTestJava:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./running-service/.env)"
+    ]
+  }
+}
