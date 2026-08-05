@@ -327,10 +327,16 @@ jobs:
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__ECR_REGISTRY__/$ECR_REGISTRY}"
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__IMAGE_URI__/$IMAGE_URI}"
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__GITHUB_SHA__/$GITHUB_SHA}"
-
+        
+          DEPLOY_SCRIPT_BASE64=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
+          
           PARAMETERS=$(jq -n \
-            --arg command "$DEPLOY_SCRIPT" \
-            '{commands: [$command]}')
+          --arg script "$DEPLOY_SCRIPT_BASE64" \
+          '{
+            commands: [
+              "echo " + $script + " | base64 -d | bash"
+            ]
+          }')
 
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
