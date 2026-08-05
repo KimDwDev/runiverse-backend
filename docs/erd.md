@@ -6,7 +6,7 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`follow`·`feed_like`·`comment_like`·`user_badge`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_follow_stat`·`delete_user`)·`running_room_session`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`follow`·`feed_like`·`comment_like`·`user_badge`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboard`·`oauth_user`·`user_follow_stat`·`delete_user`)·`running_room_session`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_record.running_room_id`). 같은 테이블 이중 참조는 역할명(`follow.follower_id`/`followee_id`). `feed.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_user`·`running_record`·`running_split`).
 - **타임스탬프**: `*_at`은 전부 `timestamptz`(UTC 저장, API `Z` 표기). `*_date`도 시점이면 `timestamptz`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboard.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
@@ -38,8 +38,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| user_onboard_id | bigint | PK | |
-| user_id | UUID | FK → users, UNIQUE, NOT NULL | 1:1 강제 (온보딩 1 row) |
+| user_id | UUID | PK, FK → users | 참조 키가 곧 PK — 1:1 강제 (온보딩 1 row) |
 | nickname | varchar | UNIQUE, NOT NULL | 중복 시 409. 프로필 표시명(닉네임 변경도 이 컬럼 갱신) |
 | gender | enum | NOT NULL |  |
 | birthday | date | NOT NULL | |
@@ -54,14 +53,12 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| oauth_user_id | bigint | PK | |
-| user_id | UUID | FK → users, NOT NULL | |
+| user_id | UUID | PK, FK → users | 참조 키가 곧 PK — 유저당 소셜 1개(1:1 확정) |
 | provider | enum | NOT NULL |  |
 | provider_id | varchar | NOT NULL | provider 내 유저 식별자 |
 | created_at / updated_at | timestamptz | NOT NULL | |
 
-> UNIQUE (provider, provider_id) — 같은 소셜계정 중복 연결 방지.
-> UNIQUE (user_id, provider) — 유저당 provider 1개.
+> UNIQUE (provider, provider_id) — 같은 소셜 계정 중복 연결 방지.
 
 ### user_profile_image
 
@@ -198,7 +195,7 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | feed_id | bigint | PK | |
-| running_record_id | bigint | → running_record, nullable | 러닝기록 템플릿 카드용. **논리 참조**(FK 제약 없음 — 별개 애그리거트, 무결성 앱 레벨). UNIQUE 없음(1기록:N피드 허용) |
+| running_record_id | bigint | → running_record, nullable | 러닝 기록 템플릿 카드용. **논리 참조**(FK 제약 없음 — 별개 애그리거트, 무결성 앱 레벨). UNIQUE 없음(1기록:N피드 허용) |
 | user_id | UUID | → users, NOT NULL | 작성자 |
 | content | text | nullable | 캡션 (이미지만 있는 피드 허용) |
 | visibility | enum | NOT NULL |  |
@@ -295,7 +292,7 @@
 
 ## 5. delete_* (스냅샷/이력 테이블)
 
-FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 다이어그램 제외. 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
+FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
 
 ### delete_user
 
@@ -351,13 +348,13 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | feed.visibility | FOLLOWERS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | **[2차]** 지인 마스킹 |
-| users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[2차]** 피드 기본 공개범위 |
+| users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[2차]** 피드 기본 공개 범위 |
 | user_onboard.gender | MALE / FEMALE | |
 | user_device.platform | IOS / ANDROID | |
 | running_player.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 |
-| running_room.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 매칭중 / 매칭완료 / 시작 / 종료 / 취소 |
+| running_room.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 매칭 중 / 매칭 완료 / 시작 / 종료 / 취소 |
 | oauth_user.provider | GOOGLE / KAKAO | |
-| (API 전용) emojiType | HI / CHEER / FIGHTING / FIRE / LAUGH | WS 이모티콘 — DB 컬럼 없음(비영속). 인사/응원/파이팅/준비 완료/웃음, 추가는 하위호환 |
+| (API 전용) emojiType | HI / CHEER / FIGHTING / FIRE / LAUGH | WS 이모티콘 — DB 컬럼 없음(비영속). 인사/응원/파이팅/준비 완료/웃음, 추가는 하위 호환 |
 
 ---
 
