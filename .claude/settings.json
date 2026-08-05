@@ -18,6 +18,10 @@
     "deny": [
       "Read(./.env)",
       "Read(./running-service/.env)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
