@@ -118,7 +118,7 @@ jobs:
           cache-from: type=gha,scope=runiverse-backend-test
           cache-to: type=gha,scope=runiverse-backend-test,mode=max
 
-  # ECR -> EC2로 배포
+  # ECR -> Private EC2 배포
   runiverse-backend-deploy:
     name: running-service 테스트 서버 배포
     needs: runiverse-backend-docker-build
@@ -129,11 +129,11 @@ jobs:
       id-token: write
 
     steps:
-      # GitHub OIDC를 통해 배포용 IAM Role 획득
+      # GitHub OIDC를 통해 CI/CD IAM Role 획득
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ vars.AWS_TEST_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_TEST_CICD_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: runiverse-test-deploy
 
@@ -155,64 +155,178 @@ jobs:
           ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-          DEPLOY_SCRIPT=$(cat <<EOF
+          DEPLOY_SCRIPT=$(cat <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
 
-          AWS_REGION="${AWS_REGION}"
-          ECR_REGISTRY="${ECR_REGISTRY}"
-          IMAGE_URI="${IMAGE_URI}"
+          AWS_REGION="__AWS_REGION__"
+          ECR_REGISTRY="__ECR_REGISTRY__"
+          IMAGE_URI="__IMAGE_URI__"
+
           CONTAINER_NAME="runiverse-backend"
-          ENV_FILE="/opt/runiverse/.env"
+          PARAMETER_PATH="/runiverse/test"
+          ENV_DIRECTORY="/opt/runiverse"
+          ENV_FILE="${ENV_DIRECTORY}/.env"
 
           echo "===== Runiverse deployment started ====="
-          echo "Image: \${IMAGE_URI}"
-          echo "Host: \$(hostname)"
+          echo "Image: ${IMAGE_URI}"
+          echo "Host: $(hostname)"
 
-          if [ ! -f "\${ENV_FILE}" ]; then
-            echo "Environment file does not exist: \${ENV_FILE}" >&2
+          mkdir -p "${ENV_DIRECTORY}"
+
+          # Parameter Store에서 환경변수 내려받기
+          echo "Loading environment variables from Parameter Store..."
+
+          TEMP_ENV=$(mktemp)
+
+          aws ssm get-parameters-by-path \
+            --region "${AWS_REGION}" \
+            --path "${PARAMETER_PATH}" \
+            --recursive \
+            --with-decryption \
+            --query 'Parameters[*].[Name,Value]' \
+            --output text |
+          while IFS=$'\t' read -r NAME VALUE; do
+            KEY="${NAME##*/}"
+
+            if [[ ! "${KEY}" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+              echo "Invalid environment variable name: ${KEY}" >&2
+              rm -f "${TEMP_ENV}"
+              exit 1
+            fi
+
+            # Docker env-file은 한 줄에 KEY=VALUE 형식이어야 함
+            if [[ "${VALUE}" == *$'\n'* || "${VALUE}" == *$'\r'* ]]; then
+              echo "Multiline value is not supported: ${KEY}" >&2
+              rm -f "${TEMP_ENV}"
+              exit 1
+            fi
+
+            printf '%s=%s\n' "${KEY}" "${VALUE}"
+          done > "${TEMP_ENV}"
+
+          if [ ! -s "${TEMP_ENV}" ]; then
+            echo "No parameters found under ${PARAMETER_PATH}" >&2
+            rm -f "${TEMP_ENV}"
             exit 1
           fi
 
+          chown root:root "${TEMP_ENV}"
+          chmod 600 "${TEMP_ENV}"
+          mv "${TEMP_ENV}" "${ENV_FILE}"
+
+          echo "Environment file generated successfully."
+          echo "Loaded environment variable names:"
+          cut -d= -f1 "${ENV_FILE}"
+
+          # ECR 인증
           echo "Logging in to Amazon ECR..."
+
           aws ecr get-login-password \
-            --region "\${AWS_REGION}" |
+            --region "${AWS_REGION}" |
             docker login \
               --username AWS \
-              --password-stdin "\${ECR_REGISTRY}"
+              --password-stdin "${ECR_REGISTRY}"
 
-          echo "Pulling image..."
-          docker pull "\${IMAGE_URI}"
+          # 이미지 Pull
+          echo "Pulling Docker image..."
+          docker pull "${IMAGE_URI}"
 
+          # 기존 컨테이너 정보 보존
+          PREVIOUS_IMAGE=""
+
+          if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+            PREVIOUS_IMAGE=$(docker inspect \
+              --format='{{.Config.Image}}' \
+              "${CONTAINER_NAME}")
+          fi
+
+          # 기존 컨테이너 제거
           echo "Removing existing container..."
-          docker rm -f "\${CONTAINER_NAME}" || true
+          docker rm -f "${CONTAINER_NAME}" || true
 
+          # 새 컨테이너 실행
           echo "Starting new container..."
+
           docker run -d \
-            --name "\${CONTAINER_NAME}" \
+            --name "${CONTAINER_NAME}" \
             --restart unless-stopped \
             --network host \
-            --env-file "\${ENV_FILE}" \
-            --label "runiverse.commit=${{ github.sha }}" \
-            "\${IMAGE_URI}"
+            --env-file "${ENV_FILE}" \
+            --label "runiverse.commit=__GITHUB_SHA__" \
+            "${IMAGE_URI}"
 
-          sleep 10
+          # Spring Boot 시작 대기
+          echo "Waiting for application startup..."
 
-          if ! docker ps \
-            --filter "name=^\${CONTAINER_NAME}\$" \
-            --filter "status=running" \
-            --format '{{.Names}}' |
-            grep -qx "\${CONTAINER_NAME}"; then
+          STARTED=false
 
-            echo "Container failed to start." >&2
-            docker logs "\${CONTAINER_NAME}" || true
+          for attempt in $(seq 1 30); do
+            if ! docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+              echo "Container no longer exists." >&2
+              break
+            fi
+
+            RUNNING=$(docker inspect \
+              --format='{{.State.Running}}' \
+              "${CONTAINER_NAME}")
+
+            if [ "${RUNNING}" != "true" ]; then
+              echo "Container stopped during startup." >&2
+              break
+            fi
+
+            # Actuator가 활성화된 경우 실제 API 상태 확인
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              http://127.0.0.1:8080/actuator/health \
+              >/dev/null 2>&1; then
+              STARTED=true
+              break
+            fi
+
+            echo "Waiting for health check... (${attempt}/30)"
+            sleep 5
+          done
+
+          if [ "${STARTED}" != "true" ]; then
+            echo "Application health check failed." >&2
+
+            echo "===== Container logs ====="
+            docker logs --tail 200 "${CONTAINER_NAME}" || true
+
+            docker rm -f "${CONTAINER_NAME}" || true
+
+            # 직전 이미지가 있다면 자동 롤백
+            if [ -n "${PREVIOUS_IMAGE}" ]; then
+              echo "Rolling back to previous image: ${PREVIOUS_IMAGE}"
+
+              docker run -d \
+                --name "${CONTAINER_NAME}" \
+                --restart unless-stopped \
+                --network host \
+                --env-file "${ENV_FILE}" \
+                "${PREVIOUS_IMAGE}"
+            fi
+
             exit 1
           fi
 
-          echo "Container started successfully."
-          docker ps --filter "name=\${CONTAINER_NAME}"
+          echo "Application health check passed."
+          docker ps --filter "name=${CONTAINER_NAME}"
+
+          # 사용하지 않는 이미지 정리
+          docker image prune -f
+
           echo "===== Runiverse deployment completed ====="
-          EOF
+          REMOTE_SCRIPT
           )
+
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__AWS_REGION__/$AWS_REGION}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__ECR_REGISTRY__/$ECR_REGISTRY}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__IMAGE_URI__/$IMAGE_URI}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__GITHUB_SHA__/$GITHUB_SHA}"
 
           PARAMETERS=$(jq -n \
             --arg command "$DEPLOY_SCRIPT" \
@@ -224,14 +338,14 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy runiverse backend ${GITHUB_SHA}" \
             --parameters "$PARAMETERS" \
-            --timeout-seconds 600 \
+            --timeout-seconds 900 \
             --query "Command.CommandId" \
             --output text)
 
           echo "SSM Command ID: $COMMAND_ID"
           echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
 
-      # 명령이 끝날 때까지 기다림
+      # 명령 실행 완료 대기
       - name: Wait for deployment
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
@@ -240,7 +354,7 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 180); do
             STATUS=$(aws ssm get-command-invocation \
               --region "$AWS_REGION" \
               --command-id "$COMMAND_ID" \
@@ -258,6 +372,11 @@ jobs:
                 echo "Deployment failed with status: $STATUS" >&2
                 exit 1
                 ;;
+              Pending|InProgress|Delayed)
+                ;;
+              *)
+                echo "Unknown deployment status: $STATUS"
+                ;;
             esac
 
             sleep 5
@@ -266,7 +385,7 @@ jobs:
           echo "Deployment result wait timed out." >&2
           exit 1
 
-      # 성공하거나 실패해도 실행 로그 출력
+      # 성공하거나 실패해도 실행 결과 출력
       - name: Print deployment result
         if: always()
         env:
