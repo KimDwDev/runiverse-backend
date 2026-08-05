@@ -22,6 +22,13 @@ cd running-service
   - 초안이며 자주 바뀐다 — 구현 전 다시 읽고, 코드와 어긋나면 사용자에게 확인한다.
   - 길다 — 통째로 읽지 말고 해당 기능의 섹션만 찾아 읽는다.
 
+## 스킬 (`.claude/skills/`)
+
+맥락에 맞으면 자동으로 적용되고, `/이름`으로 직접 부를 수도 있다.
+
+- `usecase` — 스펙 한 건을 전 레이어로 구현 (구현 순서·레이어별 함정)
+- `spec-check` — 스펙↔구현 정합성과 레이어 규칙 점검 (`scripts/check_conventions.py`)
+
 ## 주의사항
 
 - `BusinessException`/`ErrorCode`가 domain(VO 검증)·application(유스케이스)에 같은 이름으로 존재 — import 시 레이어 확인.
