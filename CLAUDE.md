@@ -27,7 +27,7 @@ cd running-service
 맥락에 맞으면 자동으로 적용되고, `/이름`으로 직접 부를 수도 있다.
 
 - `usecase` — 스펙 한 건을 전 레이어로 구현 (구현 순서·레이어별 함정)
-- `spec-check` — 스펙↔구현 정합성과 레이어 규칙 점검 (`scripts/check_conventions.py`)
+- `spec-check` — 문서끼리·문서↔구현 정합성과 레이어 규칙 점검 (`scripts/check_conventions.py`)
 
 ## 주의사항
 

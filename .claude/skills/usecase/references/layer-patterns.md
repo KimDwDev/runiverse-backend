@@ -45,7 +45,7 @@
 
 - 컬럼 제약(`nullable`·`length`·`precision`/`scale`)과 `@Check`·`@UniqueConstraint`를 `erd.md` 표 그대로 옮긴다. 이름은 `uk_<테이블>_<컬럼>` / `ck_...` / `fk_<테이블>_<참조테이블>`.
 - setter를 두지 않는다. `@NoArgsConstructor(access = PROTECTED)` + private 생성자 + static `create(...)`.
-- 감사 컬럼은 `@CreationTimestamp`·`@UpdateTimestamp`.
+- 감사 컬럼은 `@CreatedDate`·`@LastModifiedDate`와 `AuditingEntityListener`를 사용한다. `@EnableJpaAuditing` 설정이 없으면 한 번만 추가한다.
 - FK 제약은 걸되 값은 직접 관리하고 싶을 때, `insertable = false, updatable = false` 연관을 따로 둔다(`UserOnboardJpaEntity`의 `user` 필드).
 - 탈퇴 시 CASCADE 대상인지 논리 참조인지는 `erd.md` §0의 `user_id` FK 정책을 따른다. 논리 참조 테이블에는 FK 제약을 걸지 않는다.
 
@@ -81,6 +81,6 @@
 String gender
 ```
 
-타입 자체를 enum으로 두면 Jackson이 먼저 터져 `MALFORMED_REQUEST_BODY`가 나가고, 스펙에 적힌 메시지를 제어할 수 없다.
+타입 자체를 enum으로 두면 Jackson이 먼저 터져 `MALFORMED_REQUEST_BODY`가 나가고, 명세에 적힌 메시지를 제어할 수 없다.
 
 그 외: 필드명에 단위 접미사(`weightKg`·`totalDistanceMeters`), 메시지는 `api-spec.md` 문구 그대로.

@@ -43,4 +43,4 @@
 
 인증 실패 4종은 `AuthErrorCode`가 갖고 `JwtAuthenticationEntryPoint`가 응답한다. 이미 `EXPOSED_CODES`에 있다.
 
-> `CommonErrorCode.INVALID_REQUEST`·`INTERNAL_SERVER_ERROR`는 스펙의 `VALIDATION_FAILED`·`INTERNAL_ERROR`와 문자열이 다르다. 알려진 불일치이고 정리 예정이니 선례로 삼지 말고, 새 코드는 스펙 문자열을 그대로 쓴다.
+> `CommonErrorCode.INVALID_REQUEST`·`INTERNAL_SERVER_ERROR`는 명세의 `VALIDATION_FAILED`·`INTERNAL_ERROR`와 문자열이 다르다. 알려진 불일치이고 정리 예정이니 선례로 삼지 말고, 새 코드는 명세 문자열을 그대로 쓴다.

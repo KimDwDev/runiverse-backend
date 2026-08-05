@@ -7,8 +7,8 @@
 사용법:
     python3 .claude/skills/spec-check/scripts/check_conventions.py [저장소_루트]
 
-출력은 사람이 읽는 리포트. 위반이 있어도 종료 코드는 0이다
-(게이트가 아니라 조사 도구이므로, 호출한 쪽이 결과를 해석한다).
+출력은 확정 위반·조사 필요·휴리스틱 의심으로 나눈 사람이 읽는 리포트다.
+위반이 있어도 종료 코드는 0이다(게이트가 아니라 조사 도구이므로 호출한 쪽이 결과를 해석한다).
 """
 
 import re
@@ -289,56 +289,65 @@ def main():
         print(f"소스 디렉터리를 찾을 수 없습니다: {root / SRC}")
         return 0
 
-    total = 0
+    confirmed = 0
+    investigate = 0
 
-    print("## 1. 레이어 의존 방향")
+    print("## 1. 확정 위반")
+    print("\n### 레이어 의존 방향")
     layers = check_layers(root)
     if layers:
-        total += len(layers)
+        confirmed += len(layers)
         for path, imported, why in layers:
             print(f"  - {path}\n      {imported}  ({why})")
     else:
         print("  위반 없음")
 
-    print("\n## 2. 에러 코드 등록 (ErrorCode / toStatus / EXPOSED_CODES)")
+    print("\n### 포트 구조")
+    multi, non_iface, odd_name = check_ports(root)
+    if multi or non_iface:
+        confirmed += len(multi) + len(non_iface)
+    for path, methods in multi:
+        print(f"  - {path}: 메서드 {len(methods)}개 — {', '.join(methods)} (단일 메서드로 분리)")
+    for path, why in non_iface:
+        print(f"  - {path}: {why}")
+    if not (multi or non_iface):
+        print("  위반 없음")
+
+    print("\n## 2. 조사 필요")
+    print("\n### 에러 코드 등록 (ErrorCode / toStatus / EXPOSED_CODES)")
     rows = check_error_exposure(root)
     missing = [(c, s, e) for c, s, e in rows if not (s and e)]
     if missing:
-        total += len(missing)
+        investigate += len(missing)
         for code, in_switch, in_exposed in missing:
             flags = []
             if not in_switch:
                 flags.append("toStatus 누락")
             if not in_exposed:
-                flags.append("EXPOSED_CODES 없음 → 500으로 응답됨")
+                flags.append("EXPOSED_CODES 없음 — 400 외 상태는 500으로 마스킹됨")
             print(f"  - {code}: {', '.join(flags)}")
         print("  ※ 의도적 비노출일 수 있다 — 보고 전 `git log -S <코드명>`으로 확인할 것")
     else:
         print(f"  {len(rows)}개 코드 모두 정상 등록")
 
-    print("\n## 3. 사용되지 않는 예외 클래스")
+    print("\n### 사용되지 않는 예외 클래스")
     dead = check_dead_exceptions(root)
     if dead:
-        total += len(dead)
+        investigate += len(dead)
         for path in dead:
             print(f"  - {path}")
     else:
         print("  없음")
 
-    print("\n## 4. 포트 규칙")
-    multi, non_iface, odd_name = check_ports(root)
-    if multi or non_iface:
-        total += len(multi) + len(non_iface)
-    for path, methods in multi:
-        print(f"  - {path}: 메서드 {len(methods)}개 — {', '.join(methods)} (단일 메서드로 분리)")
-    for path, why in non_iface:
-        print(f"  - {path}: {why}")
+    print("\n### 포트 이름")
+    investigate += len(odd_name)
     for path in odd_name:
-        print(f"  - (참고) {path}: 동사 접두사로 시작하지 않음")
-    if not (multi or non_iface or odd_name):
-        print("  위반 없음")
+        print(f"  - {path}: 동사 접두사로 시작하지 않음")
+    if not odd_name:
+        print("  조사할 항목 없음")
 
-    print("\n## 5. DTO 단위 접미사 (휴리스틱 — 오탐 가능)")
+    print("\n## 3. 휴리스틱 의심")
+    print("\n### DTO 단위 접미사")
     units = check_unit_suffix(root)
     if units:
         for path, field, expected in units:
@@ -346,7 +355,10 @@ def main():
     else:
         print("  의심 필드 없음")
 
-    print(f"\n---\n확실한 위반 {total}건 (5번 항목은 별도 판단)")
+    print(
+        f"\n---\n확정 위반 {confirmed}건 / "
+        f"조사 필요 {investigate}건 / 휴리스틱 의심 {len(units)}건"
+    )
     return 0
 
 
