@@ -95,7 +95,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ vars.AWS_TEST_ECR_PUSH_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_TEST_CICD_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: runiverse-ecr-push
 
@@ -119,3 +119,173 @@ jobs:
           cache-to: type=gha,scope=runiverse-backend-test,mode=max
 
   # ECR -> EC2로 배포
+  runiverse-backend-deploy:
+    name: running-service 테스트 서버 배포
+    needs: runiverse-backend-docker-build
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # GitHub OIDC를 통해 배포용 IAM Role 획득
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_TEST_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: runiverse-test-deploy
+
+      # SSM으로 Private EC2에 배포 명령 전달
+      - name: Deploy application through SSM
+        id: deploy
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.TEST_EC2_INSTANCE_ID }}
+          ECR_REPOSITORY: ${{ vars.ECR_BACKEND_TEST_REPOSITORY }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity \
+            --query Account \
+            --output text)
+
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          DEPLOY_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+
+          AWS_REGION="${AWS_REGION}"
+          ECR_REGISTRY="${ECR_REGISTRY}"
+          IMAGE_URI="${IMAGE_URI}"
+          CONTAINER_NAME="runiverse-backend"
+          ENV_FILE="/opt/runiverse/.env"
+
+          echo "===== Runiverse deployment started ====="
+          echo "Image: \${IMAGE_URI}"
+          echo "Host: \$(hostname)"
+
+          if [ ! -f "\${ENV_FILE}" ]; then
+            echo "Environment file does not exist: \${ENV_FILE}" >&2
+            exit 1
+          fi
+
+          echo "Logging in to Amazon ECR..."
+          aws ecr get-login-password \
+            --region "\${AWS_REGION}" |
+            docker login \
+              --username AWS \
+              --password-stdin "\${ECR_REGISTRY}"
+
+          echo "Pulling image..."
+          docker pull "\${IMAGE_URI}"
+
+          echo "Removing existing container..."
+          docker rm -f "\${CONTAINER_NAME}" || true
+
+          echo "Starting new container..."
+          docker run -d \
+            --name "\${CONTAINER_NAME}" \
+            --restart unless-stopped \
+            --network host \
+            --env-file "\${ENV_FILE}" \
+            --label "runiverse.commit=${{ github.sha }}" \
+            "\${IMAGE_URI}"
+
+          sleep 10
+
+          if ! docker ps \
+            --filter "name=^\${CONTAINER_NAME}\$" \
+            --filter "status=running" \
+            --format '{{.Names}}' |
+            grep -qx "\${CONTAINER_NAME}"; then
+
+            echo "Container failed to start." >&2
+            docker logs "\${CONTAINER_NAME}" || true
+            exit 1
+          fi
+
+          echo "Container started successfully."
+          docker ps --filter "name=\${CONTAINER_NAME}"
+          echo "===== Runiverse deployment completed ====="
+          EOF
+          )
+
+          PARAMETERS=$(jq -n \
+            --arg command "$DEPLOY_SCRIPT" \
+            '{commands: [$command]}')
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy runiverse backend ${GITHUB_SHA}" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 600 \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+      # 명령이 끝날 때까지 기다림
+      - name: Wait for deployment
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.TEST_EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.deploy.outputs.command_id }}
+        run: |
+          set -Eeuo pipefail
+
+          for attempt in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || echo "Pending")
+
+            echo "Deployment status: $STATUS"
+
+            case "$STATUS" in
+              Success)
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "Deployment failed with status: $STATUS" >&2
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Deployment result wait timed out." >&2
+          exit 1
+
+      # 성공하거나 실패해도 실행 로그 출력
+      - name: Print deployment result
+        if: always()
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.TEST_EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.deploy.outputs.command_id }}
+        run: |
+          if [ -z "${COMMAND_ID:-}" ]; then
+            echo "SSM command was not created."
+            exit 0
+          fi
+
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query '{
+              Status: Status,
+              StandardOutput: StandardOutputContent,
+              StandardError: StandardErrorContent
+            }' \
+            --output yaml
