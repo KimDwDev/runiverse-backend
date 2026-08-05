@@ -24,7 +24,7 @@
 **온보딩 화면**
 
 - 온보딩 폼: 약관 동의 체크 + 닉네임, 생년월일, 성별, 키, 몸무게, 평균 페이스 입력 후 제출.
-  - 약관 동의는 로컬·소셜 공통 관문 — 가입 경로 무관 온보딩에서 일괄 수취, 동의 시각 증빙은 `user_onboard.created_at`.
+  - 약관 동의는 로컬·소셜 공통 관문 — 가입 경로 무관 온보딩에서 일괄 수취, 동의 시각 증빙은 `user_onboard.created_at`
   - 닉네임 중복 체크(`NICKNAME_ALREADY_EXISTS`)는 온보딩 API의 에러 케이스.
   - 1회성 입력 — 1차는 닉네임만 `PATCH /users/me`로 수정 가능, 키·몸무게 수정은 2차. 평균 페이스는 수정 UI 없이 서버가 러닝 기록 기반 자동 갱신.
 
@@ -140,7 +140,7 @@
 
 **프로필 편집 페이지**
 
-- 사진 변경, 닉네임 변경(서비스 전반 표시 갱신), 소개글 변경. `nickname`은 `user_onboard`에 저장 — 닉네임 변경은 별도 API 없이 `PATCH /users/me`에 통합, 서버가 `user_onboard.nickname` 갱신, 중복 시 `409 NICKNAME_ALREADY_EXISTS`.
+- 사진 변경, 닉네임 변경(서비스 전반 표시 갱신), 소개글 변경. `nickname`은 `user_onboard`에 저장 — 닉네임 변경은 별도 API 없이 `PATCH /users/me`에 통합, 서버가 `user_onboard.nickname` 갱신, 중복 시 `409 NICKNAME_ALREADY_EXISTS`
 
 **팔로워/팔로잉 목록 페이지**
 
@@ -154,7 +154,7 @@
 - 알림 설정: 전체 알림 on/off 단일 토글(`users.alert_consent` — 좋아요·댓글·팔로우·매칭·리마인더·대회 푸시 전부 관장). 종류별 개별 토글은 1차 미포함.
 - 프로필/피드 공개 범위 설정: **[2차]** `profile_visibility`(지인 마스킹 on/off)·`feed_default_visibility`(피드 기본 공개 범위) 추가 예정. 1차는 피드 작성 시 공개 범위(`feed.visibility`)를 매 피드 개별 선택, 기본 선택값은 클라가 PUBLIC 고정.
 - 로그아웃/회원탈퇴: 확인 팝업 후 처리.
-  - 로그아웃: `POST /auth/logout`(바디 없음 — 서버가 요청 토큰으로 본인 식별). 해당 access 토큰을 서버 블랙리스트에 올려 즉시 무효화 — 만료 전이라도 그 토큰 요청은 `401 TOKEN_BLOCKED`.
+  - 로그아웃: `POST /auth/logout`(바디 없음 — 서버가 요청 토큰으로 본인 식별). 해당 access 토큰을 서버 블랙리스트에 올려 즉시 무효화 — 만료 전이라도 그 토큰 요청은 `401 TOKEN_BLOCKED`
   - 기기 단위 푸시 중단(`deviceId`·`is_active`)은 2차 — deviceId 도입 시.
 
 ### 공통 (특정 화면 소속 아님)
@@ -203,7 +203,7 @@
 
 - **유지**: `feed`, `comment`, `running_record`(+`running_split`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
 - **유지 (카운트 재계산 안 함)**: `feed_like`, `comment_like` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `follow`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stat`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboard`, `user_profile_image`, `user_device`, `oauth_user`, `user_badge`, `user_running_contests`.
+- **즉시 삭제**: `follow`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stat`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboard`, `user_profile_image`, `user_device`, `oauth_user`, `user_badge`, `user_running_contests`
 - `follow` CASCADE 삭제로 어긋나는 상대방들의 `user_follow_stat` follower/following_count는 탈퇴 트랜잭션에서 즉시 재계산(감소 반영) — follow는 row가 삭제돼 목록과 수가 일치해야 하기 때문(feed_like는 row 유지라 카운트 유지 — 기준이 다름).
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):

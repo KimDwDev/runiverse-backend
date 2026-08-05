@@ -14,7 +14,7 @@
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`session_time`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(feed/comment/running_room)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboard`·`oauth_user`·`user_profile_image`·`user_device`·`follow`·`user_follow_stat`·`user_badge`·`user_running_contests`·`running_player`)은 `user_id` **FK + ON DELETE CASCADE**. `running_player` 삭제는 연결 테이블 `running_room_session`으로 연쇄(아래 참조). **유지**되는 테이블(`feed`·`comment`·`running_record`·`feed_like`·`comment_like`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`.
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboard`·`oauth_user`·`user_profile_image`·`user_device`·`follow`·`user_follow_stat`·`user_badge`·`user_running_contests`·`running_player`)은 `user_id` **FK + ON DELETE CASCADE**. `running_player` 삭제는 연결 테이블 `running_room_session`으로 연쇄(아래 참조). **유지**되는 테이블(`feed`·`comment`·`running_record`·`feed_like`·`comment_like`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feed.running_record_id` 참조 정책**: `feed`↔`running_record`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_record`. **무결성은 앱 레벨**: 저장 시 `running_record` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
