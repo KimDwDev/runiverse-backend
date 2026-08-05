@@ -22,7 +22,14 @@
 
 ## 노출 정책
 
-`isExposed`는 상태가 400이거나 코드가 `EXPOSED_CODES`에 있을 때만 참이다. 그 외에는 500 `INTERNAL_ERROR`로 바뀐다.
+`isExposed`는 상태가 400이거나 코드가 `EXPOSED_CODES`에 있을 때만 참이다. 현재 그 외의 응답은 `ErrorExposurePolicy.masked()`가 500 `INTERNAL_SERVER_ERROR`로 바꾼다.
+
+## 명세 계약과 현재 구현 차이
+
+- 목표 계약(`api-spec.md` §0): Bean Validation 실패는 `VALIDATION_FAILED`, 마스킹하거나 예상하지 못한 500은 `INTERNAL_ERROR`다.
+- 현재 구현: `GlobalExceptionHandler`는 Bean Validation 실패에 `INVALID_REQUEST`, `ErrorExposurePolicy.masked()`와 예상하지 못한 예외에 `INTERNAL_SERVER_ERROR`를 반환한다.
+
+현재 동작을 목표 계약으로 설명하지 않는다. 관련 에러 경로를 구현할 때 차이와 영향을 알리고, 공개 계약 변경 범위를 확인한 뒤 맞춘다.
 
 ## 일부러 감추는 경우
 

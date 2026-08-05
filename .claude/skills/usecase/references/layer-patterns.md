@@ -34,7 +34,7 @@
 
 열어볼 것: `port/in/SignUpUsecase`, `port/out/CheckEmailDuplicatePort`
 
-- `port/out`은 단일 메서드이며 `Check*`·`Load*`·`Save*`·`Delete*`·`Generate*`·`Exchange*`로 시작한다.
+- `port/out`은 단일 메서드로 쪼개고 동작·역할이 드러나는 이름을 붙인다. `Check*`·`Load*`·`Save*`·`Delete*`·`Generate*`·`Exchange*`는 기존 예시이며 접두사 제한 목록이 아니다.
 - 파라미터·반환에 도메인 타입(`UserId`, `User`)을 써도 된다. 포트는 application 소유라 domain 의존은 방향이 맞다.
 - `port/out`에는 인터페이스만 두고, DTO·결과 객체는 기능 패키지에 둔다.
 
@@ -70,4 +70,4 @@
 
 - 필수 숫자는 `Integer`와 `@NotNull`로 받는다. `int`는 누락을 0으로 바꾼다.
 - enum은 `String`과 `@Pattern`으로 검증한다. enum 타입은 Jackson의 `MALFORMED_REQUEST_BODY`가 먼저 발생해 명세 메시지를 제어할 수 없다.
-- 필드명에는 단위 접미사(`weightKg`·`totalDistanceMeters`)를 붙이고 메시지는 `api-spec.md` 문구 그대로 쓴다.
+- 필드명에는 `api-convention.md`의 단위 접미사를 붙인다(예: `weightKg`·`totalDistanceMeters`·`averagePaceSecondsPerKm`·`speedMetersPerSecond`). 메시지는 `api-spec.md` 문구 그대로 쓴다.

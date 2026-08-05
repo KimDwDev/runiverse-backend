@@ -4,8 +4,8 @@ description: >-
   Runiverse 문서끼리 또는 문서와 구현의 불일치, 클린 아키텍처 규칙 위반을 찾는다. API·ERD 정합성,
   레이어 의존 방향, 에러 노출, 포트 구조, DTO 단위를 점검한다. "명세대로 구현됐나", "스펙이랑 코드가
   맞나", "아키텍처 점검", 리뷰·PR 전 점검 같은 진단 요청에 사용한다. 점검과 수정이 함께 요청되면
-  수정 전에 적용하며, 이 스킬 자체는 파일을 변경하지 않는다. 구조 설명이나 문서 편집에는
-  사용하지 않는다.
+  수정 전에 적용하며, 이 스킬 자체는 파일을 변경하지 않는다. 불일치 진단이 없는 순수 구조 설명이나
+  문서 편집에는 사용하지 않는다.
 ---
 
 # 명세·구조 정합성 점검
@@ -17,6 +17,7 @@ description: >-
 ## 0. 범위
 
 범위를 지정하지 않으면 구현된 컨트롤러 엔드포인트를 모두 점검한다. 명세에만 있는 미구현 엔드포인트는 제외한다.
+사용자가 범위를 지정하면 그 범위가 수동 대조와 스크립트 결과 보고를 모두 제한한다. 가능하면 스크립트에 소스 범위를 넘기고, 여러 디렉터리라면 각각 실행한다. 범위 밖 발견 사항은 보고하지 않는다. 단, 지정 범위에 적용되는 공통 규칙과 직접 영향을 주는 공통 구현은 포함한다.
 
 ```bash
 rg -n "Mapping\(" running-service/src/main/java -g "*Controller.java"
@@ -26,26 +27,36 @@ rg -n "Mapping\(" running-service/src/main/java -g "*Controller.java"
 
 ```bash
 python3 .claude/skills/spec-check/scripts/check_conventions.py .
+python3 .claude/skills/spec-check/scripts/check_conventions.py . application/user
 ```
 
-레이어 의존 방향, 에러 코드 3자 대조, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 결과는 확정 위반, 조사 필요, 휴리스틱 의심으로 나눈다.
+레이어 의존 방향, application 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 코드 3자 대조, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 결과는 확정 위반, 조사 필요, 휴리스틱 의심으로 나눈다. 스크립트의 휴리스틱이 프로젝트 문서와 다르면 문서를 기준으로 재판정한다.
 
-필요하면 스크립트가 못 보는 다음 항목을 직접 확인한다.
+스크립트 결과를 보완해 다음 항목을 직접 확인한다.
 
+- 기능별 application 패키지가 `Command`/`Handler`/`Result` 3종과 `port/in`의 `*Usecase` 구현을 갖추고, Handler가 `@Transactional` 트랜잭션 경계인지
+- `port/out`이 정확히 단일 메서드 인터페이스이며 기존 포트에 메서드를 추가하지 않고, Handler가 필요한 포트만 주입받는지 (`port/in`이나 메서드명 접두사에는 이 규칙을 적용하지 않는다)
+- 아웃바운드 구현체가 `*Adapter`, 외부 API 클라이언트가 `*Client`이고, 같은 도메인의 여러 포트를 어댑터 하나가 함께 구현하는지
 - 어댑터가 애그리거트를 반쪽만 복원해서 도메인 메서드가 죽은 코드가 됐는지
 - 같은 일을 하는 포트가 이름만 다르게 중복됐는지
 - JPA 엔티티가 `erd.md` §0과 표의 PK·FK·삭제 정책·타입·제약·enum을 빠짐없이 반영하는지
 
 ## 2. 명세와 구현 대조
 
+각 엔드포인트 상세뿐 아니라 `api-spec.md` §0의 적용 가능한 공통 규칙도 먼저 대조한다.
+
 | 볼 것 | 구현 |
 |---|---|
 | 경로·HTTP 메서드 | `@RequestMapping` + `@PostMapping` 등 (`/api/v1` 제외) |
+| 인증·인가 | 인증 필터·Security 설정 + 현재 사용자 주입 + 소유자·역할·참가자 권한 검사 |
+| 헤더·경로·쿼리 파라미터 | `@RequestHeader`/`@PathVariable`/`@RequestParam` + 기본값·최댓값·클램프 동작 |
 | 요청 필드명·필수 여부 | Request record + `@NotNull`/`@NotBlank` |
 | 검증 메시지 문구 | Bean Validation `message` — **글자 단위로** 같아야 한다 (400 응답 본문) |
 | 응답 필드명·타입 | Response record |
 | 성공 상태 코드 | `ResponseEntity.status(...)` |
 | 에러 코드·상태 | `ErrorCode` + `toStatus()` + `EXPOSED_CODES` |
+| 멱등성·업무 동작 | Handler·도메인·포트 호출 + 중복 호출 결과·상태 변경·트랜잭션 |
+| 시각·ID·단위·enum | DTO·매핑·도메인 타입과 `api-spec.md` §0·`api-convention.md`·`erd.md` §6 |
 
 JPA 엔티티는 ERD의 컬럼명·타입·nullable·UNIQUE·FK·삭제 정책·enum 값(§6)과 대조한다.
 
@@ -72,4 +83,4 @@ git log --oneline -S "<식별자>" -- running-service/src docs
 
 ## 6. 마무리
 
-구조, 요청·응답 계약, ERD, 관련 문서를 모두 대조하고 발견 사항을 위 형식으로 보고해야 완료다. 수정 요청에는 수정 기준과 논리적 작업 단위를 제안한다.
+사용자가 요청한 범위와 그 범위에 적용되는 공통 규칙 안에서 해당하는 구조, API 계약·동작, ERD, 관련 문서를 대조하고 발견 사항을 위 형식으로 보고해야 완료다. 수정 요청에는 수정 기준과 논리적 작업 단위를 제안한다.

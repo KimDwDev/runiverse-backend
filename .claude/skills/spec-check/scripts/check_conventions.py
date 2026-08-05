@@ -5,7 +5,7 @@
 소스만 보고 기계적으로 판정 가능한 것만 검사한다.
 
 사용법:
-    python3 .claude/skills/spec-check/scripts/check_conventions.py [저장소_루트]
+    python3 .claude/skills/spec-check/scripts/check_conventions.py [저장소_루트] [소스_범위]
 
 출력은 확정 위반·조사 필요·휴리스틱 의심으로 나눈 사람이 읽는 리포트다.
 위반이 있어도 종료 코드는 0이다(게이트가 아니라 조사 도구이므로 호출한 쪽이 결과를 해석한다).
@@ -44,12 +44,6 @@ FORBIDDEN = {
         (f"{BASE_PKG}.infrastructure", "infrastructure 참조 — port/in만 통해야 함"),
     ],
 }
-
-# port/out 이름에 쓰는 동사 접두사 (architecture.md의 '동사로 시작' 규칙)
-PORT_VERBS = (
-    "Check", "Load", "Save", "Delete", "Generate", "Exchange",
-    "Parse", "Block", "Exists", "Update", "Find", "Send", "Publish",
-)
 
 # 단위 접미사가 필요한 물리량 키워드 → 허용 접미사
 UNIT_KEYWORDS = {
@@ -144,8 +138,31 @@ def record_fields(text: str):
     return fields
 
 
-def java_files(root: Path):
-    return sorted((root / SRC).rglob("*.java"))
+def java_files(root: Path, scope: Path = None):
+    target = scope or root / SRC
+    if target.is_file():
+        return [target] if target.suffix == ".java" else []
+    return sorted(target.rglob("*.java"))
+
+
+def resolve_scope(root: Path, value: str):
+    """선택 범위를 소스 루트 안의 파일이나 디렉터리로 해석한다."""
+    if not value:
+        return None
+
+    source_root = (root / SRC).resolve()
+    raw = Path(value)
+    candidates = [raw] if raw.is_absolute() else [root / raw, source_root / raw]
+    scope = next((candidate.resolve() for candidate in candidates if candidate.exists()), None)
+    if scope is None:
+        raise ValueError(f"검사 범위를 찾을 수 없습니다: {value}")
+    try:
+        scope.relative_to(source_root)
+    except ValueError as e:
+        raise ValueError(f"검사 범위는 소스 디렉터리 안이어야 합니다: {scope}") from e
+    if not scope.is_dir() and scope.suffix != ".java":
+        raise ValueError(f"검사 범위는 디렉터리나 Java 파일이어야 합니다: {scope}")
+    return scope
 
 
 def layer_of(path: Path, root: Path) -> str:
@@ -157,10 +174,10 @@ def rel(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def check_layers(root: Path):
+def check_layers(root: Path, scope: Path = None):
     """의존 방향 위반. 안쪽 레이어가 바깥을 참조하면 클린 아키텍처가 깨진다."""
     hits = []
-    for f in java_files(root):
+    for f in java_files(root, scope):
         layer = layer_of(f, root)
         rules = FORBIDDEN.get(layer)
         if not rules:
@@ -191,13 +208,25 @@ def parse_enum_constants(path: Path):
     return names
 
 
-def check_error_exposure(root: Path):
+def check_error_exposure(root: Path, scope: Path = None):
     """ErrorCode ↔ toStatus ↔ EXPOSED_CODES 3자 대조.
 
     EXPOSED_CODES 누락은 컴파일러가 못 잡고 런타임에 500으로 둔갑한다.
     """
     base = root / SRC
     codes = parse_enum_constants(base / "application/common/exception/ErrorCode.java")
+
+    if scope is not None:
+        scoped_files = java_files(root, scope)
+        global_files = {
+            (base / "application/common/exception/ErrorCode.java").resolve(),
+            (base / "presentation/common/exception/GlobalExceptionHandler.java").resolve(),
+            (base / "presentation/common/exception/ErrorExposurePolicy.java").resolve(),
+        }
+        if not any(f.resolve() in global_files for f in scoped_files):
+            scoped_text = "\n".join(f.read_text(encoding="utf-8") for f in scoped_files)
+            referenced = set(re.findall(r"\bErrorCode\.(\w+)\b", scoped_text))
+            codes = [code for code in codes if code in referenced]
 
     handler = base / "presentation/common/exception/GlobalExceptionHandler.java"
     policy = base / "presentation/common/exception/ErrorExposurePolicy.java"
@@ -217,12 +246,13 @@ def check_error_exposure(root: Path):
     return rows
 
 
-def check_dead_exceptions(root: Path):
+def check_dead_exceptions(root: Path, scope: Path = None):
     """어디서도 생성되지 않는 예외 클래스. 리팩토링 잔재일 가능성이 높다."""
     files = java_files(root)
+    candidates = java_files(root, scope)
     corpus = {f: f.read_text(encoding="utf-8") for f in files}
     dead = []
-    for f in files:
+    for f in candidates:
         if not f.name.endswith("Exception.java"):
             continue
         name = f.stem
@@ -238,15 +268,17 @@ def check_dead_exceptions(root: Path):
     return dead
 
 
-def check_ports(root: Path):
-    """포트 규칙: 단일 메서드 인터페이스, 동사로 시작."""
-    multi, non_iface, odd_name = [], [], []
-    for f in java_files(root):
+def check_ports(root: Path, scope: Path = None):
+    """port/out 규칙: 정확히 한 메서드를 가진 인터페이스."""
+    wrong_count, non_iface = [], []
+    for f in java_files(root, scope):
         parts = f.relative_to(root / SRC).as_posix().split("/")
         if "port" not in parts:
             continue
         text = f.read_text(encoding="utf-8")
         kind = parts[parts.index("port") + 1] if parts.index("port") + 1 < len(parts) else ""
+        if kind != "out":
+            continue
 
         if not re.search(r"\binterface\s+" + re.escape(f.stem) + r"\b", text):
             non_iface.append((rel(f, root), "인터페이스가 아님"))
@@ -256,21 +288,74 @@ def check_ports(root: Path):
         # 주석 제거 후 메서드 선언 수를 센다
         body = re.sub(r"//.*?$|/\*.*?\*/", "", body, flags=re.S | re.M)
         methods = IFACE_METHOD_RE.findall(body)
-        if len(methods) > 1:
-            multi.append((rel(f, root), methods))
-
-        if kind == "out" and not f.stem.startswith(PORT_VERBS):
-            odd_name.append(rel(f, root))
-    return multi, non_iface, odd_name
+        if len(methods) != 1:
+            wrong_count.append((rel(f, root), methods))
+    return wrong_count, non_iface
 
 
-def check_unit_suffix(root: Path):
+def check_application_structure(root: Path, scope: Path = None):
+    """Command/Handler/Result 세트와 Handler 트랜잭션 경계를 검사한다."""
+    source_root = root / SRC
+    feature_dirs = set()
+    for f in java_files(root, scope):
+        parts = f.relative_to(source_root).parts
+        if len(parts) >= 4 and parts[0] == "application" and parts[2] == "command":
+            feature_dirs.add(source_root.joinpath(*parts[:4]))
+
+    missing_sets, handler_issues = [], []
+    for feature_dir in sorted(feature_dirs):
+        files = sorted(feature_dir.glob("*.java"))
+        stems = [f.stem for f in files]
+        missing = [suffix for suffix in ("Command", "Handler", "Result")
+                   if not any(stem.endswith(suffix) for stem in stems)]
+        if missing:
+            missing_sets.append((rel(feature_dir, root), missing))
+
+        for handler in (f for f in files if f.stem.endswith("Handler")):
+            text = re.sub(
+                r"//.*?$|/\*.*?\*/",
+                "",
+                handler.read_text(encoding="utf-8"),
+                flags=re.S | re.M,
+            )
+            issues = []
+            if "@Transactional" not in text:
+                issues.append("@Transactional 누락")
+            declaration = re.search(
+                r"\bclass\s+\w+Handler\b[^\{]*\bimplements\b[^\{]*\b\w+Usecase\b",
+                text,
+                re.S,
+            )
+            if not declaration:
+                issues.append("*Usecase 구현 누락")
+            if issues:
+                handler_issues.append((rel(handler, root), issues))
+    return missing_sets, handler_issues
+
+
+def check_outbound_names(root: Path, scope: Path = None):
+    """port/out 구현체가 *Adapter로 끝나는지 검사한다."""
+    hits = []
+    for f in java_files(root, scope):
+        if layer_of(f, root) != "infrastructure":
+            continue
+        text = re.sub(r"//.*?$|/\*.*?\*/", "", f.read_text(encoding="utf-8"), flags=re.S | re.M)
+        declaration = re.search(r"\bclass\s+(\w+)\b[^\{]*\bimplements\b([^\{]+)\{", text, re.S)
+        if not declaration:
+            continue
+        class_name, interfaces = declaration.groups()
+        if re.search(r"\b\w+Port\b", interfaces) and not class_name.endswith("Adapter"):
+            hits.append(rel(f, root))
+    return hits
+
+
+def check_unit_suffix(root: Path, scope: Path = None):
     """요청·응답 DTO 필드의 단위 접미사 (api-convention.md '예외 0' 규칙).
 
     휴리스틱이다 — 이름에 물리량 키워드가 있는데 접미사가 없는 필드를 모은다.
     """
     hits = []
-    for f in java_files(root):
+    for f in java_files(root, scope):
         p = f.relative_to(root / SRC).as_posix()
         if not (p.startswith("presentation/") and ("/request/" in p or "/response/" in p)):
             continue
@@ -288,13 +373,21 @@ def main():
     if not (root / SRC).is_dir():
         print(f"소스 디렉터리를 찾을 수 없습니다: {root / SRC}")
         return 0
+    try:
+        scope = resolve_scope(root, sys.argv[2] if len(sys.argv) > 2 else None)
+    except ValueError as e:
+        print(e)
+        return 0
+    if scope is not None and not java_files(root, scope):
+        print(f"검사 범위에 Java 파일이 없습니다: {scope}")
+        return 0
 
     confirmed = 0
     investigate = 0
 
     print("## 1. 확정 위반")
     print("\n### 레이어 의존 방향")
-    layers = check_layers(root)
+    layers = check_layers(root, scope)
     if layers:
         confirmed += len(layers)
         for path, imported, why in layers:
@@ -303,19 +396,40 @@ def main():
         print("  위반 없음")
 
     print("\n### 포트 구조")
-    multi, non_iface, odd_name = check_ports(root)
-    if multi or non_iface:
-        confirmed += len(multi) + len(non_iface)
-    for path, methods in multi:
-        print(f"  - {path}: 메서드 {len(methods)}개 — {', '.join(methods)} (단일 메서드로 분리)")
+    wrong_count, non_iface = check_ports(root, scope)
+    if wrong_count or non_iface:
+        confirmed += len(wrong_count) + len(non_iface)
+    for path, methods in wrong_count:
+        detail = ", ".join(methods) if methods else "메서드 없음"
+        print(f"  - {path}: 메서드 {len(methods)}개 — {detail} (정확히 1개 필요)")
     for path, why in non_iface:
         print(f"  - {path}: {why}")
-    if not (multi or non_iface):
+    if not (wrong_count or non_iface):
+        print("  위반 없음")
+
+    print("\n### 애플리케이션 구성·트랜잭션")
+    missing_sets, handler_issues = check_application_structure(root, scope)
+    if missing_sets or handler_issues:
+        confirmed += len(missing_sets) + len(handler_issues)
+        for path, missing in missing_sets:
+            print(f"  - {path}: {', '.join(missing)} 누락")
+        for path, issues in handler_issues:
+            print(f"  - {path}: {', '.join(issues)}")
+    else:
+        print("  위반 없음")
+
+    print("\n### 아웃바운드 구현체 네이밍")
+    outbound_names = check_outbound_names(root, scope)
+    if outbound_names:
+        confirmed += len(outbound_names)
+        for path in outbound_names:
+            print(f"  - {path}: port/out 구현체는 *Adapter로 명명")
+    else:
         print("  위반 없음")
 
     print("\n## 2. 조사 필요")
     print("\n### 에러 코드 등록 (ErrorCode / toStatus / EXPOSED_CODES)")
-    rows = check_error_exposure(root)
+    rows = check_error_exposure(root, scope)
     missing = [(c, s, e) for c, s, e in rows if not (s and e)]
     if missing:
         investigate += len(missing)
@@ -328,10 +442,10 @@ def main():
             print(f"  - {code}: {', '.join(flags)}")
         print("  ※ 의도적 비노출일 수 있다 — 보고 전 `git log -S <코드명>`으로 확인할 것")
     else:
-        print(f"  {len(rows)}개 코드 모두 정상 등록")
+        print(f"  {len(rows)}개 코드 모두 정상 등록" if rows else "  범위에서 참조한 application ErrorCode 없음")
 
     print("\n### 사용되지 않는 예외 클래스")
-    dead = check_dead_exceptions(root)
+    dead = check_dead_exceptions(root, scope)
     if dead:
         investigate += len(dead)
         for path in dead:
@@ -339,16 +453,9 @@ def main():
     else:
         print("  없음")
 
-    print("\n### 포트 이름")
-    investigate += len(odd_name)
-    for path in odd_name:
-        print(f"  - {path}: 동사 접두사로 시작하지 않음")
-    if not odd_name:
-        print("  조사할 항목 없음")
-
     print("\n## 3. 휴리스틱 의심")
     print("\n### DTO 단위 접미사")
-    units = check_unit_suffix(root)
+    units = check_unit_suffix(root, scope)
     if units:
         for path, field, expected in units:
             print(f"  - {path}: `{field}` → `...{expected}` 필요?")
