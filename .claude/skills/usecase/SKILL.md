@@ -13,7 +13,6 @@ description: >-
 
 ## 저장소 고유 규칙
 
-- 같은 도메인의 여러 단일 메서드 포트는 하나의 어댑터가 구현한다. 어댑터를 불필요하게 나누지 않는다.
 - **Spring Data Repository를 쓰지 않는다.** `EntityManager`와 JPQL 텍스트 블록을 사용한다.
 
 ## 사전 확인
