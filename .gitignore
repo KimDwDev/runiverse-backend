@@ -4,3 +4,10 @@
 ### Claude Code ###
 .claude/settings.local.json
 CLAUDE.local.md
+
+### Secrets ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
