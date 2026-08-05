@@ -36,6 +36,8 @@ indent_style = space
 indent_size = 2
 
 [*.md]
+indent_style = space
+indent_size = 2
 trim_trailing_whitespace = false
 # 줄 길이 제한 없음 — 문단 단위 한 줄 유지, 읽을 때는 에디터 소프트 랩 사용
 max_line_length = off
