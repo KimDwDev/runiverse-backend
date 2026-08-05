@@ -95,7 +95,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ vars.AWS_TEST_CICD_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_TEST_ECR_PUSH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: runiverse-ecr-push
 
@@ -133,7 +133,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ vars.AWS_TEST_CICD_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_TEST_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: runiverse-test-deploy
 
