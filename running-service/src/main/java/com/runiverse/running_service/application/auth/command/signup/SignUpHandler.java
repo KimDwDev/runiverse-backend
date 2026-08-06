@@ -41,7 +41,13 @@ public class SignUpHandler implements SignUpUsecase {
         // 5. DB 저장
         User savedUser = saveUserPort.save(user);
 
-        // 6. 결과 반환
+        // 6. token 생성
+
+        // 7. refresh token 서명화
+
+        // 8. refresh token redis 저장
+
+        // 9. 결과 반환
         return new SignUpResult(savedUser.getUserId().value());
     }
 
