@@ -1,6 +1,6 @@
 # 레이어 패턴
 
-문서가 정책 기준이고 기존 파일은 구현 형태의 예시다. 둘이 어긋나면 사용자에게 확인한다.
+문서가 정책 기준이고 기존 파일은 구현 형태의 예시다. 둘 중 어느 쪽이든 낡았을 수 있으니, 어긋나면 한쪽을 그대로 따르지 말고 차이를 알린다.
 
 경로는 전부 `running-service/src/main/java/com/runiverse/running_service/` 기준.
 
@@ -34,9 +34,9 @@
 
 열어볼 것: `port/in/SignUpUsecase`, `port/out/CheckEmailDuplicatePort`
 
-- `port/out`은 단일 메서드로 쪼개고 동작·역할이 드러나는 이름을 붙인다. `Check*`·`Load*`·`Save*`·`Delete*`·`Generate*`·`Exchange*`는 기존 예시이며 접두사 제한 목록이 아니다.
+- `port/out`은 작고 응집되게 나누고(사용 유스케이스나 변경 이유가 다르면 분리) 동작·역할이 드러나는 이름을 붙인다. `Check*`·`Load*`·`Save*`·`Delete*`·`Generate*`·`Exchange*`는 기존 예시이며 접두사 제한 목록이 아니다.
 - 파라미터·반환에 도메인 타입(`UserId`, `User`)을 써도 된다. 포트는 application 소유라 domain 의존은 방향이 맞다.
-- `port/out`에는 인터페이스만 두고, DTO·결과 객체는 기능 패키지에 둔다.
+- `port/out`에는 아웃바운드 인터페이스와 그 전용 입출력 모델만 둔다(예: `OauthProfile`). 여러 레이어가 함께 쓰는 DTO는 기능 패키지에 둔다.
 
 ## JPA 엔티티 — `infrastructure/persistence/user/`
 
@@ -44,7 +44,7 @@
 
 - 컬럼 제약(`nullable`·`length`·`precision`/`scale`)과 `@Check`·`@UniqueConstraint`를 `erd.md` 표 그대로 옮긴다. 이름은 `uk_<테이블>_<컬럼>` / `ck_...` / `fk_<테이블>_<참조테이블>`.
 - setter를 두지 않는다. `@NoArgsConstructor(access = PROTECTED)` + private 생성자 + static `create(...)`.
-- 감사 컬럼은 `@CreatedDate`·`@LastModifiedDate`와 `AuditingEntityListener`를 사용한다(`erd.md` §0). `@EnableJpaAuditing` 설정이 없으면 한 번만 추가한다. 기존 엔티티는 아직 `@CreationTimestamp`를 쓰므로 이관 범위를 사용자와 확인한다.
+- 감사 컬럼은 `@CreatedDate`·`@LastModifiedDate`와 `AuditingEntityListener`를 사용한다(`erd.md` §0). `@EnableJpaAuditing` 설정이 없으면 한 번만 추가한다. 기존 엔티티는 아직 `@CreationTimestamp`를 쓴다 — 새 엔티티는 문서대로 만들고, 기존 엔티티 이관은 요청받았을 때만 한다.
 - FK 제약은 걸되 값을 직접 관리할 때는 `insertable = false, updatable = false` 연관을 별도로 둔다.
 - CASCADE와 논리 참조는 `erd.md` §0의 `user_id` FK 정책을 따른다. 논리 참조 테이블에는 FK 제약을 걸지 않는다.
 

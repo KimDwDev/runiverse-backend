@@ -18,7 +18,7 @@
 
 1. **`application/common/exception/ErrorCode`** — 코드 문자열·메시지를 `api-spec.md`와 글자 그대로 맞춘다.
 2. **`GlobalExceptionHandler.toStatus()`** — `default`가 없는 exhaustive switch라 빠뜨리면 컴파일이 깨진다.
-3. **`ErrorExposurePolicy.EXPOSED_CODES`** — 없으면 **아무 경고 없이** 응답이 500으로 바뀐다.
+3. **`ErrorExposurePolicy.EXPOSED_CODES`** — 400은 자동 노출이라 등록이 필요 없고, 그 외 상태 중 공개할 코드만 추가한다. 공개 대상인데 빠지면 **아무 경고 없이** 응답이 500으로 바뀐다.
 
 ## 노출 정책
 
