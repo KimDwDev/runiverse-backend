@@ -22,7 +22,8 @@ public class SecurityConfig {
             "/auth/signup",
             "/auth/login",
             "/auth/refresh",
-            "/auth/oauth/**"
+            "/auth/oauth/**",
+            "/auth/email/**"
     };
 
     @Bean

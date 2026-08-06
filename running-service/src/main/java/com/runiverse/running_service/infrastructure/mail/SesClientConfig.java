@@ -14,7 +14,7 @@ public class SesClientConfig {
     public SesV2Client sesV2Client(SesProperties properties) {
         return SesV2Client.builder()
                 .region(Region.of(properties.region()))
-                .credentialsProvider(DefaultCredentialsProvider.create())
+                .credentialsProvider(DefaultCredentialsProvider.builder().build())
                 .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(5)))
                 .build();
     }
