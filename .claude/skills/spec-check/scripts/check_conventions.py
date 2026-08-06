@@ -9,6 +9,7 @@
 
 출력은 확정 위반·조사 필요·휴리스틱 의심으로 나눈 사람이 읽는 리포트다.
 위반이 있어도 종료 코드는 0이다(게이트가 아니라 조사 도구이므로 호출한 쪽이 결과를 해석한다).
+사용법·경로·범위 오류는 검사 미실행을 뜻하므로 종료 코드 2를 반환한다.
 """
 
 import re
@@ -62,8 +63,22 @@ UNIT_KEYWORDS = {
 }
 
 IMPORT_RE = re.compile(r"^\s*import\s+(?:static\s+)?([\w.]+)", re.M)
+NORMAL_IMPORT_RE = re.compile(r"^\s*import\s+(?!static\s+)([\w.*]+)\s*;", re.M)
+STATIC_IMPORT_RE = re.compile(r"^\s*import\s+static\s+([\w.*]+)\s*;", re.M)
+PACKAGE_RE = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.M)
 # 인터페이스 본문의 메서드 선언 (기본 구현 default 메서드 제외)
 IFACE_METHOD_RE = re.compile(r"^\s*(?!default\b|static\b)[\w<>\[\],.?\s]+?\s+(\w+)\s*\(", re.M)
+
+APP_ERROR_CODE = f"{BASE_PKG}.application.common.exception.ErrorCode"
+EXTERNAL_CLIENT_IMPORT_PREFIXES = (
+    "org.springframework.web.client",
+    "org.springframework.web.reactive.function.client",
+    "org.springframework.cloud.openfeign",
+    "java.net.http",
+    "feign",
+    "okhttp3",
+    "retrofit2",
+)
 
 
 def strip_annotations(text: str) -> str:
@@ -155,13 +170,18 @@ def resolve_scope(root: Path, value: str):
     candidates = [raw] if raw.is_absolute() else [root / raw, source_root / raw]
     scope = next((candidate.resolve() for candidate in candidates if candidate.exists()), None)
     if scope is None:
-        raise ValueError(f"검사 범위를 찾을 수 없습니다: {value}")
+        requested = display_requested_path(value, root)
+        raise ValueError(f"검사 범위를 찾을 수 없습니다: {requested}")
     try:
         scope.relative_to(source_root)
     except ValueError as e:
-        raise ValueError(f"검사 범위는 소스 디렉터리 안이어야 합니다: {scope}") from e
+        raise ValueError(
+            f"검사 범위는 소스 디렉터리 안이어야 합니다: {display_path(scope, root)}"
+        ) from e
     if not scope.is_dir() and scope.suffix != ".java":
-        raise ValueError(f"검사 범위는 디렉터리나 Java 파일이어야 합니다: {scope}")
+        raise ValueError(
+            f"검사 범위는 디렉터리나 Java 파일이어야 합니다: {display_path(scope, root)}"
+        )
     return scope
 
 
@@ -174,6 +194,34 @@ def rel(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def display_path(path: Path, root: Path) -> str:
+    """저장소 안은 상대 경로로, 밖은 로컬 절대 경로 없이 표시한다."""
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return f"<저장소 밖 경로>/{path.name}" if path.name else "<저장소 밖 경로>"
+
+
+def display_requested_path(value: str, root: Path) -> str:
+    """존재하지 않는 범위도 절대 경로 노출 없이 표시한다."""
+    requested = Path(value)
+    if requested.is_absolute():
+        return display_path(requested, root)
+    return requested.as_posix()
+
+
+def without_comments(text: str) -> str:
+    """주석 속 코드를 실제 선언·참조로 오인하지 않게 제거한다."""
+    return re.sub(r"//.*?$|/\*.*?\*/", "", text, flags=re.S | re.M)
+
+
+def without_comments_and_imports(text: str) -> str:
+    """직접 참조 탐색 중 주석·import 선언을 사용 지점으로 오인하지 않게 제거한다."""
+    return re.sub(
+        r"^\s*import\s+[^;]+;\s*$", "", without_comments(text), flags=re.M
+    )
+
+
 def check_layers(root: Path, scope: Path = None):
     """의존 방향 위반. 안쪽 레이어가 바깥을 참조하면 클린 아키텍처가 깨진다."""
     hits = []
@@ -182,7 +230,7 @@ def check_layers(root: Path, scope: Path = None):
         rules = FORBIDDEN.get(layer)
         if not rules:
             continue
-        text = f.read_text(encoding="utf-8")
+        text = without_comments(f.read_text(encoding="utf-8"))
         for imported in IMPORT_RE.findall(text):
             for prefix, why in rules:
                 if imported.startswith(prefix):
@@ -208,13 +256,149 @@ def parse_enum_constants(path: Path):
     return names
 
 
-def check_error_exposure(root: Path, scope: Path = None):
-    """ErrorCode ↔ toStatus ↔ EXPOSED_CODES 3자 대조.
+def source_fqcn(path: Path, source_root: Path) -> str:
+    """Java 소스 경로를 패키지 포함 클래스명으로 바꾼다."""
+    relative = path.relative_to(source_root).with_suffix("")
+    return f"{BASE_PKG}." + ".".join(relative.parts)
 
-    EXPOSED_CODES 누락은 컴파일러가 못 잡고 런타임에 500으로 둔갑한다.
-    """
+
+def application_exception_index(root: Path):
+    """직접 참조를 소스로 연결하기 위한 application 예외 인덱스."""
+    source_root = root / SRC
+    app_root = source_root / "application"
+    return {
+        source_fqcn(path, source_root): path
+        for path in app_root.rglob("*Exception.java")
+        if path.name != "BusinessException.java"
+    }
+
+
+def referenced_application_error_codes(text: str, known_codes):
+    """domain의 동명 ErrorCode를 제외하고 application 코드 참조만 반환한다."""
+    known = set(known_codes)
+    source = without_comments(text)
+    imports = set(NORMAL_IMPORT_RE.findall(source))
+    static_imports = set(STATIC_IMPORT_RE.findall(source))
+    body = without_comments_and_imports(text)
+    found = set()
+
+    package_match = PACKAGE_RE.search(source)
+    package_name = package_match.group(1) if package_match else ""
+    explicit_error_imports = {
+        imported for imported in imports if imported.endswith(".ErrorCode")
+    }
+    imports_application_error = APP_ERROR_CODE in explicit_error_imports or (
+        not explicit_error_imports
+        and (
+            f"{BASE_PKG}.application.common.exception.*" in imports
+            or package_name == f"{BASE_PKG}.application.common.exception"
+        )
+    )
+    if imports_application_error:
+        found.update(re.findall(r"\bErrorCode\.([A-Z][A-Z0-9_]*)\b", body))
+
+    found.update(
+        re.findall(rf"\b{re.escape(APP_ERROR_CODE)}\.([A-Z][A-Z0-9_]*)\b", body)
+    )
+
+    static_prefix = f"{APP_ERROR_CODE}."
+    for imported in static_imports:
+        if not imported.startswith(static_prefix):
+            continue
+        member = imported[len(static_prefix):]
+        if member == "*":
+            found.update(code for code in known if re.search(rf"\b{re.escape(code)}\b", body))
+        elif member in known and re.search(rf"\b{re.escape(member)}\b", body):
+            found.add(member)
+
+    return found & known
+
+
+def referenced_application_exceptions(text: str, current: Path, index):
+    """생성·생성자 참조·상속으로 직접 연결된 application 예외을 찾는다."""
+    source = without_comments(text)
+    imports = set(NORMAL_IMPORT_RE.findall(source))
+    explicit = {
+        imported.rsplit(".", 1)[-1]: imported
+        for imported in imports
+        if not imported.endswith(".*")
+    }
+    wildcard_packages = [imported[:-2] for imported in imports if imported.endswith(".*")]
+    package_match = PACKAGE_RE.search(source)
+    package_name = package_match.group(1) if package_match else ""
+    body = without_comments_and_imports(text)
+
+    simple_names = set(re.findall(r"\bnew\s+([A-Z]\w*Exception)\b", body))
+    simple_names.update(re.findall(r"\b([A-Z]\w*Exception)\s*::\s*new\b", body))
+    simple_names.update(re.findall(r"\bextends\s+([A-Z]\w*Exception)\b", body))
+    simple_names.update(re.findall(r"\b([A-Z]\w*Exception)\s*\.", body))
+
+    resolved, unresolved = set(), set()
+    for name in simple_names:
+        if name == "BusinessException":
+            continue
+        fqcn = explicit.get(name)
+        if fqcn is None and package_name:
+            same_package = f"{package_name}.{name}"
+            if same_package in index:
+                fqcn = same_package
+        if fqcn is None:
+            fqcn = next(
+                (f"{package}.{name}" for package in wildcard_packages
+                 if f"{package}.{name}" in index),
+                None,
+            )
+        if fqcn is None or not fqcn.startswith(f"{BASE_PKG}.application."):
+            continue
+        target = index.get(fqcn)
+        if target is None:
+            unresolved.add(fqcn)
+        elif target.resolve() != current.resolve():
+            resolved.add(target)
+
+    fqcn_pattern = rf"\b({re.escape(BASE_PKG)}\.application(?:\.\w+)+\.[A-Z]\w*Exception)\b"
+    for fqcn in re.findall(fqcn_pattern, body):
+        target = index.get(fqcn)
+        if target is None:
+            unresolved.add(fqcn)
+        elif target.resolve() != current.resolve():
+            resolved.add(target)
+
+    return resolved, unresolved
+
+
+def trace_scoped_application_codes(root: Path, scope: Path, known_codes):
+    """범위 파일의 직접 코드 참조와 직접 참조 예외 체인을 추적한다."""
+    index = application_exception_index(root)
+    scoped_files = java_files(root, scope)
+    pending = list(scoped_files)
+    visited, followed, unresolved, codes = set(), set(), set(), set()
+
+    while pending:
+        path = pending.pop()
+        resolved = path.resolve()
+        if resolved in visited:
+            continue
+        visited.add(resolved)
+        text = path.read_text(encoding="utf-8")
+        codes.update(referenced_application_error_codes(text, known_codes))
+        references, missing = referenced_application_exceptions(text, path, index)
+        unresolved.update(missing)
+        for target in references:
+            if target.resolve() not in visited:
+                followed.add(target)
+                pending.append(target)
+
+    return codes, followed, unresolved
+
+
+def check_error_exposure_details(root: Path, scope: Path = None):
+    """ErrorCode ↔ toStatus ↔ 공개 경로 대조와 범위 추적 메타데이터."""
     base = root / SRC
-    codes = parse_enum_constants(base / "application/common/exception/ErrorCode.java")
+    all_codes = parse_enum_constants(base / "application/common/exception/ErrorCode.java")
+    selected_codes = set(all_codes)
+    followed, unresolved = set(), set()
+    complete_claim = scope is None
 
     if scope is not None:
         scoped_files = java_files(root, scope)
@@ -223,26 +407,56 @@ def check_error_exposure(root: Path, scope: Path = None):
             (base / "presentation/common/exception/GlobalExceptionHandler.java").resolve(),
             (base / "presentation/common/exception/ErrorExposurePolicy.java").resolve(),
         }
-        if not any(f.resolve() in global_files for f in scoped_files):
-            scoped_text = "\n".join(f.read_text(encoding="utf-8") for f in scoped_files)
-            referenced = set(re.findall(r"\bErrorCode\.(\w+)\b", scoped_text))
-            codes = [code for code in codes if code in referenced]
+        complete_claim = any(path.resolve() in global_files for path in scoped_files)
+        if not complete_claim:
+            selected_codes, followed, unresolved = trace_scoped_application_codes(
+                root, scope, all_codes
+            )
 
     handler = base / "presentation/common/exception/GlobalExceptionHandler.java"
     policy = base / "presentation/common/exception/ErrorExposurePolicy.java"
     handler_text = handler.read_text(encoding="utf-8") if handler.exists() else ""
     policy_text = policy.read_text(encoding="utf-8") if policy.exists() else ""
+    handler_code = without_comments_and_imports(handler_text)
+    policy_code = without_comments_and_imports(policy_text)
 
     # toStatus 스위치 본문만 잘라낸다
-    m = re.search(r"toStatus\s*\([^)]*\)\s*\{(.*?)\n\s*\}", handler_text, re.S)
-    switch_body = m.group(1) if m else ""
-
-    exposed = set(re.findall(r"ErrorCode\.(\w+)\.getCode\(\)", policy_text))
+    match = re.search(r"toStatus\s*\([^)]*\)\s*\{(.*?)\n\s*\}", handler_code, re.S)
+    switch_body = match.group(1) if match else ""
+    exposed = set(re.findall(r"ErrorCode\.(\w+)\.getCode\(\)", policy_code))
+    bad_request_auto_exposed = re.search(
+        r"\bstatus\s*==\s*HttpStatus\.BAD_REQUEST\b|"
+        r"\bHttpStatus\.BAD_REQUEST\s*==\s*status\b",
+        policy_code,
+    ) is not None
+    status_by_code = {}
+    for case_match in re.finditer(
+        r"\bcase\s+(.*?)\s*->\s*HttpStatus\.([A-Z_]+)", switch_body, re.S
+    ):
+        case_body, status = case_match.groups()
+        for code in re.findall(r"\b[A-Z][A-Z0-9_]*\b", case_body):
+            status_by_code[code] = status
 
     rows = []
-    for code in codes:
-        in_switch = re.search(rf"\b{code}\b", switch_body) is not None
-        rows.append((code, in_switch, code in exposed))
+    for code in all_codes:
+        if code not in selected_codes:
+            continue
+        in_switch = re.search(rf"\b{re.escape(code)}\b", switch_body) is not None
+        has_public_path = (
+            bad_request_auto_exposed and status_by_code.get(code) == "BAD_REQUEST"
+        ) or code in exposed
+        rows.append((code, in_switch, has_public_path))
+    metadata = {
+        "complete_claim": complete_claim,
+        "followed": sorted(rel(path, root) for path in followed),
+        "unresolved": sorted(unresolved),
+    }
+    return rows, metadata
+
+
+def check_error_exposure(root: Path, scope: Path = None):
+    """기존 호출 호환을 위해 대조 행만 반환한다."""
+    rows, _ = check_error_exposure_details(root, scope)
     return rows
 
 
@@ -363,6 +577,57 @@ def check_outbound_names(root: Path, scope: Path = None):
     return hits
 
 
+def check_outbound_role_ambiguities(root: Path, scope: Path = None):
+    """*Client·*Router가 이름에 맞는 역할인지 소스로 확정할 수 없으면 조사로 남긴다."""
+    hits = []
+    for f in java_files(root, scope):
+        if layer_of(f, root) != "infrastructure":
+            continue
+        raw_text = f.read_text(encoding="utf-8")
+        text = without_comments(raw_text)
+        declaration = re.search(r"\bclass\s+(\w+)\b([^\{]*)\{", text, re.S)
+        if not declaration:
+            continue
+        class_name, class_header = declaration.groups()
+        implements = re.search(r"\bimplements\b(.+)$", class_header, re.S)
+        interfaces = implements.group(1) if implements else ""
+        implements_port = re.search(r"\b\w+Port\b", interfaces) is not None
+
+        if class_name.endswith("Client"):
+            imports = IMPORT_RE.findall(text)
+            external_client = any(
+                imported.startswith(prefix)
+                for imported in imports
+                for prefix in EXTERNAL_CLIENT_IMPORT_PREFIXES
+            ) or re.search(r"\b(?:RestClient|WebClient|HttpClient|OkHttpClient)\b", text)
+            if not external_client:
+                hits.append((rel(f, root), "*Client이지만 외부 API 호출 근거를 기계적으로 확인할 수 없음"))
+
+        if class_name.endswith("Router"):
+            if not implements_port:
+                hits.append((rel(f, root), "*Router이지만 application 포트를 구현하지 않음"))
+            client_collection = re.search(
+                r"\b(?:Map|List|Set|Collection|Iterable)\s*<"
+                r"[^;{}]*\b\w+Client\s*>\s+(\w+)\b",
+                text,
+                re.S,
+            )
+            if not client_collection:
+                hits.append((rel(f, root), "*Router이지만 클라이언트 선택 근거를 기계적으로 확인할 수 없음"))
+            else:
+                collection_name = client_collection.group(1)
+                selects_client = re.search(
+                    rf"\b{re.escape(collection_name)}\s*\.\s*(?:get|stream)\s*\(",
+                    text,
+                ) is not None
+                if not selects_client:
+                    hits.append((
+                        rel(f, root),
+                        "*Router의 클라이언트 컬렉션은 있으나 선택 동작을 확인할 수 없음",
+                    ))
+    return hits
+
+
 def check_unit_suffix(root: Path, scope: Path = None):
     """요청·응답 DTO 필드의 단위 접미사 (api-convention.md '예외 0' 규칙).
 
@@ -383,18 +648,27 @@ def check_unit_suffix(root: Path, scope: Path = None):
 
 
 def main():
+    if len(sys.argv) > 3:
+        print("인자가 너무 많습니다.", file=sys.stderr)
+        print(
+            "사용법: python3 .claude/skills/spec-check/scripts/check_conventions.py "
+            "[저장소_루트] [소스_범위]",
+            file=sys.stderr,
+        )
+        return 2
+
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     if not (root / SRC).is_dir():
-        print(f"소스 디렉터리를 찾을 수 없습니다: {root / SRC}")
-        return 0
+        print(f"소스 디렉터리를 찾을 수 없습니다: {SRC}", file=sys.stderr)
+        return 2
     try:
         scope = resolve_scope(root, sys.argv[2] if len(sys.argv) > 2 else None)
     except ValueError as e:
-        print(e)
-        return 0
+        print(e, file=sys.stderr)
+        return 2
     if scope is not None and not java_files(root, scope):
-        print(f"검사 범위에 Java 파일이 없습니다: {scope}")
-        return 0
+        print(f"검사 범위에 Java 파일이 없습니다: {display_path(scope, root)}", file=sys.stderr)
+        return 2
 
     confirmed = 0
     investigate = 0
@@ -439,21 +713,51 @@ def main():
         print("  위반 없음")
 
     print("\n## 2. 조사 필요")
-    print("\n### 에러 코드 등록 (ErrorCode / toStatus / EXPOSED_CODES)")
-    rows = check_error_exposure(root, scope)
-    missing = [(c, s, e) for c, s, e in rows if not (s and e)]
+    print("\n### 에러 코드 상태·노출 후보 (ErrorCode / toStatus / EXPOSED_CODES)")
+    rows, error_metadata = check_error_exposure_details(root, scope)
+    missing = [(code, in_switch, has_public_path)
+               for code, in_switch, has_public_path in rows
+               if not (in_switch and has_public_path)]
     if missing:
         investigate += len(missing)
-        for code, in_switch, in_exposed in missing:
+        for code, in_switch, has_public_path in missing:
             flags = []
             if not in_switch:
                 flags.append("toStatus 누락")
-            if not in_exposed:
-                flags.append("EXPOSED_CODES 없음 — 400 외 상태는 500으로 마스킹됨")
+            if not has_public_path:
+                flags.append(
+                    "공개 경로 없음 — 비-400 상태는 500 마스킹 대상; API 계약 확인 필요"
+                )
             print(f"  - {code}: {', '.join(flags)}")
-        print("  ※ 의도적 비노출일 수 있다 — 보고 전 `git log -S <코드명>`으로 확인할 것")
+        print("  ※ 의도적 비노출일 수 있다 — 현재 API 계약과 직접 관련된 이력을 함께 확인할 것")
     else:
-        print(f"  {len(rows)}개 코드 모두 정상 등록" if rows else "  범위에서 참조한 application ErrorCode 없음")
+        if error_metadata["complete_claim"]:
+            print(f"  {len(rows)}개 application 코드에 상태·공개 경로가 있음")
+        elif rows:
+            print(f"  범위에서 추적된 {len(rows)}개 코드에 상태·공개 경로가 있음")
+        else:
+            print("  범위에서 추적된 application ErrorCode 없음")
+
+    if error_metadata["followed"]:
+        print(f"  ※ 직접 참조한 application 예외 {len(error_metadata['followed'])}개의 ErrorCode를 추적함")
+    if error_metadata["unresolved"]:
+        investigate += len(error_metadata["unresolved"])
+        for exception_name in error_metadata["unresolved"]:
+            print(f"  - {exception_name}: application 예외 소스를 찾지 못해 ErrorCode 확인 불가")
+    if not error_metadata["complete_claim"]:
+        print(
+            "  ※ 범위 검사 한계: 직접 application ErrorCode 참조와 직접 참조한 "
+            "application 예외만 추적한다. 공통 변환·동적 생성 경로는 수동 확인이 필요하다."
+        )
+
+    print("\n### 아웃바운드 *Client·*Router 역할")
+    outbound_ambiguities = check_outbound_role_ambiguities(root, scope)
+    if outbound_ambiguities:
+        investigate += len(outbound_ambiguities)
+        for path, why in outbound_ambiguities:
+            print(f"  - {path}: {why}")
+    else:
+        print("  조사 필요 없음")
 
     print("\n### 사용되지 않는 예외 클래스")
     dead = check_dead_exceptions(root, scope)
