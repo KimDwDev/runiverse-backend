@@ -49,7 +49,7 @@ AuthController ──▶ SignUpUsecase ──▶ SignUpHandler ──▶ SaveUse
 ## 레이어별 규칙
 
 - **domain/**: 프레임워크 의존 금지. VO는 생성 시점에 검증하고 도메인 예외를 던진다. 하위는 `aggregate`·`vo`·`exception`으로 나눈다.
-- **application/**: Handler는 `*Usecase`를 구현한다. 반환값이 있을 때만 `Result`를 둔다. DB 트랜잭션은 application에서 관리하며 보통 Handler, 필요하면 내부 컴포넌트가 경계다.
+- **application/**: Handler는 `*Usecase`를 구현한다. 반환값이 있을 때만 `Result`를 둔다. DB 트랜잭션은 application에서 관리하며 보통 Handler, 필요하면 내부 컴포넌트가 경계다 — Redis 전용처럼 DB를 쓰지 않으면 경계가 없는 것이 정상이다.
 - **port/out**: 작고 응집된 인터페이스로 나누고 Handler에는 필요한 포트만 주입한다. 사용 유스케이스나 변경 이유가 다르면 포트를 분리한다.
 - **infrastructure/**: 도메인 ↔ JPA 변환을 담당한다. 포트 구현은 `*Adapter`, 외부 API는 `*Client`, 클라이언트 선택은 `*Router`로 명명한다. 같은 애그리거트와 저장 기술의 포트는 어댑터 하나가 함께 구현할 수 있다.
 - **presentation/**: 컨트롤러 + DTO. 컨트롤러 처리 중 발생한 예외는 `GlobalExceptionHandler`, 인증 진입 실패는 `AuthenticationEntryPoint`에서 변환한다.

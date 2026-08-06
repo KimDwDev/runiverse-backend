@@ -25,18 +25,20 @@ rg -n "Mapping\(" running-service/src/main/java -g "*Controller.java"
 
 ## 1. 구조 검사
 
+저장소 루트에서 실행한다 — `running-service` 안에서는 경로가 깨진다. 두 번째 인자는 소스 루트 기준 상대 경로다.
+
 ```bash
 python3 .claude/skills/spec-check/scripts/check_conventions.py .
 python3 .claude/skills/spec-check/scripts/check_conventions.py . application/user
 ```
 
+종료 코드는 위반이 있어도, 범위를 못 찾아도 0이다 — 출력 본문으로 판단한다. 스크립트를 실행하지 못했으면 §2 수동 대조로 대체하고 그 사실을 보고에 밝힌다.
+
 레이어 의존 방향, application 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 코드 3자 대조, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 결과는 확정 위반, 조사 필요, 휴리스틱 의심으로 나눈다. 스크립트의 휴리스틱이 프로젝트 문서와 다르면 문서를 기준으로 재판정한다.
 
-스크립트 결과를 보완해 다음 항목을 직접 확인한다.
+휴리스틱 판정 기준은 `architecture.md`의 "레이어별 규칙"·"DDD 규칙"이다. 스크립트가 보지 못하는 다음을 직접 확인한다.
 
-- 기능별 application 패키지가 `Command`/`Handler`/`Result` 3종과 `port/in`의 `*Usecase` 구현을 갖추고, Handler가 `@Transactional` 트랜잭션 경계인지
-- `port/out`이 정확히 단일 메서드 인터페이스이며 기존 포트에 메서드를 추가하지 않고, Handler가 필요한 포트만 주입받는지 (`port/in`이나 메서드명 접두사에는 이 규칙을 적용하지 않는다)
-- 아웃바운드 구현체가 `*Adapter`, 외부 API 클라이언트가 `*Client`이고, 같은 도메인의 여러 포트를 어댑터 하나가 함께 구현하는지
+- 같은 애그리거트·저장 기술의 포트를 어댑터 하나가 함께 구현하는지, Handler가 필요한 포트만 주입받는지
 - 어댑터가 애그리거트를 반쪽만 복원해서 도메인 메서드가 죽은 코드가 됐는지
 - 같은 일을 하는 포트가 이름만 다르게 중복됐는지
 - JPA 엔티티가 `erd.md` §0과 표의 PK·FK·삭제 정책·타입·제약·enum을 빠짐없이 반영하는지
@@ -62,6 +64,8 @@ JPA 엔티티는 ERD의 컬럼명·타입·nullable·UNIQUE·FK·삭제 정책·
 
 ## 3. 문서 간 대조
 
+§0에서 정한 범위에 걸리는 절만 대조한다.
+
 - `api-spec.md`의 공통·상세 규칙 ↔ `api-convention.md`
 - `api-spec.md`의 동작·권한·1차 범위 ↔ `feature-spec.md`의 해당 화면 절
 - `erd.md`의 저장 구조·enum·FK 정책 ↔ `feature-spec.md`의 도메인 제약
@@ -72,7 +76,9 @@ JPA 엔티티는 ERD의 컬럼명·타입·nullable·UNIQUE·FK·삭제 정책·
 git log --oneline -S "<식별자>" -- running-service/src docs
 ```
 
-`-S`는 식별자가 추가·삭제된 커밋을 찾는다. 메시지가 애매하면 `git show <해시>`로 diff를 확인한다. 의도된 예외는 조치 불필요로 분류한다.
+`-S`는 식별자가 추가·삭제된 커밋을 찾는다. 메시지가 애매하면 `git show <해시>`로 diff를 확인한다.
+
+`architecture.md`의 "구현 스타일 기준"에 이미 적힌 예외와 커밋으로 의도가 확인된 항목은 조치 불필요로 분류한다. 새 코드가 그 예외를 따라 한 경우에만 위반으로 올린다.
 
 ## 5. 보고 형식
 
@@ -83,4 +89,4 @@ git log --oneline -S "<식별자>" -- running-service/src docs
 
 ## 6. 마무리
 
-사용자가 요청한 범위와 그 범위에 적용되는 공통 규칙 안에서 해당하는 구조, API 계약·동작, ERD, 관련 문서를 대조하고 발견 사항을 위 형식으로 보고해야 완료다. 수정 요청에는 수정 기준과 논리적 작업 단위를 제안한다.
+§0 범위의 구조·API 계약·ERD·문서를 대조하고 발견 사항을 §5 형식으로 보고해야 완료다. 수정 요청에는 수정 기준과 논리적 작업 단위를 제안한다.

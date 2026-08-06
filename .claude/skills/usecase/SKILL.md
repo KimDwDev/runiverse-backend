@@ -41,7 +41,7 @@ description: >-
 
 **1) 도메인** — 값 규칙이나 상태 전이가 있을 때만 변경한다. 프레임워크를 import하지 않는다.
 
-**2) 애플리케이션** — `command/<기능>/`에 `Command`·`Handler`·`Result`, `port/in/<기능>Usecase`, 필요한 단일 메서드 `port/out/`을 만든다. 출력 포트명은 동작·역할이 드러나게 짓는다. 유스케이스 거부 조건은 `application/<도메인>/exception/`에 둔다.
+**2) 애플리케이션** — `command/<기능>/`에 `Command`·`Handler`(반환값이 있으면 `Result`), `port/in/<기능>Usecase`, 필요한 `port/out/`을 만든다. 포트는 작고 응집되게 나눈다. 출력 포트명은 동작·역할이 드러나게 짓는다. 유스케이스 거부 조건은 `application/<도메인>/exception/`에 둔다.
 
 **3) 에러 처리** — 애플리케이션 예외를 추가하거나 요청 값 규칙을 바꿀 때 `references/error-registration.md`를 따르고 DTO·VO 검증을 함께 반영한다.
 
@@ -61,7 +61,7 @@ cd running-service && ./gradlew test
 
 `.env`가 없어 통합 컨텍스트 로드가 실패하면 `compileJava compileTestJava`와 실행 가능한 관련 단위 테스트를 돌리고, 생략한 검증을 밝힌다.
 
-응답 필드명·상태 코드·에러 코드, 포트의 단일 메서드 여부, 새 ErrorCode의 `EXPOSED_CODES` 등록을 확인한다.
+응답 필드명·상태 코드·에러 코드, 포트의 응집도, 새 ErrorCode의 `EXPOSED_CODES` 등록을 확인한다.
 
 구현과 필요한 테스트를 작성하고 위 검증을 마쳐야 완료다. 구현 요약, 검증 결과, 남은 결정이나 실행하지 못한 항목만 보고한다.
 

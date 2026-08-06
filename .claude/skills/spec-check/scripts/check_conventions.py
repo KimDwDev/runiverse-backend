@@ -269,8 +269,17 @@ def check_dead_exceptions(root: Path, scope: Path = None):
 
 
 def check_ports(root: Path, scope: Path = None):
-    """port/out 규칙: 정확히 한 메서드를 가진 인터페이스."""
-    wrong_count, non_iface = [], []
+    """port/out 규칙: `*Port`는 인터페이스여야 한다.
+
+    port/out에는 인터페이스뿐 아니라 전용 입출력 모델(record)도 둘 수 있으므로
+    (architecture.md '아웃바운드 인터페이스 · 전용 입출력 모델'), 이름이 `*Port`인
+    것만 인터페이스 여부를 따진다.
+
+    메서드 수는 확정 위반이 아니다 — architecture.md는 '작고 응집된 인터페이스'를
+    요구할 뿐이라, 여러 메서드가 하나의 역할로 묶이면 정상이다. 사람이 판단하도록
+    휴리스틱으로만 보고한다.
+    """
+    multi_method, non_iface = [], []
     for f in java_files(root, scope):
         parts = f.relative_to(root / SRC).as_posix().split("/")
         if "port" not in parts:
@@ -281,20 +290,26 @@ def check_ports(root: Path, scope: Path = None):
             continue
 
         if not re.search(r"\binterface\s+" + re.escape(f.stem) + r"\b", text):
-            non_iface.append((rel(f, root), "인터페이스가 아님"))
+            if f.stem.endswith("Port"):
+                non_iface.append((rel(f, root), "이름이 *Port인데 인터페이스가 아님"))
             continue
 
         body = text.split("{", 1)[-1]
         # 주석 제거 후 메서드 선언 수를 센다
         body = re.sub(r"//.*?$|/\*.*?\*/", "", body, flags=re.S | re.M)
         methods = IFACE_METHOD_RE.findall(body)
-        if len(methods) != 1:
-            wrong_count.append((rel(f, root), methods))
-    return wrong_count, non_iface
+        if len(methods) > 1:
+            multi_method.append((rel(f, root), methods))
+    return multi_method, non_iface
 
 
 def check_application_structure(root: Path, scope: Path = None):
-    """Command/Handler/Result 세트와 Handler 트랜잭션 경계를 검사한다."""
+    """Command/Handler 세트와 트랜잭션 경계를 검사한다.
+
+    `Result`는 반환값이 있을 때만 두므로 필수가 아니다. 트랜잭션도 경계가 Handler가
+    아닐 수 있고(내부 컴포넌트) Redis 전용 유스케이스는 아예 불필요하므로,
+    기능 패키지 전체에 `@Transactional`이 하나도 없을 때만 휴리스틱으로 보고한다.
+    """
     source_root = root / SRC
     feature_dirs = set()
     for f in java_files(root, scope):
@@ -302,39 +317,38 @@ def check_application_structure(root: Path, scope: Path = None):
         if len(parts) >= 4 and parts[0] == "application" and parts[2] == "command":
             feature_dirs.add(source_root.joinpath(*parts[:4]))
 
-    missing_sets, handler_issues = [], []
+    missing_sets, handler_issues, no_tx = [], [], []
     for feature_dir in sorted(feature_dirs):
         files = sorted(feature_dir.glob("*.java"))
         stems = [f.stem for f in files]
-        missing = [suffix for suffix in ("Command", "Handler", "Result")
+        missing = [suffix for suffix in ("Command", "Handler")
                    if not any(stem.endswith(suffix) for stem in stems)]
         if missing:
             missing_sets.append((rel(feature_dir, root), missing))
 
+        texts = {
+            f: re.sub(r"//.*?$|/\*.*?\*/", "", f.read_text(encoding="utf-8"), flags=re.S | re.M)
+            for f in files
+        }
+        if files and not any("@Transactional" in t for t in texts.values()):
+            no_tx.append(rel(feature_dir, root))
+
         for handler in (f for f in files if f.stem.endswith("Handler")):
-            text = re.sub(
-                r"//.*?$|/\*.*?\*/",
-                "",
-                handler.read_text(encoding="utf-8"),
-                flags=re.S | re.M,
-            )
-            issues = []
-            if "@Transactional" not in text:
-                issues.append("@Transactional 누락")
             declaration = re.search(
                 r"\bclass\s+\w+Handler\b[^\{]*\bimplements\b[^\{]*\b\w+Usecase\b",
-                text,
+                texts[handler],
                 re.S,
             )
             if not declaration:
-                issues.append("*Usecase 구현 누락")
-            if issues:
-                handler_issues.append((rel(handler, root), issues))
-    return missing_sets, handler_issues
+                handler_issues.append((rel(handler, root), ["*Usecase 구현 누락"]))
+    return missing_sets, handler_issues, no_tx
+
+
+OUTBOUND_SUFFIXES = ("Adapter", "Client", "Router")
 
 
 def check_outbound_names(root: Path, scope: Path = None):
-    """port/out 구현체가 *Adapter로 끝나는지 검사한다."""
+    """port/out 구현체 네이밍: 포트 구현은 *Adapter, 외부 API는 *Client, 선택은 *Router."""
     hits = []
     for f in java_files(root, scope):
         if layer_of(f, root) != "infrastructure":
@@ -344,7 +358,7 @@ def check_outbound_names(root: Path, scope: Path = None):
         if not declaration:
             continue
         class_name, interfaces = declaration.groups()
-        if re.search(r"\b\w+Port\b", interfaces) and not class_name.endswith("Adapter"):
+        if re.search(r"\b\w+Port\b", interfaces) and not class_name.endswith(OUTBOUND_SUFFIXES):
             hits.append(rel(f, root))
     return hits
 
@@ -396,19 +410,16 @@ def main():
         print("  위반 없음")
 
     print("\n### 포트 구조")
-    wrong_count, non_iface = check_ports(root, scope)
-    if wrong_count or non_iface:
-        confirmed += len(wrong_count) + len(non_iface)
-    for path, methods in wrong_count:
-        detail = ", ".join(methods) if methods else "메서드 없음"
-        print(f"  - {path}: 메서드 {len(methods)}개 — {detail} (정확히 1개 필요)")
-    for path, why in non_iface:
-        print(f"  - {path}: {why}")
-    if not (wrong_count or non_iface):
+    multi_method, non_iface = check_ports(root, scope)
+    if non_iface:
+        confirmed += len(non_iface)
+        for path, why in non_iface:
+            print(f"  - {path}: {why}")
+    else:
         print("  위반 없음")
 
-    print("\n### 애플리케이션 구성·트랜잭션")
-    missing_sets, handler_issues = check_application_structure(root, scope)
+    print("\n### 애플리케이션 구성")
+    missing_sets, handler_issues, no_tx = check_application_structure(root, scope)
     if missing_sets or handler_issues:
         confirmed += len(missing_sets) + len(handler_issues)
         for path, missing in missing_sets:
@@ -423,7 +434,7 @@ def main():
     if outbound_names:
         confirmed += len(outbound_names)
         for path in outbound_names:
-            print(f"  - {path}: port/out 구현체는 *Adapter로 명명")
+            print(f"  - {path}: port/out 구현체는 *Adapter·*Client·*Router 중 하나로 명명")
     else:
         print("  위반 없음")
 
@@ -454,6 +465,22 @@ def main():
         print("  없음")
 
     print("\n## 3. 휴리스틱 의심")
+    print("\n### port/out 메서드 2개 이상")
+    if multi_method:
+        for path, methods in multi_method:
+            print(f"  - {path}: {len(methods)}개 — {', '.join(methods)}")
+        print("  ※ 하나의 역할로 응집됐으면 정상 — 변경 이유가 다르면 분리 검토")
+    else:
+        print("  없음")
+
+    print("\n### 트랜잭션 경계가 없는 기능 패키지")
+    if no_tx:
+        for path in no_tx:
+            print(f"  - {path}")
+        print("  ※ Redis 전용 등 DB를 쓰지 않으면 정상")
+    else:
+        print("  없음")
+
     print("\n### DTO 단위 접미사")
     units = check_unit_suffix(root, scope)
     if units:
@@ -463,8 +490,8 @@ def main():
         print("  의심 필드 없음")
 
     print(
-        f"\n---\n확정 위반 {confirmed}건 / "
-        f"조사 필요 {investigate}건 / 휴리스틱 의심 {len(units)}건"
+        f"\n---\n확정 위반 {confirmed}건 / 조사 필요 {investigate}건 / "
+        f"휴리스틱 의심 {len(multi_method) + len(no_tx) + len(units)}건"
     )
     return 0
 
