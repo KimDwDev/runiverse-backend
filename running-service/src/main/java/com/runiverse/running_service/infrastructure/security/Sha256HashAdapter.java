@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.security;
 
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationCodeHashPort;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -9,7 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 @Component
-public class Sha256RefreshTokenHashAdapter implements RefreshTokenHashPort {
+public class Sha256HashAdapter implements RefreshTokenHashPort, VerificationCodeHashPort {
 
     private static final String ALGORITHM = "SHA-256";
 

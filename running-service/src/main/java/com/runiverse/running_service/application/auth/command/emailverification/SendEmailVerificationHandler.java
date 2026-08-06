@@ -1,8 +1,22 @@
 package com.runiverse.running_service.application.auth.command.emailverification;
 
 import com.runiverse.running_service.application.auth.port.in.SendEmailVerificationUsecase;
+import com.runiverse.running_service.application.auth.port.out.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
+@Service
+@RequiredArgsConstructor
 public class SendEmailVerificationHandler implements SendEmailVerificationUsecase {
+
+    private final AcquireSendCooldownPort acquireSendCooldownPort;
+    private final ReleaseSendCooldownPort releaseSendCooldownPort;
+    private final CheckDailySendLimitPort checkDailySendLimitPort;
+    private final GenerateVerificationCodePort generateVerificationCodePort;
+    private final VerificationCodeHashPort verificationCodeHashPort;
+    private final SaveVerificationCodePort saveVerificationCodePort;
+    private final DeleteVerificationCodePort deleteVerificationCodePort;
+    private final SendEmailPort sendEmailPort;
 
     @Override
     public void handle(SendEmailVerificationCommand command) {
