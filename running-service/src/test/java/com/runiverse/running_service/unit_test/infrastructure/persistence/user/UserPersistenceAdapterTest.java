@@ -172,7 +172,7 @@ public class UserPersistenceAdapterTest {
     @Test
     @DisplayName("provider와 providerId에 연동된 유저를 도메인 User로 변환해 반환한다")
     void loadByProviderReturnsUser() {
-        // given - 소셜 전용 계정은 hash_password와 description이 NULL로 저장된다
+        // given -> 소셜 전용 계정은 hash_password와 description이 NULL로 저장된다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
                 userId, "kakao@example.com", null, false, null
