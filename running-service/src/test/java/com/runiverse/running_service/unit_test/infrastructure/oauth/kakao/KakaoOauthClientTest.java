@@ -42,7 +42,8 @@ public class KakaoOauthClientTest {
     private static final String PROVIDER_ID = "1234567890";
     private static final String EMAIL = "kakao@example.com";
 
-    private static final String TOKEN_RESPONSE = """
+    private static final String TOKEN_RESPONSE =
+            """
             {
               "token_type": "bearer",
               "access_token": "kakao-access-token",
@@ -51,7 +52,8 @@ public class KakaoOauthClientTest {
             }
             """;
 
-    private static final String USER_RESPONSE = """
+    private static final String USER_RESPONSE =
+            """
             {
               "id": 1234567890,
               "connected_at": "2026-07-30T00:00:00Z",
@@ -66,7 +68,8 @@ public class KakaoOauthClientTest {
             """;
 
     // 이메일 동의를 받지 못하면 email 필드 자체가 응답에서 빠진다
-    private static final String USER_RESPONSE_WITHOUT_EMAIL = """
+    private static final String USER_RESPONSE_WITHOUT_EMAIL =
+            """
             {
               "id": 1234567890,
               "kakao_account": {
@@ -77,7 +80,8 @@ public class KakaoOauthClientTest {
             """;
 
     // 동의 항목이 하나도 없으면 kakao_account 자체가 오지 않는다
-    private static final String USER_RESPONSE_WITHOUT_ACCOUNT = """
+    private static final String USER_RESPONSE_WITHOUT_ACCOUNT =
+            """
             {
               "id": 1234567890
             }
@@ -146,7 +150,7 @@ public class KakaoOauthClientTest {
     @Test
     @DisplayName("client_secret과 code_verifier가 없으면 폼에 담지 않는다")
     void exchangeOmitsBlankOptionalParameters() {
-        // given - 콘솔에서 client_secret을 쓰지 않고, PKCE도 쓰지 않는 클라이언트
+        // given -> 콘솔에서 client_secret을 쓰지 않고, PKCE도 쓰지 않는 클라이언트
         KakaoOauthClient client = createClient("");
 
         // formData는 완전 일치를 검사하므로 이 4개만 있어야 통과한다
@@ -173,12 +177,13 @@ public class KakaoOauthClientTest {
     @Test
     @DisplayName("토큰 요청이 실패하면 OauthCodeExchangeFailedException을 던진다")
     void exchangeFailsWhenTokenRequestRejected() {
-        // given - 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
+        // given -> 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
 
         mockServer.expect(requestTo(TOKEN_URI))
                 .andRespond(withBadRequest()
-                        .body("""
+                        .body(
+                                """
                                 {"error":"invalid_grant","error_description":"authorization code not found","error_code":"KOE320"}
                                 """)
                         .contentType(MediaType.APPLICATION_JSON));
@@ -193,7 +198,7 @@ public class KakaoOauthClientTest {
     @Test
     @DisplayName("토큰 응답에 access_token이 없으면 OauthCodeExchangeFailedException을 던진다")
     void exchangeFailsWhenAccessTokenMissing() {
-        // given - 200이지만 본문이 비어 있는 경우를 방어한다
+        // given -> 200이지만 본문이 비어 있는 경우를 방어한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
 
         mockServer.expect(requestTo(TOKEN_URI))
