@@ -39,9 +39,7 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
     private CompleteOnboardHandler completeOnboardHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                verificationTicketHasher, verificationTicketStore,
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
                 tokenProvider, refreshTokenStore, onboardStore);

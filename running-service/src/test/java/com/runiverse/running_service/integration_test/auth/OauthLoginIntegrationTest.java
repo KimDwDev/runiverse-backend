@@ -28,9 +28,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     private OauthLoginHandler oauthLoginHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                verificationTicketHasher, verificationTicketStore,
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         OauthUserResolver oauthUserResolver = new OauthUserResolver(
                 userStore,        // LoadUserByProviderPort
                 userStore,        // CheckEmailDuplicatePort
@@ -119,7 +117,8 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 .isInstanceOf(EmailAlreadyExistsException.class);
         // 소셜 유저가 추가로 만들어지지 않는다
         assertThat(userStore.size()).isEqualTo(1);
-        assertThat(refreshTokenStore.isEmpty()).isTrue();
+        // 로컬 가입 때 발급된 것 하나뿐이고, 소셜 로그인 토큰은 저장되지 않는다
+        assertThat(refreshTokenStore.size()).isEqualTo(1);
     }
     @Test
     @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 코드 교환을 시도하지 않는다")

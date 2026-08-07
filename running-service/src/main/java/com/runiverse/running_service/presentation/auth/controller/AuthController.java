@@ -38,22 +38,6 @@ public class AuthController {
     private final OauthLoginUsecase oauthLoginUsecase;
     private final ReissueUsecase reissueUsecase;
 
-    @PostMapping("/signup")
-    public ResponseEntity<SignUpResponse> signUp(
-            @Valid @RequestBody SignUpRequest request
-    ) {
-
-        SignUpCommand command = new SignUpCommand(
-                        request.verificationTicket(),
-                        request.password()
-                );
-
-        SignUpResult result = signUpUsecase.handle(command);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new SignUpResponse(result.userId()));
-    }
-
     @PostMapping("/email/verifications")
     public ResponseEntity<Void> sendEmailVerification(
             @Valid @RequestBody EmailVerificationRequest request
@@ -74,6 +58,27 @@ public class AuthController {
         VerifyEmailCodeResult result = verifyEmailCodeUsecase.handle(command);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(new VerifyEmailCodeResponse(result.verificationTicket()));
+    }
+
+    @PostMapping("/signup")
+    public ResponseEntity<SignUpResponse> signUp(
+            @Valid @RequestBody SignUpRequest request
+    ) {
+
+        SignUpCommand command = new SignUpCommand(
+                        request.verificationTicket(),
+                        request.password()
+                );
+
+        SignUpResult result = signUpUsecase.handle(command);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new SignUpResponse(
+                        result.userId(),
+                        result.accessToken(),
+                        result.refreshToken(),
+                        result.isOnboarded()
+                ));
     }
 
     @PostMapping("/login")

@@ -19,14 +19,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     private SignUpHandler signUpHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                verificationTicketHasher,  // VerificationTicketHashPort
-                verificationTicketStore,   // ConsumeVerificationTicketPort
-                userStore,                 // CheckEmailDuplicatePort
-                passwordHasher,            // PasswordHashPort
-                userIdGenerator,           // GenerateUserIdPort
-                userStore                  // SaveUserPort
-        );
+        signUpHandler = newSignUpHandler();
     }
     @Test
     @DisplayName("회원가입에 성공하면 UUIDv7 userId를 반환하고 티켓에 담긴 이메일로 유저가 저장된다")
@@ -78,6 +71,8 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
                 .isInstanceOf(EmailAlreadyExistsException.class);
         // 중복 요청이 기존 데이터를 덮어쓰지 않는다
         assertThat(userStore.size()).isEqualTo(1);
+        // 실패했으므로 토큰도 첫 가입 때 받은 것 하나뿐이다
+        assertThat(refreshTokenStore.size()).isEqualTo(1);
     }
     @Test
     @DisplayName("중복 이메일로 실패해도 티켓은 이미 소비되어 되돌아오지 않는다")
@@ -102,11 +97,42 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThat(userStore.size()).isEqualTo(2);
     }
     @Test
+    @DisplayName("가입에 성공하면 자동 로그인되어 토큰 두 개를 함께 받는다")
+    void signUpIssuesTokens() {
+        // when
+        SignUpResult result = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        // then
+        assertThat(result.accessToken()).isNotBlank();
+        assertThat(result.refreshToken()).isNotBlank();
+        assertThat(result.accessToken()).isNotEqualTo(result.refreshToken());
+    }
+    @Test
+    @DisplayName("refresh token은 원문이 아니라 해시로 저장된다")
+    void signUpStoresHashedRefreshToken() {
+        // when
+        SignUpResult result = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        // then
+        String storedHash = refreshTokenStore.loadById(result.userId()).orElseThrow();
+        assertThat(storedHash).isNotEqualTo(result.refreshToken());
+        assertThat(tokenProvider.matches(result.refreshToken(), storedHash)).isTrue();
+    }
+    @Test
+    @DisplayName("가입 직후에는 온보딩을 하지 않았으므로 isOnboarded가 false다")
+    void signUpIsNotOnboarded() {
+        SignUpResult result = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        assertThat(result.isOnboarded()).isFalse();
+    }
+    @Test
     @DisplayName("발급받은 적 없는 티켓이면 EmailNotVerifiedException이 발생하고 저장되지 않는다")
     void signUpWithUnknownTicket() {
         assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand("not-a-ticket", PASSWORD)))
                 .isInstanceOf(EmailNotVerifiedException.class);
         assertThat(userStore.size()).isZero();
+        // 유저가 없으니 토큰도 발급되지 않는다
+        assertThat(refreshTokenStore.isEmpty()).isTrue();
     }
     @Test
     @DisplayName("같은 티켓을 두 번 쓰면 두 번째는 EmailNotVerifiedException이 발생한다")

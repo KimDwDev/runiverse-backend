@@ -1,27 +1,23 @@
 package com.runiverse.running_service.application.auth.command.signup;
 
-import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.application.auth.port.out.*;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class SignUpHandler implements SignUpUsecase {
 
     private final VerificationTicketHashPort verificationTicketHashPort;
     private final ConsumeVerificationTicketPort consumeVerificationTicketPort;
-    private final CheckEmailDuplicatePort checkEmailDuplicatePort;
-    private final PasswordHashPort passwordHashPort;
-    private final GenerateUserIdPort generateUserIdPort;
-    private final SaveUserPort saveUserPort;
+    private final SignUpUserRegistrar signUpUserRegistrar;
+    private final GenerateTokenPort generateTokenPort;
+    private final RefreshTokenHashPort refreshTokenHashPort;
+    private final SaveRefreshTokenHashPort saveRefreshTokenHashPort;
 
     @Override
     public SignUpResult handle(SignUpCommand command) {
@@ -30,30 +26,18 @@ public class SignUpHandler implements SignUpUsecase {
         String email = consumeVerificationTicketPort.consume(hashedTicket);
         if (email == null) throw new EmailNotVerifiedException();
 
-        // 2. 이메일 중복 확인
-        boolean emailExists = checkEmailDuplicatePort.existsByEmail(email);
-        if (emailExists) throw new EmailAlreadyExistsException();
+        // 2. 유저 생성
+        User user = signUpUserRegistrar.register(email, command.password());
 
-        // 3. 비밀번호 해시화
-        String hashedPassword = passwordHashPort.hash(command.password());
+        // 3. token 생성
+        String accessToken = generateTokenPort.generateAccessToken(user.getUserId());
+        String refreshToken = generateTokenPort.generateRefreshToken(user.getUserId());
 
-        // 4. UUIDv7 생성
-        UUID userId = generateUserIdPort.generate();
+        // 4. refresh token해시화 후 refresh token redis 저장
+        saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
 
-        // 5. 도메인 User 생성
-        User user = new User(userId, email, hashedPassword);
-
-        // 6. DB 저장
-        User savedUser = saveUserPort.save(user);
-
-        // 7. token 생성
-
-        // 8. refresh token 서명화
-
-        // 9. refresh token redis 저장
-
-        // 10. 결과 반환
-        return new SignUpResult(savedUser.getUserId().value());
+        // 5. 결과 반환 (방금 회원가입 했으니 온보딩 여부는 항상 false)
+        return new SignUpResult(user.getUserId().value(), accessToken, refreshToken, false);
     }
 
 }
