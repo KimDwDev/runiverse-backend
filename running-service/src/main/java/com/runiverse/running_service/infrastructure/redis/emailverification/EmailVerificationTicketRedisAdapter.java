@@ -1,7 +1,8 @@
-package com.runiverse.running_service.infrastructure.redis;
+package com.runiverse.running_service.infrastructure.redis.emailverification;
 
 import com.runiverse.running_service.application.auth.port.out.ConsumeVerificationTicketPort;
 import com.runiverse.running_service.application.auth.port.out.SaveVerificationTicketPort;
+import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;

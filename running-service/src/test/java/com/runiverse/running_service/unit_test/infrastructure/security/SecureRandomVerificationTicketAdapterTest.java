@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.security;
 
-import com.runiverse.running_service.infrastructure.security.SecureRandomVerificationTicketAdapter;
+import com.runiverse.running_service.infrastructure.security.emailverification.SecureRandomVerificationTicketAdapter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.infrastructure.redis;
+package com.runiverse.running_service.infrastructure.redis.emailverification;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

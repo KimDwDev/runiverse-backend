@@ -1,4 +1,4 @@
-package com.runiverse.running_service.infrastructure.security;
+package com.runiverse.running_service.infrastructure.security.emailverification;
 
 import com.runiverse.running_service.application.auth.port.out.GenerateVerificationTicketPort;
 import org.springframework.stereotype.Component;

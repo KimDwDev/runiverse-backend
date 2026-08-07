@@ -1,9 +1,10 @@
-package com.runiverse.running_service.infrastructure.redis;
+package com.runiverse.running_service.infrastructure.redis.token;
 
 import com.runiverse.running_service.application.auth.port.out.DeleteRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
 import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;

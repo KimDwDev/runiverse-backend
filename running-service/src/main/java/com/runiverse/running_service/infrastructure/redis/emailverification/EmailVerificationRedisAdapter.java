@@ -1,6 +1,7 @@
-package com.runiverse.running_service.infrastructure.redis;
+package com.runiverse.running_service.infrastructure.redis.emailverification;
 
 import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.HashOperations;

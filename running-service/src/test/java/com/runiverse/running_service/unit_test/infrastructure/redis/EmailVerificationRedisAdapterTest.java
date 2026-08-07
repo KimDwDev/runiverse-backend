@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.runiverse.running_service.application.auth.port.out.VerificationAttempt;
-import com.runiverse.running_service.infrastructure.redis.EmailVerificationProperties;
-import com.runiverse.running_service.infrastructure.redis.EmailVerificationRedisAdapter;
+import com.runiverse.running_service.infrastructure.redis.emailverification.EmailVerificationProperties;
+import com.runiverse.running_service.infrastructure.redis.emailverification.EmailVerificationRedisAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
