@@ -27,14 +27,14 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public boolean existsByEmail(String email) {
         Long count = entityManager.createQuery(
-    """
-           SELECT COUNT(u)
-           FROM UserJpaEntity u 
-           WHERE u.email = :email
-           """, Long.class
+                """
+                SELECT COUNT(u)
+                FROM UserJpaEntity u
+                WHERE u.email = :email
+                """, Long.class
         )
-        .setParameter("email", email)
-        .getSingleResult();
+                .setParameter("email", email)
+                .getSingleResult();
 
         return count > 0;
     }
@@ -73,11 +73,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<User> loadByEmail(String email) {
         return entityManager.createQuery(
-            """
-            SELECT u 
-            FROM UserJpaEntity u 
-            WHERE u.email = :email
-            """, UserJpaEntity.class
+                """
+                SELECT u
+                FROM UserJpaEntity u
+                WHERE u.email = :email
+                """, UserJpaEntity.class
         )
                 .setParameter("email", email)
                 .getResultStream()
@@ -97,13 +97,13 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<User> loadByProvider(Provider provider, String providerId) {
         return entityManager.createQuery(
-           """
-           SELECT u 
-           FROM UserJpaEntity u, OauthUserJpaEntity o
-           WHERE o.userId = u.userId
-               AND o.provider = :provider
-               AND o.providerId = :providerId
-           """, UserJpaEntity.class
+                """
+                SELECT u
+                FROM UserJpaEntity u, OauthUserJpaEntity o
+                WHERE o.userId = u.userId
+                    AND o.provider = :provider
+                    AND o.providerId = :providerId
+                """, UserJpaEntity.class
         )
                 .setParameter("provider", provider)
                 .setParameter("providerId", providerId)
@@ -115,11 +115,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public boolean existsByUserId(UserId userId) {
         Long count = entityManager.createQuery(
-    """
-            SELECT COUNT(o)
-            FROM UserOnboardJpaEntity o
-            WHERE o.userId = :userId
-            """, Long.class
+                """
+                SELECT COUNT(o)
+                FROM UserOnboardJpaEntity o
+                WHERE o.userId = :userId
+                """, Long.class
         )
                 .setParameter("userId", userId.value())
                 .getSingleResult();
@@ -129,11 +129,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public boolean existsByNickname(Nickname nickname) {
         Long count = entityManager.createQuery(
-    """
-           SELECT COUNT(o) 
-           FROM UserOnboardJpaEntity o 
-           WHERE o.nickname = :nickname
-           """, Long.class
+                """
+                SELECT COUNT(o)
+                FROM UserOnboardJpaEntity o
+                WHERE o.nickname = :nickname
+                """, Long.class
         )
                 .setParameter("nickname", nickname.value())
                 .getSingleResult();
