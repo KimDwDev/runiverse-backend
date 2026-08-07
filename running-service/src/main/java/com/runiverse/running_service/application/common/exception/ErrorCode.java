@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
-    EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다."),
+    EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다. 로그인해 주세요."),
     INVALID_EMAIL_CREDENTIALS("INVALID_EMAIL_CREDENTIALS", "이메일이 존재하지 않습니다."),
     INVALID_PASSWORD_CREDENTIALS("INVALID_PASSWORD_CREDENTIALS", "비밀번호가 올바르지 않습니다."),
     INVALID_CREDENTIALS("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
@@ -23,7 +23,7 @@ public enum ErrorCode {
     EMAIL_VERIFICATION_NOT_FOUND("EMAIL_VERIFICATION_NOT_FOUND", "인증 코드가 만료되었습니다. 다시 요청해 주세요."),
     INVALID_VERIFICATION_CODE("INVALID_VERIFICATION_CODE", "인증 코드가 올바르지 않습니다."),
     TOO_MANY_VERIFICATION_ATTEMPTS("TOO_MANY_VERIFICATION_ATTEMPTS", "인증 시도 횟수를 초과했습니다. 코드를 다시 요청해 주세요."),
-    EMAIL_NOT_VERIFIED("EMAIL_NOT_VERIFIED", "이메일 인증이 필요합니다."),
+    EMAIL_NOT_VERIFIED("EMAIL_NOT_VERIFIED", "이메일 인증이 만료되었습니다. 다시 인증해 주세요."),
     EMAIL_SEND_FAILED("EMAIL_SEND_FAILED", "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     private final String code;
     private final String message;
