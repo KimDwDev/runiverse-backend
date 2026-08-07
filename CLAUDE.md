@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Runiverse 백엔드 — 원격 동반 러닝 플랫폼의 API 서버.
+Runiverse 백엔드 — 원격 동반 러닝 플랫폼의 API 서버. 클라이언트는 Flutter 모바일 앱(안드로이드 우선, iOS는 이후 출시).
 
 ## 빌드 및 테스트
 
