@@ -44,7 +44,7 @@ public class AuthController {
     ) {
 
         SignUpCommand command = new SignUpCommand(
-                        request.email(),
+                        request.verificationTicket(),
                         request.password()
                 );
 

@@ -1,15 +1,13 @@
 package com.runiverse.running_service.application.auth.command.signup;
 
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
+import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
-import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
-import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
-import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.auth.port.out.*;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -18,6 +16,8 @@ import java.util.UUID;
 @Transactional
 public class SignUpHandler implements SignUpUsecase {
 
+    private final VerificationTicketHashPort verificationTicketHashPort;
+    private final ConsumeVerificationTicketPort consumeVerificationTicketPort;
     private final CheckEmailDuplicatePort checkEmailDuplicatePort;
     private final PasswordHashPort passwordHashPort;
     private final GenerateUserIdPort generateUserIdPort;
@@ -25,29 +25,34 @@ public class SignUpHandler implements SignUpUsecase {
 
     @Override
     public SignUpResult handle(SignUpCommand command) {
-        // 1. 이메일 중복 확인
-        boolean emailExists = checkEmailDuplicatePort.existsByEmail(command.email());
+        // 1. 티켓을 소비해 이메일을 얻는다. 요청이 보낸 이메일은 애초에 받지 않는다
+        String hashedTicket = verificationTicketHashPort.hash(command.verificationTicket());
+        String email = consumeVerificationTicketPort.consume(hashedTicket);
+        if (email == null) throw new EmailNotVerifiedException();
+
+        // 2. 이메일 중복 확인
+        boolean emailExists = checkEmailDuplicatePort.existsByEmail(email);
         if (emailExists) throw new EmailAlreadyExistsException();
 
-        // 2. 비밀번호 해시화
+        // 3. 비밀번호 해시화
         String hashedPassword = passwordHashPort.hash(command.password());
 
-        // 3. UUIDv7 생성
+        // 4. UUIDv7 생성
         UUID userId = generateUserIdPort.generate();
 
-        // 4. 도메인 User 생성
-        User user = new User(userId, command.email(), hashedPassword);
+        // 5. 도메인 User 생성
+        User user = new User(userId, email, hashedPassword);
 
-        // 5. DB 저장
+        // 6. DB 저장
         User savedUser = saveUserPort.save(user);
 
-        // 6. token 생성
+        // 7. token 생성
 
-        // 7. refresh token 서명화
+        // 8. refresh token 서명화
 
-        // 8. refresh token redis 저장
+        // 9. refresh token redis 저장
 
-        // 9. 결과 반환
+        // 10. 결과 반환
         return new SignUpResult(savedUser.getUserId().value());
     }
 

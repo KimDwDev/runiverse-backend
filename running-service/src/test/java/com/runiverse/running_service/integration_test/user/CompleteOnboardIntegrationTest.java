@@ -40,6 +40,7 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
+                verificationTicketHasher, verificationTicketStore,
                 userStore, passwordHasher, userIdGenerator, userStore);
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
@@ -52,7 +53,8 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
         );
     }
     private UUID signUp(String email) {
-        return signUpHandler.handle(new SignUpCommand(email, PASSWORD)).userId();
+        return signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(email), PASSWORD)).userId();
     }
     private CompleteOnboardCommand command(UUID userId, String nickname) {
         return new CompleteOnboardCommand(

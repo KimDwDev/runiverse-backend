@@ -4,8 +4,8 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
+import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,29 +20,45 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
-                userStore,        // CheckEmailDuplicatePort
-                passwordHasher,   // PasswordHashPort
-                userIdGenerator,  // GenerateUserIdPort
-                userStore         // SaveUserPort
+                verificationTicketHasher,  // VerificationTicketHashPort
+                verificationTicketStore,   // ConsumeVerificationTicketPort
+                userStore,                 // CheckEmailDuplicatePort
+                passwordHasher,            // PasswordHashPort
+                userIdGenerator,           // GenerateUserIdPort
+                userStore                  // SaveUserPort
         );
     }
     @Test
-    @DisplayName("회원가입에 성공하면 UUIDv7 userId를 반환하고 유저가 저장된다")
+    @DisplayName("회원가입에 성공하면 UUIDv7 userId를 반환하고 티켓에 담긴 이메일로 유저가 저장된다")
     void signUpSuccess() {
+        // given
+        String ticket = issueVerificationTicket(EMAIL);
         // when
-        SignUpResult result = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        SignUpResult result = signUpHandler.handle(new SignUpCommand(ticket, PASSWORD));
         // then
         assertThat(result.userId()).isNotNull();
         assertThat(result.userId().version()).isEqualTo(7);
         assertThat(userStore.size()).isEqualTo(1);
         User saved = userStore.findById(result.userId()).orElseThrow();
+        // 요청에는 이메일이 없다. 이 값은 오직 티켓에서만 나온다
         assertThat(saved.getEmail().value()).isEqualTo(EMAIL);
+    }
+    @Test
+    @DisplayName("가입에 성공하면 티켓은 소비되어 저장소에서 사라진다")
+    void signUpConsumesTicket() {
+        // given
+        String ticket = issueVerificationTicket(EMAIL);
+        // when
+        signUpHandler.handle(new SignUpCommand(ticket, PASSWORD));
+        // then
+        assertThat(verificationTicketStore.size()).isZero();
     }
     @Test
     @DisplayName("비밀번호는 평문이 아니라 해시로 저장된다")
     void signUpStoresHashedPassword() {
         // when
-        SignUpResult result = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        SignUpResult result = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         // then
         User saved = userStore.findById(result.userId()).orElseThrow();
         String storedHash = saved.getPasswordHash().value();
@@ -54,27 +70,53 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     @DisplayName("이미 가입된 이메일이면 EmailAlreadyExistsException이 발생한다")
     void signUpWithDuplicateEmail() {
         // given
-        signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        // 티켓은 1회용이라 두 번째 시도에는 새로 발급받아야 한다
+        String secondTicket = issueVerificationTicket(EMAIL);
         // when & then
-        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(EMAIL, "Another123!")))
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(secondTicket, "Another123!")))
                 .isInstanceOf(EmailAlreadyExistsException.class);
         // 중복 요청이 기존 데이터를 덮어쓰지 않는다
         assertThat(userStore.size()).isEqualTo(1);
     }
     @Test
+    @DisplayName("중복 이메일로 실패해도 티켓은 이미 소비되어 되돌아오지 않는다")
+    void signUpConsumesTicketEvenWhenDuplicate() {
+        // given
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        String secondTicket = issueVerificationTicket(EMAIL);
+        // when
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(secondTicket, PASSWORD)))
+                .isInstanceOf(EmailAlreadyExistsException.class);
+        // then - Redis 삭제는 트랜잭션 롤백 대상이 아니다. 재시도하려면 이메일 인증부터 다시 해야 한다
+        assertThat(verificationTicketStore.size()).isZero();
+    }
+    @Test
     @DisplayName("서로 다른 이메일로 가입하면 각각 다른 userId를 받는다")
     void signUpMultipleUsers() {
-        SignUpResult first = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        SignUpResult first = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         SignUpResult second = signUpHandler.handle(
-                new SignUpCommand("other@runiverse.com", PASSWORD));
+                new SignUpCommand(issueVerificationTicket("other@runiverse.com"), PASSWORD));
         assertThat(second.userId()).isNotEqualTo(first.userId());
         assertThat(userStore.size()).isEqualTo(2);
     }
     @Test
-    @DisplayName("이메일 형식이 잘못되면 도메인 예외가 그대로 전파되고 저장되지 않는다")
-    void signUpWithInvalidEmail() {
-        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand("not-an-email", PASSWORD)))
-                .isInstanceOf(InvalidEmailFormatException.class);
+    @DisplayName("발급받은 적 없는 티켓이면 EmailNotVerifiedException이 발생하고 저장되지 않는다")
+    void signUpWithUnknownTicket() {
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand("not-a-ticket", PASSWORD)))
+                .isInstanceOf(EmailNotVerifiedException.class);
         assertThat(userStore.size()).isZero();
+    }
+    @Test
+    @DisplayName("같은 티켓을 두 번 쓰면 두 번째는 EmailNotVerifiedException이 발생한다")
+    void signUpWithUsedTicket() {
+        // given
+        String ticket = issueVerificationTicket(EMAIL);
+        signUpHandler.handle(new SignUpCommand(ticket, PASSWORD));
+        // when & then - 티켓은 1회용이다
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(ticket, PASSWORD)))
+                .isInstanceOf(EmailNotVerifiedException.class);
+        assertThat(userStore.size()).isEqualTo(1);
     }
 }

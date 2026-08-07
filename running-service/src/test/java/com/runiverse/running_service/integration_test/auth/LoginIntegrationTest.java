@@ -23,6 +23,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
+                verificationTicketHasher, verificationTicketStore,
                 userStore, passwordHasher, userIdGenerator, userStore);
         loginHandler = new LoginHandler(
                 userStore,
@@ -34,7 +35,8 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         );
     }
     private UUID signUp() {
-        return signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD)).userId();
+        return signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD)).userId();
     }
 
     @Test

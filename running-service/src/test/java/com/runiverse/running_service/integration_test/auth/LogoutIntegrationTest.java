@@ -30,6 +30,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
+                verificationTicketHasher, verificationTicketStore,
                 userStore, passwordHasher, userIdGenerator, userStore);
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
@@ -43,7 +44,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         );
     }
     private LoginResult signUpAndLogin() {
-        signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         return loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
     }
 
@@ -109,7 +110,8 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
     @DisplayName("로그인한 적 없는 유저를 로그아웃해도 예외 없이 access token만 차단한다")
     void logoutWithoutLogin() {
         // given
-        UUID userId = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD)).userId();
+        UUID userId = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD)).userId();
         // when & then
         assertThatCode(() -> logoutHandler.handle(new LogoutCommand(userId, ACCESS_TOKEN_ID)))
                 .doesNotThrowAnyException();
@@ -120,7 +122,8 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
     void logoutDoesNotAffectOtherUsers() {
         // given
         LoginResult mine = signUpAndLogin();
-        signUpHandler.handle(new SignUpCommand("other@runiverse.com", PASSWORD));
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket("other@runiverse.com"), PASSWORD));
         LoginResult others = loginHandler.handle(new LoginCommand("other@runiverse.com", PASSWORD));
         // when
         logoutHandler.handle(new LogoutCommand(mine.userId(), ACCESS_TOKEN_ID));

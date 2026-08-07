@@ -29,6 +29,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
+                verificationTicketHasher, verificationTicketStore,
                 userStore, passwordHasher, userIdGenerator, userStore);
         OauthUserResolver oauthUserResolver = new OauthUserResolver(
                 userStore,        // LoadUserByProviderPort
@@ -111,7 +112,8 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @DisplayName("이미 로컬 가입된 이메일이면 자동 연동하지 않고 EmailAlreadyExistsException이 발생한다")
     void oauthLoginRejectsExistingLocalEmail() {
         // given - 같은 이메일로 로컬 회원가입이 되어 있다
-        signUpHandler.handle(new SignUpCommand(KAKAO_EMAIL, "Password123!"));
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(KAKAO_EMAIL), "Password123!"));
         // when & then
         assertThatThrownBy(this::login)
                 .isInstanceOf(EmailAlreadyExistsException.class);

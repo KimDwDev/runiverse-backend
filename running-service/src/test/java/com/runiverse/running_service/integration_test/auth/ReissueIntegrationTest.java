@@ -28,6 +28,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = new SignUpHandler(
+                verificationTicketHasher, verificationTicketStore,
                 userStore, passwordHasher, userIdGenerator, userStore);
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
@@ -43,7 +44,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     }
     // 가입 -> 로그인까지 마친 상태를 만든다
     private LoginResult signUpAndLogin() {
-        signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         return loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
     }
 
@@ -120,7 +121,8 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     @DisplayName("저장소에 토큰이 없는 유저면 InvalidRefreshTokenException이 발생한다")
     void reissueWithoutStoredToken() {
         // given - 로그인하지 않아 저장된 적 없는 유저의 토큰
-        UUID userId = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD)).userId();
+        UUID userId = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD)).userId();
         String neverStored = tokenProvider.generateRefreshToken(new UserId(userId));
         // when & then
         assertThatThrownBy(() -> reissueHandler.handle(new ReissueCommand(neverStored)))
