@@ -1,21 +1,32 @@
 package com.runiverse.running_service.integration_test;
 
+import com.runiverse.running_service.application.auth.command.emailverification.SendEmailVerificationHandler;
+import com.runiverse.running_service.application.auth.command.emailverification.VerifyEmailCodeHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpUserRegistrar;
 import com.runiverse.running_service.integration_test.fake.*;
 import org.junit.jupiter.api.BeforeEach;
 
 public abstract class IntegrationTestSupport {
+    // 실제 application.properties와 같은 값으로 맞춘다
+    protected static final int MAX_ATTEMPTS = 5;
+    protected static final int DAILY_LIMIT = 10;
+
     protected InMemoryUserStore userStore;
     protected InMemoryRefreshTokenStore refreshTokenStore;
     protected InMemoryOnboardStore onboardStore;
     protected InMemoryAccessTokenBlacklist accessTokenBlacklist;
     protected InMemoryVerificationTicketStore verificationTicketStore;
+    protected InMemoryEmailVerificationStore emailVerificationStore;
     protected FakePasswordHasher passwordHasher;
     protected FakeTokenProvider tokenProvider;
     protected FakeUserIdGenerator userIdGenerator;
     protected FakeOauthClient oauthClient;
     protected FakeVerificationTicketHasher verificationTicketHasher;
+    protected FakeVerificationTicketGenerator verificationTicketGenerator;
+    protected FakeVerificationCodeGenerator verificationCodeGenerator;
+    protected FakeVerificationCodeHasher verificationCodeHasher;
+    protected FakeEmailSender emailSender;
     @BeforeEach
     void setUpFakes() {
         userStore = new InMemoryUserStore();
@@ -23,11 +34,16 @@ public abstract class IntegrationTestSupport {
         onboardStore = new InMemoryOnboardStore();
         accessTokenBlacklist = new InMemoryAccessTokenBlacklist();
         verificationTicketStore = new InMemoryVerificationTicketStore();
+        emailVerificationStore = new InMemoryEmailVerificationStore(MAX_ATTEMPTS, DAILY_LIMIT);
         passwordHasher = new FakePasswordHasher();
         tokenProvider = new FakeTokenProvider();
         userIdGenerator = new FakeUserIdGenerator();
         oauthClient = new FakeOauthClient();
         verificationTicketHasher = new FakeVerificationTicketHasher();
+        verificationTicketGenerator = new FakeVerificationTicketGenerator();
+        verificationCodeGenerator = new FakeVerificationCodeGenerator();
+        verificationCodeHasher = new FakeVerificationCodeHasher();
+        emailSender = new FakeEmailSender();
     }
     // 조립할 fake가 많고 여러 테스트가 가입부터 시작하므로 여기서 한 번만 엮는다
     protected SignUpHandler newSignUpHandler() {
@@ -44,6 +60,29 @@ public abstract class IntegrationTestSupport {
                 tokenProvider,             // GenerateTokenPort
                 tokenProvider,             // RefreshTokenHashPort
                 refreshTokenStore          // SaveRefreshTokenHashPort
+        );
+    }
+    // 발송 핸들러는 한 저장소가 포트 6개 중 5개를 겸한다
+    protected SendEmailVerificationHandler newSendEmailVerificationHandler() {
+        return new SendEmailVerificationHandler(
+                emailVerificationStore,     // AcquireSendCooldownPort
+                emailVerificationStore,     // ReleaseSendCooldownPort
+                emailVerificationStore,     // CheckDailySendLimitPort
+                verificationCodeGenerator,  // GenerateVerificationCodePort
+                verificationCodeHasher,     // VerificationCodeHashPort
+                emailVerificationStore,     // SaveVerificationCodePort
+                emailVerificationStore,     // DeleteVerificationCodePort
+                emailSender                 // SendEmailPort
+        );
+    }
+    protected VerifyEmailCodeHandler newVerifyEmailCodeHandler() {
+        return new VerifyEmailCodeHandler(
+                emailVerificationStore,       // ConsumeVerificationAttemptPort
+                verificationCodeHasher,       // VerificationCodeHashPort
+                emailVerificationStore,       // DeleteVerificationCodePort
+                verificationTicketGenerator,  // GenerateVerificationTicketPort
+                verificationTicketStore,      // SaveVerificationTicketPort
+                verificationTicketHasher      // VerificationTicketHashPort
         );
     }
     // 이메일 인증을 마친 상태를 만들고 원문 티켓을 돌려준다.
