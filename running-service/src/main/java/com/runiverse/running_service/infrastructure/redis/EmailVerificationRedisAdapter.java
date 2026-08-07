@@ -2,17 +2,21 @@ package com.runiverse.running_service.infrastructure.redis;
 
 import com.runiverse.running_service.application.auth.port.out.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class EmailVerificationRedisAdapter implements AcquireSendCooldownPort, ReleaseSendCooldownPort,
-        CheckDailySendLimitPort, SaveVerificationCodePort, DeleteVerificationCodePort {
+        CheckDailySendLimitPort, SaveVerificationCodePort, DeleteVerificationCodePort, ConsumeVerificationAttemptPort {
     private final StringRedisTemplate redisTemplate;
     private final EmailVerificationProperties properties;
     private static final String EMAIL_VERIFICATION = "email_verification";
@@ -60,6 +64,40 @@ public class EmailVerificationRedisAdapter implements AcquireSendCooldownPort, R
     @Override
     public void delete(String email) {
         redisTemplate.delete(codeKey(email));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public VerificationAttempt consume(String email) {
+        List<String> result = redisTemplate.execute(
+                CONSUME_ATTEMPT_SCRIPT,
+                List.of(codeKey(email)),
+                FIELD_ATTEMPTS, String.valueOf(properties.maxAttempts()), FIELD_CODE
+        );
+        // 스크립트가 결과를 돌려주지 못한 경우도 코드가 없는 것으로 본다
+        if (result == null || result.isEmpty()) {
+            return new VerificationAttempt(VerificationAttempt.Status.NOT_FOUND, null);
+        }
+        VerificationAttempt.Status status = VerificationAttempt.Status.valueOf(result.get(0));
+        // AVAILABLE인데 해시가 비어 있으면 손상된 데이터다
+        if (status != VerificationAttempt.Status.AVAILABLE) {
+            return new VerificationAttempt(status, null);
+        }
+        // AVAILABLE인데 해시가 없으면 손상된 데이터다
+        if (result.size() < 2) {
+            return new VerificationAttempt(VerificationAttempt.Status.NOT_FOUND, null);
+        }
+        return new VerificationAttempt(VerificationAttempt.Status.AVAILABLE, result.get(1));
+    }
+    @SuppressWarnings("rawtypes")
+    private static final DefaultRedisScript<List> CONSUME_ATTEMPT_SCRIPT = consumeAttemptScript();
+    @SuppressWarnings("rawtypes")
+    private static DefaultRedisScript<List> consumeAttemptScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setScriptSource(new ResourceScriptSource(
+                new ClassPathResource("scripts/consume_verification_attempt.lua")));
+        script.setResultType(List.class);
+        return script;
     }
     private String codeKey(String email) {
         return RedisKey.USER.of(EMAIL_VERIFICATION, email);
