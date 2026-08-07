@@ -10,4 +10,8 @@ public class OauthRestClientConfig {
     public RestClient kakaoRestClient(RestClient.Builder builder) {
         return builder.build();
     }
+    @Bean
+    public RestClient googleRestClient(RestClient.Builder builder) {
+        return builder.build();
+    }
 }
