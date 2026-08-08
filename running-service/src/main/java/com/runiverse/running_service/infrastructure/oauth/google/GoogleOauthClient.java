@@ -59,13 +59,11 @@ public class GoogleOauthClient implements OauthClient{
         form.add("client_id", properties.clientId());
         form.add("redirect_uri", properties.redirectUri());
         form.add("code", authorization);
+        // 앱이 PKCE로 인가를 시작하므로 검증값은 항상 온다
+        form.add("code_verifier", codeVerifier);
         // 모바일 클라이언트 타입은 secret이 없다
         if (StringUtils.hasText(properties.clientSecret())) {
             form.add("client_secret", properties.clientSecret());
-        }
-        // 앱이 PKCE로 인가를 시작했을 때만 온다
-        if (StringUtils.hasText(codeVerifier)) {
-            form.add("code_verifier", codeVerifier);
         }
         GoogleTokenResponse response = restClient.post()
                 .uri(properties.tokenUri())

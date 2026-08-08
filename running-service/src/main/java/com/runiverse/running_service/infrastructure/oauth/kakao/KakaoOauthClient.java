@@ -59,12 +59,11 @@ public class KakaoOauthClient implements OauthClient{
         form.add("client_id", properties.clientId());
         form.add("redirect_uri", properties.redirectUri());
         form.add("code", authorization);
+        // 앱이 PKCE로 인가를 시작하므로 검증값은 항상 온다
+        form.add("code_verifier", codeVerifier);
+        // REST API 키에 기본 활성화돼 있으면 필수다
         if (StringUtils.hasText(properties.clientSecret())) {
             form.add("client_secret", properties.clientSecret());
-        }
-        // client가 없다면 verifier가 없음
-        if (StringUtils.hasText(codeVerifier)) {
-            form.add("code_verifier", codeVerifier);
         }
         KakaoTokenResponse response = restClient.post()
                 .uri(properties.tokenUri())
