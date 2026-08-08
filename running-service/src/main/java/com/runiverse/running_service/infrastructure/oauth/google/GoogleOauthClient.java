@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
-public class GoogleOauthClient implements OauthClient{
+public class GoogleOauthClient implements OauthClient {
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
