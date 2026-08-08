@@ -8,7 +8,6 @@ import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -32,7 +31,7 @@ public class KakaoOauthClient implements OauthClient {
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
     KakaoOauthClient(
-            @Qualifier("kakaoRestClient") RestClient restClient,
+            RestClient restClient,
             KakaoOauthProperties properties
     ) {
         this.restClient = restClient;

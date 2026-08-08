@@ -8,7 +8,6 @@ import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.google.dto.GoogleTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.google.dto.GoogleUserResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -32,7 +31,7 @@ public class GoogleOauthClient implements OauthClient {
     private final RestClient restClient;
     private final GoogleOauthProperties properties;
     GoogleOauthClient(
-            @Qualifier("googleRestClient") RestClient restClient,
+            RestClient restClient,
             GoogleOauthProperties properties
     ) {
         this.restClient = restClient;
