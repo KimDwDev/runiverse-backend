@@ -148,17 +148,18 @@ public class KakaoOauthClientTest {
     }
 
     @Test
-    @DisplayName("client_secret과 code_verifier가 없으면 폼에 담지 않는다")
-    void exchangeOmitsBlankOptionalParameters() {
-        // given -> 콘솔에서 client_secret을 쓰지 않고, PKCE도 쓰지 않는 클라이언트
+    @DisplayName("client_secret이 없으면 폼에 담지 않는다")
+    void exchangeOmitsBlankClientSecret() {
+        // given -> 콘솔에서 client_secret을 끈 클라이언트
         KakaoOauthClient client = createClient("");
 
-        // formData는 완전 일치를 검사하므로 이 4개만 있어야 통과한다
+        // formData는 완전 일치를 검사하므로 이 5개만 있어야 통과한다
         MultiValueMap<String, String> expectedForm = new LinkedMultiValueMap<>();
         expectedForm.add("grant_type", "authorization_code");
         expectedForm.add("client_id", CLIENT_ID);
         expectedForm.add("redirect_uri", REDIRECT_URI);
         expectedForm.add("code", AUTHORIZATION_CODE);
+        expectedForm.add("code_verifier", CODE_VERIFIER);
 
         mockServer.expect(requestTo(TOKEN_URI))
                 .andExpect(content().formData(expectedForm))
@@ -168,7 +169,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        client.exchange(AUTHORIZATION_CODE, null);
+        client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         mockServer.verify();
