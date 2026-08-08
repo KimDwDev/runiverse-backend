@@ -350,6 +350,11 @@
 }
 
 {
+  "code": "VALIDATION_FAILED",
+  "message": "코드 검증값은 필수입니다."
+}
+
+{
   "code": "UNSUPPORTED_PROVIDER",
   "message": "지원하지 않는 로그인 제공자입니다."
 }

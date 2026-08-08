@@ -12,7 +12,7 @@
 - 로그인 버튼: 입력한 이메일/비밀번호로 로그인 수행.
 - 회원가입 버튼 → 회원가입 페이지로 이동.
 - Google / Kakao 로그인 버튼: 소셜 계정으로 회원가입 또는 로그인. 네이버는 1차 미포함.
-  - 인가 코드 + PKCE 방식: 앱이 provider 인증 후 인가 코드(`authorizationCode`)·`codeVerifier` 수령 → `POST /auth/oauth/google|kakao`로 서버 전달 → 서버가 provider와 코드↔토큰 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_user` 조회(없으면 생성=회원가입) → 자체 토큰 발급. 웹뷰·콜백·딥링크 없음.
+  - 인가 코드 + PKCE 방식: 앱이 provider 인증 후 인가 코드(`authorizationCode`)·`codeVerifier` 수령 → `POST /auth/oauth/google|kakao`로 서버 전달 → 서버가 provider와 코드↔토큰 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_user` 조회(없으면 생성=회원가입) → 자체 토큰 발급. 카카오는 SDK 앱 전환, 구글은 커스텀 탭으로 인가를 시작하고 커스텀 스킴으로 인가 코드를 돌려받는다 — 웹뷰는 provider가 차단한다.
   - 최초 가입 시 온보딩 화면을 거침 — `oauth_user` 생성 후 `user_onboard` 입력 필요.
   - 카카오 이메일 미동의 시 403 가입 거부(`OAUTH_EMAIL_NOT_PROVIDED` — `users.email` NOT NULL 유지).
 
