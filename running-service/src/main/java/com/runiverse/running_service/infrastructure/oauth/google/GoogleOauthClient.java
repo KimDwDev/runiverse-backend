@@ -53,12 +53,12 @@ public class GoogleOauthClient implements OauthClient{
             throw new OauthCodeExchangeFailedException();
         }
     }
-    private String requestAccessToken(String authorization, String codeVerifier) {
+    private String requestAccessToken(String authorizationCode, String codeVerifier) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE);
         form.add("client_id", properties.clientId());
         form.add("redirect_uri", properties.redirectUri());
-        form.add("code", authorization);
+        form.add("code", authorizationCode);
         // 앱이 PKCE로 인가를 시작하므로 검증값은 항상 온다
         form.add("code_verifier", codeVerifier);
         // 모바일 클라이언트 타입은 secret이 없다
