@@ -118,6 +118,8 @@ jobs:
           cache-from: type=gha,scope=runiverse-backend-test
           cache-to: type=gha,scope=runiverse-backend-test,mode=max
 
+  # E2E 테스트 진행
+
   # ECR -> Private EC2 배포
   runiverse-backend-deploy:
     name: running-service 테스트 서버 배포
@@ -327,9 +329,9 @@ jobs:
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__ECR_REGISTRY__/$ECR_REGISTRY}"
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__IMAGE_URI__/$IMAGE_URI}"
           DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__GITHUB_SHA__/$GITHUB_SHA}"
-        
+
           DEPLOY_SCRIPT_BASE64=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
-          
+
           PARAMETERS=$(jq -n \
           --arg script "$DEPLOY_SCRIPT_BASE64" \
           '{
