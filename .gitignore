@@ -1,2 +1,13 @@
-#기본 코드
+### IDE ###
 .idea
+
+### Claude Code ###
+.claude/settings.local.json
+CLAUDE.local.md
+
+### Secrets ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
