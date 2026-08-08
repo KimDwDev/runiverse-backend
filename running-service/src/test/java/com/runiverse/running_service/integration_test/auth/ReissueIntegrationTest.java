@@ -8,6 +8,7 @@ import com.runiverse.running_service.application.auth.command.reissue.ReissueHan
 import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
+import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
@@ -27,8 +28,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     private ReissueHandler reissueHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
                 tokenProvider, refreshTokenStore, onboardStore);
@@ -43,7 +43,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     }
     // 가입 -> 로그인까지 마친 상태를 만든다
     private LoginResult signUpAndLogin() {
-        signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD));
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         return loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
     }
 
@@ -119,9 +119,11 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("저장소에 토큰이 없는 유저면 InvalidRefreshTokenException이 발생한다")
     void reissueWithoutStoredToken() {
-        // given - 로그인하지 않아 저장된 적 없는 유저의 토큰
-        UUID userId = signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD)).userId();
-        String neverStored = tokenProvider.generateRefreshToken(new UserId(userId));
+        // given - 가입 시 자동 로그인으로 저장된 토큰까지 지워 저장 이력이 없는 상태를 만든다
+        SignUpResult signUp = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        refreshTokenStore.delete(new UserId(signUp.userId()));
+        String neverStored = signUp.refreshToken();
         // when & then
         assertThatThrownBy(() -> reissueHandler.handle(new ReissueCommand(neverStored)))
                 .isInstanceOf(InvalidRefreshTokenException.class);

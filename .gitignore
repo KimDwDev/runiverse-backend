@@ -1,2 +1,15 @@
-#기본 코드
+### IDE ###
 .idea
+
+### Claude Code ###
+.claude/settings.local.json
+CLAUDE.local.md
+
+### Secrets ###
+.env
+.env.*
+!.env.example
+# cicd e2e테스트용 환경 변수 추가
+!e2e_test/.env.test
+*.pem
+*.key

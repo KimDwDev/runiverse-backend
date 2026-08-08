@@ -31,4 +31,7 @@ public class InMemoryRefreshTokenStore implements SaveRefreshTokenHashPort, Load
     public boolean isEmpty() {
         return hashes.isEmpty();
     }
+    public int size() {
+        return hashes.size();
+    }
 }

@@ -22,8 +22,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
     private LoginHandler loginHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore,
                 passwordHasher,
@@ -34,7 +33,8 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         );
     }
     private UUID signUp() {
-        return signUpHandler.handle(new SignUpCommand(EMAIL, PASSWORD)).userId();
+        return signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD)).userId();
     }
 
     @Test
@@ -72,12 +72,14 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("비밀번호가 틀리면 이메일이 없을 때와 같은 예외가 발생한다")
     void loginWithWrongPassword() {
-        // given
-        signUp();
+        // given - 가입 시 자동 로그인으로 이미 토큰이 하나 저장돼 있다
+        UUID userId = signUp();
+        String issuedAtSignUp = refreshTokenStore.loadById(userId).orElseThrow();
         // when & then — 예외를 구분하면 이메일 존재 여부가 새어나간다
         assertThatThrownBy(() -> loginHandler.handle(new LoginCommand(EMAIL, "WrongPassword1!")))
                 .isInstanceOf(InvalidCredentialsException.class);
-        assertThat(refreshTokenStore.isEmpty()).isTrue();
+        // 실패한 로그인은 토큰을 새로 발급하지 않는다
+        assertThat(refreshTokenStore.loadById(userId)).contains(issuedAtSignUp);
     }
     @Test
     @DisplayName("가입 직후 로그인하면 isOnboarded가 false다")

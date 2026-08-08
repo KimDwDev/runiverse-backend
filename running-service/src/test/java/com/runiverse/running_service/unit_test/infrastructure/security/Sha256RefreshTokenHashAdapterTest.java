@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.security;
 
-import com.runiverse.running_service.infrastructure.security.Sha256RefreshTokenHashAdapter;
+import com.runiverse.running_service.infrastructure.security.hash.Sha256HashAdapter;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,7 +14,7 @@ public class Sha256RefreshTokenHashAdapterTest {
     private static final String EXPECTED_HASH =
             "0a9b110d5e553bd98e9965c70a601c15c36805016ba60d54f20f5830c39edcde";
 
-    private final Sha256RefreshTokenHashAdapter adapter = new Sha256RefreshTokenHashAdapter();
+    private final Sha256HashAdapter adapter = new Sha256HashAdapter();
 
     @Test
     @DisplayName("토큰 원문이 아니라 SHA-256 지문을 만든다")

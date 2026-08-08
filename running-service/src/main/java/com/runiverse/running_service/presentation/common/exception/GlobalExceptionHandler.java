@@ -93,8 +93,15 @@ public class GlobalExceptionHandler {
                  INVALID_REFRESH_TOKEN,
                  OAUTH_CODE_EXCHANGE_FAILED,
                  USER_NOT_FOUND -> HttpStatus.UNAUTHORIZED;
-            case OAUTH_EMAIL_NOT_PROVIDED -> HttpStatus.FORBIDDEN;
-            case UNSUPPORTED_PROVIDER -> HttpStatus.BAD_REQUEST;
+            case OAUTH_EMAIL_NOT_PROVIDED,
+                 EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
+            case UNSUPPORTED_PROVIDER,
+                 EMAIL_VERIFICATION_NOT_FOUND,
+                 INVALID_VERIFICATION_CODE -> HttpStatus.BAD_REQUEST;
+            case EMAIL_VERIFICATION_COOLDOWN,
+                 EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
+                 TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
+            case EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
         };
     }
 }

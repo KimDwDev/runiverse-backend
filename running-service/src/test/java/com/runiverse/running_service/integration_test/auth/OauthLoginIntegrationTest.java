@@ -28,8 +28,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     private OauthLoginHandler oauthLoginHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         OauthUserResolver oauthUserResolver = new OauthUserResolver(
                 userStore,        // LoadUserByProviderPort
                 userStore,        // CheckEmailDuplicatePort
@@ -111,13 +110,15 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @DisplayName("이미 로컬 가입된 이메일이면 자동 연동하지 않고 EmailAlreadyExistsException이 발생한다")
     void oauthLoginRejectsExistingLocalEmail() {
         // given - 같은 이메일로 로컬 회원가입이 되어 있다
-        signUpHandler.handle(new SignUpCommand(KAKAO_EMAIL, "Password123!"));
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(KAKAO_EMAIL), "Password123!"));
         // when & then
         assertThatThrownBy(this::login)
                 .isInstanceOf(EmailAlreadyExistsException.class);
         // 소셜 유저가 추가로 만들어지지 않는다
         assertThat(userStore.size()).isEqualTo(1);
-        assertThat(refreshTokenStore.isEmpty()).isTrue();
+        // 로컬 가입 때 발급된 것 하나뿐이고, 소셜 로그인 토큰은 저장되지 않는다
+        assertThat(refreshTokenStore.size()).isEqualTo(1);
     }
     @Test
     @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 코드 교환을 시도하지 않는다")

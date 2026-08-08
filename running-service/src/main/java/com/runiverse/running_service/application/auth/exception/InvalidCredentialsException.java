@@ -4,5 +4,5 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class InvalidCredentialsException extends BusinessException {
-    public InvalidCredentialsException() {super(ErrorCode.INVALID_CREDENTIALS);}
+    public InvalidCredentialsException() { super(ErrorCode.INVALID_CREDENTIALS); }
 }

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
-import com.runiverse.running_service.infrastructure.redis.AccessTokenRedisAdapter;
+import com.runiverse.running_service.infrastructure.redis.token.AccessTokenRedisAdapter;
 
 import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;

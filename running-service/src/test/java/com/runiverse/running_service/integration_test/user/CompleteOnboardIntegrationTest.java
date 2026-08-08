@@ -39,8 +39,7 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
     private CompleteOnboardHandler completeOnboardHandler;
     @BeforeEach
     void setUp() {
-        signUpHandler = new SignUpHandler(
-                userStore, passwordHasher, userIdGenerator, userStore);
+        signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
                 tokenProvider, refreshTokenStore, onboardStore);
@@ -52,7 +51,8 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
         );
     }
     private UUID signUp(String email) {
-        return signUpHandler.handle(new SignUpCommand(email, PASSWORD)).userId();
+        return signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(email), PASSWORD)).userId();
     }
     private CompleteOnboardCommand command(UUID userId, String nickname) {
         return new CompleteOnboardCommand(

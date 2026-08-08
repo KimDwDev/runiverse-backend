@@ -1,0 +1,37 @@
+name: runiverse-e2e
+services:
+  postgres:
+    image: postgres:16
+    env_file:
+      - .env.test
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready --username=runiverse --dbname=runiverse_e2e" ]
+      interval: 5s # 5초마다 검사
+      timeout: 5s # 5초 까지만 기다려준다
+      retries: 12 # 최대 12번까지만 허용
+
+  redis:
+    image: redis:7
+    env_file:
+      - .env.test
+    # 서버에 비밀번호를 걸어야 앱의 AUTH가 통한다
+    command: ["sh", "-c", "redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    healthcheck:
+      # redis-cli는 에러 응답에도 0을 반환할 수 있어 PONG을 직접 확인한다
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: ${E2E_IMAGE:-runiverse-backend:e2e}
+    container_name: runiverse-e2e-app
+    env_file:
+      - .env.test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
