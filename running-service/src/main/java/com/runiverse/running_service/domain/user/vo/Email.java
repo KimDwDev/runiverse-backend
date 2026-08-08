@@ -4,6 +4,7 @@ import com.runiverse.running_service.domain.user.exception.EmailRequiredExceptio
 import com.runiverse.running_service.domain.user.exception.EmailTooLongException;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -16,7 +17,7 @@ public record Email(String value) {
     public Email {
         if (value == null) throw new EmailRequiredException();
 
-        value = value.trim();
+        value = value.trim().toLowerCase(Locale.ROOT);
 
         if (value.isEmpty()) throw new EmailRequiredException();
 

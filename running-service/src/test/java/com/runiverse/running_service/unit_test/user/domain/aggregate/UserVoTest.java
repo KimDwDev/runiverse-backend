@@ -169,6 +169,47 @@ public class UserVoTest {
 
             assertThat(first).isNotSameAs(second);
         }
+
+        @Test
+        @DisplayName("대문자가 섞여 있어도 소문자로 정규화된다")
+        void createEmailNormalizesToLowerCase() {
+            // given & when
+            Email email = new Email("USER@Example.COM");
+
+            // then - 정규화하지 않으면 같은 사람이 대소문자만 바꿔 중복 가입할 수 있다
+            assertThat(email.value()).isEqualTo("user@example.com");
+        }
+
+        @Test
+        @DisplayName("앞뒤 공백은 제거된다")
+        void createEmailTrimsWhitespace() {
+            // given & when
+            Email email = new Email("  user@example.com  ");
+
+            // then
+            assertThat(email.value()).isEqualTo("user@example.com");
+        }
+
+        @Test
+        @DisplayName("공백만 있는 문자열은 EmailRequiredException이 발생한다")
+        void createBlankEmailFails() {
+            // trim 뒤에 비는 값이라 null과 같게 취급해야 한다
+            assertThatThrownBy(() -> new Email("   "))
+                    .isInstanceOf(EmailRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("대소문자와 공백만 다른 이메일은 같은 값 객체이다")
+        void emailsDifferingOnlyByCaseAreEqual() {
+            // given & when
+            Email first = new Email("User@Example.com");
+            Email second = new Email(" user@example.com ");
+
+            // then - 이메일 인증 전체가 이 전제 위에 서 있다
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+        }
     }
 
     // PasswordHash 테스트

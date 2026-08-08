@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.security;
 
-import com.runiverse.running_service.infrastructure.security.Argon2PasswordHashAdapter;
+import com.runiverse.running_service.infrastructure.security.hash.Argon2PasswordHashAdapter;
 
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;

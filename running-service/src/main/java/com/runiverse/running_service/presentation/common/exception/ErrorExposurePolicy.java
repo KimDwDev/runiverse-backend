@@ -21,7 +21,15 @@ public final class ErrorExposurePolicy {
             AuthErrorCode.TOKEN_EXPIRED.getCode(),
             AuthErrorCode.TOKEN_BLOCKED.getCode(),
             AuthErrorCode.INVALID_TOKEN.getCode(),
-            AuthErrorCode.AUTHENTICATION_REQUIRED.getCode()
+            AuthErrorCode.AUTHENTICATION_REQUIRED.getCode(),
+            // 이메일 인증 관련한 에러는 그대로 보낸다.
+            ErrorCode.EMAIL_VERIFICATION_COOLDOWN.getCode(),
+            ErrorCode.EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED.getCode(),
+            ErrorCode.EMAIL_VERIFICATION_NOT_FOUND.getCode(),
+            ErrorCode.INVALID_VERIFICATION_CODE.getCode(),
+            ErrorCode.TOO_MANY_VERIFICATION_ATTEMPTS.getCode(),
+            ErrorCode.EMAIL_NOT_VERIFIED.getCode(),
+            ErrorCode.EMAIL_SEND_FAILED.getCode()
     );
     private ErrorExposurePolicy() {} // 다른 곳에서 사용하지 못하도록
     // 400 에러나 내가 노출을 허용한 에러에 경우를 검증하는 메서드
