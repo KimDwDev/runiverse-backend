@@ -8,7 +8,6 @@ import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -26,13 +25,13 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
-public class KakaoOauthClient implements OauthClient{
+public class KakaoOauthClient implements OauthClient {
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
     KakaoOauthClient(
-            @Qualifier("kakaoRestClient") RestClient restClient,
+            RestClient restClient,
             KakaoOauthProperties properties
     ) {
         this.restClient = restClient;
@@ -53,18 +52,17 @@ public class KakaoOauthClient implements OauthClient{
             throw new OauthCodeExchangeFailedException();
         }
     }
-    private String requestAccessToken(String authorization, String codeVerifier) {
+    private String requestAccessToken(String authorizationCode, String codeVerifier) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE);
         form.add("client_id", properties.clientId());
         form.add("redirect_uri", properties.redirectUri());
-        form.add("code", authorization);
+        form.add("code", authorizationCode);
+        // 앱이 PKCE로 인가를 시작하므로 검증값은 항상 온다
+        form.add("code_verifier", codeVerifier);
+        // REST API 키에 기본 활성화돼 있으면 필수다
         if (StringUtils.hasText(properties.clientSecret())) {
             form.add("client_secret", properties.clientSecret());
-        }
-        // client가 없다면 verifier가 없음
-        if (StringUtils.hasText(codeVerifier)) {
-            form.add("code_verifier", codeVerifier);
         }
         KakaoTokenResponse response = restClient.post()
                 .uri(properties.tokenUri())
