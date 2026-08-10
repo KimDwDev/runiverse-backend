@@ -79,7 +79,6 @@ public abstract class IntegrationTestSupport {
                 refreshTokenStore          // SaveRefreshTokenHashPort
         );
     }
-    // 발송 핸들러는 한 저장소가 포트 7개 중 5개를 겸한다
 
     // 발송 핸들러는 한 저장소가 포트 6개 중 5개를 겸한다
     protected SendEmailVerificationHandler newSendEmailVerificationHandler() {
