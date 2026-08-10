@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.auth.exception.EmailVerificatio
 import com.runiverse.running_service.application.auth.port.in.SendEmailVerificationUsecase;
 import com.runiverse.running_service.application.auth.port.out.AcquireSendCooldownPort;
 import com.runiverse.running_service.application.auth.port.out.CheckDailySendLimitPort;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
 import com.runiverse.running_service.application.auth.port.out.DeleteVerificationCodePort;
 import com.runiverse.running_service.application.auth.port.out.GenerateVerificationCodePort;
 import com.runiverse.running_service.application.auth.port.out.ReleaseSendCooldownPort;
@@ -41,7 +42,12 @@ public class SendEmailVerificationHandler implements SendEmailVerificationUsecas
             throw new EmailVerificationCooldownException();
         }
 
-        // 3. 전송 횟수 제한 확인
+        // 3. 이메일 중복성 검사
+        if (!checkEmailDuplicatePort.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException();
+        }
+
+        // 4. 전송 횟수 제한 확인
         if (!checkDailySendLimitPort.tryConsume(email)) {
             throw new EmailVerificationDailyLimitExceededException();
         }
