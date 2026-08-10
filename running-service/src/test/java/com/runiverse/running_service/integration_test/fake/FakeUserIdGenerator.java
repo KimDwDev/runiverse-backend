@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPor
 import java.util.UUID;
 
 public class FakeUserIdGenerator implements GenerateUserIdPort {
+
     @Override
     public UUID generate() {
         return UuidCreator.getTimeOrderedEpoch();

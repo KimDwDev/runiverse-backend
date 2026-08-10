@@ -6,4 +6,5 @@ public record LogoutCommand(
         UUID userId,
         String accessTokenId
 ) {
+
 }

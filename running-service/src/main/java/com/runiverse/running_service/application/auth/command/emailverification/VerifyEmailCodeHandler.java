@@ -4,7 +4,13 @@ import com.runiverse.running_service.application.auth.exception.EmailVerificatio
 import com.runiverse.running_service.application.auth.exception.InvalidVerificationCodeException;
 import com.runiverse.running_service.application.auth.exception.TooManyVerificationAttemptsException;
 import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.ConsumeVerificationAttemptPort;
+import com.runiverse.running_service.application.auth.port.out.DeleteVerificationCodePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateVerificationTicketPort;
+import com.runiverse.running_service.application.auth.port.out.SaveVerificationTicketPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationAttempt;
+import com.runiverse.running_service.application.auth.port.out.VerificationCodeHashPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationTicketHashPort;
 import com.runiverse.running_service.domain.user.vo.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,11 +36,14 @@ public class VerifyEmailCodeHandler implements VerifyEmailCodeUsecase {
         switch (attempt.status()) {
             case NOT_FOUND -> throw new EmailVerificationNotFoundException();
             case EXHAUSTED -> throw new TooManyVerificationAttemptsException();
-            case AVAILABLE -> { }
+            case AVAILABLE -> {
+            }
         }
 
         // 3. 코드 대조. 시도 횟수는 이미 소비됐다
-        if (!verificationCodeHashPort.matches(command.code(), attempt.hashedCode())) throw new InvalidVerificationCodeException();
+        if (!verificationCodeHashPort.matches(command.code(), attempt.hashedCode())) {
+            throw new InvalidVerificationCodeException();
+        }
 
         // 4. 맞은 코드는 재사용할 수 없도록 지운다.
         deleteVerificationCodePort.delete(email);

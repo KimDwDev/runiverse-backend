@@ -9,12 +9,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class FakeOauthClient implements ExchangeOauthCodePort {
+
     private final Map<String, OauthProfile> profiles = new HashMap<>();
     private int exchangeCount = 0;
+
     // 테스트 준비 - 인가 코드에 대응하는 프로필을 미리 심는다
     public void register(String authorizationCode, OauthProfile profile) {
         profiles.put(authorizationCode, profile);
     }
+
     @Override
     public OauthProfile exchange(Provider provider, String authorizationCode, String codeVerifier) {
         exchangeCount++;
@@ -25,6 +28,7 @@ public class FakeOauthClient implements ExchangeOauthCodePort {
         }
         return profile;
     }
+
     // 검증 전용
     public int exchangeCount() {
         return exchangeCount;

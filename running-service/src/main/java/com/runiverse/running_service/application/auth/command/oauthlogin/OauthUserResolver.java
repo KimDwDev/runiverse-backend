@@ -1,7 +1,11 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
+import com.runiverse.running_service.application.auth.port.out.OauthProfile;
+import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,7 +32,9 @@ public class OauthUserResolver {
         );
 
         // 2. 있으면 그대로 반환
-        if (foundUser.isPresent()) return foundUser.get();
+        if (foundUser.isPresent()) {
+            return foundUser.get();
+        }
 
         // 3. 없으면 가입
         return register(oauthProfile);

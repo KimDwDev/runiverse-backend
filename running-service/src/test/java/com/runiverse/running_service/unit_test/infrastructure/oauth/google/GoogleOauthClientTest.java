@@ -42,34 +42,34 @@ public class GoogleOauthClientTest {
 
     private static final String TOKEN_RESPONSE =
             """
-            {
-              "access_token": "google-access-token",
-              "expires_in": 3599,
-              "scope": "openid email profile",
-              "token_type": "Bearer",
-              "id_token": "ey..."
-            }
-            """;
+                    {
+                      "access_token": "google-access-token",
+                      "expires_in": 3599,
+                      "scope": "openid email profile",
+                      "token_type": "Bearer",
+                      "id_token": "ey..."
+                    }
+                    """;
 
     private static final String USER_RESPONSE =
             """
-            {
-              "sub": "107812345678901234567",
-              "email": "google@example.com",
-              "email_verified": true,
-              "name": "러니버스",
-              "picture": "https://lh3.googleusercontent.com/a/example"
-            }
-            """;
+                    {
+                      "sub": "107812345678901234567",
+                      "email": "google@example.com",
+                      "email_verified": true,
+                      "name": "러니버스",
+                      "picture": "https://lh3.googleusercontent.com/a/example"
+                    }
+                    """;
 
     // email 스코프에 동의하지 않으면 email 필드 자체가 응답에서 빠진다
     private static final String USER_RESPONSE_WITHOUT_EMAIL =
             """
-            {
-              "sub": "107812345678901234567",
-              "name": "러니버스"
-            }
-            """;
+                    {
+                      "sub": "107812345678901234567",
+                      "name": "러니버스"
+                    }
+                    """;
 
     private MockRestServiceServer mockServer;
 
@@ -169,8 +169,8 @@ public class GoogleOauthClientTest {
                 .andRespond(withBadRequest()
                         .body(
                                 """
-                                {"error":"invalid_grant","error_description":"Bad Request"}
-                                """)
+                                        {"error":"invalid_grant","error_description":"Bad Request"}
+                                        """)
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when & then

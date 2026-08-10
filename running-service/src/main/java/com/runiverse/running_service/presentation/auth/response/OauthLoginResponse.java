@@ -8,4 +8,5 @@ public record OauthLoginResponse(
         String refreshToken,
         boolean isOnboarded
 ) {
+
 }

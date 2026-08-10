@@ -17,6 +17,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+
     // 토큰 없이 접근 할 수 있는 경로
     private static final String[] PUBLIC_ENDPOINTS = {
             "/auth/signup",
@@ -50,6 +51,7 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .build();
     }
+
     // cors 설정
     @Bean
     public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {

@@ -25,7 +25,9 @@ public class SignUpUserRegistrar {
     public User register(String email, String rawPassword) {
         // 1. 이메일 중복 확인
         boolean emailExists = checkEmailDuplicatePort.existsByEmail(email);
-        if (emailExists) throw new EmailAlreadyExistsException();
+        if (emailExists) {
+            throw new EmailAlreadyExistsException();
+        }
 
         // 2. 비밀번호 해시화
         String hashedPassword = passwordHashPort.hash(rawPassword);

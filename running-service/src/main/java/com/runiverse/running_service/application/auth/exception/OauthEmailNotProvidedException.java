@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class OauthEmailNotProvidedException extends BusinessException {
-    public OauthEmailNotProvidedException() { super(ErrorCode.OAUTH_EMAIL_NOT_PROVIDED); }
+
+    public OauthEmailNotProvidedException() {
+        super(ErrorCode.OAUTH_EMAIL_NOT_PROVIDED);
+    }
 }

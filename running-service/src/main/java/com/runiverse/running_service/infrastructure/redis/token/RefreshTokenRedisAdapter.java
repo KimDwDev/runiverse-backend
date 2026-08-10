@@ -14,7 +14,8 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class RefreshTokenRedisAdapter implements SaveRefreshTokenHashPort, LoadRefreshTokenPort, DeleteRefreshTokenPort {
+public class RefreshTokenRedisAdapter implements SaveRefreshTokenHashPort, LoadRefreshTokenPort,
+        DeleteRefreshTokenPort {
 
     private final StringRedisTemplate redisTemplate;
     private final JwtProperties jwtProperties;

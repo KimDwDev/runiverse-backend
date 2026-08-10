@@ -7,7 +7,9 @@ import java.util.List;
 
 public class FakeEmailSender implements SendEmailPort {
 
-    public record SentEmail(String to, String subject, String body) {}
+    public record SentEmail(String to, String subject, String body) {
+
+    }
 
     private final List<SentEmail> sent = new ArrayList<>();
     private RuntimeException failure;
@@ -19,7 +21,9 @@ public class FakeEmailSender implements SendEmailPort {
 
     @Override
     public void send(String to, String subject, String body) {
-        if (failure != null) throw failure;
+        if (failure != null) {
+            throw failure;
+        }
         sent.add(new SentEmail(to, subject, body));
     }
 

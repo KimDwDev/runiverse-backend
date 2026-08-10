@@ -7,4 +7,5 @@ public record OauthProfile(
         String providerId,
         String email
 ) {
+
 }

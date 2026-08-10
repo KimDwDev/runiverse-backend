@@ -1,11 +1,5 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
-import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
-import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
-
-import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
-import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
-
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
@@ -13,6 +7,10 @@ import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.DisplayName;

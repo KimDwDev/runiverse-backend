@@ -34,13 +34,17 @@ public class CompleteOnboardHandler implements CompleteOnboardUsecase {
                 .orElseThrow(UserNotFoundException::new);
 
         // 2. 온보딩 되어 있으면 막는다
-        if (existsOnboardPort.existsByUserId(userId)) throw new AlreadyOnboardException();
+        if (existsOnboardPort.existsByUserId(userId)) {
+            throw new AlreadyOnboardException();
+        }
 
         // 3. 닉네임 정규화 -> 중복 검사 확인
         Nickname nickname = new Nickname(command.nickname());
 
         // 4. 닉네임 중복 확인
-        if (checkNicknameDuplicatePort.existsByNickname(nickname)) throw new NicknameAlreadyExistsException();
+        if (checkNicknameDuplicatePort.existsByNickname(nickname)) {
+            throw new NicknameAlreadyExistsException();
+        }
 
         // 5. 도메인에 위임
         user.completeOnboarding(

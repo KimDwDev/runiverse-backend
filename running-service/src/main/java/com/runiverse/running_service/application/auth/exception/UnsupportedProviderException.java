@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class UnsupportedProviderException extends BusinessException {
-    public UnsupportedProviderException() { super(ErrorCode.UNSUPPORTED_PROVIDER); }
+
+    public UnsupportedProviderException() {
+        super(ErrorCode.UNSUPPORTED_PROVIDER);
+    }
 }

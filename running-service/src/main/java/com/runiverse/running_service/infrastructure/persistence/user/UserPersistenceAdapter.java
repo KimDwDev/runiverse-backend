@@ -1,6 +1,10 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.auth.port.out.CheckOnboardPort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
+import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
@@ -20,19 +24,20 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
-        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort, CheckOnboardPort {
+        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort,
+        CheckOnboardPort {
 
     private final EntityManager entityManager;
 
     @Override
     public boolean existsByEmail(String email) {
         Long count = entityManager.createQuery(
-                """
-                SELECT COUNT(u)
-                FROM UserJpaEntity u
-                WHERE u.email = :email
-                """, Long.class
-        )
+                        """
+                                SELECT COUNT(u)
+                                FROM UserJpaEntity u
+                                WHERE u.email = :email
+                                """, Long.class
+                )
                 .setParameter("email", email)
                 .getSingleResult();
 
@@ -56,7 +61,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                         oauth.getProvider(),
                         oauth.getProviderId().value()
                 )
-                )));
+        )));
         return user;
     }
 
@@ -73,17 +78,18 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<User> loadByEmail(String email) {
         return entityManager.createQuery(
-                """
-                SELECT u
-                FROM UserJpaEntity u
-                WHERE u.email = :email
-                """, UserJpaEntity.class
-        )
+                        """
+                                SELECT u
+                                FROM UserJpaEntity u
+                                WHERE u.email = :email
+                                """, UserJpaEntity.class
+                )
                 .setParameter("email", email)
                 .getResultStream()
                 .findFirst()
                 .map(this::toDomain);
     }
+
     private User toDomain(UserJpaEntity entity) {
         return new User(
                 entity.getUserId(),
@@ -97,14 +103,14 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<User> loadByProvider(Provider provider, String providerId) {
         return entityManager.createQuery(
-                """
-                SELECT u
-                FROM UserJpaEntity u, OauthUserJpaEntity o
-                WHERE o.userId = u.userId
-                    AND o.provider = :provider
-                    AND o.providerId = :providerId
-                """, UserJpaEntity.class
-        )
+                        """
+                                SELECT u
+                                FROM UserJpaEntity u, OauthUserJpaEntity o
+                                WHERE o.userId = u.userId
+                                    AND o.provider = :provider
+                                    AND o.providerId = :providerId
+                                """, UserJpaEntity.class
+                )
                 .setParameter("provider", provider)
                 .setParameter("providerId", providerId)
                 .getResultStream()
@@ -115,12 +121,12 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public boolean existsByUserId(UserId userId) {
         Long count = entityManager.createQuery(
-                """
-                SELECT COUNT(o)
-                FROM UserOnboardJpaEntity o
-                WHERE o.userId = :userId
-                """, Long.class
-        )
+                        """
+                                SELECT COUNT(o)
+                                FROM UserOnboardJpaEntity o
+                                WHERE o.userId = :userId
+                                """, Long.class
+                )
                 .setParameter("userId", userId.value())
                 .getSingleResult();
         return count > 0;
@@ -129,12 +135,12 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public boolean existsByNickname(Nickname nickname) {
         Long count = entityManager.createQuery(
-                """
-                SELECT COUNT(o)
-                FROM UserOnboardJpaEntity o
-                WHERE o.nickname = :nickname
-                """, Long.class
-        )
+                        """
+                                SELECT COUNT(o)
+                                FROM UserOnboardJpaEntity o
+                                WHERE o.nickname = :nickname
+                                """, Long.class
+                )
                 .setParameter("nickname", nickname.value())
                 .getSingleResult();
         return count > 0;
@@ -143,7 +149,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public void saveOnboard(UserOnboard onboard) {
         entityManager.persist(UserOnboardJpaEntity.create(
-            onboard.getUserId().value(),
+                onboard.getUserId().value(),
                 onboard.getNickname().value(),
                 onboard.getGender(),
                 onboard.getBirthday().value(),

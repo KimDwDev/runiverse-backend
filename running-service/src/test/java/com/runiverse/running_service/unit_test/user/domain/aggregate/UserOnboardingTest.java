@@ -5,9 +5,6 @@ import com.runiverse.running_service.domain.user.exception.InvalidNicknameLength
 import com.runiverse.running_service.domain.user.exception.OnboardingAlreadyCompletedException;
 import com.runiverse.running_service.domain.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.user.vo.Gender;
-
-import static org.assertj.core.api.Assertions.*;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UserOnboardingTest {
 

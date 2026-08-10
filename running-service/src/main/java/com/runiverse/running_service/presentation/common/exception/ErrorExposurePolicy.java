@@ -31,11 +31,15 @@ public final class ErrorExposurePolicy {
             ErrorCode.EMAIL_NOT_VERIFIED.getCode(),
             ErrorCode.EMAIL_SEND_FAILED.getCode()
     );
-    private ErrorExposurePolicy() {} // 다른 곳에서 사용하지 못하도록
+
+    private ErrorExposurePolicy() {
+    } // 다른 곳에서 사용하지 못하도록
+
     // 400 에러나 내가 노출을 허용한 에러에 경우를 검증하는 메서드
     public static boolean isExposed(HttpStatus status, String code) {
         return status == HttpStatus.BAD_REQUEST || EXPOSED_CODES.contains(code);
     }
+
     // 그냥 평범한 에러는 모두 500서버 에러로 넘길 예정
     public static ErrorResponse masked() {
         return new ErrorResponse(

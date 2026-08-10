@@ -28,7 +28,9 @@ public class Sha256HashAdapter implements RefreshTokenHashPort, VerificationCode
 
     @Override
     public boolean matches(String refreshToken, String storedHash) {
-        if (storedHash == null) return false;
+        if (storedHash == null) {
+            return false;
+        }
         return MessageDigest.isEqual(
                 hash(refreshToken).getBytes(StandardCharsets.UTF_8),
                 storedHash.getBytes(StandardCharsets.UTF_8)

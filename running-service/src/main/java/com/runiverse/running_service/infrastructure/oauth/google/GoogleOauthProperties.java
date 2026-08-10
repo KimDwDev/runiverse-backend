@@ -4,10 +4,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "oauth.google")
 public record GoogleOauthProperties(
-    String clientId,
-    String clientSecret,
-    String redirectUri,
-    String tokenUri,
-    String userInfoUri
+        String clientId,
+        String clientSecret,
+        String redirectUri,
+        String tokenUri,
+        String userInfoUri
 ) {
+
 }

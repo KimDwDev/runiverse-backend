@@ -1,17 +1,27 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 
+import com.runiverse.running_service.domain.user.exception.DescriptionRequiredException;
+import com.runiverse.running_service.domain.user.exception.DescriptionTooLongException;
+import com.runiverse.running_service.domain.user.exception.EmailRequiredException;
+import com.runiverse.running_service.domain.user.exception.EmailTooLongException;
+import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
+import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Description;
 import com.runiverse.running_service.domain.user.vo.Email;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.UserId;
-import com.runiverse.running_service.domain.user.exception.*;
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UserVoTest {
 
@@ -74,7 +84,7 @@ public class UserVoTest {
                     .isNotSameAs(second);
         }
     }
-    
+
     // Email 테스트
     @Nested
     @DisplayName("Email 테스트")
