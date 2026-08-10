@@ -1,10 +1,12 @@
 package com.runiverse.running_service.application.auth.command.emailverification;
 
+import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.exception.EmailVerificationCooldownException;
 import com.runiverse.running_service.application.auth.exception.EmailVerificationDailyLimitExceededException;
 import com.runiverse.running_service.application.auth.port.in.SendEmailVerificationUsecase;
 import com.runiverse.running_service.application.auth.port.out.AcquireSendCooldownPort;
 import com.runiverse.running_service.application.auth.port.out.CheckDailySendLimitPort;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
 import com.runiverse.running_service.application.auth.port.out.DeleteVerificationCodePort;
 import com.runiverse.running_service.application.auth.port.out.GenerateVerificationCodePort;
 import com.runiverse.running_service.application.auth.port.out.ReleaseSendCooldownPort;
@@ -23,6 +25,7 @@ public class SendEmailVerificationHandler implements SendEmailVerificationUsecas
     private final AcquireSendCooldownPort acquireSendCooldownPort;
     private final ReleaseSendCooldownPort releaseSendCooldownPort;
     private final CheckDailySendLimitPort checkDailySendLimitPort;
+    private final CheckEmailDuplicatePort checkEmailDuplicatePort;
     private final GenerateVerificationCodePort generateVerificationCodePort;
     private final VerificationCodeHashPort verificationCodeHashPort;
     private final SaveVerificationCodePort saveVerificationCodePort;
@@ -39,20 +42,25 @@ public class SendEmailVerificationHandler implements SendEmailVerificationUsecas
             throw new EmailVerificationCooldownException();
         }
 
-        // 3. 전송 횟수 제한 확인
+        // 3. 이메일 중복성 검사
+        if (checkEmailDuplicatePort.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException();
+        }
+
+        // 4. 전송 횟수 제한 확인
         if (!checkDailySendLimitPort.tryConsume(email)) {
             throw new EmailVerificationDailyLimitExceededException();
         }
 
-        // 4. email code를 생성한다.
+        // 5. email code를 생성한다.
         String code = generateVerificationCodePort.generate();
-        // 5. email code를 해시화 한다.
+        // 6. email code를 해시화 한다.
         String hashedCode = verificationCodeHashPort.hash(code);
 
         try {
-            // 6. email hash code 저장
+            // 7. email hash code 저장
             saveVerificationCodePort.save(email, hashedCode);
-            // 7. email code 전송
+            // 8. email code 전송
             sendEmailPort.send(email, SUBJECT, buildBody(code));
         } catch (RuntimeException e) {
             // 저장이나 발송이 실패하면 코드와 쿨다운을 되돌린다

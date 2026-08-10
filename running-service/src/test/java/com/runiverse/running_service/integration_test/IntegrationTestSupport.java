@@ -86,6 +86,7 @@ public abstract class IntegrationTestSupport {
                 emailVerificationStore,     // AcquireSendCooldownPort
                 emailVerificationStore,     // ReleaseSendCooldownPort
                 emailVerificationStore,     // CheckDailySendLimitPort
+                userStore,                  // CheckEmailDuplicatePort
                 verificationCodeGenerator,  // GenerateVerificationCodePort
                 verificationCodeHasher,     // VerificationCodeHashPort
                 emailVerificationStore,     // SaveVerificationCodePort
