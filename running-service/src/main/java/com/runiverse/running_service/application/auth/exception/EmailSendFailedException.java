@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class EmailSendFailedException extends BusinessException {
-    public EmailSendFailedException() {super(ErrorCode.EMAIL_SEND_FAILED);}
+
+    public EmailSendFailedException() {
+        super(ErrorCode.EMAIL_SEND_FAILED);
+    }
 }

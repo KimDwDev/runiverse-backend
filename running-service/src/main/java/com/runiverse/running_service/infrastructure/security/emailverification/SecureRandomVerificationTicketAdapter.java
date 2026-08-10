@@ -8,9 +8,11 @@ import java.util.Base64;
 
 @Component
 public class SecureRandomVerificationTicketAdapter implements GenerateVerificationTicketPort {
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final int TICKET_BYTES = 32;
+
     @Override
     public String generate() {
         byte[] ticket = new byte[TICKET_BYTES];

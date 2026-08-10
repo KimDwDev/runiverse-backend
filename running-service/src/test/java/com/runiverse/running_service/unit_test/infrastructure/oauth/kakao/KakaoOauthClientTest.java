@@ -1,8 +1,6 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 
-import com.runiverse.running_service.infrastructure.oauth.kakao.KakaoOauthClient;
-
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
@@ -44,48 +42,48 @@ public class KakaoOauthClientTest {
 
     private static final String TOKEN_RESPONSE =
             """
-            {
-              "token_type": "bearer",
-              "access_token": "kakao-access-token",
-              "expires_in": 21599,
-              "refresh_token": "kakao-refresh-token"
-            }
-            """;
+                    {
+                      "token_type": "bearer",
+                      "access_token": "kakao-access-token",
+                      "expires_in": 21599,
+                      "refresh_token": "kakao-refresh-token"
+                    }
+                    """;
 
     private static final String USER_RESPONSE =
             """
-            {
-              "id": 1234567890,
-              "connected_at": "2026-07-30T00:00:00Z",
-              "kakao_account": {
-                "has_email": true,
-                "email_needs_agreement": false,
-                "is_email_valid": true,
-                "is_email_verified": true,
-                "email": "kakao@example.com"
-              }
-            }
-            """;
+                    {
+                      "id": 1234567890,
+                      "connected_at": "2026-07-30T00:00:00Z",
+                      "kakao_account": {
+                        "has_email": true,
+                        "email_needs_agreement": false,
+                        "is_email_valid": true,
+                        "is_email_verified": true,
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
 
     // 이메일 동의를 받지 못하면 email 필드 자체가 응답에서 빠진다
     private static final String USER_RESPONSE_WITHOUT_EMAIL =
             """
-            {
-              "id": 1234567890,
-              "kakao_account": {
-                "has_email": true,
-                "email_needs_agreement": true
-              }
-            }
-            """;
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "has_email": true,
+                        "email_needs_agreement": true
+                      }
+                    }
+                    """;
 
     // 동의 항목이 하나도 없으면 kakao_account 자체가 오지 않는다
     private static final String USER_RESPONSE_WITHOUT_ACCOUNT =
             """
-            {
-              "id": 1234567890
-            }
-            """;
+                    {
+                      "id": 1234567890
+                    }
+                    """;
 
     private MockRestServiceServer mockServer;
 
@@ -185,8 +183,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withBadRequest()
                         .body(
                                 """
-                                {"error":"invalid_grant","error_description":"authorization code not found","error_code":"KOE320"}
-                                """)
+                                        {"error":"invalid_grant","error_description":"authorization code not found","error_code":"KOE320"}
+                                        """)
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when & then

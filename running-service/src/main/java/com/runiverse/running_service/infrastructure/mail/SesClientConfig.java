@@ -14,6 +14,7 @@ import java.time.Duration;
 
 @Configuration
 public class SesClientConfig {
+
     private static final Duration API_CALL_TIMEOUT = Duration.ofSeconds(5);
 
     @Bean

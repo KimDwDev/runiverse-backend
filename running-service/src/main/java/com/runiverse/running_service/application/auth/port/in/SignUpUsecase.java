@@ -4,5 +4,6 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 
 public interface SignUpUsecase {
+
     SignUpResult handle(SignUpCommand command);
 }

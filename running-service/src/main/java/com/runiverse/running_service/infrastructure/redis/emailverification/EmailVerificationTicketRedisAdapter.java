@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class EmailVerificationTicketRedisAdapter implements SaveVerificationTicketPort, ConsumeVerificationTicketPort {
+
     private final StringRedisTemplate redisTemplate;
     private final EmailVerificationProperties properties;
     private static final String EMAIL_VERIFICATION = "email_verification";
@@ -26,6 +27,7 @@ public class EmailVerificationTicketRedisAdapter implements SaveVerificationTick
     public String consume(String hashedTicket) {
         return redisTemplate.opsForValue().getAndDelete(key(hashedTicket));
     }
+
     private String key(String hashedTicket) {
         return RedisKey.USER.of(EMAIL_VERIFICATION, TICKET, hashedTicket);
     }

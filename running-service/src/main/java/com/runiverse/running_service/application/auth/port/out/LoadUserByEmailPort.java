@@ -5,5 +5,6 @@ import com.runiverse.running_service.domain.user.aggregate.User;
 import java.util.Optional;
 
 public interface LoadUserByEmailPort {
+
     Optional<User> loadByEmail(String email);
 }

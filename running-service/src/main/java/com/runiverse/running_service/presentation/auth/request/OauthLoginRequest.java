@@ -8,4 +8,5 @@ public record OauthLoginRequest(
         @NotBlank(message = "코드 검증값은 필수입니다.")
         String codeVerifier
 ) {
+
 }

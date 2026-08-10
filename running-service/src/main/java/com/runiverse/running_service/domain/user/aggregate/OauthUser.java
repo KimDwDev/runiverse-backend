@@ -8,30 +8,42 @@ import com.runiverse.running_service.domain.user.vo.UserId;
 import lombok.Getter;
 
 import java.util.Objects;
-import java.util.UUID;
 
 @Getter
 public class OauthUser {
+
     private final UserId userId;
     private final Provider provider;
     private final ProviderId providerId;
+
     OauthUser(UserId userId, Provider provider, String providerId) {
-        if (userId == null) throw new UserIdRequiredException();// provider는 application에서 검증
-        if (provider == null) throw new ProviderRequiredException();
+        if (userId == null) {
+            throw new UserIdRequiredException();// provider는 application에서 검증
+        }
+        if (provider == null) {
+            throw new ProviderRequiredException();
+        }
         this.userId = userId;
         this.provider = provider;
         this.providerId = new ProviderId(providerId);
     }
+
     public boolean isSameProvider(Provider other) {
         return provider == other;
     }
+
     // userId와 provider 유저를 구분
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof OauthUser other)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof OauthUser other)) {
+            return false;
+        }
         return userId.equals(other.userId) && provider == other.provider;
     }
+
     @Override
     public int hashCode() {
         return Objects.hash(userId, provider);

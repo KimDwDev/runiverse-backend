@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class EmailVerificationDailyLimitExceededException extends BusinessException {
-    public EmailVerificationDailyLimitExceededException() {super(ErrorCode.EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED);}
+
+    public EmailVerificationDailyLimitExceededException() {
+        super(ErrorCode.EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED);
+    }
 }

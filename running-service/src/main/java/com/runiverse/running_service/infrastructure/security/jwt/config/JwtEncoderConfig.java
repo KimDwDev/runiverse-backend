@@ -10,14 +10,17 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
 @Configuration
 public class JwtEncoderConfig {
+
     @Bean
     public JwtEncoder accessTokenEncoder(JwtProperties properties) {
         return encoder(properties.accessToken().secret());
     }
+
     @Bean
     public JwtEncoder refreshTokenEncoder(JwtProperties properties) {
         return encoder(properties.refreshToken().secret());
     }
+
     private JwtEncoder encoder(String secret) {
         return new NimbusJwtEncoder(new ImmutableSecret<>(JwtSecretKeyFactory.create(secret)));
     }

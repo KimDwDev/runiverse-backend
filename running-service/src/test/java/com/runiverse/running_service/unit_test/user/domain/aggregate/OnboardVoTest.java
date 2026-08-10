@@ -1,16 +1,32 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
-import com.runiverse.running_service.domain.user.exception.*;
-import com.runiverse.running_service.domain.user.vo.*;
-
-import static org.assertj.core.api.Assertions.*;
-
+import com.runiverse.running_service.domain.user.exception.AvgPaceOutOfRangeException;
+import com.runiverse.running_service.domain.user.exception.BirthdayRequiredException;
+import com.runiverse.running_service.domain.user.exception.GenderRequiredException;
+import com.runiverse.running_service.domain.user.exception.HeightOutOfRangeException;
+import com.runiverse.running_service.domain.user.exception.HeightRequiredException;
+import com.runiverse.running_service.domain.user.exception.InvalidBirthdayException;
+import com.runiverse.running_service.domain.user.exception.InvalidNicknameFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidNicknameLengthException;
+import com.runiverse.running_service.domain.user.exception.NicknameRequiredException;
+import com.runiverse.running_service.domain.user.exception.UnsupportedGenderException;
+import com.runiverse.running_service.domain.user.exception.WeightOutOfRangeException;
+import com.runiverse.running_service.domain.user.exception.WeightRequiredException;
+import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
+import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.Weight;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class OnboardVoTest {
 

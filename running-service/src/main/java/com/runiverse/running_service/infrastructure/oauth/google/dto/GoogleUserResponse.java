@@ -8,4 +8,5 @@ public record GoogleUserResponse(
         String email,
         @JsonProperty("email_verified") Boolean emailVerified
 ) {
+
 }

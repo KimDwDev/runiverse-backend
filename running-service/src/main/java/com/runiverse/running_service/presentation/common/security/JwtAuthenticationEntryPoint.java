@@ -12,8 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -25,7 +25,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
     private final ObjectMapper objectMapper;
+
     @Override
     public void commence(
             HttpServletRequest request,
@@ -45,17 +47,22 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(), body);
     }
+
     private AuthErrorCode resolve(AuthenticationException authException) {
         // 만료와 블랙리스트는 각 validator가 심어둔 코드로 판별한다
         if (authException.getCause() instanceof JwtValidationException validationException) {
             // 만료
             boolean expired = validationException.getErrors().stream()
                     .anyMatch(error -> ExpiredTokenValidator.ERROR_CODE.equals(error.getErrorCode()));
-            if (expired) return AuthErrorCode.TOKEN_EXPIRED;
+            if (expired) {
+                return AuthErrorCode.TOKEN_EXPIRED;
+            }
             // 블랙리스트
             boolean blocked = validationException.getErrors().stream()
                     .anyMatch(error -> BlockedTokenValidator.ERROR_CODE.equals(error.getErrorCode()));
-            if (blocked) return AuthErrorCode.TOKEN_BLOCKED;
+            if (blocked) {
+                return AuthErrorCode.TOKEN_BLOCKED;
+            }
         }
         // 토큰을 아예 보내지 않은 경우
         if (authException instanceof InsufficientAuthenticationException) {

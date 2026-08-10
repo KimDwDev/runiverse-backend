@@ -4,5 +4,6 @@ import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLo
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginResult;
 
 public interface OauthLoginUsecase {
+
     OauthLoginResult handle(OauthLoginCommand command);
 }

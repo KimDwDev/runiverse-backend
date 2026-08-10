@@ -5,4 +5,5 @@ public record OauthLoginCommand(
         String authorizationCode,
         String codeVerifier
 ) {
+
 }

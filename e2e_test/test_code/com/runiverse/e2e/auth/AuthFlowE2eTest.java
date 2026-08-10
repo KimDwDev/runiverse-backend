@@ -1,13 +1,19 @@
 package com.runiverse.e2e.auth;
+
 import com.runiverse.e2e.E2eTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
 import java.math.BigDecimal;
 import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
+
 @DisplayName("배포 이미지 대상 인증 흐름 E2E 테스트")
 class AuthFlowE2eTest extends E2eTestSupport {
+
     private static final String PASSWORD = "Password123!";
+
     @Test
     @DisplayName("메일 인증부터 로그아웃까지 실제 컨테이너 위에서 한 흐름으로 이어진다")
     void fullFlow() {
@@ -64,6 +70,7 @@ class AuthFlowE2eTest extends E2eTestSupport {
         assertThat(reused.status()).isEqualTo(401);
         assertThat(reused.text("code")).isEqualTo("TOKEN_BLOCKED");
     }
+
     @Test
     @DisplayName("토큰 없이 보호된 엔드포인트를 부르면 401과 함께 인증 필요 코드가 내려온다")
     void protectedEndpointRequiresToken() {
@@ -80,6 +87,7 @@ class AuthFlowE2eTest extends E2eTestSupport {
         assertThat(response.status()).isEqualTo(401);
         assertThat(response.text("code")).isEqualTo("AUTHENTICATION_REQUIRED");
     }
+
     @Test
     @DisplayName("인증을 마쳐도 비밀번호 규칙을 어기면 400으로 걸러지고 가입되지 않는다")
     void signUpRejectsInvalidPassword() {

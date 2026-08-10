@@ -1,6 +1,12 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.AcquireSendCooldownPort;
+import com.runiverse.running_service.application.auth.port.out.CheckDailySendLimitPort;
+import com.runiverse.running_service.application.auth.port.out.ConsumeVerificationAttemptPort;
+import com.runiverse.running_service.application.auth.port.out.DeleteVerificationCodePort;
+import com.runiverse.running_service.application.auth.port.out.ReleaseSendCooldownPort;
+import com.runiverse.running_service.application.auth.port.out.SaveVerificationCodePort;
+import com.runiverse.running_service.application.auth.port.out.VerificationAttempt;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,6 +31,7 @@ public class InMemoryEmailVerificationStore implements AcquireSendCooldownPort, 
 
     // 해시와 시도 횟수를 한 덩어리로 묶는다. Redis 쪽 Hash 자료구조와 같은 모양이다
     private static final class Entry {
+
         private final String hashedCode;
         private int attempts;
 
@@ -64,7 +71,9 @@ public class InMemoryEmailVerificationStore implements AcquireSendCooldownPort, 
     @Override
     public VerificationAttempt consume(String email) {
         Entry entry = codes.get(email);
-        if (entry == null) return new VerificationAttempt(VerificationAttempt.Status.NOT_FOUND, null);
+        if (entry == null) {
+            return new VerificationAttempt(VerificationAttempt.Status.NOT_FOUND, null);
+        }
 
         entry.attempts++;
         // 대조하기 전에 먼저 소비한다. 틀린 코드로 무한히 두드릴 수 없게 하기 위해서다

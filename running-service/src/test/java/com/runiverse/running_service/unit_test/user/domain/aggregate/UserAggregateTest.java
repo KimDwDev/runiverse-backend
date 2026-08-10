@@ -1,13 +1,18 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.exception.*;
-import static org.assertj.core.api.Assertions.*;
+import com.runiverse.running_service.domain.user.exception.DescriptionTooLongException;
+import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UserAggregateTest {
 

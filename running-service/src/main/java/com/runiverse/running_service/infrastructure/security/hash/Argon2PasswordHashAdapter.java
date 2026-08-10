@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class Argon2PasswordHashAdapter implements PasswordHashPort {
+
     private final PasswordEncoder passwordEncoder;
 
     @Override
