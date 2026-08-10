@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class EmailVerificationCooldownException extends BusinessException {
-    public EmailVerificationCooldownException() { super(ErrorCode.EMAIL_VERIFICATION_COOLDOWN); }
+
+    public EmailVerificationCooldownException() {
+        super(ErrorCode.EMAIL_VERIFICATION_COOLDOWN);
+    }
 }

@@ -1,12 +1,13 @@
 package com.runiverse.running_service.unit_test.infrastructure.security.jwt.key;
 
 import com.runiverse.running_service.infrastructure.security.jwt.key.JwtSecretKeyFactory;
-
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.spec.SecretKeySpec;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class JwtSecretKeyFactoryTest {
 

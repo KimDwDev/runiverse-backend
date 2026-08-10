@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class OauthCodeExchangeFailedException extends BusinessException {
-    public OauthCodeExchangeFailedException() { super(ErrorCode.OAUTH_CODE_EXCHANGE_FAILED); }
+
+    public OauthCodeExchangeFailedException() {
+        super(ErrorCode.OAUTH_CODE_EXCHANGE_FAILED);
+    }
 }

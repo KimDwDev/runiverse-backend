@@ -12,20 +12,22 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpResul
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.UUID;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("토큰 재발급 통합 테스트")
 public class ReissueIntegrationTest extends IntegrationTestSupport {
+
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
     private ReissueHandler reissueHandler;
+
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
@@ -41,6 +43,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
                 refreshTokenStore   // SaveRefreshTokenHashPort
         );
     }
+
     // 가입 -> 로그인까지 마친 상태를 만든다
     private LoginResult signUpAndLogin() {
         signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
@@ -58,6 +61,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         assertThat(result.accessToken()).isNotBlank().isNotEqualTo(login.accessToken());
         assertThat(result.refreshToken()).isNotBlank().isNotEqualTo(login.refreshToken());
     }
+
     @Test
     @DisplayName("재발급하면 저장된 해시가 새 refresh token의 것으로 교체된다")
     void reissueReplacesStoredHash() {
@@ -71,6 +75,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         assertThat(afterHash).isNotEqualTo(beforeHash);
         assertThat(tokenProvider.matches(result.refreshToken(), afterHash)).isTrue();
     }
+
     @Test
     @DisplayName("이미 사용한 refresh token을 다시 쓰면 탈취로 보고 저장된 토큰을 폐기한다")
     void reusingOldRefreshTokenRevokesEverything() {
@@ -83,6 +88,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         // 정상 발급된 최신 토큰까지 함께 무효화된다
         assertThat(refreshTokenStore.loadById(login.userId())).isEmpty();
     }
+
     @Test
     @DisplayName("재발급받은 토큰으로 연속해서 재발급할 수 있다")
     void reissueChain() {
@@ -96,6 +102,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         String storedHash = refreshTokenStore.loadById(login.userId()).orElseThrow();
         assertThat(tokenProvider.matches(second.refreshToken(), storedHash)).isTrue();
     }
+
     @Test
     @DisplayName("형식이 잘못된 토큰이면 InvalidRefreshTokenException이 발생한다")
     void reissueWithMalformedToken() {
@@ -107,6 +114,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         // 남의 토큰이 아니므로 저장된 토큰은 그대로 살아 있다
         assertThat(refreshTokenStore.loadById(login.userId())).isPresent();
     }
+
     @Test
     @DisplayName("access token을 refresh token 자리에 넘기면 InvalidRefreshTokenException이 발생한다")
     void reissueWithAccessToken() {
@@ -116,6 +124,7 @@ public class ReissueIntegrationTest extends IntegrationTestSupport {
         assertThatThrownBy(() -> reissueHandler.handle(new ReissueCommand(login.accessToken())))
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
+
     @Test
     @DisplayName("저장소에 토큰이 없는 유저면 InvalidRefreshTokenException이 발생한다")
     void reissueWithoutStoredToken() {

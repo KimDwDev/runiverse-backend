@@ -5,8 +5,6 @@ import com.runiverse.running_service.application.common.exception.ErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -19,6 +17,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     // 유스케이스 예외
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
@@ -26,6 +25,7 @@ public class GlobalExceptionHandler {
         log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
         return respond(toStatus(errorCode), errorCode.getCode(), errorCode.getMessage());
     }
+
     // 도메인 검증 예외
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(
@@ -38,6 +38,7 @@ public class GlobalExceptionHandler {
                 e.getErrorCode().getMessage()
         );
     }
+
     // @Valid 검증 실패
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
@@ -51,16 +52,18 @@ public class GlobalExceptionHandler {
                 message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
         );
     }
+
     // JSON 문법 오류 등 본문 자체를 읽지 못한 경우
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException e) {
         log.warn("요청 본문 파싱 실패: {}", e.getMessage());
         return respond(
-            HttpStatus.BAD_REQUEST,
+                HttpStatus.BAD_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getMessage()
         );
     }
+
     // 예상 못한 예외
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e) {

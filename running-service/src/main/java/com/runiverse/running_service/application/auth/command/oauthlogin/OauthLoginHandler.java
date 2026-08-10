@@ -2,7 +2,12 @@ package com.runiverse.running_service.application.auth.command.oauthlogin;
 
 import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.CheckOnboardPort;
+import com.runiverse.running_service.application.auth.port.out.ExchangeOauthCodePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
+import com.runiverse.running_service.application.auth.port.out.OauthProfile;
+import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
+import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import lombok.RequiredArgsConstructor;

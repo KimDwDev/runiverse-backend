@@ -8,4 +8,5 @@ public record SignUpResult(
         String refreshToken,
         boolean isOnboarded
 ) {
+
 }

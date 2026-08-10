@@ -4,5 +4,6 @@ import com.runiverse.running_service.application.auth.command.login.LoginCommand
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
 
 public interface LoginUsecase {
+
     LoginResult handle(LoginCommand command);
 }

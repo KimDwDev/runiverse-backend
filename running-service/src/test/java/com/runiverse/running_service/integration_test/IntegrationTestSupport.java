@@ -4,10 +4,25 @@ import com.runiverse.running_service.application.auth.command.emailverification.
 import com.runiverse.running_service.application.auth.command.emailverification.VerifyEmailCodeHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpUserRegistrar;
-import com.runiverse.running_service.integration_test.fake.*;
+import com.runiverse.running_service.integration_test.fake.FakeEmailSender;
+import com.runiverse.running_service.integration_test.fake.FakeOauthClient;
+import com.runiverse.running_service.integration_test.fake.FakePasswordHasher;
+import com.runiverse.running_service.integration_test.fake.FakeTokenProvider;
+import com.runiverse.running_service.integration_test.fake.FakeUserIdGenerator;
+import com.runiverse.running_service.integration_test.fake.FakeVerificationCodeGenerator;
+import com.runiverse.running_service.integration_test.fake.FakeVerificationCodeHasher;
+import com.runiverse.running_service.integration_test.fake.FakeVerificationTicketGenerator;
+import com.runiverse.running_service.integration_test.fake.FakeVerificationTicketHasher;
+import com.runiverse.running_service.integration_test.fake.InMemoryAccessTokenBlacklist;
+import com.runiverse.running_service.integration_test.fake.InMemoryEmailVerificationStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryOnboardStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRefreshTokenStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryVerificationTicketStore;
 import org.junit.jupiter.api.BeforeEach;
 
 public abstract class IntegrationTestSupport {
+
     // 실제 application.properties와 같은 값으로 맞춘다
     protected static final int MAX_ATTEMPTS = 5;
     protected static final int DAILY_LIMIT = 10;
@@ -27,6 +42,7 @@ public abstract class IntegrationTestSupport {
     protected FakeVerificationCodeGenerator verificationCodeGenerator;
     protected FakeVerificationCodeHasher verificationCodeHasher;
     protected FakeEmailSender emailSender;
+
     @BeforeEach
     void setUpFakes() {
         userStore = new InMemoryUserStore();
@@ -45,6 +61,7 @@ public abstract class IntegrationTestSupport {
         verificationCodeHasher = new FakeVerificationCodeHasher();
         emailSender = new FakeEmailSender();
     }
+
     // 조립할 fake가 많고 여러 테스트가 가입부터 시작하므로 여기서 한 번만 엮는다
     protected SignUpHandler newSignUpHandler() {
         SignUpUserRegistrar registrar = new SignUpUserRegistrar(
@@ -62,6 +79,7 @@ public abstract class IntegrationTestSupport {
                 refreshTokenStore          // SaveRefreshTokenHashPort
         );
     }
+
     // 발송 핸들러는 한 저장소가 포트 6개 중 5개를 겸한다
     protected SendEmailVerificationHandler newSendEmailVerificationHandler() {
         return new SendEmailVerificationHandler(
@@ -75,6 +93,7 @@ public abstract class IntegrationTestSupport {
                 emailSender                 // SendEmailPort
         );
     }
+
     protected VerifyEmailCodeHandler newVerifyEmailCodeHandler() {
         return new VerifyEmailCodeHandler(
                 emailVerificationStore,       // ConsumeVerificationAttemptPort
@@ -85,6 +104,7 @@ public abstract class IntegrationTestSupport {
                 verificationTicketHasher      // VerificationTicketHashPort
         );
     }
+
     // 이메일 인증을 마친 상태를 만들고 원문 티켓을 돌려준다.
     // 회원가입은 이 티켓으로만 이메일을 얻으므로 가입 전에 반드시 필요하다
     protected String issueVerificationTicket(String email) {

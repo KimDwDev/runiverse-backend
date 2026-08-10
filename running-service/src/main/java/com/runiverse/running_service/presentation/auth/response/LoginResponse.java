@@ -8,4 +8,5 @@ public record LoginResponse(
         String refreshToken,
         boolean isOnboarded
 ) {
+
 }

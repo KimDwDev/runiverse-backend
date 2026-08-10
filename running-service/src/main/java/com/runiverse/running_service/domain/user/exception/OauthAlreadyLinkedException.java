@@ -4,5 +4,8 @@ import com.runiverse.running_service.domain.common.exception.BusinessException;
 import com.runiverse.running_service.domain.common.exception.ErrorCode;
 
 public class OauthAlreadyLinkedException extends BusinessException {
-    public OauthAlreadyLinkedException() { super(ErrorCode.OAUTH_ALREADY_LINKED); }
+
+    public OauthAlreadyLinkedException() {
+        super(ErrorCode.OAUTH_ALREADY_LINKED);
+    }
 }

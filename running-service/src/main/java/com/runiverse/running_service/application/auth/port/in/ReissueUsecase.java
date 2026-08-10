@@ -4,5 +4,6 @@ import com.runiverse.running_service.application.auth.command.reissue.ReissueCom
 import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
 
 public interface ReissueUsecase {
+
     ReissueResult handle(ReissueCommand command);
 }

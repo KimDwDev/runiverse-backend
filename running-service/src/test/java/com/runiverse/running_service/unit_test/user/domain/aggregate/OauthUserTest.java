@@ -5,14 +5,14 @@ import com.runiverse.running_service.domain.user.exception.ProviderRequiredExcep
 import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
-
-import static org.assertj.core.api.Assertions.*;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // OauthUser의 생성자가 package-private 이라 같은 패키지에 둔다
 public class OauthUserTest {

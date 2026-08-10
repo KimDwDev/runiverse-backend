@@ -1,7 +1,13 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
-import com.runiverse.running_service.domain.user.vo.*;
+import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
+import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.user.vo.Weight;
 import lombok.Getter;
 
 import java.math.BigDecimal;
@@ -10,6 +16,7 @@ import java.util.Objects;
 
 @Getter
 public class UserOnboard {
+
     private final UserId userId;
     private final Nickname nickname;
     private final Gender gender;
@@ -17,6 +24,7 @@ public class UserOnboard {
     private final AvgPace avgPace;
     private final Weight weight;
     private final Height height;
+
     // 온보딩 완료
     UserOnboard(UserId userId, String nickname, String gender, LocalDate birthday,
                 int avgPace, BigDecimal weight, BigDecimal height) {
@@ -28,10 +36,13 @@ public class UserOnboard {
                 new Weight(weight),
                 new Height(height));
     }
+
     // 내부 전용 - 수정 시 기존 VO를 넘기기 위해 필요
     private UserOnboard(UserId userId, Nickname nickname, Gender gender, Birthday birthday,
                         AvgPace avgPace, Weight weight, Height height) {
-        if (userId == null) throw new UserIdRequiredException();
+        if (userId == null) {
+            throw new UserIdRequiredException();
+        }
         this.userId = userId;
         this.nickname = nickname;
         this.gender = gender;
@@ -40,6 +51,7 @@ public class UserOnboard {
         this.weight = weight;
         this.height = height;
     }
+
     // 프로필 수정
     UserOnboard change(String nickname, String gender, LocalDate birthday,
                        Integer avgPace, BigDecimal weight, BigDecimal height) {
@@ -53,12 +65,18 @@ public class UserOnboard {
                 height != null ? new Height(height) : this.height
         );
     }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof UserOnboard other)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof UserOnboard other)) {
+            return false;
+        }
         return userId.equals(other.userId);
     }
+
     @Override
     public int hashCode() {
         return Objects.hash(userId);

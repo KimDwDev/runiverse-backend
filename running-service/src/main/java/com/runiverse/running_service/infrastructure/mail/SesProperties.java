@@ -7,9 +7,10 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "mail.ses")
 @Validated
 public record SesProperties(
-    @NotBlank String region,
-    @NotBlank String from,
-    String accessKeyId,      // 비우면 기본 자격증명 체인(IAM Role) 사용
-    String secretAccessKey
+        @NotBlank String region,
+        @NotBlank String from,
+        String accessKeyId,      // 비우면 기본 자격증명 체인(IAM Role) 사용
+        String secretAccessKey
 ) {
+
 }

@@ -11,6 +11,7 @@ import java.util.List;
 public record AudienceValidator(
         String audience
 ) implements OAuth2TokenValidator<Jwt> {
+
     private static final String DESCRIPTION = "토큰의 aud 클레임이 이 API를 가리키지 않습니다";
 
     @Override

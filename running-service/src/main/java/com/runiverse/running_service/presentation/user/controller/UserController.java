@@ -29,7 +29,7 @@ public class UserController {
     public ResponseEntity<OnboardResponse> completeOnboard(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody OnboardRequest request) {
-        UUID userId =  UUID.fromString(jwt.getSubject());
+        UUID userId = UUID.fromString(jwt.getSubject());
         CompleteOnboardResult result = completeOnboardUsecase.handle(
                 new CompleteOnboardCommand(
                         userId,

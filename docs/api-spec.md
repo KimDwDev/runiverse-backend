@@ -588,8 +588,8 @@
 ```
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `MATCH_REQUEST`→`MATCH_WAITING`, `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
-    - **`MATCH_CANCEL`·`RUNNING_LOCATION_UPDATE`는 ack 없음**(보내고 끝 — 실패는 `ERROR`)
-    - ack의 `data`는 비움
+  - **`MATCH_CANCEL`·`RUNNING_LOCATION_UPDATE`는 ack 없음**(보내고 끝 — 실패는 `ERROR`)
+  - ack의 `data`는 비움
 - **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
 
 ```json
@@ -603,9 +603,9 @@
 - **code**: `VALIDATION_FAILED`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청) / `ALREADY_MATCHING`(이미 매칭 대기·방에 있는데 재요청)
 
 - **DB row 트리거** — `running_room_session`은 방↔플레이어 순수 연결 테이블
-    - 링크 생성 = 방 배정 시(`MATCH_REQUEST` 처리)
-    - `MATCH_CANCEL` 수신 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_player`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 페널티·이력 근거)
-    - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
+  - 링크 생성 = 방 배정 시(`MATCH_REQUEST` 처리)
+  - `MATCH_CANCEL` 수신 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_player`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 페널티·이력 근거)
+  - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
@@ -627,9 +627,9 @@
 
 - Data: 없음 (연결 컨텍스트로 본인 처리)
 - **서버가 방 상태로 분기**
-    - 대기 중(`MATCHING`) = 대기 취소(row 삭제)
-    - 확정 후(`MATCHED`) = 이탈(`LEFT` 처리, 페널티 대상)
-    - 남은 인원에겐 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED` 통지
+  - 대기 중(`MATCHING`) = 대기 취소(row 삭제)
+  - 확정 후(`MATCHED`) = 이탈(`LEFT` 처리, 페널티 대상)
+  - 남은 인원에 겐 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED` 통지
 - **ack 없음** — 보내고 화면 닫으면 끝, 실패는 `ERROR`
 
 #### `MATCH_PLAYERS_UPDATED` (S→C) — 매칭 참여자 갱신

@@ -5,7 +5,7 @@ services:
     env_file:
       - .env.test
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready --username=runiverse --dbname=runiverse_e2e" ]
+      test: ["CMD-SHELL", "pg_isready --username=runiverse --dbname=runiverse_e2e"]
       interval: 5s # 5초마다 검사
       timeout: 5s # 5초 까지만 기다려준다
       retries: 12 # 최대 12번까지만 허용

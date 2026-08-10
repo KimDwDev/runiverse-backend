@@ -7,19 +7,23 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.InvalidCredentialsException;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 @DisplayName("로그인 통합 테스트")
 public class LoginIntegrationTest extends IntegrationTestSupport {
+
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
+
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
@@ -32,6 +36,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 onboardStore
         );
     }
+
     private UUID signUp() {
         return signUpHandler.handle(
                 new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD)).userId();
@@ -50,6 +55,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         assertThat(result.refreshToken()).isNotBlank();
         assertThat(result.accessToken()).isNotEqualTo(result.refreshToken());
     }
+
     @Test
     @DisplayName("refresh token은 원문이 아니라 해시로 저장된다")
     void loginStoresHashedRefreshToken() {
@@ -62,6 +68,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         assertThat(storedHash).isNotEqualTo(result.refreshToken());
         assertThat(tokenProvider.matches(result.refreshToken(), storedHash)).isTrue();
     }
+
     @Test
     @DisplayName("가입하지 않은 이메일로 로그인하면 InvalidCredentialsException이 발생한다")
     void loginWithUnknownEmail() {
@@ -69,6 +76,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 .isInstanceOf(InvalidCredentialsException.class);
         assertThat(refreshTokenStore.isEmpty()).isTrue();
     }
+
     @Test
     @DisplayName("비밀번호가 틀리면 이메일이 없을 때와 같은 예외가 발생한다")
     void loginWithWrongPassword() {
@@ -81,6 +89,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         // 실패한 로그인은 토큰을 새로 발급하지 않는다
         assertThat(refreshTokenStore.loadById(userId)).contains(issuedAtSignUp);
     }
+
     @Test
     @DisplayName("가입 직후 로그인하면 isOnboarded가 false다")
     void loginBeforeOnboarding() {
@@ -91,6 +100,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(result.isOnboarded()).isFalse();
     }
+
     @Test
     @DisplayName("온보딩을 마친 유저가 로그인하면 isOnboarded가 true다")
     void loginAfterOnboarding() {
@@ -102,6 +112,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(result.isOnboarded()).isTrue();
     }
+
     @Test
     @DisplayName("재로그인하면 새 refresh token이 발급되고 저장된 해시가 교체된다")
     void reLoginReplacesStoredRefreshToken() {

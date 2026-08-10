@@ -6,4 +6,5 @@ public record OnboardResponse(
         UUID userId,
         String nickname
 ) {
+
 }

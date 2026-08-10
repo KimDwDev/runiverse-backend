@@ -1,6 +1,14 @@
 package com.runiverse.running_service.presentation.user.request;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,4 +52,5 @@ public record OnboardRequest(
         @DecimalMax(value = "300.0", message = "키는 300cm 이하여야 합니다.")
         BigDecimal height
 ) {
+
 }

@@ -6,5 +6,6 @@ import com.runiverse.running_service.domain.user.vo.UserId;
 import java.util.Optional;
 
 public interface LoadUserByIdPort {
+
     Optional<User> loadById(UserId userId);
 }

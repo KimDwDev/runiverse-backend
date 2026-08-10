@@ -13,15 +13,20 @@ import java.util.stream.Collectors;
 
 @Component
 public class OauthClientRouter implements ExchangeOauthCodePort {
+
     private final Map<Provider, OauthClient> clients;
+
     public OauthClientRouter(List<OauthClient> clientList) {
         this.clients = clientList.stream()
                 .collect(Collectors.toMap(OauthClient::provider, Function.identity()));
     }
+
     @Override
     public OauthProfile exchange(Provider provider, String authorizationCode, String codeVerifier) {
         OauthClient client = clients.get(provider);
-        if (client == null) throw new UnsupportedProviderException();
+        if (client == null) {
+            throw new UnsupportedProviderException();
+        }
         return client.exchange(authorizationCode, codeVerifier);
     }
 }

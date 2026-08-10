@@ -12,16 +12,35 @@ import com.runiverse.running_service.application.auth.command.reissue.ReissueCom
 import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
-import com.runiverse.running_service.application.auth.port.in.*;
-import com.runiverse.running_service.presentation.auth.request.*;
-import com.runiverse.running_service.presentation.auth.response.*;
+import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
+import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
+import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
+import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
+import com.runiverse.running_service.application.auth.port.in.SendEmailVerificationUsecase;
+import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
+import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
+import com.runiverse.running_service.presentation.auth.request.EmailVerificationRequest;
+import com.runiverse.running_service.presentation.auth.request.LoginRequest;
+import com.runiverse.running_service.presentation.auth.request.OauthLoginRequest;
+import com.runiverse.running_service.presentation.auth.request.ReissueRequest;
+import com.runiverse.running_service.presentation.auth.request.SignUpRequest;
+import com.runiverse.running_service.presentation.auth.request.VerifyEmailCodeRequest;
+import com.runiverse.running_service.presentation.auth.response.LoginResponse;
+import com.runiverse.running_service.presentation.auth.response.OauthLoginResponse;
+import com.runiverse.running_service.presentation.auth.response.ReissueResponse;
+import com.runiverse.running_service.presentation.auth.response.SignUpResponse;
+import com.runiverse.running_service.presentation.auth.response.VerifyEmailCodeResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
@@ -66,9 +85,9 @@ public class AuthController {
     ) {
 
         SignUpCommand command = new SignUpCommand(
-                        request.verificationTicket(),
-                        request.password()
-                );
+                request.verificationTicket(),
+                request.password()
+        );
 
         SignUpResult result = signUpUsecase.handle(command);
 
@@ -84,7 +103,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request
-            ) {
+    ) {
 
         LoginCommand command = new LoginCommand(
                 request.email(),
@@ -105,7 +124,7 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             @AuthenticationPrincipal Jwt jwt
-            ) {
+    ) {
         LogoutCommand command = new LogoutCommand(
                 UUID.fromString(jwt.getSubject()),
                 jwt.getId()
@@ -118,7 +137,7 @@ public class AuthController {
     public ResponseEntity<OauthLoginResponse> oauthLogin(
             @PathVariable String provider,
             @Valid @RequestBody OauthLoginRequest request
-            ) {
+    ) {
         OauthLoginCommand command = new OauthLoginCommand(
                 provider,
                 request.authorizationCode(),
@@ -137,7 +156,7 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<ReissueResponse> reissue(
             @Valid @RequestBody ReissueRequest request
-            ) {
+    ) {
         ReissueCommand command = new ReissueCommand(
                 request.refreshToken()
         );

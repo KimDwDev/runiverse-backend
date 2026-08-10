@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.runiverse.running_service.infrastructure.redis.RedisKey;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -8,16 +8,23 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
-import software.amazon.awssdk.services.sesv2.model.*;
+import software.amazon.awssdk.services.sesv2.model.Body;
+import software.amazon.awssdk.services.sesv2.model.Content;
+import software.amazon.awssdk.services.sesv2.model.Destination;
+import software.amazon.awssdk.services.sesv2.model.EmailContent;
+import software.amazon.awssdk.services.sesv2.model.Message;
+import software.amazon.awssdk.services.sesv2.model.SendEmailRequest;
 
 @Slf4j
 @Component
 @Profile("!local")
 @RequiredArgsConstructor
 public class SesEmailAdapter implements SendEmailPort {
+
     private static final String CHARSET = "UTF-8";
     private final SesV2Client sesV2Client;
     private final SesProperties properties;
+
     @Override
     public void send(String to, String subject, String body) {
         try {
@@ -36,6 +43,7 @@ public class SesEmailAdapter implements SendEmailPort {
             throw new EmailSendFailedException();
         }
     }
+
     private Content content(String data) {
         return Content.builder().data(data).charset(CHARSET).build();
     }

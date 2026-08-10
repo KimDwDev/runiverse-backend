@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("local")
 public class LoggingEmailAdapter implements SendEmailPort {
+
     @Override
     public void send(String to, String subject, String body) {
         log.info("[메일 발송 생략] to={} subject={}\n{}", to, subject, body);

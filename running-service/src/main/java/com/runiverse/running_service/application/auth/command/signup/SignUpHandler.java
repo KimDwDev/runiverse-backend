@@ -2,7 +2,11 @@ package com.runiverse.running_service.application.auth.command.signup;
 
 import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.ConsumeVerificationTicketPort;
+import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
+import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
+import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationTicketHashPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,7 +28,9 @@ public class SignUpHandler implements SignUpUsecase {
         // 1. 티켓을 소비해 이메일을 얻는다. 요청이 보낸 이메일은 애초에 받지 않는다
         String hashedTicket = verificationTicketHashPort.hash(command.verificationTicket());
         String email = consumeVerificationTicketPort.consume(hashedTicket);
-        if (email == null) throw new EmailNotVerifiedException();
+        if (email == null) {
+            throw new EmailNotVerifiedException();
+        }
 
         // 2. 유저 생성
         User user = signUpUserRegistrar.register(email, command.password());

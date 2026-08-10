@@ -16,22 +16,27 @@ import java.util.UUID;
 
 public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort {
+
     private final Map<UUID, User> users = new LinkedHashMap<>();
+
     @Override
     public User save(User user) {
         users.put(user.getUserId().value(), user);
         return user;
     }
+
     @Override
     public boolean existsByEmail(String email) {
         return loadByEmail(email).isPresent();
     }
+
     @Override
     public Optional<User> loadByEmail(String email) {
         return users.values().stream()
                 .filter(user -> user.getEmail().value().equals(email))
                 .findFirst();
     }
+
     @Override
     public Optional<User> loadByProvider(Provider provider, String providerId) {
         return users.values().stream()
@@ -41,14 +46,17 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
                         .isPresent())
                 .findFirst();
     }
+
     @Override
     public Optional<User> loadById(UserId userId) {
         return Optional.ofNullable(users.get(userId.value()));
     }
+
     // 검증 전용
     public int size() {
         return users.size();
     }
+
     public Optional<User> findById(UUID userId) {
         return Optional.ofNullable(users.get(userId));
     }

@@ -4,5 +4,6 @@ import com.runiverse.running_service.application.user.command.onboard.CompleteOn
 import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardResult;
 
 public interface CompleteOnboardUsecase {
+
     CompleteOnboardResult handle(CompleteOnboardCommand command);
 }

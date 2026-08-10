@@ -4,5 +4,8 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.ErrorCode;
 
 public class EmailNotVerifiedException extends BusinessException {
-    public EmailNotVerifiedException() {super(ErrorCode.EMAIL_NOT_VERIFIED);}
+
+    public EmailNotVerifiedException() {
+        super(ErrorCode.EMAIL_NOT_VERIFIED);
+    }
 }

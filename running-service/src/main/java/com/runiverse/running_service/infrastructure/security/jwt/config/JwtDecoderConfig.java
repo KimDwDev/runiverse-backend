@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration
 public class JwtDecoderConfig {
+
     @Bean
     public JwtDecoder accessTokenDecoder(
             JwtProperties properties,
@@ -31,6 +32,7 @@ public class JwtDecoderConfig {
         ));
         return decoder;
     }
+
     @Bean
     public JwtDecoder refreshTokenDecoder(JwtProperties properties) {
         NimbusJwtDecoder decoder = decoder(properties.refreshToken().secret());
@@ -40,6 +42,7 @@ public class JwtDecoderConfig {
         ));
         return decoder;
     }
+
     // 키와 알고리즘만 조립
     private NimbusJwtDecoder decoder(String secret) {
         return NimbusJwtDecoder

@@ -7,20 +7,22 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 
 [*.java]
-# 들여쓰기와 줄 길이
 indent_style = space
 indent_size = 4
 ij_continuation_indent_size = 8
-max_line_length = 100
-ij_java_indent_case_from_switch = true
-# import: 와일드카드 금지 (999 = 사실상 무제한)
+max_line_length = 120
+ij_java_wrap_long_lines = true
+ij_java_keep_line_breaks = true
+
+# 999 = 사실상 무제한, none.* = 예외 패키지 없음 → 와일드카드 import 금지
 ij_java_use_single_class_imports = true
 ij_java_class_count_to_use_import_on_demand = 999
 ij_java_names_count_to_use_import_on_demand = 999
 ij_java_packages_to_use_import_on_demand = none.*
-# static import → 빈 줄 → 일반 import
-ij_java_imports_layout = $*, |, *
-# 중괄호: K&R 스타일, 한 줄 분기에도 필수
+
+# 일반 import → 빈 줄 → javax·java → 빈 줄 → static import
+ij_java_imports_layout = *, |, javax.**, java.**, |, $*
+
 ij_java_class_brace_style = end_of_line
 ij_java_method_brace_style = end_of_line
 ij_java_block_brace_style = end_of_line
@@ -28,20 +30,15 @@ ij_java_if_brace_force = always
 ij_java_for_brace_force = always
 ij_java_while_brace_force = always
 ij_java_do_while_brace_force = always
-# 코드 생성: 지역 변수에 final 자동 추가 금지
-ij_java_generate_final_locals = false
-# 일괄 리팩터링 전까지 기존 줄바꿈과 빈 줄을 최대한 유지
-ij_java_keep_line_breaks = true
-ij_java_wrap_long_lines = false
-ij_java_keep_blank_lines_in_code = 2
-ij_java_keep_blank_lines_in_declarations = 2
+
+ij_java_blank_lines_after_class_header = 1
 
 [*.gradle]
 indent_style = tab
 tab_width = 4
 
 [*.bat]
-# 전역 LF 예외: Windows 실행 호환을 위해 CRLF 사용
+# 전역 규칙 예외 — Windows 배치 파일은 CRLF 필수
 end_of_line = crlf
 
 [*.properties]
@@ -52,17 +49,21 @@ ij_properties_keep_blank_lines = true
 [*.{yml,yaml,json}]
 indent_style = space
 indent_size = 2
+ij_yaml_spaces_within_brackets = false
 
 [*.md]
 indent_style = space
 indent_size = 2
-trim_trailing_whitespace = false
-# 문단은 한 줄로 유지하고 에디터에서 소프트 랩
 max_line_length = off
-# Markdown 포맷터는 사용하되 표의 수동 정렬은 보존
+# 전역 규칙 예외 — 줄 끝 공백 2개가 마크다운 강제 개행
+trim_trailing_whitespace = false
 ij_markdown_wrap_text_if_long = false
 ij_markdown_format_tables = false
 
 [*.py]
 indent_style = space
 indent_size = 4
+
+[*.sh]
+indent_style = space
+indent_size = 2

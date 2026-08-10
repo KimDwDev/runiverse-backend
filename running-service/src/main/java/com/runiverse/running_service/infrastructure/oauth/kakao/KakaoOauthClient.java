@@ -26,10 +26,12 @@ import java.nio.charset.StandardCharsets;
 @Slf4j
 @Component
 public class KakaoOauthClient implements OauthClient {
+
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
+
     KakaoOauthClient(
             RestClient restClient,
             KakaoOauthProperties properties
@@ -37,10 +39,12 @@ public class KakaoOauthClient implements OauthClient {
         this.restClient = restClient;
         this.properties = properties;
     }
+
     @Override
     public Provider provider() {
         return Provider.KAKAO;
     }
+
     @Override
     public OauthProfile exchange(String authorizationCode, String codeVerifier) {
         try {
@@ -52,6 +56,7 @@ public class KakaoOauthClient implements OauthClient {
             throw new OauthCodeExchangeFailedException();
         }
     }
+
     private String requestAccessToken(String authorizationCode, String codeVerifier) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE);
@@ -80,6 +85,7 @@ public class KakaoOauthClient implements OauthClient {
         }
         return response.accessToken();
     }
+
     // 카카오 액세스 토큰으로 사용자 정보 조회
     private KakaoUserResponse fetchUser(String kakaoAccessToken) {
         KakaoUserResponse response = restClient.get()
@@ -97,6 +103,7 @@ public class KakaoOauthClient implements OauthClient {
         }
         return response;
     }
+
     private OauthProfile toProfile(KakaoUserResponse response) {
         // 보낸 데이터 에서 email이 있으면 account로 받아온다
         KakaoUserResponse.KakaoAccount account = response.kakaoAccount();
@@ -106,6 +113,7 @@ public class KakaoOauthClient implements OauthClient {
         }
         return new OauthProfile(Provider.KAKAO, String.valueOf(response.id()), email);
     }
+
     private void logFailure(String step, ClientHttpResponse response) throws IOException {
         log.warn("카카오 {} 실패: status={}, body={}",
                 step,

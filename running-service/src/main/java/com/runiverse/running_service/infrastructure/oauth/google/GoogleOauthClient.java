@@ -26,10 +26,12 @@ import java.nio.charset.StandardCharsets;
 @Slf4j
 @Component
 public class GoogleOauthClient implements OauthClient {
+
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
     private final GoogleOauthProperties properties;
+
     GoogleOauthClient(
             RestClient restClient,
             GoogleOauthProperties properties
@@ -37,10 +39,12 @@ public class GoogleOauthClient implements OauthClient {
         this.restClient = restClient;
         this.properties = properties;
     }
+
     @Override
     public Provider provider() {
         return Provider.GOOGLE;
     }
+
     @Override
     public OauthProfile exchange(String authorizationCode, String codeVerifier) {
         try {
@@ -52,6 +56,7 @@ public class GoogleOauthClient implements OauthClient {
             throw new OauthCodeExchangeFailedException();
         }
     }
+
     private String requestAccessToken(String authorizationCode, String codeVerifier) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE);
@@ -80,6 +85,7 @@ public class GoogleOauthClient implements OauthClient {
         }
         return response.accessToken();
     }
+
     // 구글 액세스 토큰으로 사용자 정보 조회
     private GoogleUserResponse fetchUser(String googleAccessToken) {
         GoogleUserResponse response = restClient.get()
@@ -97,6 +103,7 @@ public class GoogleOauthClient implements OauthClient {
         }
         return response;
     }
+
     private OauthProfile toProfile(GoogleUserResponse response) {
         // email 스코프에 동의하지 않으면 필드 자체가 빠진다
         if (!StringUtils.hasText(response.email())) {
@@ -104,6 +111,7 @@ public class GoogleOauthClient implements OauthClient {
         }
         return new OauthProfile(Provider.GOOGLE, response.sub(), response.email());
     }
+
     private void logFailure(String step, ClientHttpResponse response) throws IOException {
         log.warn("구글 {} 실패: status={}, body={}",
                 step,

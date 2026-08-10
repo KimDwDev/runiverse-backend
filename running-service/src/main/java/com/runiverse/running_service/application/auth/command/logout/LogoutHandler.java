@@ -3,7 +3,6 @@ package com.runiverse.running_service.application.auth.command.logout;
 import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
 import com.runiverse.running_service.application.auth.port.out.BlockAccessTokenPort;
 import com.runiverse.running_service.application.auth.port.out.DeleteRefreshTokenPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

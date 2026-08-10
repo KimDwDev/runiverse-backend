@@ -4,4 +4,5 @@ public record SignUpCommand(
         String verificationTicket,
         String password
 ) {
+
 }

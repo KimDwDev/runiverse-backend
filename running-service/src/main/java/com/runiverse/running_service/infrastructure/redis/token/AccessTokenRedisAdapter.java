@@ -21,7 +21,7 @@ public class AccessTokenRedisAdapter implements BlockAccessTokenPort, CheckBlock
     @Override
     public void block(String accessTokenId) {
         redisTemplate.opsForValue().set(
-            key(accessTokenId),
+                key(accessTokenId),
                 BLOCKED,
                 jwtProperties.accessToken().ttl()
         );
@@ -32,5 +32,7 @@ public class AccessTokenRedisAdapter implements BlockAccessTokenPort, CheckBlock
         return Boolean.TRUE.equals(redisTemplate.hasKey(key(accessTokenId)));
     }
 
-    private String key(String accessTokenId) { return RedisKey.USER.of(ACCESS_TOKEN, BLACKLIST, accessTokenId); }
+    private String key(String accessTokenId) {
+        return RedisKey.USER.of(ACCESS_TOKEN, BLACKLIST, accessTokenId);
+    }
 }

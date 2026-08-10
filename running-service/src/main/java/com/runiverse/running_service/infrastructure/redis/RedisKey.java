@@ -5,10 +5,12 @@ public enum RedisKey {
 
     private static final String DELIMITER = ":";
     private final String prefix;
+
     RedisKey(String prefix) {
         this.prefix = prefix;
     }
-    public String of(String ...segments) {
+
+    public String of(String... segments) {
         return prefix + DELIMITER + String.join(DELIMITER, segments);
     }
 }
