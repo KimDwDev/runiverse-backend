@@ -43,7 +43,7 @@ public class SendEmailVerificationHandler implements SendEmailVerificationUsecas
         }
 
         // 3. 이메일 중복성 검사
-        if (!checkEmailDuplicatePort.existsByEmail(email)) {
+        if (checkEmailDuplicatePort.existsByEmail(email)) {
             throw new EmailAlreadyExistsException();
         }
 
