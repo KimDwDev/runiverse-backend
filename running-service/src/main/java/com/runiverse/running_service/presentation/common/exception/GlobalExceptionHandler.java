@@ -71,8 +71,8 @@ public class GlobalExceptionHandler {
         log.error("처리하지 못한 예외", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(
-                        CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
-                        CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage()
+                        CommonErrorCode.INTERNAL_ERROR.getCode(),
+                        CommonErrorCode.INTERNAL_ERROR.getMessage()
                 ));
     }
 

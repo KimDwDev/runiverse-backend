@@ -47,8 +47,8 @@ public final class ErrorExposurePolicy {
     // 그냥 평범한 에러는 모두 500서버 에러로 넘길 예정
     public static ErrorResponse masked() {
         return new ErrorResponse(
-                CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
-                CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage()
+                CommonErrorCode.INTERNAL_ERROR.getCode(),
+                CommonErrorCode.INTERNAL_ERROR.getMessage()
         );
     }
 }
