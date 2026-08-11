@@ -5,6 +5,7 @@ import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
@@ -113,7 +114,7 @@ public class UserPersistenceAdapterTest {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
 
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, email, PASSWORD_HASH, true, "러닝을 좋아합니다"
+                userId, email, PASSWORD_HASH, true, ProfileVisibility.FRIENDS, "러닝을 좋아합니다"
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -129,6 +130,7 @@ public class UserPersistenceAdapterTest {
         assertThat(user.getEmail().value()).isEqualTo(email);
         assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
         assertThat(user.isAlertConsent()).isTrue();
+        assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.FRIENDS);
         assertThat(user.getIntroduction().value()).isEqualTo("러닝을 좋아합니다");
     }
 
@@ -154,7 +156,7 @@ public class UserPersistenceAdapterTest {
         String email = "test@example.com";
 
         UserJpaEntity entity = UserJpaEntity.create(
-                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, null
+                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, ProfileVisibility.PUBLIC, null
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -173,7 +175,7 @@ public class UserPersistenceAdapterTest {
         // given -> 소셜 전용 계정은 hash_password와 introduction이 NULL로 저장된다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "kakao@example.com", null, false, null
+                userId, "kakao@example.com", null, false, ProfileVisibility.PUBLIC, null
         );
 
         givenProviderQueryReturns(PROVIDER_ID, Stream.of(entity));
@@ -253,6 +255,24 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("신규 유저를 저장하면 profile_visibility에 PUBLIC이 채워진다")
+    void savePersistsDefaultProfileVisibility() {
+        // given -> profile_visibility는 NOT NULL이라 저장 시 값이 비면 안 된다
+        User user = new User(
+                UuidCreator.getTimeOrderedEpoch(), "local@example.com", PASSWORD_HASH
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+    }
+
+    @Test
     @DisplayName("소셜 연결이 없는 로컬 유저는 users 행만 저장한다")
     void saveLocalUserPersistsOnlyUserRow() {
         // given
@@ -274,7 +294,7 @@ public class UserPersistenceAdapterTest {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "test@example.com", PASSWORD_HASH, false, null
+                userId, "test@example.com", PASSWORD_HASH, false, ProfileVisibility.PUBLIC, null
         );
 
         when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
