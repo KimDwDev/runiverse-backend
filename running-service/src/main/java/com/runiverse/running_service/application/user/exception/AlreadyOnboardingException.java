@@ -6,6 +6,6 @@ import com.runiverse.running_service.application.common.exception.ErrorCode;
 public class AlreadyOnboardingException extends BusinessException {
 
     public AlreadyOnboardingException() {
-        super(ErrorCode.ALREADY_ONBOARD);
+        super(ErrorCode.ALREADY_ONBOARDED);
     }
 }

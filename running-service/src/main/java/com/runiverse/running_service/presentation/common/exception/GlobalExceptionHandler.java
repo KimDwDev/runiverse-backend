@@ -99,7 +99,7 @@ public class GlobalExceptionHandler {
 
     private HttpStatus toStatus(ErrorCode errorCode) {
         return switch (errorCode) {
-            case ALREADY_ONBOARD,
+            case ALREADY_ONBOARDED,
                  EMAIL_ALREADY_EXISTS,
                  NICKNAME_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_CREDENTIALS,
