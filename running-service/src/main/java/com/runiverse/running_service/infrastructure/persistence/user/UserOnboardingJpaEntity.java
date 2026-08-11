@@ -29,7 +29,7 @@ import java.util.UUID;
 @Getter
 @Entity
 @Table(
-        name = "user_onboarding",
+        name = "user_onboardings",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_user_onboarding_nickname",
                 columnNames = "nickname"

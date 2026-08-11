@@ -12,8 +12,8 @@
 - 로그인 버튼: 입력한 이메일/비밀번호로 로그인 수행.
 - 회원가입 버튼 → 회원가입 페이지로 이동.
 - Google / Kakao 로그인 버튼: 소셜 계정으로 회원가입 또는 로그인. 네이버는 1차 미포함.
-  - 인가 코드 + PKCE 방식: 앱이 provider 인증 후 인가 코드(`authorizationCode`)·`codeVerifier` 수령 → `POST /auth/oauth/google|kakao`로 서버 전달 → 서버가 provider와 코드↔토큰 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_user` 조회(없으면 생성=회원가입) → 자체 토큰 발급. 카카오는 SDK 앱 전환, 구글은 커스텀 탭으로 인가를 시작하고 커스텀 스킴으로 인가 코드를 돌려받는다 — 웹뷰는 provider가 차단한다.
-  - 최초 가입 시 온보딩 화면을 거침 — `oauth_user` 생성 후 `user_onboard` 입력 필요.
+  - 인가 코드 + PKCE 방식: 앱이 provider 인증 후 인가 코드(`authorizationCode`)·`codeVerifier` 수령 → `POST /auth/oauth/google|kakao`로 서버 전달 → 서버가 provider와 코드↔토큰 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회(없으면 생성=회원가입) → 자체 토큰 발급. 카카오는 SDK 앱 전환, 구글은 커스텀 탭으로 인가를 시작하고 커스텀 스킴으로 인가 코드를 돌려받는다 — 웹뷰는 provider가 차단한다.
+  - 최초 가입 시 온보딩 화면을 거침 — `oauth_users` 생성 후 `user_onboardings` 입력 필요.
   - 카카오 이메일 미동의 시 403 가입 거부(`OAUTH_EMAIL_NOT_PROVIDED` — `users.email` NOT NULL 유지).
 
 **회원가입 페이지**
@@ -24,7 +24,7 @@
 **온보딩 화면**
 
 - 온보딩 폼: 약관 동의 체크 + 닉네임, 생년월일, 성별, 키, 몸무게, 평균 페이스 입력 후 제출.
-  - 약관 동의는 로컬·소셜 공통 관문 — 가입 경로 무관 온보딩에서 일괄 수취, 동의 시각 증빙은 `user_onboard.created_at`
+  - 약관 동의는 로컬·소셜 공통 관문 — 가입 경로 무관 온보딩에서 일괄 수취, 동의 시각 증빙은 `user_onboardings.created_at`
   - 닉네임 중복 체크(`NICKNAME_ALREADY_EXISTS`)는 온보딩 API의 에러 케이스.
   - 1회성 입력 — 1차는 닉네임만 `PATCH /users/me`로 수정 가능, 키·몸무게 수정은 2차. 평균 페이스는 수정 UI 없이 서버가 러닝 기록 기반 자동 갱신.
 
@@ -41,7 +41,7 @@
 - 매칭 설정 버튼: 매칭 조건 설정 모달 오픈.
 - 매칭 정보 입력 모달: 거리/시간 입력.
   - 모집 인원은 입력받지 않음 — 서버가 2~4명 범위에서 자동 편성. 친구 초대(친구 선택 모달)는 1차 미포함, 랜덤 매칭만.
-  - `running_player` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_player.start_date`에 저장. "거리"는 `running_player.total_distance`(플레이어별 목표 거리)에 저장.
+  - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_date`에 저장. "거리"는 `running_players.total_distance`(플레이어별 목표 거리)에 저장.
 - 매칭 대기 화면: 매칭 진행 상태·남은 예상 시간·현재 참가자 확인.
   - 확정/취소 판정: 판정 시각 confirm_deadline은 `start_date`의 X시간 전으로 계산하는 파생값(X는 서버 설정값, DB 컬럼 아님). 그 시점 참가자가 2명 이상이면 `status='MATCHED'` 자동 확정, 미만이면 `status='CANCELLED'` 자동 취소 — 목표 인원(`total_member`) 도달 여부와 무관.
 
@@ -52,8 +52,8 @@
 - 이모티콘 주고받기: 대기방 참가자끼리 전송·수신 (WS `EMOJI_SEND`(C→S) / `EMOJI_RECEIVED`(S→C)).
 - 시작 타이머: 러닝 시작까지 카운트다운 — 클라이언트 주도 시작.
   - 카운트다운은 각 클라이언트가 자체 시계 기준으로 표시하고, `start_date` 도달 시 스스로 러닝 화면으로 전환하며 WS `RUNNING_START`(C→S)로 시작을 알림.
-  - 서버는 같은 시각에 내부 스케줄러로 `running_room.status='STARTED'` 전환 — 클라이언트가 호출하는 REST API 없음.
-- 나가기: 나간 사람만 `running_player.status='LEFT'` 처리, 방은 유지되고 남은 참가자는 계속 대기.
+  - 서버는 같은 시각에 내부 스케줄러로 `running_rooms.status='STARTED'` 전환 — 클라이언트가 호출하는 REST API 없음.
+- 나가기: 나간 사람만 `running_players.status='LEFT'` 처리, 방은 유지되고 남은 참가자는 계속 대기.
 - 확정(`MATCHED`) 이후 이탈 시 페널티 부여(정의·저장 방식은 별도 설계). 이탈로 인원이 2명 미만이 되면 방 취소, 자동 재매칭(빈자리 채우기)은 하지 않음.
 
 ### 러닝
@@ -88,7 +88,7 @@
 - 필터 기능: 날짜·지역·거리 조건 필터.
 - 대회 목록: 대회명·지역·장소·개최 일정·거리·접수 기간·링크 제공.
 - 대회 상세 정보: 선택 대회 공식 홈페이지로 이동.
-- 일정 추가: 참가 신청이 아니라 관심 대회를 내 캘린더(기록 화면의 일정 조회)에 북마크하는 동작. 대회는 마라톤 일정 정보(외부 정보)로 러닝 기록(`running_record`)과 무관 — 참가 확정 등 별도 상태값 불필요, `user_running_contests`는 단순 연결 테이블로 충분.
+- 일정 추가: 참가 신청이 아니라 관심 대회를 내 캘린더(기록 화면의 일정 조회)에 북마크하는 동작. 대회는 마라톤 일정 정보(외부 정보)로 러닝 기록(`running_records`)과 무관 — 참가 확정 등 별도 상태값 불필요, `user_running_contests`는 단순 연결 테이블로 충분.
 
 ### 피드
 
@@ -102,8 +102,8 @@
 - 프로필 클릭 → 프로필로 이동.
 - 통합 검색: 계정/게시글 검색. 게시글 노출 범위: "전체" 공개 피드 + 본인 피드만.
 - 댓글: 작성/수정/삭제, 답글 작성/수정/삭제, 댓글 좋아요.
-  - 수정은 작성자 본인만 가능(피드 소유자는 삭제만). 수정 시 이전 내용은 `delete_comment`에 스냅샷 보관(피드와 동일).
-  - 대댓글 depth는 1단계 제한 — `comment.parent_comment_id`가 있는 댓글엔 답글 작성 API 자체를 차단.
+  - 수정은 작성자 본인만 가능(피드 소유자는 삭제만). 수정 시 이전 내용은 `delete_comments`에 스냅샷 보관(피드와 동일).
+  - 대댓글 depth는 1단계 제한 — `comments.parent_comment_id`가 있는 댓글엔 답글 작성 API 자체를 차단.
   - 답글은 목록에 바로 포함하지 않고 "답글 N개 보기" 탭 시 지연 로딩(인스타그램 방식). 댓글 목록 정렬은 등록순.
   - 삭제 권한: 댓글 작성자 본인 또는 그 댓글이 달린 피드의 소유자(악플/스팸 관리 목적).
 
@@ -112,7 +112,7 @@
 - 이미지 업로드: 여러 장 선택해 첨부.
 - 글 작성: 텍스트/이미지 둘 다 비운 채 게시 불가 — 최소 하나 필수.
 - 노출 범위 선택: 팔로워/전체/나만.
-- 위치/경로 첨부: 별도 기능 아님 — 러닝 기록 템플릿 선택에 통합. 템플릿 카드에 경로 미리보기 지도 포함 — 피드 카드 `record.routePolyline`은 `running_record.route_polyline`의 다운샘플 encoded polyline(별도 API 없음).
+- 위치/경로 첨부: 별도 기능 아님 — 러닝 기록 템플릿 선택에 통합. 템플릿 카드에 경로 미리보기 지도 포함 — 피드 카드 `record.routePolyline`은 `running_records.route_polyline`의 다운샘플 encoded polyline(별도 API 없음).
 - 러닝 기록 템플릿 선택: 과거 기록 선택 시 거리/시간/페이스·경로 미리보기가 카드로 자동 삽입. 대시보드에서 진입한 경우 방금 완료한 기록이 기본 선택.
 - 게시 버튼: 등록 후 피드 목록 최상단에 노출.
 
@@ -121,13 +121,13 @@
 **프로필 페이지**
 
 - 프로필 요약: 사진, 닉네임, 총 누적고도, 마일리지, 소개글, 뱃지, 잔디, 팔로워/팔로잉 수 표시.
-  - 마일리지: 별도 저장 테이블 없이 `running_record.total_distance` 합산 — 누적은 전체, 월별은 해당 월 기록 합산.
-  - 총 누적고도: `running_record.elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
+  - 마일리지: 별도 저장 테이블 없이 `running_records.total_distance` 합산 — 누적은 전체, 월별은 해당 월 기록 합산.
+  - 총 누적고도: `running_records.elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
 - 내가 올린 피드 그리드: 프로필 하단에 본인 작성 피드를 썸네일 그리드로 표시.
 - 피드 작성 버튼: 누르면 피드 작성 페이지로 이동.
 - 피드 편집: 게시글 수정/삭제, 노출 범위 설정.
 - 뱃지·잔디 더보기: 같은 페이지 내에서 전체 뱃지 목록·월별 잔디 상세 확장(별도 페이지 이동 없음).
-  - 잔디는 일 단위가 아니라 주 단위 — 해당 주 `running_record` 개수로 진하기 표시. 1회=가장 연함 ~ 7회=가장 진함, 8회 이상은 7회와 동일한 최고 진하기로 캡.
+  - 잔디는 일 단위가 아니라 주 단위 — 해당 주 `running_records` 개수로 진하기 표시. 1회=가장 연함 ~ 7회=가장 진함, 8회 이상은 7회와 동일한 최고 진하기로 캡.
   - API는 주별 러닝 횟수만 반환(예: `{week, count}`), 색상 단계 매핑은 프론트에서 처리.
 - 팔로워/팔로잉 수 클릭 → 팔로워/팔로잉 목록 페이지로 이동.
 - 편집 버튼 → 프로필 편집 페이지로 이동.
@@ -140,7 +140,7 @@
 
 **프로필 편집 페이지**
 
-- 사진 변경, 닉네임 변경(서비스 전반 표시 갱신), 소개글 변경. `nickname`은 `user_onboard`에 저장 — 닉네임 변경은 별도 API 없이 `PATCH /users/me`에 통합, 서버가 `user_onboard.nickname` 갱신, 중복 시 `409 NICKNAME_ALREADY_EXISTS`
+- 사진 변경, 닉네임 변경(서비스 전반 표시 갱신), 소개글 변경. `nickname`은 `user_onboardings`에 저장 — 닉네임 변경은 별도 API 없이 `PATCH /users/me`에 통합, 서버가 `user_onboardings.nickname` 갱신, 중복 시 `409 NICKNAME_ALREADY_EXISTS`
 
 **팔로워/팔로잉 목록 페이지**
 
@@ -152,7 +152,7 @@
 **설정 페이지**
 
 - 알림 설정: 전체 알림 on/off 단일 토글(`users.alert_consent` — 좋아요·댓글·팔로우·매칭·리마인더·대회 푸시 전부 관장). 종류별 개별 토글은 1차 미포함.
-- 프로필/피드 공개 범위 설정: **[2차]** `profile_visibility`(지인 마스킹 on/off)·`feed_default_visibility`(피드 기본 공개 범위) 추가 예정. 1차는 피드 작성 시 공개 범위(`feed.visibility`)를 매 피드 개별 선택, 기본 선택값은 클라가 PUBLIC 고정.
+- 프로필/피드 공개 범위 설정: **[2차]** `profile_visibility`(지인 마스킹 on/off)·`feed_default_visibility`(피드 기본 공개 범위) 추가 예정. 1차는 피드 작성 시 공개 범위(`feeds.visibility`)를 매 피드 개별 선택, 기본 선택값은 클라가 PUBLIC 고정.
 - 로그아웃/회원탈퇴: 확인 팝업 후 처리.
   - 로그아웃: `POST /auth/logout`(바디 없음 — 서버가 요청 토큰으로 본인 식별). 해당 access 토큰을 서버 블랙리스트에 올려 즉시 무효화 — 만료 전이라도 그 토큰 요청은 `401 TOKEN_BLOCKED`
   - 기기 단위 푸시 중단(`deviceId`·`is_active`)은 2차 — deviceId 도입 시.
@@ -162,52 +162,52 @@
 **알림 (푸시)**
 
 - 매칭 확정/실패, 세션 시작 리마인더, 새 팔로워, 피드 좋아요/댓글, 대회 접수 시작 — 알림 종류별로 눌렀을 때 최적 화면으로 랜딩. "대회 접수 시작"은 전체 대회가 아니라 `user_running_contests`로 북마크한 대회에 한해서만 발송.
-- 인앱 알림함(목록 조회 화면) 없음 — 푸시로만 발송, 클릭 시 랜딩만 수행. `notification` 테이블/조회 API 불필요, 디바이스 등록(`user_device`) API만 유지.
+- 인앱 알림함(목록 조회 화면) 없음 — 푸시로만 발송, 클릭 시 랜딩만 수행. `notification` 테이블/조회 API 불필요, 디바이스 등록(`user_devices`) API만 유지.
 
 ## 2. 도메인 제약
 
 > 전체 테이블·컬럼·타입·PK 규칙·enum·단위는 `erd.md`가 단일 출처. 여기서는 API 작성·구현에 필요한 도메인 제약과 설계 맥락만 남긴다.
 
-**API 리소스 네이밍**: DB 테이블명(`running_room`, `running_player` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일한다(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성되어 있다.
+**API 리소스 네이밍**: DB 테이블명(`running_rooms`, `running_players` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일한다(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성되어 있다.
 
 **매칭·러닝 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리한다.
 
-- 매칭 시작 = 대기 풀(`running_player`) 진입 — 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번).
+- 매칭 시작 = 대기 풀(`running_players`) 진입 — 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번).
 - 러닝 시작은 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계). 메시지 네이밍 규칙: 클라 발신 현재형 / 서버 발신 과거형.
 - 러닝 중 다른 참가자 위치·진행상황 공유도 WS로 처리 — 러닝방 입장 시 연결, 위치를 주기적으로 발신/수신.
-- 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_room.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음.
+- 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_rooms.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음.
 
-**`user_device.is_active`**: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). 기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차) — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
+**`user_devices.is_active`**: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). 기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차) — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
 
-**이미지 업로드**(`feed_image`, `user_profile_image` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
+**이미지 업로드**(`feed_images`, `users.profile_image_key` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
 
-**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드하고 `running_record.gps_track_key`로 참조. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_record` 저장.
+**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드하고 `running_records.gps_track_key`로 참조. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_records` 저장.
 
-**피드-러닝 기록 연결**: `feed.running_record_id`는 `running_record` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
+**피드-러닝 기록 연결**: `feeds.running_record_id`는 `running_records` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
 
-**피드 공개 범위**: `feed.visibility` 값은 3종(팔로워/전체/나만) — "나만"은 본인 피드 목록/프로필 그리드 조회 시에만 노출, 팔로워 피드·전체 피드 조회에서는 제외.
+**피드 공개 범위**: `feeds.visibility` 값은 3종(팔로워/전체/나만) — "나만"은 본인 피드 목록/프로필 그리드 조회 시에만 노출, 팔로워 피드·전체 피드 조회에서는 제외.
 
 **뱃지**: 획득 조건/기준을 저장하는 테이블은 ERD에 없음 — 서버 로직으로 자동 판정·지급. 지급 트리거 API 없음, 조회 API만 존재.
 
 **날씨**: 홈 화면 날씨는 클라이언트가 키리스 무료 날씨 API(예: Open-Meteo)를 직접 호출 — 서버 API 없음. 유료 제공자·캐싱 필요 시점에 프록시 추가 재검토.
 
-**`running_room.status`**: MATCHING/MATCHED/STARTED/FINISHED/CANCELLED. 매칭 취소 시 `status='CANCELLED'`만 사용 — 취소 이력도 조회 가능해야 하므로 목록에서 제외하지 않음. `deleted_at`은 별도 용도(예: 관리자의 부정 방 숨김 처리)로 남겨두고 이번 명세에서는 다루지 않는다.
+**`running_rooms.status`**: MATCHING/MATCHED/STARTED/FINISHED/CANCELLED. 매칭 취소 시 `status='CANCELLED'`만 사용 — 취소 이력도 조회 가능해야 하므로 목록에서 제외하지 않음. `deleted_at`은 별도 용도(예: 관리자의 부정 방 숨김 처리)로 남겨두고 이번 명세에서는 다루지 않는다.
 
 **`STARTED`→`FINISHED` 전환**: 둘 중 먼저 오는 시점에 자동 전환 — ① `CONFIRMED` 참가자 전원이 기록 제출 완료 시 즉시 `FINISHED`, ② 미제출자가 있어도 시작 후 서버 설정 시간 경과 시(타임아웃) 스케줄러가 `FINISHED` 처리. 타임아웃 값은 운영 정책.
 
-**`running_player.status`**: CONFIRMED(참가중)/LEFT(이탈)/INVITED(초대됨). `INVITED`는 친구 초대용 — 1차 미사용. 거절 시에는 별도 상태값 없이 row 자체를 DELETE(거절 이력 보관 안 함).
+**`running_players.status`**: CONFIRMED(참가중)/LEFT(이탈)/INVITED(초대됨). `INVITED`는 친구 초대용 — 1차 미사용. 거절 시에는 별도 상태값 없이 row 자체를 DELETE(거절 이력 보관 안 함).
 
-**목표 거리 vs 실제 거리**: `running_player.total_distance`는 매칭 시 설정한 목표 거리(플레이어별 저장), `running_record.total_distance`는 러닝 종료 후 확정된 실제 이동 거리 — 서로 다른 값, 혼동 주의.
+**목표 거리 vs 실제 거리**: `running_players.total_distance`는 매칭 시 설정한 목표 거리(플레이어별 저장), `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리 — 서로 다른 값, 혼동 주의.
 
 **회원탈퇴 시 연관 데이터 처리** (테이블별):
 
-- **유지**: `feed`, `comment`, `running_record`(+`running_split`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
-- **유지 (카운트 재계산 안 함)**: `feed_like`, `comment_like` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `follow`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stat`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboard`, `user_profile_image`, `user_device`, `oauth_user`, `user_badge`, `user_running_contests`
-- `follow` CASCADE 삭제로 어긋나는 상대방들의 `user_follow_stat` follower/following_count는 탈퇴 트랜잭션에서 즉시 재계산(감소 반영) — follow는 row가 삭제돼 목록과 수가 일치해야 하기 때문(feed_like는 row 유지라 카운트 유지 — 기준이 다름).
+- **유지**: `feeds`, `comments`, `running_records`(+`running_splits`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
+- **유지 (카운트 재계산 안 함)**: `feed_likes`, `comment_likes` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
+- **즉시 삭제**: `follows`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stats`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_badges`, `user_running_contests`
+- `follows` CASCADE 삭제로 어긋나는 상대방들의 `user_follow_stats` follower/following_count는 탈퇴 트랜잭션에서 즉시 재계산(감소 반영) — `follows`는 row가 삭제돼 목록과 수가 일치해야 하기 때문(`feed_likes`는 row 유지라 카운트 유지 — 기준이 다름).
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):
 
-- **`users`/`badge`**: 하드delete + 아카이브 — 실제 DELETE 전에 `delete_user`/`delete_badge`에 스냅샷 먼저 저장(감사/로그 용도, 복구 기능 없음).
-- **`feed`**: `deleted_at` 소프트delete(복구 가능·조회 제외 처리).
-- **`comment`**: 답글 유무로 분기(레딧 방식, 두 경우 모두 `delete_comment` 스냅샷 먼저 저장) — 답글 없으면 하드delete, 답글 있으면 톰스톤(row 유지 + 내용 비움 + `deleted_at` 기록, "삭제된 댓글입니다" 자리표시로 노출하고 답글 스레드 유지).
+- **`users`/`badges`**: 하드delete + 아카이브 — 실제 DELETE 전에 `delete_users`/`delete_badges`에 스냅샷 먼저 저장(감사/로그 용도, 복구 기능 없음).
+- **`feeds`**: `deleted_at` 소프트delete(복구 가능·조회 제외 처리).
+- **`comments`**: 답글 유무로 분기(레딧 방식, 두 경우 모두 `delete_comments` 스냅샷 먼저 저장) — 답글 없으면 하드delete, 답글 있으면 톰스톤(row 유지 + 내용 비움 + `deleted_at` 기록, "삭제된 댓글입니다" 자리표시로 노출하고 답글 스레드 유지).
