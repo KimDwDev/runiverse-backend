@@ -569,7 +569,7 @@
 
 - **약관 동의**: 별도 요청 필드 없음 — 온보딩 완료(=`user_onboardings` row 생성)가 동의로 갈음, 동의 시각 증빙 = `user_onboardings.created_at`
 
-- **Response `200 OK`**
+- **Response `201 Created`**
 
 ```json
 {
