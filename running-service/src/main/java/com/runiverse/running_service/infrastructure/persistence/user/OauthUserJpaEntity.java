@@ -35,7 +35,6 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OauthUserJpaEntity {
 
-    // PK가 (user_id, provider) 이다
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
