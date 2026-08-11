@@ -56,6 +56,6 @@ public class ErrorExposurePolicyTest {
     @DisplayName("가려진 응답은 항상 같은 500 메시지를 쓴다")
     void maskedResponseIsGeneric() {
         // when & then
-        assertThat(ErrorExposurePolicy.masked().code()).isEqualTo("INTERNAL_SERVER_ERROR");
+        assertThat(ErrorExposurePolicy.masked().code()).isEqualTo("INTERNAL_ERROR");
     }
 }
