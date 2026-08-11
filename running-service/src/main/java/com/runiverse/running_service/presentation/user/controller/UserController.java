@@ -1,10 +1,10 @@
 package com.runiverse.running_service.presentation.user.controller;
 
-import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardCommand;
-import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardResult;
-import com.runiverse.running_service.application.user.port.in.CompleteOnboardUsecase;
-import com.runiverse.running_service.presentation.user.request.OnboardRequest;
-import com.runiverse.running_service.presentation.user.response.OnboardResponse;
+import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
+import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingResult;
+import com.runiverse.running_service.application.user.port.in.CompleteOnboardingUsecase;
+import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
+import com.runiverse.running_service.presentation.user.response.OnboardingResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,25 +23,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final CompleteOnboardUsecase completeOnboardUsecase;
+    private final CompleteOnboardingUsecase completeOnboardingUsecase;
 
     @PostMapping("/onboarding")
-    public ResponseEntity<OnboardResponse> completeOnboard(
+    public ResponseEntity<OnboardingResponse> completeOnboarding(
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody OnboardRequest request) {
+            @Valid @RequestBody OnboardingRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        CompleteOnboardResult result = completeOnboardUsecase.handle(
-                new CompleteOnboardCommand(
+        CompleteOnboardingResult result = completeOnboardingUsecase.handle(
+                new CompleteOnboardingCommand(
                         userId,
                         request.nickname(),
                         request.gender(),
                         request.birthday(),
                         request.averagePaceSecondsPerKm(),
-                        request.weight(),
-                        request.height()
+                        request.weightKg(),
+                        request.heightCm()
                 ));
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new OnboardResponse(result.userId(), result.nickname()));
+                .body(new OnboardingResponse(result.userId(), result.nickname()));
     }
 
 }

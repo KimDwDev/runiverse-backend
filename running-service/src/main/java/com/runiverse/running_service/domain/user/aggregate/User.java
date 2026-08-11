@@ -5,9 +5,12 @@ import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedExc
 import com.runiverse.running_service.domain.user.exception.OauthNotLinkedException;
 import com.runiverse.running_service.domain.user.exception.OnboardingAlreadyCompletedException;
 import com.runiverse.running_service.domain.user.exception.OnboardingNotCompletedException;
-import com.runiverse.running_service.domain.user.vo.Description;
+import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequiredException;
 import com.runiverse.running_service.domain.user.vo.Email;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
+import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import lombok.Getter;
@@ -24,36 +27,48 @@ public class User {
     private final Email email;
     private final PasswordHash passwordHash;
     private final boolean alertConsent;
-    private final Description description;
+    private final ProfileVisibility profileVisibility;
+    private final ProfileImageKey profileImageKey;
+    private final Introduction introduction;
 
     // 내부 저장
     private OauthUser oauthUser;
 
     // 유저 온보드
-    private UserOnboard onboard;
+    private UserOnboarding onboarding;
 
     // 생성자 부분 작성
-    public User(UUID userId, String email, String passwordHash, boolean alertConsent, String description) {
+    public User(UUID userId, String email, String passwordHash, boolean alertConsent, String profileImageKey,
+                ProfileVisibility profileVisibility, String introduction) {
         this.userId = new UserId(userId);
         this.email = new Email(email);
         this.passwordHash = new PasswordHash(passwordHash);
         this.alertConsent = alertConsent;
-        this.description = new Description(description);
+        if (profileVisibility == null) {   // 값 변환은 application에서 검증
+            throw new ProfileVisibilityRequiredException();
+        }
+        this.profileImageKey = profileImageKey == null ? null : new ProfileImageKey(profileImageKey);
+        this.profileVisibility = profileVisibility;
+        this.introduction = new Introduction(introduction);
     }
 
     // 로컬 회원가입 할때 사용하는 생성자
     public User(UUID userId, String email, String passwordHash, boolean alertConsent) {
-        this(userId, email, passwordHash, alertConsent, "");
+        this(userId, email, passwordHash, alertConsent, null, ProfileVisibility.PUBLIC, "");
     }
 
-    // alertConsent, description이 없는 경우
+    // alertConsent, introduction이 없는 경우
     public User(UUID userId, String email, String passwordHash) {
-        this(userId, email, passwordHash, false, "");
+        this(userId, email, passwordHash, false, null, ProfileVisibility.PUBLIC, "");
     }
 
     // oauth로 회원가입 할때 사용하는 생성자
     public User(UUID userId, String email) {
-        this(userId, email, "", false, "");
+        this(userId, email, "", false, null, ProfileVisibility.PUBLIC, "");
+    }
+
+    public Optional<ProfileImageKey> getProfileImageKey() {
+        return Optional.ofNullable(profileImageKey);
     }
 
     // 소셜 회원가입: 유저 생성과 연결을 진행
@@ -96,25 +111,25 @@ public class User {
 
     public void completeOnboarding(String nickname, String gender, LocalDate birthday,
                                    int avgPace, BigDecimal weight, BigDecimal height) {
-        if (onboard != null) {
+        if (onboarding != null) {
             throw new OnboardingAlreadyCompletedException();
         }
-        this.onboard = new UserOnboard(userId, nickname, gender, birthday, avgPace, weight, height);
+        this.onboarding = new UserOnboarding(userId, nickname, gender, birthday, avgPace, weight, height);
     }
 
     public void updateOnboarding(String nickname, String gender, LocalDate birthday,
                                  Integer avgPace, BigDecimal weight, BigDecimal height) {
-        if (onboard == null) {
+        if (onboarding == null) {
             throw new OnboardingNotCompletedException();
         }
-        this.onboard = onboard.change(nickname, gender, birthday, avgPace, weight, height);
+        this.onboarding = onboarding.change(nickname, gender, birthday, avgPace, weight, height);
     }
 
     public boolean hasOnboarded() {
-        return onboard != null;
+        return onboarding != null;
     }
 
-    public Optional<UserOnboard> getOnboard() {
-        return Optional.ofNullable(onboard);
+    public Optional<UserOnboarding> getOnboarding() {
+        return Optional.ofNullable(onboarding);
     }
 }

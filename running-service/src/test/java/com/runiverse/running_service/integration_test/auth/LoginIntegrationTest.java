@@ -33,7 +33,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 tokenProvider,
                 tokenProvider,
                 refreshTokenStore,
-                onboardStore
+                onboardingStore
         );
     }
 
@@ -106,7 +106,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
     void loginAfterOnboarding() {
         // given
         UUID userId = signUp();
-        onboardStore.markOnboarded(userId);
+        onboardingStore.markOnboarded(userId);
         // when
         LoginResult result = loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
         // then

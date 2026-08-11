@@ -45,7 +45,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 tokenProvider,      // GenerateTokenPort
                 tokenProvider,      // RefreshTokenHashPort
                 refreshTokenStore,  // SaveRefreshTokenHashPort
-                onboardStore        // CheckOnboardPort
+                onboardingStore        // CheckOnboardingPort
         );
         oauthClient.register(AUTH_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
     }
@@ -109,7 +109,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     void oauthLoginReturnsOnboardedStatus() {
         // given
         OauthLoginResult first = login();
-        onboardStore.markOnboarded(first.userId());
+        onboardingStore.markOnboarded(first.userId());
         // when
         OauthLoginResult second = login();
         // then

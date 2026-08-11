@@ -2,7 +2,7 @@ package com.runiverse.running_service.application.auth.command.oauthlogin;
 
 import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardPort;
+import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.auth.port.out.ExchangeOauthCodePort;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
@@ -22,7 +22,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
     private final GenerateTokenPort generateTokenPort;
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final SaveRefreshTokenHashPort saveRefreshTokenHashPort;
-    private final CheckOnboardPort checkOnboardPort;
+    private final CheckOnboardingPort checkOnboardingPort;
 
     @Override
     public OauthLoginResult handle(OauthLoginCommand command) {
@@ -47,7 +47,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
         saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
 
         // 6. 온보딩 완료 여부 조회
-        boolean isOnboarded = checkOnboardPort.existsByUserId(user.getUserId());
+        boolean isOnboarded = checkOnboardingPort.existsByUserId(user.getUserId());
 
         // 7. 반환
         return new OauthLoginResult(user.getUserId().value(), accessToken, refreshToken, isOnboarded);

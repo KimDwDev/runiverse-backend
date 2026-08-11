@@ -1,10 +1,14 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.exception.DescriptionTooLongException;
+import com.runiverse.running_service.domain.user.exception.IntroductionTooLongException;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyRequiredException;
+import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequiredException;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
+import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,7 @@ public class UserAggregateTest {
             "$argon2id$v=19$m=65536,t=3,p=1$"
                     + "c29tZXNhbHQ$"
                     + "c29tZWhhc2h2YWx1ZQ";
+    private static final String PROFILE_IMAGE_KEY = "profiles/0190a5b4-3c2d-7e1f-8a2b-123456789abc/photo.jpg";
 
     @Nested
     @DisplayName("전체 생성자 테스트")
@@ -32,7 +37,7 @@ public class UserAggregateTest {
         void createUserSuccess() {
             // given
             boolean alertConsent = true;
-            String description = "함께 즐겁게 달려요!";
+            String introduction = "함께 즐겁게 달려요!";
 
             // when
             User user = new User(
@@ -40,7 +45,9 @@ public class UserAggregateTest {
                     EMAIL,
                     PASSWORD_HASH,
                     alertConsent,
-                    description
+                    PROFILE_IMAGE_KEY,
+                    ProfileVisibility.FRIENDS,
+                    introduction
             );
 
             // then
@@ -48,7 +55,11 @@ public class UserAggregateTest {
             assertThat(user.getEmail().value()).isEqualTo(EMAIL);
             assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
             assertThat(user.isAlertConsent()).isTrue();
-            assertThat(user.getDescription().value()).isEqualTo(description);
+            assertThat(user.getProfileImageKey())
+                    .map(ProfileImageKey::value)
+                    .contains(PROFILE_IMAGE_KEY);
+            assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.FRIENDS);
+            assertThat(user.getIntroduction().value()).isEqualTo(introduction);
         }
 
         @Nested
@@ -56,7 +67,7 @@ public class UserAggregateTest {
         class LocalSignupConstructorTest {
 
             @Test
-            @DisplayName("로컬 회원가입 시 description은 빈 값으로 생성된다")
+            @DisplayName("로컬 회원가입 시 introduction은 빈 값, 공개 범위는 PUBLIC으로 생성된다")
             void createLocalUserSuccess() {
                 // given
                 boolean alertConsent = true;
@@ -74,7 +85,9 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isTrue();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -83,7 +96,7 @@ public class UserAggregateTest {
         class OAuthSignupConstructorTest {
 
             @Test
-            @DisplayName("OAuth 회원가입 시 비밀번호 해시와 소개는 빈 값이고 알림 동의는 false이다")
+            @DisplayName("OAuth 회원가입 시 비밀번호 해시와 소개는 빈 값이고 알림 동의는 false, 공개 범위는 PUBLIC이다")
             void createOAuthUserSuccess() {
                 // when
                 User user = new User(USER_ID, EMAIL);
@@ -93,7 +106,9 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEmpty();
                 assertThat(user.isAlertConsent()).isFalse();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -116,7 +131,9 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isFalse();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -178,9 +195,9 @@ public class UserAggregateTest {
 
             @Test
             @DisplayName("소개가 100자를 초과하면 사용자 생성에 실패한다")
-            void createUserWithLongDescriptionFails() {
+            void createUserWithLongIntroductionFails() {
                 // given
-                String longDescription = "가".repeat(101);
+                String longIntroduction = "가".repeat(101);
 
                 // when & then
                 assertThatThrownBy(
@@ -189,11 +206,53 @@ public class UserAggregateTest {
                                 EMAIL,
                                 PASSWORD_HASH,
                                 false,
-                                longDescription
+                                null,
+                                ProfileVisibility.PUBLIC,
+                                longIntroduction
                         )
                 )
-                        .isInstanceOf(DescriptionTooLongException.class)
+                        .isInstanceOf(IntroductionTooLongException.class)
                         .hasMessage("소개는 100자를 초과할 수 없습니다.");
+            }
+
+            @Test
+            @DisplayName("공개 범위가 null이면 사용자 생성에 실패한다")
+            void createUserWithNullProfileVisibilityFails() {
+                // when & then
+                assertThatThrownBy(
+                        () -> new User(
+                                USER_ID,
+                                EMAIL,
+                                PASSWORD_HASH,
+                                false,
+                                null,
+                                null,
+                                ""
+                        )
+                )
+                        .isInstanceOf(ProfileVisibilityRequiredException.class)
+                        .hasMessage("프로필 공개 범위는 필수입니다.");
+            }
+
+            @Test
+            @DisplayName("프로필 이미지 키가 비어 있으면 사용자 생성에 실패한다")
+            void createUserWithBlankProfileImageKeyFails() {
+                // given -> 사진 없음은 null로 표현하고, 빈 문자열은 잘못된 입력으로 본다
+                String blankKey = "   ";
+
+                // when & then
+                assertThatThrownBy(
+                        () -> new User(
+                                USER_ID,
+                                EMAIL,
+                                PASSWORD_HASH,
+                                false,
+                                blankKey,
+                                ProfileVisibility.PUBLIC,
+                                ""
+                        )
+                )
+                        .isInstanceOf(ProfileImageKeyRequiredException.class);
             }
         }
     }

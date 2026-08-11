@@ -13,7 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record OnboardRequest(
+public record OnboardingRequest(
         @NotBlank(message = "닉네임은 필수입니다.")
         @Size(
                 min = 2,
@@ -45,12 +45,12 @@ public record OnboardRequest(
         @NotNull(message = "몸무게는 필수입니다.")
         @DecimalMin(value = "20.0", message = "몸무게는 20kg 이상이어야 합니다.")
         @DecimalMax(value = "300.0", message = "몸무게는 300kg 이하여야 합니다.")
-        BigDecimal weight,
+        BigDecimal weightKg,
 
         @NotNull(message = "키는 필수입니다.")
         @DecimalMin(value = "20.0", message = "키는 20cm 이상이어야 합니다.")
         @DecimalMax(value = "300.0", message = "키는 300cm 이하여야 합니다.")
-        BigDecimal height
+        BigDecimal heightCm
 ) {
 
 }

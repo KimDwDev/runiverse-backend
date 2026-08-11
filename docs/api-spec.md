@@ -52,7 +52,7 @@
 | 러닝 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
 | 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | |
-| 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 강제 종료 포함 — 이 시점에 서버가 `running_record` 저장 |
+| 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 강제 종료 포함 — 이 시점에 서버가 `running_records` 저장 |
 | 공통 | `ERROR` | S→C | WS 요청 실패 통지 |
 
 ### 6. 러닝 중 / 러닝 후 대시보드
@@ -330,7 +330,7 @@
 }
 ```
 
-- **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_user` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
 - **Response `200 OK`**: 1-2 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`/`isOnboarded`) — 최초 가입 여부와 무관하게 토큰 발급
 - **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
 
@@ -426,7 +426,7 @@
 }
 ```
 
-- **약관 동의**: 별도 요청 필드 없음 — 온보딩 완료(=`user_onboard` row 생성)가 동의로 갈음, 동의 시각 증빙 = `user_onboard.created_at`
+- **약관 동의**: 별도 요청 필드 없음 — 온보딩 완료(=`user_onboardings` row 생성)가 동의로 갈음, 동의 시각 증빙 = `user_onboardings.created_at`
 
 - **Response `200 OK`**
 
@@ -602,9 +602,9 @@
 
 - **code**: `VALIDATION_FAILED`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청) / `ALREADY_MATCHING`(이미 매칭 대기·방에 있는데 재요청)
 
-- **DB row 트리거** — `running_room_session`은 방↔플레이어 순수 연결 테이블
+- **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
   - 링크 생성 = 방 배정 시(`MATCH_REQUEST` 처리)
-  - `MATCH_CANCEL` 수신 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_player`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 페널티·이력 근거)
+  - `MATCH_CANCEL` 수신 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 페널티·이력 근거)
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
@@ -663,7 +663,7 @@
 ```json
 {
   "runningSessionId": 125,
-  "status": "MATCHED",               // running_room.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
+  "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
   "scheduledStartAt": "2026-07-25T10:00:00Z",
   "targetDistanceMeters": 5000,
   "teamAveragePaceSecondsPerKm": 375,
@@ -822,7 +822,7 @@
 ```
 
 - `forced=true` = 목표 도달 전 즉시 종료 — 정상/강제의 서버 처리(현재까지 데이터로 기록 저장 + 세션 종료)가 동일해 플래그로만 구분
-- **이 시점에 서버가 `running_record`(+splits) 저장**. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성(피드 카드용)
+- **이 시점에 서버가 `running_records`(+splits) 저장**. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성(피드 카드용)
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-sessions/{id}/results`로 대시보드 진입
 - 전원 제출 완료 or 타임아웃 중 먼저 오는 시점에 방 상태 `FINISHED` (타임아웃 값은 운영 정책)
 
@@ -1118,10 +1118,10 @@
 ```
 
 - **필수**: `startedAt`, `finishedAt`, `totalDistanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`, `endLatitude/Longitude`, `gpsTrackKey`, `routePolyline`, `splits`
-- **`routePolyline`**: 전체 경로를 다운샘플한 encoded polyline(피드 카드 지도 미리보기용 → `running_record.route_polyline`). 매칭 러닝은 서버가 Redis 버퍼로 생성하므로 솔로만 클라 제출 — 포인트 수 등 다운샘플 정책은 운영값
-- **splits 항목별 필수**: `splitNumber`, `distanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`(구간 시작점 → `running_split.session_lat/lng`), `startedAt`/`finishedAt`(구간 시작/종료 시각 → `session_start_date/session_end_date`) — 매칭 러닝은 서버가 Redis 버퍼로 직접 채우는 값이라 솔로만 클라 제출
+- **`routePolyline`**: 전체 경로를 다운샘플한 encoded polyline(피드 카드 지도 미리보기용 → `running_records.route_polyline`). 매칭 러닝은 서버가 Redis 버퍼로 생성하므로 솔로만 클라 제출 — 포인트 수 등 다운샘플 정책은 운영값
+- **splits 항목별 필수**: `splitNumber`, `distanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`(구간 시작점 → `running_splits.session_lat/lng`), `startedAt`/`finishedAt`(구간 시작/종료 시각 → `session_start_date/session_end_date`) — 매칭 러닝은 서버가 Redis 버퍼로 직접 채우는 값이라 솔로만 클라 제출
 - **선택**: `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters` (구간별 동일)
-- **동작**: 서버가 `running_record`(`running_room_id=null`) + `running_split` 생성. `gpsTrackKey`가 S3에 존재하는지 검증
+- **동작**: 서버가 `running_records`(`running_room_id=null`) + `running_splits` 생성. `gpsTrackKey`가 S3에 존재하는지 검증
 - **Response `201 Created`**: 7-2 상세 형식 (`runningSessionId: null`)
 
 - **에러 (400 Bad Request — 입력 불량)**
@@ -1230,7 +1230,7 @@
     "totalDistanceMeters": 5020,
     "durationSeconds": 1800,
     "averagePaceSecondsPerKm": 359,
-    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline) — 카드 지도 미리보기. running_record.route_polyline
+    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline) — 카드 지도 미리보기. running_records.route_polyline
   },
   "createdAt": "2026-07-25T11:00:00Z",
   "updatedAt": "2026-07-25T11:00:00Z"
@@ -1388,7 +1388,7 @@
 
 - **Request**: `{ "comment": "..." }` (필수, 빈 값 불가)
 - **권한**: 댓글 **작성자 본인만** (피드 소유자는 삭제만 가능 — 남의 발언 내용 변경 불가)
-- 톰스톤(삭제된 댓글)은 수정 불가. 수정 시 이전 내용을 `delete_comment`에 스냅샷 저장(피드와 동일 — 신고 시 원본 확인용), `updatedAt` 갱신
+- 톰스톤(삭제된 댓글)은 수정 불가. 수정 시 이전 내용을 `delete_comments`에 스냅샷 저장(피드와 동일 — 신고 시 원본 확인용), `updatedAt` 갱신
 - **Response `200 OK`**: 수정된 댓글 객체 (9-5 형식)
 
 - **에러 (403 Forbidden — 작성자 아님)**
@@ -1437,7 +1437,7 @@
 ### 9-9. `DELETE /api/v1/comments/{commentId}` — 댓글 삭제
 
 - **권한**: 댓글 작성자 본인 **또는** 그 댓글이 달린 피드의 소유자
-- **동작(레딧 방식)**: 답글 없으면 하드delete, 답글 있으면 톰스톤(내용 비움 + `deletedAt`, 스레드 유지). 두 경우 모두 `delete_comment` 스냅샷 선저장
+- **동작(레딧 방식)**: 답글 없으면 하드delete, 답글 있으면 톰스톤(내용 비움 + `deletedAt`, 스레드 유지). 두 경우 모두 `delete_comments` 스냅샷 선저장
 - **Response**: `204 No Content`
 
 - **에러 (403 Forbidden)**
@@ -1521,7 +1521,7 @@
   "content": "오늘도 5km 완주!",          // 선택
   "imageKeys": ["feeds/2026/07/....jpg"],  // 선택 — 업로드 완료된 key, 배열 순서 = sortOrder
   "visibility": "PUBLIC",                  // 필수. FOLLOWERS|PUBLIC|PRIVATE — 기본 선택값 PUBLIC(클라 프리셋)
-  "runningRecordId": 501                   // 선택 — 러닝기록 템플릿 (대시보드 진입 시 방금 기록 기본 선택). DB 매핑은 feed.running_record_id
+  "runningRecordId": 501                   // 선택 — 러닝기록 템플릿 (대시보드 진입 시 방금 기록 기본 선택). DB 매핑은 feeds.running_record_id
 }
 ```
 
@@ -1551,7 +1551,7 @@
 ### 10-3. `PATCH /api/v1/feeds/{feedId}` — 피드 수정
 
 - **화면**: 프로필(피드 편집 — 게시글 수정, 노출 범위 설정)
-- **Request**: `{ "content"?, "imageKeys"?, "visibility"? }` (부분 수정). 수정 시마다 **이전 내용을 `delete_feed`에 스냅샷 저장** (신고/차단 등 활용 기능은 2차지만 이력은 1차부터 축적)
+- **Request**: `{ "content"?, "imageKeys"?, "visibility"? }` (부분 수정). 수정 시마다 **이전 내용을 `delete_feeds`에 스냅샷 저장** (신고/차단 등 활용 기능은 2차지만 이력은 1차부터 축적)
 - **Response `200 OK`**: 수정된 피드 카드
 
 - **에러 (403 Forbidden — 본인 피드 아님)**
@@ -1632,8 +1632,8 @@
   "followingCount": 38,
   "isFollowing": true,
   "isMutual": true,
-  "elevationGainTotalMeters": 3200,    // 평생 누적 상승 고도 (running_record.elevation_gain 전체 합산, null 제외) — 세션 결과의 totalElevationGainMeters(1회 러닝 합)와 다른 값
-  "mileageTotalMeters": 320500,        // 누적 마일리지 (running_record 합산)
+  "elevationGainTotalMeters": 3200,    // 평생 누적 상승 고도 (running_records.elevation_gain 전체 합산, null 제외) — 세션 결과의 totalElevationGainMeters(1회 러닝 합)와 다른 값
+  "mileageTotalMeters": 320500,        // 누적 마일리지 (`running_records` 합산)
   "mileageMonthlyMeters": 42200        // 이번 달 마일리지
 }
 ```
@@ -1716,7 +1716,7 @@
 
 ### 11-6. `POST /api/v1/users/{userId}/follow` — 팔로우 / 11-7. `DELETE` — 언팔로우
 
-- **Response `200 OK`** (대상의 갱신 카운트 — `user_follow_stat`). idempotent
+- **Response `200 OK`** (대상의 갱신 카운트 — `user_follow_stats`). idempotent
 
 ```json
 {
@@ -1791,7 +1791,7 @@
 
 ### 12-2. `PATCH /api/v1/users/me` — 프로필 수정
 
-- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboard.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 2차 예정, 평균 페이스는 수정 불가(서버 자동 갱신)
+- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboardings.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 2차 예정, 평균 페이스는 수정 불가(서버 자동 갱신)
 - **Response `200 OK`**: 11-1 형태 갱신본
 
 - **에러 (409 Conflict)**
@@ -1836,6 +1836,6 @@
 ### 13-3. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_user` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feed`/`comment`/`running_record`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follow` + 상대방 `user_follow_stat` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboard`/`user_profile_image`/`user_device`/`oauth_user`/`user_badge`/`user_running_contests` + 본인 `user_follow_stat`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_badges`/`user_running_contests` + 본인 `user_follow_stats`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

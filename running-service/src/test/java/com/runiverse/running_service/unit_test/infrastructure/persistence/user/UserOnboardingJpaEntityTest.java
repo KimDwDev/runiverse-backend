@@ -2,7 +2,7 @@ package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.vo.Gender;
-import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardingJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -23,7 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class UserOnboardJpaEntityTest {
+public class UserOnboardingJpaEntityTest {
 
     private static final LocalDate BIRTHDAY = LocalDate.of(1999, 5, 20);
     private static final BigDecimal WEIGHT = new BigDecimal("70.5");
@@ -35,12 +35,12 @@ public class UserOnboardJpaEntityTest {
 
         @Test
         @DisplayName("온보딩 JPA 엔티티를 생성한다")
-        void createUserOnboardJpaEntity() {
+        void createUserOnboardingJpaEntity() {
             // given
             UUID userId = UuidCreator.getTimeOrderedEpoch();
 
             // when
-            UserOnboardJpaEntity entity = UserOnboardJpaEntity.create(
+            UserOnboardingJpaEntity entity = UserOnboardingJpaEntity.create(
                     userId, "러너킴", Gender.MALE, BIRTHDAY, 330, WEIGHT, HEIGHT
             );
 
@@ -58,7 +58,7 @@ public class UserOnboardJpaEntityTest {
         @DisplayName("타임스탬프는 영속화 시점에 채워지므로 생성 직후에는 비어 있다")
         void timestampsAreNullBeforePersist() {
             // when
-            UserOnboardJpaEntity entity = UserOnboardJpaEntity.create(
+            UserOnboardingJpaEntity entity = UserOnboardingJpaEntity.create(
                     UuidCreator.getTimeOrderedEpoch(), "러너킴", Gender.MALE,
                     BIRTHDAY, 330, WEIGHT, HEIGHT
             );
@@ -77,7 +77,7 @@ public class UserOnboardJpaEntityTest {
         @DisplayName("user_id가 PK이며 수정할 수 없다")
         void userIdIsImmutablePrimaryKey() throws NoSuchFieldException {
             // given
-            Field field = UserOnboardJpaEntity.class.getDeclaredField("userId");
+            Field field = UserOnboardingJpaEntity.class.getDeclaredField("userId");
 
             // when & then -> shared-PK 구조라 user_id는 users의 FK이기도 하다
             assertThat(field.isAnnotationPresent(Id.class)).isTrue();
@@ -89,7 +89,7 @@ public class UserOnboardJpaEntityTest {
         void profileColumnsAreUpdatable() throws NoSuchFieldException {
             // when & then -> updatable=false가 붙으면 프로필 수정이 조용히 무시된다
             for (String name : new String[]{"nickname", "gender", "birthday", "avgPace", "weight", "height"}) {
-                Field field = UserOnboardJpaEntity.class.getDeclaredField(name);
+                Field field = UserOnboardingJpaEntity.class.getDeclaredField(name);
                 assertThat(field.getAnnotation(Column.class).updatable())
                         .as("%s 는 수정 가능해야 한다", name)
                         .isTrue();
@@ -101,7 +101,7 @@ public class UserOnboardJpaEntityTest {
         void decimalColumnsMatchValueObjectScale() throws NoSuchFieldException {
             // when & then -> VO의 setScale(1)과 어긋나면 저장 시 값이 잘린다
             for (String name : new String[]{"weight", "height"}) {
-                Column column = UserOnboardJpaEntity.class.getDeclaredField(name).getAnnotation(Column.class);
+                Column column = UserOnboardingJpaEntity.class.getDeclaredField(name).getAnnotation(Column.class);
                 assertThat(column.precision()).as("%s precision", name).isEqualTo(4);
                 assertThat(column.scale()).as("%s scale", name).isEqualTo(1);
             }
@@ -111,7 +111,7 @@ public class UserOnboardJpaEntityTest {
         @DisplayName("닉네임 컬럼 길이가 VO의 최대 길이와 같다")
         void nicknameLengthMatchesValueObject() throws NoSuchFieldException {
             // when & then -> VO는 통과했는데 DB가 자르면 데이터가 손상된다
-            Column column = UserOnboardJpaEntity.class.getDeclaredField("nickname").getAnnotation(Column.class);
+            Column column = UserOnboardingJpaEntity.class.getDeclaredField("nickname").getAnnotation(Column.class);
             assertThat(column.length()).isEqualTo(16);
         }
 
@@ -119,9 +119,9 @@ public class UserOnboardJpaEntityTest {
         @DisplayName("타임스탬프 어노테이션이 붙어 있다")
         void timestampAnnotationsArePresent() throws NoSuchFieldException {
             // when & then -> 없으면 NOT NULL 위반으로 저장 자체가 실패한다
-            assertThat(UserOnboardJpaEntity.class.getDeclaredField("createdAt")
+            assertThat(UserOnboardingJpaEntity.class.getDeclaredField("createdAt")
                     .isAnnotationPresent(CreationTimestamp.class)).isTrue();
-            assertThat(UserOnboardJpaEntity.class.getDeclaredField("updatedAt")
+            assertThat(UserOnboardingJpaEntity.class.getDeclaredField("updatedAt")
                     .isAnnotationPresent(UpdateTimestamp.class)).isTrue();
         }
     }
@@ -135,7 +135,7 @@ public class UserOnboardJpaEntityTest {
         void nicknameHasUniqueConstraint() {
             // when
             UniqueConstraint[] constraints =
-                    UserOnboardJpaEntity.class.getAnnotation(Table.class).uniqueConstraints();
+                    UserOnboardingJpaEntity.class.getAnnotation(Table.class).uniqueConstraints();
 
             // then -> 애플리케이션 중복 검사만으로는 동시 요청에 뚫린다
             assertThat(constraints).hasSize(1);
@@ -147,7 +147,7 @@ public class UserOnboardJpaEntityTest {
         void checkConstraintsMatchDomainBounds() {
             // when
             String[] constraints = Arrays.stream(
-                            UserOnboardJpaEntity.class.getAnnotation(Checks.class).value())
+                            UserOnboardingJpaEntity.class.getAnnotation(Checks.class).value())
                     .map(Check::constraints)
                     .toArray(String[]::new);
 

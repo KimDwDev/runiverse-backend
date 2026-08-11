@@ -15,7 +15,7 @@ import com.runiverse.running_service.integration_test.fake.FakeVerificationTicke
 import com.runiverse.running_service.integration_test.fake.FakeVerificationTicketHasher;
 import com.runiverse.running_service.integration_test.fake.InMemoryAccessTokenBlacklist;
 import com.runiverse.running_service.integration_test.fake.InMemoryEmailVerificationStore;
-import com.runiverse.running_service.integration_test.fake.InMemoryOnboardStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryOnboardingStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRefreshTokenStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryVerificationTicketStore;
@@ -29,7 +29,7 @@ public abstract class IntegrationTestSupport {
 
     protected InMemoryUserStore userStore;
     protected InMemoryRefreshTokenStore refreshTokenStore;
-    protected InMemoryOnboardStore onboardStore;
+    protected InMemoryOnboardingStore onboardingStore;
     protected InMemoryAccessTokenBlacklist accessTokenBlacklist;
     protected InMemoryVerificationTicketStore verificationTicketStore;
     protected InMemoryEmailVerificationStore emailVerificationStore;
@@ -47,7 +47,7 @@ public abstract class IntegrationTestSupport {
     void setUpFakes() {
         userStore = new InMemoryUserStore();
         refreshTokenStore = new InMemoryRefreshTokenStore();
-        onboardStore = new InMemoryOnboardStore();
+        onboardingStore = new InMemoryOnboardingStore();
         accessTokenBlacklist = new InMemoryAccessTokenBlacklist();
         verificationTicketStore = new InMemoryVerificationTicketStore();
         emailVerificationStore = new InMemoryEmailVerificationStore(MAX_ATTEMPTS, DAILY_LIMIT);

@@ -29,19 +29,19 @@ import java.util.UUID;
 @Getter
 @Entity
 @Table(
-        name = "user_onboard",
+        name = "user_onboardings",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_user_onboard_nickname",
+                name = "uk_user_onboarding_nickname",
                 columnNames = "nickname"
         )
 )
-@Check(name = "ck_user_onboard_nickname", constraints = "char_length(nickname) between 2 and 16")
-@Check(name = "ck_user_onboard_gender", constraints = "gender in ('MALE', 'FEMALE')")
-@Check(name = "ck_user_onboard_avg_pace", constraints = "avg_pace between 120 and 1800")
-@Check(name = "ck_user_onboard_weight", constraints = "weight between 20.0 and 300.0")
-@Check(name = "ck_user_onboard_height", constraints = "height between 20.0 and 300.0")
+@Check(name = "ck_user_onboarding_nickname", constraints = "char_length(nickname) between 2 and 16")
+@Check(name = "ck_user_onboarding_gender", constraints = "gender in ('MALE', 'FEMALE')")
+@Check(name = "ck_user_onboarding_avg_pace", constraints = "avg_pace between 120 and 1800")
+@Check(name = "ck_user_onboarding_weight", constraints = "weight between 20.0 and 300.0")
+@Check(name = "ck_user_onboarding_height", constraints = "height between 20.0 and 300.0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserOnboardJpaEntity {
+public class UserOnboardingJpaEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
@@ -66,8 +66,8 @@ public class UserOnboardJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private UserOnboardJpaEntity(UUID userId, String nickname, Gender gender, LocalDate birthday,
-                                 int avgPace, BigDecimal weight, BigDecimal height) {
+    private UserOnboardingJpaEntity(UUID userId, String nickname, Gender gender, LocalDate birthday,
+                                    int avgPace, BigDecimal weight, BigDecimal height) {
         this.userId = userId;
         this.nickname = nickname;
         this.gender = gender;
@@ -77,10 +77,10 @@ public class UserOnboardJpaEntity {
         this.height = height;
     }
 
-    public static UserOnboardJpaEntity create(UUID userId, String nickname, Gender gender,
-                                              LocalDate birthday, int avgPace,
-                                              BigDecimal weight, BigDecimal height) {
-        return new UserOnboardJpaEntity(userId, nickname, gender, birthday, avgPace, weight, height);
+    public static UserOnboardingJpaEntity create(UUID userId, String nickname, Gender gender,
+                                                 LocalDate birthday, int avgPace,
+                                                 BigDecimal weight, BigDecimal height) {
+        return new UserOnboardingJpaEntity(userId, nickname, gender, birthday, avgPace, weight, height);
     }
 
     // FK 제약

@@ -28,7 +28,7 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class OnboardVoTest {
+public class OnboardingVoTest {
 
     @Nested
     @DisplayName("닉네임 테스트")

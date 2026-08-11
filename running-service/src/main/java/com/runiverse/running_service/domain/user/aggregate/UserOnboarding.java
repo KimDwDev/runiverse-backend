@@ -15,7 +15,7 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 @Getter
-public class UserOnboard {
+public class UserOnboarding {
 
     private final UserId userId;
     private final Nickname nickname;
@@ -26,8 +26,8 @@ public class UserOnboard {
     private final Height height;
 
     // 온보딩 완료
-    UserOnboard(UserId userId, String nickname, String gender, LocalDate birthday,
-                int avgPace, BigDecimal weight, BigDecimal height) {
+    UserOnboarding(UserId userId, String nickname, String gender, LocalDate birthday,
+                   int avgPace, BigDecimal weight, BigDecimal height) {
         this(userId,
                 new Nickname(nickname),
                 Gender.from(gender),
@@ -38,8 +38,8 @@ public class UserOnboard {
     }
 
     // 내부 전용 - 수정 시 기존 VO를 넘기기 위해 필요
-    private UserOnboard(UserId userId, Nickname nickname, Gender gender, Birthday birthday,
-                        AvgPace avgPace, Weight weight, Height height) {
+    private UserOnboarding(UserId userId, Nickname nickname, Gender gender, Birthday birthday,
+                           AvgPace avgPace, Weight weight, Height height) {
         if (userId == null) {
             throw new UserIdRequiredException();
         }
@@ -53,9 +53,9 @@ public class UserOnboard {
     }
 
     // 프로필 수정
-    UserOnboard change(String nickname, String gender, LocalDate birthday,
-                       Integer avgPace, BigDecimal weight, BigDecimal height) {
-        return new UserOnboard(
+    UserOnboarding change(String nickname, String gender, LocalDate birthday,
+                          Integer avgPace, BigDecimal weight, BigDecimal height) {
+        return new UserOnboarding(
                 userId,
                 nickname != null ? new Nickname(nickname) : this.nickname,
                 gender != null ? Gender.from(gender) : this.gender,
@@ -71,7 +71,7 @@ public class UserOnboard {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof UserOnboard other)) {
+        if (!(o instanceof UserOnboarding other)) {
             return false;
         }
         return userId.equals(other.userId);

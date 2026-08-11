@@ -3,9 +3,10 @@ package com.runiverse.running_service.domain.user.exception;
 import com.runiverse.running_service.domain.common.exception.BusinessException;
 import com.runiverse.running_service.domain.common.exception.ErrorCode;
 
-public class DescriptionRequiredException extends BusinessException {
+public class ProfileImageKeyTooLongException extends BusinessException {
 
-    public DescriptionRequiredException() {
-        super(ErrorCode.DESCRIPTION_REQUIRED);
+    public ProfileImageKeyTooLongException() {
+        super(ErrorCode.PROFILE_IMAGE_KEY_TOO_LONG);
     }
+
 }
