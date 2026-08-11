@@ -1,17 +1,17 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 
-import com.runiverse.running_service.domain.user.exception.DescriptionRequiredException;
-import com.runiverse.running_service.domain.user.exception.DescriptionTooLongException;
 import com.runiverse.running_service.domain.user.exception.EmailRequiredException;
 import com.runiverse.running_service.domain.user.exception.EmailTooLongException;
+import com.runiverse.running_service.domain.user.exception.IntroductionRequiredException;
+import com.runiverse.running_service.domain.user.exception.IntroductionTooLongException;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
 import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
 import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
-import com.runiverse.running_service.domain.user.vo.Description;
 import com.runiverse.running_service.domain.user.vo.Email;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
@@ -311,79 +311,79 @@ public class UserVoTest {
         }
     }
 
-    // Description 테스트
+    // Introduction 테스트
     @Nested
-    @DisplayName("Description 테스트")
-    class DescriptionTest {
+    @DisplayName("Introduction 테스트")
+    class IntroductionTest {
 
         @Test
         @DisplayName("100자 이하의 소개는 생성할 수 있다")
-        void createDescriptionSuccess() {
+        void createIntroductionSuccess() {
             // given
             String value = "함께 즐겁게 달려요!";
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value()).isEqualTo(value);
+            assertThat(introduction.value()).isEqualTo(value);
         }
 
         @Test
         @DisplayName("빈 소개는 생성할 수 있다")
-        void createEmptyDescriptionSuccess() {
+        void createEmptyIntroductionSuccess() {
             // given
             String value = "";
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value()).isEmpty();
+            assertThat(introduction.value()).isEmpty();
         }
 
         @Test
         @DisplayName("소개가 정확히 100자이면 생성할 수 있다")
-        void createDescriptionWithMaxLengthSuccess() {
+        void createIntroductionWithMaxLengthSuccess() {
             // given
             String value = "가".repeat(100);
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value())
+            assertThat(introduction.value())
                     .hasSize(100)
                     .isEqualTo(value);
         }
 
         @Test
         @DisplayName("소개가 100자를 초과하면 예외가 발생한다")
-        void createDescriptionOverMaxLengthFails() {
+        void createIntroductionOverMaxLengthFails() {
             // given
             String value = "가".repeat(101);
 
             // when & then
-            assertThatThrownBy(() -> new Description(value))
-                    .isInstanceOf(DescriptionTooLongException.class)
+            assertThatThrownBy(() -> new Introduction(value))
+                    .isInstanceOf(IntroductionTooLongException.class)
                     .hasMessage("소개는 100자를 초과할 수 없습니다.");
         }
 
         @Test
         @DisplayName("소개가 null이면 예외가 발생한다")
-        void createDescriptionWithNullFails() {
+        void createIntroductionWithNullFails() {
             // when & then
-            assertThatThrownBy(() -> new Description(null))
-                    .isInstanceOf(DescriptionRequiredException.class)
+            assertThatThrownBy(() -> new Introduction(null))
+                    .isInstanceOf(IntroductionRequiredException.class)
                     .hasMessage("소개는 null일 수 없습니다.");
         }
 
         @Test
-        @DisplayName("같은 소개를 가진 Description은 같은 값 객체이다")
-        void descriptionEqualsTest() {
+        @DisplayName("같은 소개를 가진 Introduction은 같은 값 객체이다")
+        void introductionEqualsTest() {
             // given
-            Description first = new Description("함께 달려요!");
-            Description second = new Description("함께 달려요!");
+            Introduction first = new Introduction("함께 달려요!");
+            Introduction second = new Introduction("함께 달려요!");
 
             // then
             assertThat(first)

@@ -37,8 +37,8 @@ public class UserController {
                         request.gender(),
                         request.birthday(),
                         request.averagePaceSecondsPerKm(),
-                        request.weight(),
-                        request.height()
+                        request.weightKg(),
+                        request.heightCm()
                 ));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new OnboardResponse(result.userId(), result.nickname()));

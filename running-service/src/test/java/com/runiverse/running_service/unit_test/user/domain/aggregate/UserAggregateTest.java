@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.exception.DescriptionTooLongException;
+import com.runiverse.running_service.domain.user.exception.IntroductionTooLongException;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
@@ -32,7 +32,7 @@ public class UserAggregateTest {
         void createUserSuccess() {
             // given
             boolean alertConsent = true;
-            String description = "함께 즐겁게 달려요!";
+            String introduction = "함께 즐겁게 달려요!";
 
             // when
             User user = new User(
@@ -40,7 +40,7 @@ public class UserAggregateTest {
                     EMAIL,
                     PASSWORD_HASH,
                     alertConsent,
-                    description
+                    introduction
             );
 
             // then
@@ -48,7 +48,7 @@ public class UserAggregateTest {
             assertThat(user.getEmail().value()).isEqualTo(EMAIL);
             assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
             assertThat(user.isAlertConsent()).isTrue();
-            assertThat(user.getDescription().value()).isEqualTo(description);
+            assertThat(user.getIntroduction().value()).isEqualTo(introduction);
         }
 
         @Nested
@@ -56,7 +56,7 @@ public class UserAggregateTest {
         class LocalSignupConstructorTest {
 
             @Test
-            @DisplayName("로컬 회원가입 시 description은 빈 값으로 생성된다")
+            @DisplayName("로컬 회원가입 시 introduction은 빈 값으로 생성된다")
             void createLocalUserSuccess() {
                 // given
                 boolean alertConsent = true;
@@ -74,7 +74,7 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isTrue();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -93,7 +93,7 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEmpty();
                 assertThat(user.isAlertConsent()).isFalse();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -116,7 +116,7 @@ public class UserAggregateTest {
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isFalse();
-                assertThat(user.getDescription().value()).isEmpty();
+                assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
 
@@ -178,9 +178,9 @@ public class UserAggregateTest {
 
             @Test
             @DisplayName("소개가 100자를 초과하면 사용자 생성에 실패한다")
-            void createUserWithLongDescriptionFails() {
+            void createUserWithLongIntroductionFails() {
                 // given
-                String longDescription = "가".repeat(101);
+                String longIntroduction = "가".repeat(101);
 
                 // when & then
                 assertThatThrownBy(
@@ -189,10 +189,10 @@ public class UserAggregateTest {
                                 EMAIL,
                                 PASSWORD_HASH,
                                 false,
-                                longDescription
+                                longIntroduction
                         )
                 )
-                        .isInstanceOf(DescriptionTooLongException.class)
+                        .isInstanceOf(IntroductionTooLongException.class)
                         .hasMessage("소개는 100자를 초과할 수 없습니다.");
             }
         }

@@ -44,10 +44,10 @@ public class UserJpaEntity {
     private boolean alertConsent;
 
     @Column(
-            name = "description",
+            name = "introduction",
             length = 100
     )
-    private String description;
+    private String introduction;
 
     @CreationTimestamp
     @Column(
@@ -69,13 +69,13 @@ public class UserJpaEntity {
             String email,
             String passwordHash,
             boolean alertConsent,
-            String description
+            String introduction
     ) {
         this.userId = userId;
         this.email = email;
         this.passwordHash = passwordHash;
         this.alertConsent = alertConsent;
-        this.description = description;
+        this.introduction = introduction;
     }
 
     public static UserJpaEntity create(
@@ -83,14 +83,14 @@ public class UserJpaEntity {
             String email,
             String passwordHash,
             boolean alertConsent,
-            String description
+            String introduction
     ) {
         return new UserJpaEntity(
                 id,
                 email,
                 passwordHash,
                 alertConsent,
-                description
+                introduction
         );
     }
 }

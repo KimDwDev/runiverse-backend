@@ -129,7 +129,7 @@ public class UserPersistenceAdapterTest {
         assertThat(user.getEmail().value()).isEqualTo(email);
         assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
         assertThat(user.isAlertConsent()).isTrue();
-        assertThat(user.getDescription().value()).isEqualTo("러닝을 좋아합니다");
+        assertThat(user.getIntroduction().value()).isEqualTo("러닝을 좋아합니다");
     }
 
     @Test
@@ -148,8 +148,8 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("description이 null이면 빈 문자열로 변환한다")
-    void loadByEmailConvertsNullDescription() {
+    @DisplayName("introduction이 null이면 빈 문자열로 변환한다")
+    void loadByEmailConvertsNullIntroduction() {
         // given
         String email = "test@example.com";
 
@@ -164,13 +164,13 @@ public class UserPersistenceAdapterTest {
 
         // then
         assertThat(result).isPresent();
-        assertThat(result.get().getDescription().value()).isEmpty();
+        assertThat(result.get().getIntroduction().value()).isEmpty();
     }
 
     @Test
     @DisplayName("provider와 providerId에 연동된 유저를 도메인 User로 변환해 반환한다")
     void loadByProviderReturnsUser() {
-        // given -> 소셜 전용 계정은 hash_password와 description이 NULL로 저장된다
+        // given -> 소셜 전용 계정은 hash_password와 introduction이 NULL로 저장된다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
                 userId, "kakao@example.com", null, false, null
@@ -190,7 +190,7 @@ public class UserPersistenceAdapterTest {
 
         // NULL은 도메인이 허용하지 않으므로 빈 문자열로 복원되어야 한다
         assertThat(user.getPasswordHash().value()).isEmpty();
-        assertThat(user.getDescription().value()).isEmpty();
+        assertThat(user.getIntroduction().value()).isEmpty();
     }
 
     @Test
@@ -249,7 +249,7 @@ public class UserPersistenceAdapterTest {
 
         UserJpaEntity entity = (UserJpaEntity) captor.getAllValues().get(0);
         assertThat(entity.getPasswordHash()).isNull();
-        assertThat(entity.getDescription()).isNull();
+        assertThat(entity.getIntroduction()).isNull();
     }
 
     @Test

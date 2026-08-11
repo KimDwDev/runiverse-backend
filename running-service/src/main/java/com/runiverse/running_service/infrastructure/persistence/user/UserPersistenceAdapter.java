@@ -51,7 +51,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 user.getEmail().value(),
                 emptyToNull(user.getPasswordHash().value()),
                 user.isAlertConsent(),
-                emptyToNull(user.getDescription().value())
+                emptyToNull(user.getIntroduction().value())
         );
 
         entityManager.persist(entity);
@@ -96,7 +96,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 entity.getEmail(),
                 Objects.requireNonNullElse(entity.getPasswordHash(), ""),
                 entity.isAlertConsent(),
-                Objects.requireNonNullElse(entity.getDescription(), "")
+                Objects.requireNonNullElse(entity.getIntroduction(), "")
         );
     }
 

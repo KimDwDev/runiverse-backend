@@ -3,9 +3,9 @@ package com.runiverse.running_service.domain.user.exception;
 import com.runiverse.running_service.domain.common.exception.BusinessException;
 import com.runiverse.running_service.domain.common.exception.ErrorCode;
 
-public class DescriptionTooLongException extends BusinessException {
+public class IntroductionRequiredException extends BusinessException {
 
-    public DescriptionTooLongException() {
-        super(ErrorCode.DESCRIPTION_TOO_LONG);
+    public IntroductionRequiredException() {
+        super(ErrorCode.INTRODUCTION_REQUIRED);
     }
 }
