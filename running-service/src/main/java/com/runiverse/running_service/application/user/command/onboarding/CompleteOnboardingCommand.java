@@ -1,10 +1,10 @@
-package com.runiverse.running_service.application.user.command.onboard;
+package com.runiverse.running_service.application.user.command.onboarding;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public record CompleteOnboardCommand(
+public record CompleteOnboardingCommand(
         UUID userId,
         String nickname,
         String gender,

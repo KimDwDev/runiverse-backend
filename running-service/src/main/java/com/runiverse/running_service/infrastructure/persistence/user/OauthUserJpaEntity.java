@@ -26,7 +26,7 @@ import java.util.UUID;
 @Getter
 @Entity
 @Table(
-        name = "oauth_user",
+        name = "oauth_users",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_oauth_user_provider_provider_id",
                 columnNames = {"provider", "provider_id"}

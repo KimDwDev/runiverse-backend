@@ -35,7 +35,7 @@ public class User {
     private OauthUser oauthUser;
 
     // 유저 온보드
-    private UserOnboard onboard;
+    private UserOnboarding onboarding;
 
     // 생성자 부분 작성
     public User(UUID userId, String email, String passwordHash, boolean alertConsent, String profileImageKey,
@@ -111,25 +111,25 @@ public class User {
 
     public void completeOnboarding(String nickname, String gender, LocalDate birthday,
                                    int avgPace, BigDecimal weight, BigDecimal height) {
-        if (onboard != null) {
+        if (onboarding != null) {
             throw new OnboardingAlreadyCompletedException();
         }
-        this.onboard = new UserOnboard(userId, nickname, gender, birthday, avgPace, weight, height);
+        this.onboarding = new UserOnboarding(userId, nickname, gender, birthday, avgPace, weight, height);
     }
 
     public void updateOnboarding(String nickname, String gender, LocalDate birthday,
                                  Integer avgPace, BigDecimal weight, BigDecimal height) {
-        if (onboard == null) {
+        if (onboarding == null) {
             throw new OnboardingNotCompletedException();
         }
-        this.onboard = onboard.change(nickname, gender, birthday, avgPace, weight, height);
+        this.onboarding = onboarding.change(nickname, gender, birthday, avgPace, weight, height);
     }
 
     public boolean hasOnboarded() {
-        return onboard != null;
+        return onboarding != null;
     }
 
-    public Optional<UserOnboard> getOnboard() {
-        return Optional.ofNullable(onboard);
+    public Optional<UserOnboarding> getOnboarding() {
+        return Optional.ofNullable(onboarding);
     }
 }

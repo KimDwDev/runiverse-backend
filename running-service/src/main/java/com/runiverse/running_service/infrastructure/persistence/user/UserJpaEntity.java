@@ -35,7 +35,7 @@ public class UserJpaEntity {
     private String email;
 
     @Column(
-            name = "hash_password",
+            name = "password_hash",
             length = 255
     )
     private String passwordHash;

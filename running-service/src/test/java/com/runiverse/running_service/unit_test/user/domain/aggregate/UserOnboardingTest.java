@@ -52,9 +52,9 @@ public class UserOnboardingTest {
 
             // then
             assertThat(user.hasOnboarded()).isTrue();
-            assertThat(user.getOnboard()).isPresent();
-            assertThat(user.getOnboard().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
-            assertThat(user.getOnboard().orElseThrow().getUserId()).isEqualTo(user.getUserId());
+            assertThat(user.getOnboarding()).isPresent();
+            assertThat(user.getOnboarding().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
+            assertThat(user.getOnboarding().orElseThrow().getUserId()).isEqualTo(user.getUserId());
         }
 
         @Test
@@ -65,7 +65,7 @@ public class UserOnboardingTest {
 
             // when & then
             assertThat(user.hasOnboarded()).isFalse();
-            assertThat(user.getOnboard()).isEmpty();
+            assertThat(user.getOnboarding()).isEmpty();
         }
 
         @Test
@@ -81,7 +81,7 @@ public class UserOnboardingTest {
                     .isInstanceOf(OnboardingAlreadyCompletedException.class)
                     .hasMessage("이미 온보딩을 완료했습니다.");
 
-            assertThat(user.getOnboard().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
+            assertThat(user.getOnboarding().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
         }
 
         @Test
@@ -113,9 +113,9 @@ public class UserOnboardingTest {
             user.updateOnboarding("새러너", "FEMALE", null, 400, null, null);
 
             // then
-            assertThat(user.getOnboard().orElseThrow().getNickname().value()).isEqualTo("새러너");
-            assertThat(user.getOnboard().orElseThrow().getGender()).isEqualTo(Gender.FEMALE);
-            assertThat(user.getOnboard().orElseThrow().getAvgPace().secondPerKm()).isEqualTo(400);
+            assertThat(user.getOnboarding().orElseThrow().getNickname().value()).isEqualTo("새러너");
+            assertThat(user.getOnboarding().orElseThrow().getGender()).isEqualTo(Gender.FEMALE);
+            assertThat(user.getOnboarding().orElseThrow().getAvgPace().secondPerKm()).isEqualTo(400);
         }
 
         @Test
@@ -128,10 +128,10 @@ public class UserOnboardingTest {
             user.updateOnboarding("새러너", null, null, null, null, null);
 
             // then
-            assertThat(user.getOnboard().orElseThrow().getBirthday().value()).isEqualTo(BIRTHDAY);
-            assertThat(user.getOnboard().orElseThrow().getWeight().value())
+            assertThat(user.getOnboarding().orElseThrow().getBirthday().value()).isEqualTo(BIRTHDAY);
+            assertThat(user.getOnboarding().orElseThrow().getWeight().value())
                     .isEqualByComparingTo(WEIGHT);
-            assertThat(user.getOnboard().orElseThrow().getHeight().value())
+            assertThat(user.getOnboarding().orElseThrow().getHeight().value())
                     .isEqualByComparingTo(HEIGHT);
         }
 
@@ -159,7 +159,7 @@ public class UserOnboardingTest {
                     user.updateOnboarding("김", null, null, null, null, null))
                     .isInstanceOf(InvalidNicknameLengthException.class);
 
-            assertThat(user.getOnboard().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
+            assertThat(user.getOnboarding().orElseThrow().getNickname().value()).isEqualTo(NICKNAME);
         }
 
         @Test
@@ -172,7 +172,7 @@ public class UserOnboardingTest {
             user.updateOnboarding("새러너", null, null, null, null, null);
 
             // then
-            assertThat(user.getOnboard().orElseThrow().getUserId()).isEqualTo(user.getUserId());
+            assertThat(user.getOnboarding().orElseThrow().getUserId()).isEqualTo(user.getUserId());
         }
     }
 }

@@ -1,8 +1,8 @@
-package com.runiverse.running_service.application.user.port.out;
+package com.runiverse.running_service.application.auth.port.out;
 
 import com.runiverse.running_service.domain.user.vo.UserId;
 
-public interface ExistsOnboardPort {
+public interface CheckOnboardingPort {
 
     boolean existsByUserId(UserId userId);
 }

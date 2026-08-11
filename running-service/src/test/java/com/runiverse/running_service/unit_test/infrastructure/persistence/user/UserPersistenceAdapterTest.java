@@ -2,7 +2,7 @@ package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
@@ -11,7 +11,7 @@ import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
-import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardingJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -431,7 +431,7 @@ public class UserPersistenceAdapterTest {
 
     @Test
     @DisplayName("온보딩을 저장하면 user_onboard 행을 영속화한다")
-    void saveOnboardPersistsOnboardRow() {
+    void saveOnboardingPersistsOnboardingRow() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         User user = new User(userId, "test@example.com", PASSWORD_HASH);
@@ -439,17 +439,17 @@ public class UserPersistenceAdapterTest {
                 "러너킴", "MALE", LocalDate.of(1999, 5, 20),
                 330, new BigDecimal("70.5"), new BigDecimal("175.0")
         );
-        UserOnboard onboard = user.getOnboard().orElseThrow();
+        UserOnboarding onboarding = user.getOnboarding().orElseThrow();
 
         // when
-        userPersistenceAdapter.saveOnboard(onboard);
+        userPersistenceAdapter.saveOnboarding(onboarding);
 
         // then -> VO가 껍질을 벗고 원시 값으로 내려가야 한다
-        ArgumentCaptor<UserOnboardJpaEntity> captor =
-                ArgumentCaptor.forClass(UserOnboardJpaEntity.class);
+        ArgumentCaptor<UserOnboardingJpaEntity> captor =
+                ArgumentCaptor.forClass(UserOnboardingJpaEntity.class);
         verify(entityManager).persist(captor.capture());
 
-        UserOnboardJpaEntity entity = captor.getValue();
+        UserOnboardingJpaEntity entity = captor.getValue();
         assertThat(entity.getUserId()).isEqualTo(userId);
         assertThat(entity.getNickname()).isEqualTo("러너킴");
         assertThat(entity.getGender()).isEqualTo(Gender.MALE);

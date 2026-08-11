@@ -1,16 +1,16 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardPort;
+import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
-import com.runiverse.running_service.application.user.port.out.ExistsOnboardPort;
+import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
-import com.runiverse.running_service.application.user.port.out.SaveOnboardPort;
+import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -25,8 +25,8 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
-        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardPort, CheckNicknameDuplicatePort, SaveOnboardPort,
-        CheckOnboardPort {
+        LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
+        CheckOnboardingPort {
 
     private final EntityManager entityManager;
 
@@ -128,7 +128,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         Long count = entityManager.createQuery(
                         """
                                 SELECT COUNT(o)
-                                FROM UserOnboardJpaEntity o
+                                FROM UserOnboardingJpaEntity o
                                 WHERE o.userId = :userId
                                 """, Long.class
                 )
@@ -142,7 +142,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         Long count = entityManager.createQuery(
                         """
                                 SELECT COUNT(o)
-                                FROM UserOnboardJpaEntity o
+                                FROM UserOnboardingJpaEntity o
                                 WHERE o.nickname = :nickname
                                 """, Long.class
                 )
@@ -152,15 +152,15 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     }
 
     @Override
-    public void saveOnboard(UserOnboard onboard) {
-        entityManager.persist(UserOnboardJpaEntity.create(
-                onboard.getUserId().value(),
-                onboard.getNickname().value(),
-                onboard.getGender(),
-                onboard.getBirthday().value(),
-                onboard.getAvgPace().secondPerKm(),
-                onboard.getWeight().value(),
-                onboard.getHeight().value()
+    public void saveOnboarding(UserOnboarding onboarding) {
+        entityManager.persist(UserOnboardingJpaEntity.create(
+                onboarding.getUserId().value(),
+                onboarding.getNickname().value(),
+                onboarding.getGender(),
+                onboarding.getBirthday().value(),
+                onboarding.getAvgPace().secondPerKm(),
+                onboarding.getWeight().value(),
+                onboarding.getHeight().value()
         ));
     }
 }

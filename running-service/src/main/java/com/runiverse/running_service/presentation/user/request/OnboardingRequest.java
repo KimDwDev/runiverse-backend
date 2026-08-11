@@ -13,7 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record OnboardRequest(
+public record OnboardingRequest(
         @NotBlank(message = "닉네임은 필수입니다.")
         @Size(
                 min = 2,

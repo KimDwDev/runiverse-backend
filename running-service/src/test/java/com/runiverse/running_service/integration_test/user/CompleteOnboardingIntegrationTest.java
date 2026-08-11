@@ -5,13 +5,13 @@ import com.runiverse.running_service.application.auth.command.login.LoginCommand
 import com.runiverse.running_service.application.auth.command.login.LoginHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
-import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardCommand;
-import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardHandler;
-import com.runiverse.running_service.application.user.command.onboard.CompleteOnboardResult;
-import com.runiverse.running_service.application.user.exception.AlreadyOnboardException;
+import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
+import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
+import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingResult;
+import com.runiverse.running_service.application.user.exception.AlreadyOnboardingException;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.exception.InvalidNicknameLengthException;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("온보딩 완료 통합 테스트")
-public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
+public class CompleteOnboardingIntegrationTest extends IntegrationTestSupport {
 
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
@@ -39,19 +39,19 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
     private static final BigDecimal HEIGHT = new BigDecimal("175.0");
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
-    private CompleteOnboardHandler completeOnboardHandler;
+    private CompleteOnboardingHandler completeOnboardingHandler;
 
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
-                tokenProvider, refreshTokenStore, onboardStore);
-        completeOnboardHandler = new CompleteOnboardHandler(
+                tokenProvider, refreshTokenStore, onboardingStore);
+        completeOnboardingHandler = new CompleteOnboardingHandler(
                 userStore,     // LoadUserByIdPort
-                onboardStore,  // ExistsOnboardPort
-                onboardStore,  // CheckNicknameDuplicatePort
-                onboardStore   // SaveOnboardPort
+                onboardingStore,  // ExistsOnboardingPort
+                onboardingStore,  // CheckNicknameDuplicatePort
+                onboardingStore   // SaveOnboardingPort
         );
     }
 
@@ -60,23 +60,23 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
                 new SignUpCommand(issueVerificationTicket(email), PASSWORD)).userId();
     }
 
-    private CompleteOnboardCommand command(UUID userId, String nickname) {
-        return new CompleteOnboardCommand(
+    private CompleteOnboardingCommand command(UUID userId, String nickname) {
+        return new CompleteOnboardingCommand(
                 userId, nickname, GENDER, BIRTHDAY, AVG_PACE, WEIGHT, HEIGHT);
     }
 
     @Test
     @DisplayName("온보딩을 완료하면 입력한 값이 VO로 저장된다")
-    void completeOnboardSuccess() {
+    void completeOnboardingSuccess() {
         // given
         UUID userId = signUp(EMAIL);
         // when
-        CompleteOnboardResult result = completeOnboardHandler.handle(command(userId, NICKNAME));
+        CompleteOnboardingResult result = completeOnboardingHandler.handle(command(userId, NICKNAME));
         // then
         assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.nickname()).isEqualTo(NICKNAME);
 
-        UserOnboard saved = onboardStore.findByUserId(userId).orElseThrow();
+        UserOnboarding saved = onboardingStore.findByUserId(userId).orElseThrow();
         assertThat(saved.getNickname().value()).isEqualTo(NICKNAME);
         assertThat(saved.getGender()).isEqualTo(Gender.MALE);
         assertThat(saved.getBirthday().value()).isEqualTo(BIRTHDAY);
@@ -87,64 +87,64 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
 
     @Test
     @DisplayName("온보딩을 마치면 이후 로그인에서 isOnboarded가 true가 된다")
-    void onboardIsReflectedInLogin() {
+    void onboardingIsReflectedInLogin() {
         // given
         UUID userId = signUp(EMAIL);
         assertThat(loginHandler.handle(new LoginCommand(EMAIL, PASSWORD)).isOnboarded()).isFalse();
         // when
-        completeOnboardHandler.handle(command(userId, NICKNAME));
+        completeOnboardingHandler.handle(command(userId, NICKNAME));
         // then
         assertThat(loginHandler.handle(new LoginCommand(EMAIL, PASSWORD)).isOnboarded()).isTrue();
     }
 
     @Test
     @DisplayName("유저가 온보딩 정보를 갖게 된다")
-    void userAggregateHoldsOnboard() {
+    void userAggregateHoldsOnboarding() {
         // given
         UUID userId = signUp(EMAIL);
         // when
-        completeOnboardHandler.handle(command(userId, NICKNAME));
+        completeOnboardingHandler.handle(command(userId, NICKNAME));
         // then
         assertThat(userStore.findById(userId).orElseThrow().hasOnboarded()).isTrue();
     }
 
     @Test
     @DisplayName("가입하지 않은 userId면 UserNotFoundException이 발생한다")
-    void onboardWithUnknownUser() {
+    void onboardingWithUnknownUser() {
         // when & then
-        assertThatThrownBy(() -> completeOnboardHandler.handle(
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(
                 command(UuidCreator.getTimeOrderedEpoch(), NICKNAME)))
                 .isInstanceOf(UserNotFoundException.class);
 
-        assertThat(onboardStore.size()).isZero();
+        assertThat(onboardingStore.size()).isZero();
     }
 
     @Test
-    @DisplayName("이미 온보딩한 유저가 다시 시도하면 AlreadyOnboardException이 발생한다")
-    void onboardTwice() {
+    @DisplayName("이미 온보딩한 유저가 다시 시도하면 AlreadyOnboardingException이 발생한다")
+    void onboardingTwice() {
         // given
         UUID userId = signUp(EMAIL);
-        completeOnboardHandler.handle(command(userId, NICKNAME));
+        completeOnboardingHandler.handle(command(userId, NICKNAME));
         // when & then
-        assertThatThrownBy(() -> completeOnboardHandler.handle(command(userId, "새러너")))
-                .isInstanceOf(AlreadyOnboardException.class);
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(command(userId, "새러너")))
+                .isInstanceOf(AlreadyOnboardingException.class);
         // 기존 닉네임이 덮어써지지 않는다
-        assertThat(onboardStore.findByUserId(userId).orElseThrow().getNickname().value())
+        assertThat(onboardingStore.findByUserId(userId).orElseThrow().getNickname().value())
                 .isEqualTo(NICKNAME);
     }
 
     @Test
     @DisplayName("다른 유저가 쓰고 있는 닉네임이면 NicknameAlreadyExistsException이 발생한다")
-    void onboardWithDuplicateNickname() {
+    void onboardingWithDuplicateNickname() {
         // given
         UUID first = signUp(EMAIL);
         UUID second = signUp("other@runiverse.com");
-        completeOnboardHandler.handle(command(first, NICKNAME));
+        completeOnboardingHandler.handle(command(first, NICKNAME));
         // when & then
-        assertThatThrownBy(() -> completeOnboardHandler.handle(command(second, NICKNAME)))
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(command(second, NICKNAME)))
                 .isInstanceOf(NicknameAlreadyExistsException.class);
 
-        assertThat(onboardStore.size()).isEqualTo(1);
+        assertThat(onboardingStore.size()).isEqualTo(1);
         assertThat(userStore.findById(second).orElseThrow().hasOnboarded()).isFalse();
     }
 
@@ -154,22 +154,22 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
         // given
         UUID first = signUp(EMAIL);
         UUID second = signUp("other@runiverse.com");
-        completeOnboardHandler.handle(command(first, NICKNAME));
+        completeOnboardingHandler.handle(command(first, NICKNAME));
         // when & then
-        assertThatThrownBy(() -> completeOnboardHandler.handle(command(second, "  " + NICKNAME + "  ")))
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(command(second, "  " + NICKNAME + "  ")))
                 .isInstanceOf(NicknameAlreadyExistsException.class);
     }
 
     @Test
     @DisplayName("닉네임이 규칙에 어긋나면 도메인 예외가 전파되고 아무것도 저장되지 않는다")
-    void onboardWithInvalidNickname() {
+    void onboardingWithInvalidNickname() {
         // given
         UUID userId = signUp(EMAIL);
         // when & then - 2자 미만
-        assertThatThrownBy(() -> completeOnboardHandler.handle(command(userId, "킴")))
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(command(userId, "킴")))
                 .isInstanceOf(InvalidNicknameLengthException.class);
 
-        assertThat(onboardStore.size()).isZero();
+        assertThat(onboardingStore.size()).isZero();
         assertThat(userStore.findById(userId).orElseThrow().hasOnboarded()).isFalse();
     }
 
@@ -178,12 +178,12 @@ public class CompleteOnboardIntegrationTest extends IntegrationTestSupport {
     void retryAfterValidationFailure() {
         // given
         UUID userId = signUp(EMAIL);
-        assertThatThrownBy(() -> completeOnboardHandler.handle(command(userId, "킴")))
+        assertThatThrownBy(() -> completeOnboardingHandler.handle(command(userId, "킴")))
                 .isInstanceOf(InvalidNicknameLengthException.class);
         // when
-        CompleteOnboardResult result = completeOnboardHandler.handle(command(userId, NICKNAME));
+        CompleteOnboardingResult result = completeOnboardingHandler.handle(command(userId, NICKNAME));
         // then
         assertThat(result.nickname()).isEqualTo(NICKNAME);
-        assertThat(onboardStore.size()).isEqualTo(1);
+        assertThat(onboardingStore.size()).isEqualTo(1);
     }
 }
