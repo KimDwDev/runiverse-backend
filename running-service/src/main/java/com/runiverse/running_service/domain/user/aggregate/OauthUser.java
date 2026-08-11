@@ -32,7 +32,6 @@ public class OauthUser {
         return provider == other;
     }
 
-    // userId와 provider 유저를 구분
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -41,11 +40,11 @@ public class OauthUser {
         if (!(o instanceof OauthUser other)) {
             return false;
         }
-        return userId.equals(other.userId) && provider == other.provider;
+        return userId.equals(other.userId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(userId, provider);
+        return Objects.hash(userId);
     }
 }
