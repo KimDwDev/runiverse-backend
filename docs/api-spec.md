@@ -12,19 +12,21 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 1 | POST | `/api/v1/auth/signup` | 로컬 회원가입 (이메일/비밀번호) |
-| 2 | POST | `/api/v1/auth/login` | 로컬 로그인 |
-| 3 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
-| 4 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
-| 5 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
-| 6 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) — 사용 화면: 설정 페이지 |
-| 7 | POST | `/api/v1/users/onboard` | 온보딩 입력 (닉네임 포함, 1회성) |
+| 1 | POST | `/api/v1/auth/email/verifications` | 이메일 인증번호(6자리) 발급 — 회원가입 1단계 |
+| 2 | POST | `/api/v1/auth/email/verifications/confirm` | 이메일 인증번호 확인 → `verificationTicket` 발급 — 회원가입 2단계 |
+| 3 | POST | `/api/v1/auth/signup` | 로컬 회원가입 (인증 티켓/비밀번호) — 가입 즉시 자동 로그인 |
+| 4 | POST | `/api/v1/auth/login` | 로컬 로그인 |
+| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
+| 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
+| 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
+| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) — 사용 화면: 설정 페이지 |
+| 9 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
 ### 2. 공통 — 디바이스/푸시
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 8 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
+| 10 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
 
 ### 3. 홈 화면
 
@@ -59,83 +61,83 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 9 | GET | `/api/v1/running-sessions/{runningSessionId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
-| 10 | GET | `/api/v1/running-sessions/{runningSessionId}/split-results` | 구간별 상세 + GPS 경로 |
+| 11 | GET | `/api/v1/running-sessions/{runningSessionId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
+| 12 | GET | `/api/v1/running-sessions/{runningSessionId}/split-results` | 구간별 상세 + GPS 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
-| 12 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
-| 13 | POST | `/api/v1/running-records/gps/presigned-url` | 솔로 러닝 GPS 트랙 업로드 URL |
-| 14 | POST | `/api/v1/running-records` | 솔로 러닝 완주 기록 저장 (매칭 없이 혼자) |
+| 13 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
+| 14 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
+| 15 | POST | `/api/v1/running-records/gps/presigned-url` | 솔로 러닝 GPS 트랙 업로드 URL |
+| 16 | POST | `/api/v1/running-records` | 솔로 러닝 완주 기록 저장 (매칭 없이 혼자) |
 
 ### 8. 대회 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 15 | GET | `/api/v1/contests` | 대회 목록 + 검색·필터(날짜/지역/거리). 상세 API 없음 — 목록에 `detailUrl` 포함(공식 홈페이지 이동) |
-| 16 | POST | `/api/v1/contests/{contestId}/bookmark` | 일정 추가(북마크) |
-| 17 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
-| 18 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
+| 17 | GET | `/api/v1/contests` | 대회 목록 + 검색·필터(날짜/지역/거리). 상세 API 없음 — 목록에 `detailUrl` 포함(공식 홈페이지 이동) |
+| 18 | POST | `/api/v1/contests/{contestId}/bookmark` | 일정 추가(북마크) |
+| 19 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
+| 20 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
 
 ### 9. 피드 목록 페이지 (+댓글 모달)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/feeds` | 피드 목록, `tab=FOLLOWING\|ALL`, 무한 스크롤 |
-| 20 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
-| 21 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 22 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 23 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 24 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 25 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 26 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 27 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 28 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 29 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
-| 30 | GET | `/api/v1/search` | 통합 검색 — 단일 엔드포인트, `?type=ACCOUNT\|POST&q=검색어` |
+| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FOLLOWING\|ALL`, 무한 스크롤 |
+| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
+| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 32 | GET | `/api/v1/search` | 통합 검색 — 단일 엔드포인트, `?type=ACCOUNT\|POST&q=검색어` |
 
 ### 10. 피드 작성 페이지 (+프로필의 피드 편집)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 31 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 32 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 33 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 34 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 33 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 34 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 35 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 36 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 11. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 35 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 36 | GET | `/api/v1/users/{userId}` | 프로필 요약 (누적 고도·마일리지 포함, 1차 전부 공개) |
-| 37 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 38 | GET | `/api/v1/users/{userId}/badges` | 뱃지 목록 (더보기 확장 포함) |
-| 39 | GET | `/api/v1/users/{userId}/grass` | 잔디 — 주별 러닝 횟수 `{week, count}` |
-| 40 | POST | `/api/v1/users/{userId}/follow` | 팔로우 — 사용 화면: 프로필, 팔로워/팔로잉 목록 |
-| 41 | DELETE | `/api/v1/users/{userId}/follow` | 언팔로우 |
-| 42 | GET | `/api/v1/users/{userId}/followers` | 팔로워 목록 (+이름 검색) |
-| 43 | GET | `/api/v1/users/{userId}/followings` | 팔로잉 목록 (+이름 검색) |
+| 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
+| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (누적 고도·마일리지 포함, 1차 전부 공개) |
+| 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
+| 40 | GET | `/api/v1/users/{userId}/badges` | 뱃지 목록 (더보기 확장 포함) |
+| 41 | GET | `/api/v1/users/{userId}/grass` | 잔디 — 주별 러닝 횟수 `{week, count}` |
+| 42 | POST | `/api/v1/users/{userId}/follow` | 팔로우 — 사용 화면: 프로필, 팔로워/팔로잉 목록 |
+| 43 | DELETE | `/api/v1/users/{userId}/follow` | 언팔로우 |
+| 44 | GET | `/api/v1/users/{userId}/followers` | 팔로워 목록 (+이름 검색) |
+| 45 | GET | `/api/v1/users/{userId}/followings` | 팔로잉 목록 (+이름 검색) |
 
 ### 12. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 44 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 45 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
+| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 47 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
 
 ### 13. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 46 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) 조회 — 공개범위 설정 2차 |
-| 47 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 48 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 48 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) 조회 — 공개범위 설정 2차 |
+| 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 48개 + WebSocket 채널 1개(메시지 13종)**
+**합계: REST 50개 + WebSocket 채널 1개(메시지 13종)**
 
 ---
 
@@ -206,33 +208,19 @@
 
 ## 1. 인증·온보딩
 
-### 1-1. `POST /api/v1/auth/signup` — 로컬 회원가입
+### 1-1. `POST /api/v1/auth/email/verifications` — 이메일 인증번호 발급
+
+로컬 회원가입 3단계(인증번호 발급 → 인증번호 확인 → 가입) 중 1단계. 입력한 이메일로 **6자리 숫자 인증 코드**를 메일 발송.
 
 - **Request**
 
 ```json
 {
-  "email": "example@example.com",   // 필수
-  "password": "********"            // 필수 (비밀번호 확인 일치 검증은 클라이언트)
+  "email": "example@example.com"   // 필수
 }
 ```
 
-- **Response `201 Created`** — **자동 로그인 없음**, 이어서 `POST /auth/login`
-
-```json
-{
-  "userId": "550e8400-e29b-41d4-a716-446655440001"
-}
-```
-
-- **에러 (409 Conflict)**
-
-```json
-{
-  "code": "EMAIL_ALREADY_EXISTS",
-  "message": "이미 가입된 이메일입니다."
-}
-```
+- **Response `204 No Content`** — 본문 없음
 
 - **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분
 
@@ -245,6 +233,141 @@
 {
   "code": "VALIDATION_FAILED",
   "message": "이메일은 필수입니다."
+}
+```
+
+- **에러 (409 Conflict)**
+
+```json
+{
+  "code": "EMAIL_ALREADY_EXISTS",
+  "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (429 Too Many Requests)**
+
+```json
+{
+  "code": "EMAIL_VERIFICATION_COOLDOWN",
+  "message": "인증 메일을 방금 보냈습니다. 잠시 후 다시 시도해 주세요."
+}
+
+{
+  "code": "EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED",
+  "message": "하루 인증 메일 발송 횟수를 초과했습니다."
+}
+```
+
+- **에러 (503 Service Unavailable)**
+
+```json
+{
+  "code": "EMAIL_SEND_FAILED",
+  "message": "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 1-2. `POST /api/v1/auth/email/verifications/confirm` — 이메일 인증번호 확인
+
+메일로 받은 코드를 검증하고, 회원가입에 쓸 **인증 티켓(`verificationTicket`)** 을 발급.
+
+- **Request**
+
+```json
+{
+  "email": "example@example.com",   // 필수
+  "code": "123456"                  // 필수 — 6자리 숫자(^\d{6}$), 공백 불가
+}
+```
+
+- **Response `200 OK`**
+
+```json
+{
+  "verificationTicket": "_YUW5lsbzTgNYp8-B6p73LnLjP6a4YgWlcQnaauHwhc"
+}
+```
+
+- `verificationTicket`: 회원가입에 사용할 인증 티켓 (URL-safe Base64, 43자). 발급 후 **30분** 유효, **1회용**
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분. 인증 코드 자체의 실패는 별도 `code`
+
+```json
+{
+  "code": "VALIDATION_FAILED",
+  "message": "올바른 이메일 형식이 아닙니다."
+}
+
+{
+  "code": "VALIDATION_FAILED",
+  "message": "이메일은 필수입니다."
+}
+
+{
+  "code": "VALIDATION_FAILED",
+  "message": "인증 코드는 6자리 숫자입니다."
+}
+
+{
+  "code": "VALIDATION_FAILED",
+  "message": "인증 코드는 필수입니다."
+}
+
+{
+  "code": "EMAIL_VERIFICATION_NOT_FOUND",
+  "message": "인증 코드가 만료되었습니다. 다시 요청해 주세요."
+}
+
+{
+  "code": "INVALID_VERIFICATION_CODE",
+  "message": "인증 코드가 올바르지 않습니다."
+}
+```
+
+- **에러 (429 Too Many Requests)**
+
+```json
+{
+  "code": "TOO_MANY_VERIFICATION_ATTEMPTS",
+  "message": "인증 시도 횟수를 초과했습니다. 코드를 다시 요청해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 1-3. `POST /api/v1/auth/signup` — 로컬 회원가입
+
+이메일 인증(1-1 → 1-2)으로 받은 티켓으로 가입. 이메일은 티켓에서 확인한 값을 쓰므로 요청에 담지 않는다.
+
+- **Request**
+
+```json
+{
+  "verificationTicket": "_YUW5lsbzTgNYp8-B6p73LnLjP6a4YgWlcQnaauHwhc",   // 필수 — 인증 확인 API에서 받은 티켓 원문
+  "password": "********"                                                  // 필수 — 6~16자, 영문·숫자·특수문자 각 1자 이상 (확인 일치 검증은 클라이언트)
+}
+```
+
+- **Response `201 Created`** — **자동 로그인** (로그인과 동일 형태로 토큰 발급)
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "accessToken": "ey...",
+  "refreshToken": "ey...",
+  "isOnboarded": false
+}
+```
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "VALIDATION_FAILED",
+  "message": "이메일 인증 티켓은 필수입니다."
 }
 
 {
@@ -263,9 +386,27 @@
 }
 ```
 
+- **에러 (403 Forbidden)**
+
+```json
+{
+  "code": "EMAIL_NOT_VERIFIED",
+  "message": "이메일 인증이 만료되었습니다. 다시 인증해 주세요."
+}
+```
+
+- **에러 (409 Conflict)**
+
+```json
+{
+  "code": "EMAIL_ALREADY_EXISTS",
+  "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
 - **인증**: 불필요
 
-### 1-2. `POST /api/v1/auth/login` — 로컬 로그인
+### 1-4. `POST /api/v1/auth/login` — 로컬 로그인
 
 - **Request** (둘 다 필수)
 
@@ -319,7 +460,7 @@
 
 - **인증**: 불필요
 
-### 1-3. `POST /api/v1/auth/oauth/google` / 1-4. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
+### 1-5. `POST /api/v1/auth/oauth/google` / 1-6. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
 
 - **Request** (둘 다 필수, 구글·카카오 공통)
 
@@ -331,7 +472,7 @@
 ```
 
 - **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
-- **Response `200 OK`**: 1-2 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`/`isOnboarded`) — 최초 가입 여부와 무관하게 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`/`isOnboarded`) — 최초 가입 여부와 무관하게 토큰 발급
 - **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
 
 ```json
@@ -371,7 +512,7 @@
 
 - **인증**: 불필요
 
-### 1-5. `POST /api/v1/auth/refresh` — 토큰 재발급
+### 1-7. `POST /api/v1/auth/refresh` — 토큰 재발급
 
 - **Request**: `{ "refreshToken": "ey..." }` (필수)
 - **Response `200 OK`**
@@ -404,14 +545,14 @@
 
 - **인증**: 불필요 (refreshToken 자체가 자격증명)
 
-### 1-6. `POST /api/v1/auth/logout` — 로그아웃
+### 1-8. `POST /api/v1/auth/logout` — 로그아웃
 
 - **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별. **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`)
 - **Response**: `204 No Content`
 
 - **인증**: 필요
 
-### 1-7. `POST /api/v1/users/onboard` — 온보딩 입력
+### 1-9. `POST /api/v1/users/onboarding` — 온보딩 입력
 
 - **Request** (전부 필수)
 
