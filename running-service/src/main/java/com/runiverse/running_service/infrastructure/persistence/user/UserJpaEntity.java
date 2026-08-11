@@ -55,6 +55,12 @@ public class UserJpaEntity {
     private ProfileVisibility profileVisibility;
 
     @Column(
+            name = "profile_image_key",
+            length = 255
+    )
+    private String profileImageKey;
+
+    @Column(
             name = "introduction",
             length = 100
     )
@@ -80,6 +86,7 @@ public class UserJpaEntity {
             String email,
             String passwordHash,
             boolean alertConsent,
+            String profileImageKey,
             ProfileVisibility profileVisibility,
             String introduction
     ) {
@@ -87,6 +94,7 @@ public class UserJpaEntity {
         this.email = email;
         this.passwordHash = passwordHash;
         this.alertConsent = alertConsent;
+        this.profileImageKey = profileImageKey;
         this.profileVisibility = profileVisibility;
         this.introduction = introduction;
     }
@@ -96,6 +104,7 @@ public class UserJpaEntity {
             String email,
             String passwordHash,
             boolean alertConsent,
+            String profileImageKey,
             ProfileVisibility profileVisibility,
             String introduction
     ) {
@@ -104,6 +113,7 @@ public class UserJpaEntity {
                 email,
                 passwordHash,
                 alertConsent,
+                profileImageKey,
                 profileVisibility,
                 introduction
         );

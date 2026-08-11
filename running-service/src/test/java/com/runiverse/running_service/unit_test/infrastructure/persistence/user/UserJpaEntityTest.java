@@ -23,6 +23,7 @@ public class UserJpaEntityTest {
                 "test@example.com",
                 "hashed-password",
                 false,
+                "profiles/" + userId + "/photo.jpg",
                 ProfileVisibility.PUBLIC,
                 "러닝을 종료합니다"
         );
@@ -32,6 +33,7 @@ public class UserJpaEntityTest {
         assertThat(entity.getEmail()).isEqualTo("test@example.com");
         assertThat(entity.getPasswordHash()).isEqualTo("hashed-password");
         assertThat(entity.isAlertConsent()).isFalse();
+        assertThat(entity.getProfileImageKey()).isEqualTo("profiles/" + userId + "/photo.jpg");
         assertThat(entity.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
         assertThat(entity.getIntroduction()).isEqualTo("러닝을 종료합니다");
     }

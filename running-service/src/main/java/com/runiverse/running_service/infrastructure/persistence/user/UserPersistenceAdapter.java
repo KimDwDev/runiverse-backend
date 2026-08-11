@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.user.port.out.SaveOnboardPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import jakarta.persistence.EntityManager;
@@ -51,6 +52,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 user.getEmail().value(),
                 emptyToNull(user.getPasswordHash().value()),
                 user.isAlertConsent(),
+                user.getProfileImageKey().map(ProfileImageKey::value).orElse(null),
                 user.getProfileVisibility(),
                 emptyToNull(user.getIntroduction().value())
         );
@@ -97,6 +99,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 entity.getEmail(),
                 Objects.requireNonNullElse(entity.getPasswordHash(), ""),
                 entity.isAlertConsent(),
+                entity.getProfileImageKey(),
                 entity.getProfileVisibility(),
                 Objects.requireNonNullElse(entity.getIntroduction(), "")
         );

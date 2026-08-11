@@ -5,6 +5,7 @@ import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
@@ -43,6 +44,10 @@ public class UserPersistenceAdapterTest {
     // PasswordHash VO가 Argon2id 형식만 허용하므로 형식에 맞는 값을 쓴다
     private static final String PASSWORD_HASH =
             "$argon2id$v=19$m=16384,t=2,p=1$c29tZXNhbHQ$aGFzaHZhbHVl";
+
+    private static String profileImageKeyOf(UUID userId) {
+        return "profiles/" + userId + "/photo.jpg";
+    }
 
     // 카카오 회원번호
     private static final String PROVIDER_ID = "1234567890";
@@ -114,7 +119,7 @@ public class UserPersistenceAdapterTest {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
 
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, email, PASSWORD_HASH, true, ProfileVisibility.FRIENDS, "러닝을 좋아합니다"
+                userId, email, PASSWORD_HASH, true, profileImageKeyOf(userId), ProfileVisibility.FRIENDS, "러닝을 좋아합니다"
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -130,6 +135,9 @@ public class UserPersistenceAdapterTest {
         assertThat(user.getEmail().value()).isEqualTo(email);
         assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
         assertThat(user.isAlertConsent()).isTrue();
+        assertThat(user.getProfileImageKey())
+                .map(ProfileImageKey::value)
+                .contains(profileImageKeyOf(userId));
         assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.FRIENDS);
         assertThat(user.getIntroduction().value()).isEqualTo("러닝을 좋아합니다");
     }
@@ -156,7 +164,7 @@ public class UserPersistenceAdapterTest {
         String email = "test@example.com";
 
         UserJpaEntity entity = UserJpaEntity.create(
-                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, ProfileVisibility.PUBLIC, null
+                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, null, ProfileVisibility.PUBLIC, null
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -175,7 +183,7 @@ public class UserPersistenceAdapterTest {
         // given -> 소셜 전용 계정은 hash_password와 introduction이 NULL로 저장된다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "kakao@example.com", null, false, ProfileVisibility.PUBLIC, null
+                userId, "kakao@example.com", null, false, null, ProfileVisibility.PUBLIC, null
         );
 
         givenProviderQueryReturns(PROVIDER_ID, Stream.of(entity));
@@ -193,6 +201,9 @@ public class UserPersistenceAdapterTest {
         // NULL은 도메인이 허용하지 않으므로 빈 문자열로 복원되어야 한다
         assertThat(user.getPasswordHash().value()).isEmpty();
         assertThat(user.getIntroduction().value()).isEmpty();
+
+        // 사진은 빈 문자열이 아니라 빈 Optional로 복원된다
+        assertThat(user.getProfileImageKey()).isEmpty();
     }
 
     @Test
@@ -273,6 +284,44 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("신규 유저를 저장하면 profile_image_key는 NULL로 저장된다")
+    void savePersistsNullProfileImageKeyForNewUser() {
+        // given -> 가입 시점에는 프로필 사진이 없다
+        User user = new User(
+                UuidCreator.getTimeOrderedEpoch(), "local@example.com", PASSWORD_HASH
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("프로필 사진이 있는 유저를 저장하면 profile_image_key에 key가 채워진다")
+    void savePersistsProfileImageKey() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        User user = new User(
+                userId, "local@example.com", PASSWORD_HASH, false,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileImageKey()).isEqualTo(profileImageKeyOf(userId));
+    }
+
+    @Test
     @DisplayName("소셜 연결이 없는 로컬 유저는 users 행만 저장한다")
     void saveLocalUserPersistsOnlyUserRow() {
         // given
@@ -294,7 +343,7 @@ public class UserPersistenceAdapterTest {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "test@example.com", PASSWORD_HASH, false, ProfileVisibility.PUBLIC, null
+                userId, "test@example.com", PASSWORD_HASH, false, null, ProfileVisibility.PUBLIC, null
         );
 
         when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);

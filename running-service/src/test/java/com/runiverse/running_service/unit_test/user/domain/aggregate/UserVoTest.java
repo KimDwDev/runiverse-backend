@@ -9,10 +9,13 @@ import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatExc
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
 import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyRequiredException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyTooLongException;
 import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Email;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -384,6 +387,92 @@ public class UserVoTest {
             // given
             Introduction first = new Introduction("함께 달려요!");
             Introduction second = new Introduction("함께 달려요!");
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first).isNotSameAs(second);
+        }
+    }
+
+    // ProfileImageKey 테스트
+    @Nested
+    @DisplayName("ProfileImageKey 테스트")
+    class ProfileImageKeyTest {
+
+        private static final String KEY = "profiles/0190a5b4-3c2d-7e1f-8a2b-123456789abc/photo.jpg";
+
+        @Test
+        @DisplayName("255자 이하의 키는 생성할 수 있다")
+        void createProfileImageKeySuccess() {
+            // when
+            ProfileImageKey key = new ProfileImageKey(KEY);
+
+            // then
+            assertThat(key.value()).isEqualTo(KEY);
+        }
+
+        @Test
+        @DisplayName("앞뒤 공백은 제거된다")
+        void createProfileImageKeyTrimsWhitespace() {
+            // when
+            ProfileImageKey key = new ProfileImageKey("  " + KEY + "  ");
+
+            // then
+            assertThat(key.value()).isEqualTo(KEY);
+        }
+
+        @Test
+        @DisplayName("키가 정확히 255자이면 생성할 수 있다")
+        void createProfileImageKeyWithMaxLengthSuccess() {
+            // given
+            String value = "a".repeat(255);
+
+            // when
+            ProfileImageKey key = new ProfileImageKey(value);
+
+            // then
+            assertThat(key.value()).hasSize(255);
+        }
+
+        @Test
+        @DisplayName("키가 255자를 초과하면 예외가 발생한다")
+        void createProfileImageKeyOverMaxLengthFails() {
+            // given
+            String value = "a".repeat(256);
+
+            // when & then
+            assertThatThrownBy(() -> new ProfileImageKey(value))
+                    .isInstanceOf(ProfileImageKeyTooLongException.class);
+        }
+
+        @Test
+        @DisplayName("키가 null이면 예외가 발생한다")
+        void createProfileImageKeyWithNullFails() {
+            // when & then -> 사진 없음은 VO가 아니라 null 필드로 표현한다
+            assertThatThrownBy(() -> new ProfileImageKey(null))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("키가 빈 문자열이거나 공백뿐이면 예외가 발생한다")
+        void createProfileImageKeyWithBlankFails() {
+            // when & then
+            assertThatThrownBy(() -> new ProfileImageKey(""))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+
+            assertThatThrownBy(() -> new ProfileImageKey("   "))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("같은 키를 가진 ProfileImageKey는 같은 값 객체이다")
+        void profileImageKeyEqualsTest() {
+            // given
+            ProfileImageKey first = new ProfileImageKey(KEY);
+            ProfileImageKey second = new ProfileImageKey(KEY);
 
             // then
             assertThat(first)

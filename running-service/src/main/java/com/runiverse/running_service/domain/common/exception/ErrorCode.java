@@ -17,6 +17,8 @@ public enum ErrorCode {
     INTRODUCTION_REQUIRED("INTRODUCTION_REQUIRED", "소개는 null일 수 없습니다."),
     INTRODUCTION_TOO_LONG("INTRODUCTION_TOO_LONG", "소개는 100자를 초과할 수 없습니다."),
     PROFILE_VISIBILITY_REQUIRED("PROFILE_VISIBILITY_REQUIRED", "프로필 공개 범위는 필수입니다."),
+    PROFILE_IMAGE_KEY_REQUIRED("PROFILE_IMAGE_KEY_REQUIRED", "프로필 이미지 키는 null일 수 없습니다."),
+    PROFILE_IMAGE_KEY_TOO_LONG("PROFILE_IMAGE_KEY_TOO_LONG", "프로필 이미지 키는 255자를 초과할 수 없습니다."),
     NICKNAME_REQUIRED("NICKNAME_REQUIRED", "닉네임은 필수입니다."),
     INVALID_NICKNAME_FORMAT("INVALID_NICKNAME_FORMAT", "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."),
     INVALID_NICKNAME_LENGTH("INVALID_NICKNAME_LENGTH", "닉네임은 2자 이상 16자 이하로 작성해주시길 바랍니다."),

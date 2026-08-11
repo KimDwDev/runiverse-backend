@@ -9,6 +9,7 @@ import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequ
 import com.runiverse.running_service.domain.user.vo.Email;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
@@ -27,6 +28,7 @@ public class User {
     private final PasswordHash passwordHash;
     private final boolean alertConsent;
     private final ProfileVisibility profileVisibility;
+    private final ProfileImageKey profileImageKey;
     private final Introduction introduction;
 
     // 내부 저장
@@ -36,7 +38,7 @@ public class User {
     private UserOnboard onboard;
 
     // 생성자 부분 작성
-    public User(UUID userId, String email, String passwordHash, boolean alertConsent,
+    public User(UUID userId, String email, String passwordHash, boolean alertConsent, String profileImageKey,
                 ProfileVisibility profileVisibility, String introduction) {
         this.userId = new UserId(userId);
         this.email = new Email(email);
@@ -45,23 +47,28 @@ public class User {
         if (profileVisibility == null) {   // 값 변환은 application에서 검증
             throw new ProfileVisibilityRequiredException();
         }
+        this.profileImageKey = profileImageKey == null ? null : new ProfileImageKey(profileImageKey);
         this.profileVisibility = profileVisibility;
         this.introduction = new Introduction(introduction);
     }
 
     // 로컬 회원가입 할때 사용하는 생성자
     public User(UUID userId, String email, String passwordHash, boolean alertConsent) {
-        this(userId, email, passwordHash, alertConsent, ProfileVisibility.PUBLIC, "");
+        this(userId, email, passwordHash, alertConsent, null, ProfileVisibility.PUBLIC, "");
     }
 
     // alertConsent, introduction이 없는 경우
     public User(UUID userId, String email, String passwordHash) {
-        this(userId, email, passwordHash, false, ProfileVisibility.PUBLIC, "");
+        this(userId, email, passwordHash, false, null, ProfileVisibility.PUBLIC, "");
     }
 
     // oauth로 회원가입 할때 사용하는 생성자
     public User(UUID userId, String email) {
-        this(userId, email, "", false, ProfileVisibility.PUBLIC, "");
+        this(userId, email, "", false, null, ProfileVisibility.PUBLIC, "");
+    }
+
+    public Optional<ProfileImageKey> getProfileImageKey() {
+        return Optional.ofNullable(profileImageKey);
     }
 
     // 소셜 회원가입: 유저 생성과 연결을 진행

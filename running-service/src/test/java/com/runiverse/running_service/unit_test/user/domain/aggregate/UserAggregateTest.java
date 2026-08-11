@@ -5,7 +5,9 @@ import com.runiverse.running_service.domain.user.exception.IntroductionTooLongEx
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequiredException;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -24,6 +26,7 @@ public class UserAggregateTest {
             "$argon2id$v=19$m=65536,t=3,p=1$"
                     + "c29tZXNhbHQ$"
                     + "c29tZWhhc2h2YWx1ZQ";
+    private static final String PROFILE_IMAGE_KEY = "profiles/0190a5b4-3c2d-7e1f-8a2b-123456789abc/photo.jpg";
 
     @Nested
     @DisplayName("전체 생성자 테스트")
@@ -42,6 +45,7 @@ public class UserAggregateTest {
                     EMAIL,
                     PASSWORD_HASH,
                     alertConsent,
+                    PROFILE_IMAGE_KEY,
                     ProfileVisibility.FRIENDS,
                     introduction
             );
@@ -51,6 +55,9 @@ public class UserAggregateTest {
             assertThat(user.getEmail().value()).isEqualTo(EMAIL);
             assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
             assertThat(user.isAlertConsent()).isTrue();
+            assertThat(user.getProfileImageKey())
+                    .map(ProfileImageKey::value)
+                    .contains(PROFILE_IMAGE_KEY);
             assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.FRIENDS);
             assertThat(user.getIntroduction().value()).isEqualTo(introduction);
         }
@@ -79,6 +86,7 @@ public class UserAggregateTest {
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isTrue();
                 assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
                 assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
@@ -99,6 +107,7 @@ public class UserAggregateTest {
                 assertThat(user.getPasswordHash().value()).isEmpty();
                 assertThat(user.isAlertConsent()).isFalse();
                 assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
                 assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
@@ -123,6 +132,7 @@ public class UserAggregateTest {
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
                 assertThat(user.isAlertConsent()).isFalse();
                 assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+                assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
                 assertThat(user.getIntroduction().value()).isEmpty();
             }
         }
@@ -196,6 +206,7 @@ public class UserAggregateTest {
                                 EMAIL,
                                 PASSWORD_HASH,
                                 false,
+                                null,
                                 ProfileVisibility.PUBLIC,
                                 longIntroduction
                         )
@@ -215,11 +226,33 @@ public class UserAggregateTest {
                                 PASSWORD_HASH,
                                 false,
                                 null,
+                                null,
                                 ""
                         )
                 )
                         .isInstanceOf(ProfileVisibilityRequiredException.class)
                         .hasMessage("프로필 공개 범위는 필수입니다.");
+            }
+
+            @Test
+            @DisplayName("프로필 이미지 키가 비어 있으면 사용자 생성에 실패한다")
+            void createUserWithBlankProfileImageKeyFails() {
+                // given -> 사진 없음은 null로 표현하고, 빈 문자열은 잘못된 입력으로 본다
+                String blankKey = "   ";
+
+                // when & then
+                assertThatThrownBy(
+                        () -> new User(
+                                USER_ID,
+                                EMAIL,
+                                PASSWORD_HASH,
+                                false,
+                                blankKey,
+                                ProfileVisibility.PUBLIC,
+                                ""
+                        )
+                )
+                        .isInstanceOf(ProfileImageKeyRequiredException.class);
             }
         }
     }
