@@ -49,8 +49,8 @@ public class GlobalExceptionHandler {
         log.warn("요청 검증 실패: {}", message);
         return respond(
                 HttpStatus.BAD_REQUEST,
-                CommonErrorCode.INVALID_REQUEST.getCode(),
-                message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
+                CommonErrorCode.VALIDATION_FAILED.getCode(),
+                message.isBlank() ? CommonErrorCode.VALIDATION_FAILED.getMessage() : message
         );
     }
 
