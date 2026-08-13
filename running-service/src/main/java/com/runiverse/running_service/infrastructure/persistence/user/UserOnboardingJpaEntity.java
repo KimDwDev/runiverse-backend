@@ -44,17 +44,23 @@ public class UserOnboardingJpaEntity extends BaseTimeEntity {
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
+
     @Column(name = "nickname", nullable = false, length = 16)
     private String nickname;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "gender", nullable = false, length = 10)
     private Gender gender;
+
     @Column(name = "birthday", nullable = false)
     private LocalDate birthday;
+
     @Column(name = "avg_pace", nullable = false)
     private int avgPace;
+
     @Column(name = "weight", nullable = false, precision = 4, scale = 1)
     private BigDecimal weight;
+
     @Column(name = "height", nullable = false, precision = 4, scale = 1)
     private BigDecimal height;
 

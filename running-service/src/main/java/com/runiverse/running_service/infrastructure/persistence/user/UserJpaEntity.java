@@ -24,44 +24,23 @@ public class UserJpaEntity extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Column(
-            name = "email",
-            nullable = false,
-            unique = true,
-            length = 255
-    )
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(
-            name = "password_hash",
-            length = 255
-    )
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
-    @Column(
-            name = "alert_consent",
-            nullable = false
-    )
+    @Column(name = "alert_consent", nullable = false)
     private boolean alertConsent;
 
     @Enumerated(EnumType.STRING)
-    @Column(
-            name = "profile_visibility",
-            nullable = false,
-            length = 20
-    )
+    @Column(name = "profile_visibility", nullable = false, length = 20)
     private ProfileVisibility profileVisibility;
 
-    @Column(
-            name = "profile_image_key",
-            length = 255
-    )
+    @Column(name = "profile_image_key", length = 255)
     private String profileImageKey;
 
-    @Column(
-            name = "introduction",
-            length = 100
-    )
+    @Column(name = "introduction", length = 100)
     private String introduction;
 
     private UserJpaEntity(
