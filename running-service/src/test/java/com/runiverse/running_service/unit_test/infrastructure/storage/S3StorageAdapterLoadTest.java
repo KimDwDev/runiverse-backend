@@ -32,6 +32,7 @@ public class S3StorageAdapterLoadTest {
     private static final String REGION = "ap-northeast-2";
     private static final String BUCKET = "runiverse-test-bucket";
     private static final Duration TTL = Duration.ofMinutes(10);
+    private static final Duration VIEW_TTL = Duration.ofHours(1);
     private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2.jpg";
 
     @Mock
@@ -42,7 +43,7 @@ public class S3StorageAdapterLoadTest {
     @BeforeEach
     void setUp() {
         // 조회 경로는 presigner를 쓰지 않는다. 호출되면 NPE로 드러나도록 null을 넣는다
-        adapter = new S3StorageAdapter(null, new S3Properties(REGION, BUCKET, TTL, null, null), s3Client);
+        adapter = new S3StorageAdapter(null, new S3Properties(REGION, BUCKET, TTL, VIEW_TTL, null, null), s3Client);
     }
 
     @Test

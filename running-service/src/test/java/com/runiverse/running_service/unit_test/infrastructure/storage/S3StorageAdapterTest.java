@@ -23,6 +23,7 @@ public class S3StorageAdapterTest {
     private static final String REGION = "ap-northeast-2";
     private static final String BUCKET = "runiverse-test-bucket";
     private static final Duration TTL = Duration.ofMinutes(10);
+    private static final Duration VIEW_TTL = Duration.ofHours(1);
     private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2-0000-7000-8000" +
             "-000000000002.jpg";
     private static final String CONTENT_TYPE = "image/jpeg";
@@ -39,7 +40,7 @@ public class S3StorageAdapterTest {
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create("AKIATESTTESTTESTTEST", "test-secret-key")))
                 .build();
-        adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, null, null), null);
+        adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, VIEW_TTL, null, null), null);
     }
 
     @AfterEach
