@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,17 +11,14 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
 @Entity
 @Table(name = "users")
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // 다른 객체에서 생성되지 않도록 하는 속성
-public class UserJpaEntity {
+public class UserJpaEntity extends BaseTimeJpaEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
@@ -65,21 +63,6 @@ public class UserJpaEntity {
             length = 100
     )
     private String introduction;
-
-    @CreationTimestamp
-    @Column(
-            name = "created_at",
-            nullable = false,
-            updatable = false
-    )
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(
-            name = "updated_at",
-            nullable = false
-    )
-    private LocalDateTime updatedAt;
 
     private UserJpaEntity(
             UUID userId,

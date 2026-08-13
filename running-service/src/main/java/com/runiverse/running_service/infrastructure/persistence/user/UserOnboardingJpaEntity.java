@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,14 +17,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Check;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -41,7 +39,7 @@ import java.util.UUID;
 @Check(name = "ck_user_onboarding_weight", constraints = "weight between 20.0 and 300.0")
 @Check(name = "ck_user_onboarding_height", constraints = "height between 20.0 and 300.0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserOnboardingJpaEntity {
+public class UserOnboardingJpaEntity extends BaseTimeJpaEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
@@ -59,12 +57,6 @@ public class UserOnboardingJpaEntity {
     private BigDecimal weight;
     @Column(name = "height", nullable = false, precision = 4, scale = 1)
     private BigDecimal height;
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     private UserOnboardingJpaEntity(UUID userId, String nickname, Gender gender, LocalDate birthday,
                                     int avgPace, BigDecimal weight, BigDecimal height) {
