@@ -5,8 +5,8 @@ import com.runiverse.running_service.application.auth.command.login.LoginHandler
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
 import com.runiverse.running_service.application.auth.command.logout.LogoutCommand;
 import com.runiverse.running_service.application.auth.command.logout.LogoutHandler;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueHandler;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshCommand;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
@@ -29,7 +29,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
     private static final String ACCESS_TOKEN_ID = "jti-access-1";
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
-    private ReissueHandler reissueHandler;
+    private RefreshHandler refreshHandler;
     private LogoutHandler logoutHandler;
 
     @BeforeEach
@@ -38,7 +38,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
                 tokenProvider, refreshTokenStore, onboardingStore);
-        reissueHandler = new ReissueHandler(
+        refreshHandler = new RefreshHandler(
                 tokenProvider, refreshTokenStore, tokenProvider,
                 refreshTokenStore, tokenProvider, refreshTokenStore);
         logoutHandler = new LogoutHandler(
@@ -66,12 +66,12 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
 
     @Test
     @DisplayName("로그아웃한 뒤에는 기존 refresh token으로 재발급할 수 없다")
-    void reissueAfterLogoutFails() {
+    void refreshAfterLogoutFails() {
         // given
         LoginResult login = signUpAndLogin();
         logoutHandler.handle(new LogoutCommand(login.userId(), ACCESS_TOKEN_ID));
         // when & then
-        assertThatThrownBy(() -> reissueHandler.handle(new ReissueCommand(login.refreshToken())))
+        assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand(login.refreshToken())))
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
