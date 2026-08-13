@@ -1537,6 +1537,11 @@
   "code": "VALIDATION_FAILED",
   "message": "입력값이 올바르지 않습니다."
 }
+
+{
+  "code": "REPLY_DEPTH_EXCEEDED",
+  "message": "답글에는 답글을 달 수 없습니다."
+}
 ```
 
 - **인증**: 필요
@@ -1691,6 +1696,11 @@
 {
   "code": "VALIDATION_FAILED",
   "message": "입력값이 올바르지 않습니다."
+}
+
+{
+  "code": "EMPTY_FEED",
+  "message": "피드 내용이나 이미지를 최소 하나 입력해 주세요."
 }
 ```
 
@@ -1993,6 +2003,6 @@
 ### 13-3. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_badges`/`user_running_contests` + 본인 `user_follow_stats`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_badges`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄) + 본인 `user_follow_stats`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

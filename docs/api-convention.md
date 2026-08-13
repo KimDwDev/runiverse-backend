@@ -6,7 +6,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - Base path: `/api/v1`
 - 필드명: JSON 요청/응답은 camelCase — DB 컬럼은 snake_case 유지, 백엔드에서 매핑한다.
-- ID 타입: `userId`만 UUID, 그 외 ID는 Long.
+- ID 타입: `userId`만 UUID, 그 외 **리소스 ID**(`feedId`·`commentId`·`contestId`·`runningRecordId`·`runningSessionId`·`badgeId` 등 서버가 발급하는 PK)는 Long. 클라이언트가 만드는 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열.
 - 날짜/시간: ISO 8601 `yyyy-MM-ddTHH:mm:ss` — KST 기준, 오프셋 없이 초 단위까지 (예: `2026-07-20T13:00:00`). 저장도 KST(`TimeZoneConfig`), 직렬화 형식은 `JacksonConfig`가 고정한다.
 - enum: DB·API 동일한 영문 코드 (예: `"visibility": "PUBLIC"`) — 변환 매핑 없음, 값 목록은 [erd.md](erd.md) §6(enum 사전).
 
@@ -30,6 +30,6 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 ## 물리량 단위
 
-- 단위 접미사는 풀네임으로 명시한다: `...Meters` / `...Seconds` / `...SecondsPerKm` / `...MetersPerSecond` / `...Degrees` / `...Kg` / `...Cm` — 통용어 `Spm`(케이던스)만 약어를 허용한다.
+- 단위 접미사는 풀네임으로 명시한다: `...Meters` / `...Seconds` / `...SecondsPerKm` / `...MetersPerSecond` / `...Degrees` / `...Kg` / `...Cm` / `...Kcal` — 통용 단위 기호 `Spm`(케이던스)·`Kcal`(칼로리)만 약어를 허용한다.
 - 거리는 전부 미터로 통일하고(km 표시는 프론트 포맷팅), 페이스는 초/km 정수로 쓴다(`390` → "6:30" 표시).
-- 예: `totalDistanceMeters`, `averagePaceSecondsPerKm`, `speedMetersPerSecond`, `weightKg`
+- 예: `totalDistanceMeters`, `averagePaceSecondsPerKm`, `speedMetersPerSecond`, `weightKg`, `caloriesKcal`

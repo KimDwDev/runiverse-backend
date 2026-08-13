@@ -76,7 +76,7 @@
 
 - 본인 경로 확인: 달린 경로 지도 표시.
 - 참가자 공통 정보: 참가자별 러닝 시간·이동 거리.
-- 참가자 상세 정보: 평균 페이스·최고 페이스·소모 칼로리·평균 케이던스·고도·구간별 평균 페이스. 같은 방 참가자끼리는 서로의 상세 기록 열람 가능(본인 제한 없음). GPS 트랙 저장 방식은 2번 도메인 제약 참고.
+- 참가자 상세 정보: 평균 페이스·소모 칼로리·평균 케이던스·고도·구간별 평균 페이스. 같은 방 참가자끼리는 서로의 상세 기록 열람 가능(본인 제한 없음). GPS 트랙 저장 방식은 2번 도메인 제약 참고.
 
 ### 기록·대회
 
@@ -184,7 +184,10 @@
 
 **이미지 업로드**(`feed_images`, `users.profile_image_key` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
 
-**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드하고 `running_records.gps_track_key`로 참조. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_records` 저장.
+**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. 저장 주체는 러닝 종류에 따라 다름.
+
+- **매칭 러닝**: 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_records` 저장.
+- **솔로 러닝**(매칭 없이 혼자, `running_players`/`running_rooms` 없이 `running_records`만 생성): 클라이언트가 로컬로 트랙을 추적하고 종료 후 presigned URL로 S3에 직접 업로드한 뒤 기록 저장 API를 호출 — api-spec 7-3·7-4.
 
 **피드-러닝 기록 연결**: `feeds.running_record_id`는 `running_records` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
 
@@ -206,7 +209,7 @@
 
 - **유지**: `feeds`, `comments`, `running_records`(+`running_splits`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
 - **유지 (카운트 재계산 안 함)**: `feed_likes`, `comment_likes` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `follows`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stats`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_badges`, `user_running_contests`
+- **즉시 삭제**: `follows`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stats`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_badges`, `user_running_contests`, `running_players`(연결 테이블 `running_room_sessions`은 FK `ON DELETE CASCADE`로 연쇄)
 - `follows` CASCADE 삭제로 어긋나는 상대방들의 `user_follow_stats` follower/following_count는 탈퇴 트랜잭션에서 즉시 재계산(감소 반영) — `follows`는 row가 삭제돼 목록과 수가 일치해야 하기 때문(`feed_likes`는 row 유지라 카운트 유지 — 기준이 다름).
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):

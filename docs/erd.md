@@ -129,7 +129,7 @@
 | cadence | int | nullable | spm (선택) |
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
-| gps_track_key | varchar | NOT NULL | S3 key (Redis 버퍼→S3 업로드). 2차 실내러닝 시 nullable |
+| gps_track_key | varchar | NOT NULL | S3 key. 매칭=서버 업로드(Redis 버퍼→S3), 솔로=클라 업로드(presigned URL). 2차 실내러닝 시 nullable |
 | route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — 피드 카드 지도 미리보기용. 매칭=서버 생성(Redis 버퍼), 솔로=클라 제출. 2차 실내러닝 시 nullable |
 | start_date / end_date | timestamp | NOT NULL | |
 | start_lat / start_lng / end_lat / end_lng | double precision | NOT NULL | |
@@ -259,7 +259,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_contests_id | bigint | PK | |
+| running_contest_id | bigint | PK | API `contestId` |
 | name | varchar | NOT NULL | |
 | region / venue | varchar | nullable | |
 | event_date | date | NOT NULL | |
@@ -274,7 +274,7 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | user_id | UUID | PK1, FK → users | |
-| running_contests_id | bigint | PK2, FK → running_contests | |
+| running_contest_id | bigint | PK2, FK → running_contests | |
 | created_at | timestamp | NOT NULL | 관심 대회 북마크(참가 신청 아님, 단순 연결) |
 
 ---
