@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class CreateProfileImageUploadUrlHandle implements CreateProfileImageUploadUrlUsecase {
+public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUploadUrlUsecase {
 
     private static final String KEY_PREFIX = "profiles";
     private final GenerateProfileImageIdPort generateProfileImageIdPort;
