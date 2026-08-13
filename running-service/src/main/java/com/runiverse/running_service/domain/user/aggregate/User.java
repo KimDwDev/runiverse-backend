@@ -28,7 +28,7 @@ public class User {
     private final PasswordHash passwordHash;
     private final boolean alertConsent;
     private final ProfileVisibility profileVisibility;
-    private final ProfileImageKey profileImageKey;
+    private ProfileImageKey profileImageKey;
     private final Introduction introduction;
 
     // 내부 저장
@@ -131,5 +131,9 @@ public class User {
 
     public Optional<UserOnboarding> getOnboarding() {
         return Optional.ofNullable(onboarding);
+    }
+
+    public void changeProfileImage(String profileImageKey) {
+        this.profileImageKey = new ProfileImageKey(profileImageKey);
     }
 }
