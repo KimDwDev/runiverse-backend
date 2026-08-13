@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.Gender;
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -39,7 +39,7 @@ import java.util.UUID;
 @Check(name = "ck_user_onboarding_weight", constraints = "weight between 20.0 and 300.0")
 @Check(name = "ck_user_onboarding_height", constraints = "height between 20.0 and 300.0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserOnboardingJpaEntity extends BaseTimeJpaEntity {
+public class UserOnboardingJpaEntity extends BaseTimeEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)

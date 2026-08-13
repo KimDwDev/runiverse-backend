@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -31,7 +31,7 @@ import java.util.UUID;
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OauthUserJpaEntity extends BaseTimeJpaEntity {
+public class OauthUserJpaEntity extends BaseTimeEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)

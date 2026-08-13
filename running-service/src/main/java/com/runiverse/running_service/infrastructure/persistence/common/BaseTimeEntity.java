@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Getter
 @MappedSuperclass
-public abstract class BaseTimeJpaEntity extends BaseCreatedAtJpaEntity {
+public abstract class BaseTimeEntity extends BaseCreatedAtEntity {
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)

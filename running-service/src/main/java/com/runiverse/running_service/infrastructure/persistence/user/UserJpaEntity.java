@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // 다른 객체에서 생성되지 않도록 하는 속성
-public class UserJpaEntity extends BaseTimeJpaEntity {
+public class UserJpaEntity extends BaseTimeEntity {
 
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)

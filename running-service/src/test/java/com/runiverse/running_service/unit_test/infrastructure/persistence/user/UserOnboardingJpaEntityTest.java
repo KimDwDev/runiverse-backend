@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.Checks;
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -115,10 +115,10 @@ public class UserOnboardingJpaEntityTest {
         }
 
         @Test
-        @DisplayName("타임스탬프는 BaseTimeJpaEntity에서 상속받는다")
+        @DisplayName("타임스탬프는 BaseTimeEntity에서 상속받는다")
         void inheritsTimestampsFromBaseEntity() {
-            // when & then -> 어노테이션 자체는 BaseTimeJpaEntityTest가 검증한다
-            assertThat(UserOnboardingJpaEntity.class.getSuperclass()).isEqualTo(BaseTimeJpaEntity.class);
+            // when & then -> 어노테이션 자체는 BaseTimeEntityTest가 검증한다
+            assertThat(UserOnboardingJpaEntity.class.getSuperclass()).isEqualTo(BaseTimeEntity.class);
         }
     }
 
