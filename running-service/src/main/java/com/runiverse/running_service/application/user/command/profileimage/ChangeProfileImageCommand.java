@@ -1,5 +1,10 @@
 package com.runiverse.running_service.application.user.command.profileimage;
 
-public record ChangeProfileImageCommand() {
+import java.util.UUID;
+
+public record ChangeProfileImageCommand(
+        UUID userId,
+        String profileImageKey
+) {
 
 }
