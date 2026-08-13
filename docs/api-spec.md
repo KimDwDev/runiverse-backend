@@ -147,7 +147,7 @@
 
 - **인증**: `Authorization: Bearer {accessToken}` 헤더. Access+Refresh 토큰 이원화, **refresh rotation** — 재발급 시 accessToken·refreshToken 모두 교체(이전 refreshToken 무효). refreshToken은 **바디 전달 + 클라 Keychain/Keystore 보관**. **로그아웃 시 해당 access 토큰은 서버 차단(블랙리스트)**
 - **페이지네이션 limit**: `?limit=` 생략 시 기본 **20**, 최대 **50**(초과 요청은 50으로 클램프)
-- **시각**: 시점은 ISO 8601 **UTC `Z`**(예: `2026-07-20T04:00:00Z`), 달력 날짜(생일·대회 일정)는 시각·시간대 없는 `YYYY-MM-DD`
+- **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜(생일·대회 일정)는 `YYYY-MM-DD`
 - **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
 - **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 팔로우·좋아요는 갱신 상태·카운트 포함 `200 OK`, 대회 북마크는 `204 No Content`
 - **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
@@ -754,7 +754,7 @@
 
 ```json
 {
-  "scheduledStartAt": "2026-07-25T10:00:00Z",  // 희망 시작 시각
+  "scheduledStartAt": "2026-07-25T10:00:00",  // 희망 시작 시각
   "targetDistanceMeters": 5000                  // 목표 거리(m)
 }
 ```
@@ -805,7 +805,7 @@
 {
   "runningSessionId": 125,
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
-  "scheduledStartAt": "2026-07-25T10:00:00Z",
+  "scheduledStartAt": "2026-07-25T10:00:00",
   "targetDistanceMeters": 5000,
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
@@ -850,7 +850,7 @@
   "runningSessionId": 125,
   "userId": "550e8400-e29b-41d4-a716-446655440015",
   "emojiType": "CHEER",
-  "sentAt": "2026-07-25T10:10:15Z"
+  "sentAt": "2026-07-25T10:10:15"
 }
 ```
 
@@ -921,7 +921,7 @@
     "headingDegrees": 85.3,            // 0~360
     "cadenceSpm": 165,
     "currentPaceSecondsPerKm": 345,
-    "recordedAt": "2026-07-25T10:10:30Z"   // 측정 시각
+    "recordedAt": "2026-07-25T10:10:30"   // 측정 시각
   }
 }
 ```
@@ -979,8 +979,8 @@
 ```json
 {
   "runningSessionId": 125,
-  "startedAt": "2026-07-25T10:00:30Z",
-  "finishedAt": "2026-07-25T10:30:30Z",
+  "startedAt": "2026-07-25T10:00:30",
+  "finishedAt": "2026-07-25T10:30:30",
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1066,8 +1066,8 @@
   "runningSessionId": 125,
   "splitDistanceMeters": 1000,          // 기본 구간 거리
   "totalDistanceMeters": 5020,          // 현재 사용자 총 거리
-  "startedAt": "2026-07-25T10:00:30Z",
-  "finishedAt": "2026-07-25T10:30:30Z",
+  "startedAt": "2026-07-25T10:00:30",
+  "finishedAt": "2026-07-25T10:30:30",
   "route": {                             // 현재 사용자의 전체 경로
     "startLocation": {
       "latitude": 35.1795543,
@@ -1086,7 +1086,7 @@
         "accuracyMeters": 6.2,
         "currentPaceSecondsPerKm": 345,
         "cadenceSpm": 165,
-        "recordedAt": "2026-07-25T10:00:30Z"
+        "recordedAt": "2026-07-25T10:00:30"
       }
     ]
   },
@@ -1154,7 +1154,7 @@
     {
       "runningRecordId": 501,
       "runningSessionId": 125,           // null = 솔로 러닝(매칭 없이 혼자)
-      "startedAt": "2026-07-25T10:00:30Z",
+      "startedAt": "2026-07-25T10:00:30",
       "totalDistanceMeters": 5020,
       "durationSeconds": 1800,
       "averagePaceSecondsPerKm": 359
@@ -1226,8 +1226,8 @@
 
 ```json
 {
-  "startedAt": "2026-07-26T07:00:00Z",
-  "finishedAt": "2026-07-26T07:32:10Z",
+  "startedAt": "2026-07-26T07:00:00",
+  "finishedAt": "2026-07-26T07:32:10",
   "totalDistanceMeters": 5020,
   "durationSeconds": 1930,
   "averagePaceSecondsPerKm": 384,
@@ -1248,8 +1248,8 @@
       "averagePaceSecondsPerKm": 380,
       "startLatitude": 35.1795543,
       "startLongitude": 129.0756416,
-      "startedAt": "2026-07-26T07:00:00Z",
-      "finishedAt": "2026-07-26T07:06:20Z",
+      "startedAt": "2026-07-26T07:00:00",
+      "finishedAt": "2026-07-26T07:06:20",
       "averageCadenceSpm": 170,
       "caloriesKcal": 65,
       "elevationGainMeters": 10
@@ -1373,8 +1373,8 @@
     "averagePaceSecondsPerKm": 359,
     "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline) — 카드 지도 미리보기. running_records.route_polyline
   },
-  "createdAt": "2026-07-25T11:00:00Z",
-  "updatedAt": "2026-07-25T11:00:00Z"
+  "createdAt": "2026-07-25T11:00:00",
+  "updatedAt": "2026-07-25T11:00:00"
 }
 ```
 
@@ -1472,7 +1472,7 @@
       "likedByMe": false,
       "replyCount": 1,
       "isDeleted": false,               // true면 톰스톤(댓글 삭제) — comment=null, "삭제된 댓글입니다" 자리표시. author.isDeleted(작성자 탈퇴)와는 다른 의미
-      "createdAt": "2026-07-25T11:05:00Z"
+      "createdAt": "2026-07-25T11:05:00"
     }
   ],
   "nextCursor": null
