@@ -22,6 +22,7 @@ public final class ErrorExposurePolicy {
             AuthErrorCode.TOKEN_BLOCKED.getCode(),
             AuthErrorCode.INVALID_TOKEN.getCode(),
             AuthErrorCode.AUTHENTICATION_REQUIRED.getCode(),
+            AuthErrorCode.ACCESS_DENIED.getCode(),
             // 이메일 인증 관련한 에러는 그대로 보낸다.
             ErrorCode.EMAIL_VERIFICATION_COOLDOWN.getCode(),
             ErrorCode.EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED.getCode(),
