@@ -59,7 +59,7 @@ public class UserController {
             @Valid @RequestBody ProfileImageUploadUrlRequest request
     ) {
         CreateProfileImageUploadUrlResult result = createProfileImageUploadUrlUsecase.handle(
-                new CreateProfileImageUploadUrlCommand(userId, request.mimeType())
+                new CreateProfileImageUploadUrlCommand(userId, request.mimeType(), request.fileSizeBytes())
         );
         return ResponseEntity.ok(
                 new ProfileImageUploadUrlResponse(result.profileImageKey(), result.uploadUrl()));

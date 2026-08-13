@@ -15,12 +15,13 @@ public class S3StorageAdapter implements GenerateUploadUrlPort {
     private final S3Properties properties;
 
     @Override
-    public String generate(String key, String contentType) {
+    public String generate(String key, String contentType, long sizeBytes) {
         // contentType을 서명에 포함해 클라가 다른 타입으로 올리지 못하게 막음
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(properties.bucket())
                 .key(key)
                 .contentType(contentType)
+                .contentLength(sizeBytes)
                 .build();
         PresignedPutObjectRequest presignedRequest = s3Presigner.presignPutObject(builder -> builder
                 .signatureDuration(properties.presignedUrlTtl())

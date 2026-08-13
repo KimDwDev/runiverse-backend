@@ -31,7 +31,8 @@ public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUpl
 
         // 2. 키 위치에 맞는 upload_url 생성
         // contentType이 서명에 포함되므로 업로드 헤더와 일치 해야함
-        String uploadUrl = generateUploadUrlPort.generate(profileImageKey, contentType.getMimeType());
+        String uploadUrl = generateUploadUrlPort.generate(profileImageKey, contentType.getMimeType(),
+                command.fileSizeBytes());
 
         return new CreateProfileImageUploadUrlResult(profileImageKey, uploadUrl);
     }

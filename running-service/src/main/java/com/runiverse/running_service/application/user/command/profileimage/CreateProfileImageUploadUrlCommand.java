@@ -4,7 +4,8 @@ import java.util.UUID;
 
 public record CreateProfileImageUploadUrlCommand(
         UUID userId,
-        String mimeType
+        String mimeType,
+        long fileSizeBytes
 ) {
 
 }
