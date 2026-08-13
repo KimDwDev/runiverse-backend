@@ -55,6 +55,7 @@ dependencies {
 	// AWS 관련
 	implementation platform('software.amazon.awssdk:bom:2.31.+')
 	implementation 'software.amazon.awssdk:sesv2'
+	implementation 'software.amazon.awssdk:s3'
 
 	// 테스트
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'

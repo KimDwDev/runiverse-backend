@@ -11,6 +11,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -73,6 +74,17 @@ public class GlobalExceptionHandler {
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage()
                 ));
+    }
+
+    // 경로 변수 타입 변환 실패 (예: userId가 UUID가 아님)
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("경로 변수 변환 실패: {}", e.getName());
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                CommonErrorCode.INVALID_REQUEST.getMessage()
+        );
     }
 
     // 노출 대상이 아닌 경우 전부 500으로 대체
