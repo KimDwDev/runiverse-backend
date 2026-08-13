@@ -641,6 +641,11 @@
 
 {
   "code": "VALIDATION_FAILED",
+  "message": "생년월일은 1900년 1월 1일 이후여야 합니다."
+}
+
+{
+  "code": "VALIDATION_FAILED",
   "message": "평균 페이스는 필수입니다."
 }
 
