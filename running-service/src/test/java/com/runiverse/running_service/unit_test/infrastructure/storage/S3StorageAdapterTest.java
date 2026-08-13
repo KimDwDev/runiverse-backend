@@ -86,6 +86,38 @@ public class S3StorageAdapterTest {
     }
 
     @Test
+    @DisplayName("조회 URL은 설정한 버킷의 해당 key를 가리킨다")
+    void viewUrlPointsToRequestedKey() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then
+        assertThat(url).startsWith("https://%s.s3.%s.amazonaws.com/%s?".formatted(BUCKET, REGION, KEY));
+    }
+
+    @Test
+    @DisplayName("조회 URL의 만료 시간은 업로드용과 별개인 viewUrlTtl을 따른다")
+    void viewUrlExpirationFollowsViewTtl() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then -> 화면에 떠 있는 동안 유효해야 하므로 업로드용(10분)보다 길다
+        assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(VIEW_TTL.toSeconds()));
+    }
+
+    @Test
+    @DisplayName("조회 URL은 업로드 헤더를 서명에 넣지 않는다")
+    void viewUrlDoesNotSignUploadHeaders() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then -> GET에는 본문이 없으므로 형식·크기를 요구하면 안 된다
+        assertThat(queryParam(url, "X-Amz-SignedHeaders"))
+                .doesNotContain("content-type")
+                .doesNotContain("content-length");
+    }
+
+    @Test
     @DisplayName("key가 다르면 서명도 달라진다")
     void signatureDependsOnKey() {
         // when
