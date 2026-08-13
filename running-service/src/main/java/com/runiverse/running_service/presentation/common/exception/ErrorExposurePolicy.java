@@ -13,6 +13,8 @@ public final class ErrorExposurePolicy {
             ErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
             ErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
             ErrorCode.ALREADY_ONBOARD.getCode(),
+            ErrorCode.PROFILE_IMAGE_NOT_UPLOADED.getCode(),
+            ErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             ErrorCode.INVALID_CREDENTIALS.getCode(),
             ErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
             ErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),

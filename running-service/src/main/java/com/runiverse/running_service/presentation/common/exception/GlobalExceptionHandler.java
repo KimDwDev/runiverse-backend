@@ -112,7 +112,9 @@ public class GlobalExceptionHandler {
                  EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER,
                  EMAIL_VERIFICATION_NOT_FOUND,
-                 INVALID_VERIFICATION_CODE -> HttpStatus.BAD_REQUEST;
+                 INVALID_VERIFICATION_CODE,
+                 PROFILE_IMAGE_NOT_UPLOADED,
+                 INVALID_PROFILE_IMAGE -> HttpStatus.BAD_REQUEST;
             case EMAIL_VERIFICATION_COOLDOWN,
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
