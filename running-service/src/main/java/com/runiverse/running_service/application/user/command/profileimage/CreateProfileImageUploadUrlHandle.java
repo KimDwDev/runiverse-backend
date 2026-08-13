@@ -7,6 +7,10 @@ public class CreateProfileImageUploadUrlHandle implements CreateProfileImageUplo
     @Override
     public CreateProfileImageUploadUrlResult handle(CreateProfileImageUploadUrlCommand command) {
 
+        // 1. 이미지 저장을 위한 키네임 생성
+
+        // 2. 키 위치에 맞는 upload_url 생성
+
         return null;
     }
 }
