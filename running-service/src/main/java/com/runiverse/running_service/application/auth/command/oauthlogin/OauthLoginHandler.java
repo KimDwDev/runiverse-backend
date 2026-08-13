@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,7 +57,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
     private Provider resolveProvider(String value) {
         try {
             return Provider.from(value);
-        } catch (com.runiverse.running_service.domain.user.exception.UnsupportedProviderException e) {
+        } catch (ProviderNotSupportedException e) {
             throw new UnsupportedProviderException();
         }
     }
