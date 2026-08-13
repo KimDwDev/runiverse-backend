@@ -36,7 +36,7 @@ public class UuidGeneratorAdapterTest {
     @Test
     @DisplayName("생성된 사용자 ID는 UUID 버전 7이다")
     void generateUuidVersion7() {
-        //when
+        // when
         UUID userId = uuidGeneratorAdapter.generate();
 
         // then

@@ -35,7 +35,7 @@ public class Argon2PasswordHashAdapterTest {
         // when
         String result = argon2PasswordHashAdapter.hash(rawPassword);
 
-        // then
+        // then -> 위임 여부는 반환값으로 증명되지 않으므로 호출까지 확인한다
         assertThat(result).isEqualTo(encodedPassword);
         verify(passwordEncoder).encode(rawPassword);
     }
