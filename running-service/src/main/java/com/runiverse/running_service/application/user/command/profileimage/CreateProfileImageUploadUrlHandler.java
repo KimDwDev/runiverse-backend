@@ -3,7 +3,6 @@ package com.runiverse.running_service.application.user.command.profileimage;
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
 import com.runiverse.running_service.application.user.port.out.GenerateProfileImageIdPort;
 import com.runiverse.running_service.application.user.port.out.GenerateUploadUrlPort;
-import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUploadUrlUsecase {
 
-    private static final String KEY_PREFIX = "profiles";
     private final GenerateProfileImageIdPort generateProfileImageIdPort;
     private final GenerateUploadUrlPort generateUploadUrlPort;
 
@@ -22,12 +20,11 @@ public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUpl
 
         // 1. 이미지 저장을 위한 키네임 생성
         // prefix에 userId를 넣어 프로필 소유자 검증
-        String key = "%s/%s/%s.%s".formatted(
-                KEY_PREFIX,
+        String profileImageKey = ProfileImageKeyPolicy.create(
                 command.userId(),
                 generateProfileImageIdPort.generate(),
-                contentType.getExtension());
-        String profileImageKey = new ProfileImageKey(key).value();
+                contentType
+        ).value();
 
         // 2. 키 위치에 맞는 upload_url 생성
         // contentType이 서명에 포함되므로 업로드 헤더와 일치 해야함

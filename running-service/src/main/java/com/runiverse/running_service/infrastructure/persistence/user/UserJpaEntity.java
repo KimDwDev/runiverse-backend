@@ -118,4 +118,8 @@ public class UserJpaEntity {
                 introduction
         );
     }
+
+    public void changeProfileImageKey(String profileImageKey) {
+        this.profileImageKey = profileImageKey;
+    }
 }
