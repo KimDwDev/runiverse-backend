@@ -114,7 +114,8 @@ public class GlobalExceptionHandler {
                  EMAIL_VERIFICATION_NOT_FOUND,
                  INVALID_VERIFICATION_CODE,
                  PROFILE_IMAGE_NOT_UPLOADED,
-                 INVALID_PROFILE_IMAGE -> HttpStatus.BAD_REQUEST;
+                 INVALID_PROFILE_IMAGE,
+                 PROFILE_NOT_FOUND -> HttpStatus.BAD_REQUEST;
             case EMAIL_VERIFICATION_COOLDOWN,
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;

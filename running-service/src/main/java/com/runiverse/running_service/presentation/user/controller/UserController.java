@@ -9,12 +9,16 @@ import com.runiverse.running_service.application.user.command.profileimage.Creat
 import com.runiverse.running_service.application.user.port.in.ChangeProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.in.CompleteOnboardingUsecase;
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
+import com.runiverse.running_service.application.user.port.in.GetProfileImageUsecase;
+import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
+import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlResult;
 import com.runiverse.running_service.presentation.common.security.SelfOnly;
 import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUploadUrlRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileUpdateRequest;
 import com.runiverse.running_service.presentation.user.response.OnboardingResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUploadUrlResponse;
+import com.runiverse.running_service.presentation.user.response.ProfileImageUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileUpdateResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +44,7 @@ public class UserController {
     private final CompleteOnboardingUsecase completeOnboardingUsecase;
     private final CreateProfileImageUploadUrlUsecase createProfileImageUploadUrlUsecase;
     private final ChangeProfileImageUsecase changeProfileImageUsecase;
+    private final GetProfileImageUsecase getProfileImageUsecase;
 
     @PostMapping("/onboarding")
     public ResponseEntity<OnboardingResponse> completeOnboarding(
@@ -81,5 +87,12 @@ public class UserController {
         ChangeProfileImageResult result = changeProfileImageUsecase.handle(
                 new ChangeProfileImageCommand(userId, request.profileImageKey()));
         return ResponseEntity.ok(new ProfileUpdateResponse(result.profileImageKey()));
+    }
+
+    @GetMapping("/{userId}/profile-image")
+    public ResponseEntity<ProfileImageUrlResponse> getProfileImageUrl(@PathVariable UUID userId) {
+        GetProfileImageUrlResult result = getProfileImageUsecase.handle(
+                new GetProfileImageUrlQuery(userId));
+        return ResponseEntity.ok(new ProfileImageUrlResponse(result.profileImageUrl()));
     }
 }

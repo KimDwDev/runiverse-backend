@@ -14,6 +14,7 @@ public final class ErrorExposurePolicy {
             ErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
             ErrorCode.ALREADY_ONBOARD.getCode(),
             ErrorCode.PROFILE_IMAGE_NOT_UPLOADED.getCode(),
+            ErrorCode.PROFILE_NOT_FOUND.getCode(),
             ErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             ErrorCode.INVALID_CREDENTIALS.getCode(),
             ErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
