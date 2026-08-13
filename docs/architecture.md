@@ -58,7 +58,7 @@ AuthController ──▶ SignUpUsecase ──▶ SignUpHandler ──▶ SaveUse
 
 - **애그리거트 루트**: 루트만 외부에 노출한다. `User`가 `OauthUser`·`UserOnboard`를 내부에 들고, 포트는 루트 단위로 저장·조회한다.
 - **애그리거트 행위**: 불변식은 애그리거트가 스스로 지킨다. `linkOauth`·`completeOnboarding`처럼 의도가 드러나는 메서드로만 상태를 바꾸고, 위반은 도메인 예외로 막는다. 생성 방식이 여럿이면 정적 팩토리(`User.registerWithOauth`)로 구분한다.
-- **VO**: 식별자·이메일·닉네임처럼 의미가 있는 값은 원시 타입으로 두지 않는다. `record`로 만들어 불변과 값 기준 동등성을 강제하고, 생성자에서 검증한다 — 고정된 값 집합은 `enum`(`Gender`·`Provider`).
+- **VO**: 식별자·이메일·닉네임처럼 의미가 있는 값은 원시 타입으로 두지 않는다. `record`로 만들어 불변과 값 기준 동등성을 강제하고, 생성자에서 검증한다 — 고정된 값 집합은 `enum`(`Gender`·`Provider`). 같은 규칙을 Request DTO의 Bean Validation이 또 선언하는 것은 목적이 달라서다(400 노출 / 불변식) — 합치지 않고, VO를 정본으로 함께 고친다.
 - **애그리거트 간 참조**: 객체는 ID로 참조한다(*Reference by Identity*). DB FK 여부는 수명주기와 삭제 정책에 따라 [erd.md](erd.md)를 따르며, 독립적인 논리 참조는 앱에서 무결성을 관리한다. 애그리거트 내부는 객체 참조와 FK를 사용한다.
 - **예외 구분**: VO 검증과 애그리거트 불변식 위반은 `domain/`, 외부를 확인해야 아는 실패(중복·조회·인증·연동)는 `application/`이다. 두 레이어에 같은 이름의 `BusinessException`·`ErrorCode`가 있으니 import 시 확인한다.
 
