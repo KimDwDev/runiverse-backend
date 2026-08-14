@@ -14,8 +14,8 @@ public enum ErrorCode {
     PROFILE_IMAGE_NOT_UPLOADED("PROFILE_IMAGE_NOT_UPLOADED", "업로드되지 않은 이미지입니다."),
     PROFILE_NOT_FOUND("PROFILE_NOT_FOUND", "사용자를 찾을 수 없습니다."),
     INVALID_PROFILE_IMAGE("INVALID_PROFILE_IMAGE", "프로필 이미지가 올바르지 않습니다."),
-    INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "리프레시 토큰이 유효하지 않습니다."),
-    UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
+    INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "리프레시 토큰이 유효하지 않습니다. 다시 로그인해 주세요."),
+    UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 로그인 제공자입니다."),
     OAUTH_CODE_EXCHANGE_FAILED("OAUTH_CODE_EXCHANGE_FAILED", "소셜 로그인에 실패했습니다. 다시 시도해 주세요."),
     OAUTH_EMAIL_NOT_PROVIDED("OAUTH_EMAIL_NOT_PROVIDED", "이메일 제공에 동의해야 소셜 로그인을 할 수 있습니다."),
     // 이메일 인증과 관련된 오류 메시지
