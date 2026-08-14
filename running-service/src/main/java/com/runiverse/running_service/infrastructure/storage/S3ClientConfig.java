@@ -8,7 +8,10 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import java.time.Duration;
 
 @Configuration
 public class S3ClientConfig {
@@ -18,6 +21,15 @@ public class S3ClientConfig {
         return S3Presigner.builder()
                 .region(Region.of(properties.region()))
                 .credentialsProvider(credentialsProvider(properties))
+                .build();
+    }
+
+    @Bean
+    public S3Client s3Client(S3Properties properties) {
+        return S3Client.builder()
+                .region(Region.of(properties.region()))
+                .credentialsProvider(credentialsProvider(properties))
+                .overrideConfiguration(c -> c.apiCallAttemptTimeout(Duration.ofSeconds(3)))
                 .build();
     }
 

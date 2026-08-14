@@ -34,7 +34,8 @@ public class S3StorageAdapterTest {
     private static final String REGION = "ap-northeast-2";
     private static final String BUCKET = "runiverse-test-bucket";
     private static final Duration TTL = Duration.ofMinutes(10);
-    private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2.jpg";
+    private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2-0000-7000-8000" +
+            "-000000000002.jpg";
     private static final String CONTENT_TYPE = "image/jpeg";
     private static final long SIZE_BYTES = 20_480L;
     private static final String PRESIGNED_URL =
@@ -50,10 +51,13 @@ public class S3StorageAdapterTest {
 
     @BeforeEach
     void setUp() {
-        // 자격증명은 비워 둔다. 실제 배포에서는 IAM Role을 쓴다
-        adapter = new S3StorageAdapter(s3Presigner, new S3Properties(REGION, BUCKET, TTL, null, null));
-        when(s3Presigner.presignPutObject(any(Consumer.class))).thenReturn(presignedPutObjectRequest);
-        when(presignedPutObjectRequest.url()).thenReturn(presignedUrl());
+        // 서명은 네트워크 없이 로컬에서 끝나므로 자격증명은 형식만 맞추면 된다
+        presigner = S3Presigner.builder()
+                .region(Region.of(REGION))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("AKIATESTTESTTESTTEST", "test-secret-key")))
+                .build();
+        adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, null, null), null);
     }
 
     // 어댑터가 넘긴 람다를 실제 빌더에 적용해 무엇을 설정했는지 꺼낸다

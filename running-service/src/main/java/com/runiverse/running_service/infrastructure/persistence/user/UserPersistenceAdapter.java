@@ -5,10 +5,12 @@ import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPo
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Nickname;
@@ -26,7 +28,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
-        CheckOnboardingPort {
+        CheckOnboardingPort, UpdateProfileImagePort {
 
     private final EntityManager entityManager;
 
@@ -91,6 +93,16 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 .getResultStream()
                 .findFirst()
                 .map(this::toDomain);
+    }
+
+    @Override
+    public void updateProfileImage(UserId userId, ProfileImageKey profileImageKey) {
+        UserJpaEntity entity = entityManager.find(UserJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new UserNotFoundException();
+        }
+        entity.changeProfileImageKey(profileImageKey.value());
+
     }
 
     private User toDomain(UserJpaEntity entity) {
