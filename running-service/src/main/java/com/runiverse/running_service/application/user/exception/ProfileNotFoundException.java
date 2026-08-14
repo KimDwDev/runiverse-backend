@@ -1,11 +1,11 @@
 package com.runiverse.running_service.application.user.exception;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
-import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.UserErrorCode;
 
 public class ProfileNotFoundException extends BusinessException {
 
     public ProfileNotFoundException() {
-        super(ErrorCode.PROFILE_NOT_FOUND);
+        super(UserErrorCode.PROFILE_NOT_FOUND);
     }
 }

@@ -1,7 +1,7 @@
 package com.runiverse.running_service.presentation.common.security;
 
-import com.runiverse.running_service.presentation.common.exception.AuthErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
+import com.runiverse.running_service.presentation.common.exception.SecurityErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,7 +30,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
             HttpServletResponse response,
             AccessDeniedException accessDeniedException
     ) throws IOException {
-        AuthErrorCode errorCode = AuthErrorCode.ACCESS_DENIED;
+        SecurityErrorCode errorCode = SecurityErrorCode.ACCESS_DENIED;
         HttpStatus status = HttpStatus.FORBIDDEN;
         ErrorResponse body = new ErrorResponse(errorCode.getCode(), errorCode.getMessage());
         if (!ErrorExposurePolicy.isExposed(status, errorCode.getCode())) {

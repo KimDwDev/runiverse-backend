@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.presentation;
 
-import com.runiverse.running_service.application.common.exception.ErrorCode;
-import com.runiverse.running_service.presentation.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
+import com.runiverse.running_service.presentation.common.exception.SecurityErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ErrorExposurePolicyTest {
 
     @ParameterizedTest
-    @EnumSource(value = ErrorCode.class, names = {
+    @EnumSource(value = AuthErrorCode.class, names = {
             "EMAIL_VERIFICATION_COOLDOWN",
             "EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED",
             "EMAIL_VERIFICATION_NOT_FOUND",
@@ -25,7 +25,7 @@ public class ErrorExposurePolicyTest {
             "EMAIL_SEND_FAILED"
     })
     @DisplayName("이메일 인증 관련 에러는 400이 아니어도 그대로 노출한다")
-    void emailVerificationErrorsAreExposed(ErrorCode errorCode) {
+    void emailVerificationErrorsAreExposed(AuthErrorCode errorCode) {
         // 사용자가 다음에 뭘 해야 하는지 알아야 하는 에러들이라 메시지를 가리면 안 된다
         assertThat(ErrorExposurePolicy.isExposed(HttpStatus.TOO_MANY_REQUESTS, errorCode.getCode())).isTrue();
     }
@@ -35,7 +35,7 @@ public class ErrorExposurePolicyTest {
     void accessDeniedIsExposed() {
         // 노출 목록에서 빠지면 아무 경고 없이 500으로 바뀌어 클라가 원인을 알 수 없다
         assertThat(ErrorExposurePolicy.isExposed(
-                HttpStatus.FORBIDDEN, AuthErrorCode.ACCESS_DENIED.getCode())).isTrue();
+                HttpStatus.FORBIDDEN, SecurityErrorCode.ACCESS_DENIED.getCode())).isTrue();
     }
 
     @Test

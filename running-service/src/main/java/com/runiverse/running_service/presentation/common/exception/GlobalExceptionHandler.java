@@ -1,7 +1,9 @@
 package com.runiverse.running_service.presentation.common.exception;
 
+import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -97,24 +99,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(code, message));
     }
 
+    // ErrorCode가 sealed라 default 없이도 컴파일러가 누락을 잡는다
     private HttpStatus toStatus(ErrorCode errorCode) {
         return switch (errorCode) {
+            case UserErrorCode code -> toStatus(code);
+            case AuthErrorCode code -> toStatus(code);
+        };
+    }
+
+    private HttpStatus toStatus(UserErrorCode code) {
+        return switch (code) {
             case ALREADY_ONBOARDED,
-                 EMAIL_ALREADY_EXISTS,
+                 ONBOARDING_NOT_COMPLETED,
                  NICKNAME_ALREADY_EXISTS -> HttpStatus.CONFLICT;
-            case INVALID_CREDENTIALS,
-                 INVALID_REFRESH_TOKEN,
-                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
             // 계정 존재 여부를 숨기려고 노출하지 않는다 — ErrorExposurePolicy에서도 제외돼 500으로 응답한다
             case USER_NOT_FOUND -> HttpStatus.INTERNAL_SERVER_ERROR;
+            case PROFILE_IMAGE_NOT_UPLOADED,
+                 INVALID_PROFILE_IMAGE,
+                 PROFILE_NOT_FOUND -> HttpStatus.BAD_REQUEST;
+        };
+    }
+
+    private HttpStatus toStatus(AuthErrorCode code) {
+        return switch (code) {
+            case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
+            case INVALID_EMAIL_CREDENTIALS,
+                 INVALID_PASSWORD_CREDENTIALS,
+                 INVALID_CREDENTIALS,
+                 INVALID_REFRESH_TOKEN,
+                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED,
                  EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER,
                  EMAIL_VERIFICATION_NOT_FOUND,
-                 INVALID_VERIFICATION_CODE,
-                 PROFILE_IMAGE_NOT_UPLOADED,
-                 INVALID_PROFILE_IMAGE,
-                 PROFILE_NOT_FOUND -> HttpStatus.BAD_REQUEST;
+                 INVALID_VERIFICATION_CODE -> HttpStatus.BAD_REQUEST;
             case EMAIL_VERIFICATION_COOLDOWN,
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
