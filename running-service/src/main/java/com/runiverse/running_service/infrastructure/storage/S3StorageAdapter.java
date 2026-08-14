@@ -1,23 +1,26 @@
 package com.runiverse.running_service.infrastructure.storage;
 
 import com.runiverse.running_service.application.user.port.out.GenerateUploadUrlPort;
+import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.application.user.port.out.LoadUploadedImagePort;
 import com.runiverse.running_service.application.user.port.out.UploadedImage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImagePort {
+public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImagePort, GenerateViewUrlPort {
 
     private final S3Presigner s3Presigner;
     private final S3Properties properties;
@@ -54,5 +57,17 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
             }
             throw e;
         }
+    }
+
+    @Override
+    public String generate(String key) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(key)
+                .build();
+        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(builder -> builder
+                .signatureDuration(properties.viewUrlTtl())
+                .getObjectRequest(getObjectRequest));
+        return presigned.url().toString();
     }
 }

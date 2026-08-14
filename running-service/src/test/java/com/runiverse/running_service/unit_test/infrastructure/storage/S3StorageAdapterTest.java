@@ -34,6 +34,7 @@ public class S3StorageAdapterTest {
     private static final String REGION = "ap-northeast-2";
     private static final String BUCKET = "runiverse-test-bucket";
     private static final Duration TTL = Duration.ofMinutes(10);
+    private static final Duration VIEW_TTL = Duration.ofHours(1);
     private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2-0000-7000-8000" +
             "-000000000002.jpg";
     private static final String CONTENT_TYPE = "image/jpeg";
@@ -57,7 +58,7 @@ public class S3StorageAdapterTest {
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create("AKIATESTTESTTESTTEST", "test-secret-key")))
                 .build();
-        adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, null, null), null);
+        adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, VIEW_TTL, null, null), null);
     }
 
     // 어댑터가 넘긴 람다를 실제 빌더에 적용해 무엇을 설정했는지 꺼낸다
@@ -113,8 +114,40 @@ public class S3StorageAdapterTest {
     }
 
     @Test
-    @DisplayName("발급받은 URL을 그대로 돌려준다")
-    void returnsPresignedUrl() {
+    @DisplayName("조회 URL은 설정한 버킷의 해당 key를 가리킨다")
+    void viewUrlPointsToRequestedKey() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then
+        assertThat(url).startsWith("https://%s.s3.%s.amazonaws.com/%s?".formatted(BUCKET, REGION, KEY));
+    }
+
+    @Test
+    @DisplayName("조회 URL의 만료 시간은 업로드용과 별개인 viewUrlTtl을 따른다")
+    void viewUrlExpirationFollowsViewTtl() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then -> 화면에 떠 있는 동안 유효해야 하므로 업로드용(10분)보다 길다
+        assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(VIEW_TTL.toSeconds()));
+    }
+
+    @Test
+    @DisplayName("조회 URL은 업로드 헤더를 서명에 넣지 않는다")
+    void viewUrlDoesNotSignUploadHeaders() {
+        // when
+        String url = adapter.generate(KEY);
+
+        // then -> GET에는 본문이 없으므로 형식·크기를 요구하면 안 된다
+        assertThat(queryParam(url, "X-Amz-SignedHeaders"))
+                .doesNotContain("content-type")
+                .doesNotContain("content-length");
+    }
+
+    @Test
+    @DisplayName("key가 다르면 서명도 달라진다")
+    void signatureDependsOnKey() {
         // when
         String uploadUrl = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
 

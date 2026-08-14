@@ -13,6 +13,7 @@ public record S3Properties(
         @NotBlank String region,
         @NotBlank String bucket,
         @NotNull Duration presignedUrlTtl,
+        @NotNull Duration viewUrlTtl,
         String accessKeyId,
         String secretAccessKey
 ) {
