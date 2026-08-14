@@ -81,6 +81,11 @@ public class UserOnboardingJpaEntity extends BaseTimeEntity {
         return new UserOnboardingJpaEntity(userId, nickname, gender, birthday, avgPace, weight, height);
     }
 
+    // 닉네임 변경
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
     // FK 제약
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(

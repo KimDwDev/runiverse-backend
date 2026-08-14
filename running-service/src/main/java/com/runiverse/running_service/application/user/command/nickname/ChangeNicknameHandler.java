@@ -1,8 +1,15 @@
 package com.runiverse.running_service.application.user.command.nickname;
 
 import com.runiverse.running_service.application.user.port.in.ChangeNicknameUsecase;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Service
+@RequiredArgsConstructor
+@Transactional
 public class ChangeNicknameHandler implements ChangeNicknameUsecase {
+
 
     @Override
     public ChangeNicknameResult handle(ChangeNicknameCommand command) {
@@ -13,7 +20,9 @@ public class ChangeNicknameHandler implements ChangeNicknameUsecase {
 
         // 3. 자기 자신의 닉네임과 같으면 그대로 반환
 
-        // 4. 유저 닉네임을 갱신한다.
+        // 4. 남이 닉네임을 쓰고 있으면 막는다
+
+        // 5. 갱신
         return null;
     }
 }
