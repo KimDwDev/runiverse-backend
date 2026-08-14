@@ -2,32 +2,21 @@ package com.runiverse.running_service.unit_test.infrastructure.storage;
 
 import com.runiverse.running_service.infrastructure.storage.S3Properties;
 import com.runiverse.running_service.infrastructure.storage.S3StorageAdapter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@SuppressWarnings("unchecked")
-@ExtendWith(MockitoExtension.class)
 @DisplayName("S3 업로드 URL 어댑터 단위 테스트")
 public class S3StorageAdapterTest {
 
@@ -39,15 +28,8 @@ public class S3StorageAdapterTest {
             "-000000000002.jpg";
     private static final String CONTENT_TYPE = "image/jpeg";
     private static final long SIZE_BYTES = 20_480L;
-    private static final String PRESIGNED_URL =
-            "https://runiverse-test-bucket.s3.ap-northeast-2.amazonaws.com/" + KEY + "?X-Amz-Signature=test";
 
-    @Mock
-    private S3Presigner s3Presigner;
-
-    @Mock
-    private PresignedPutObjectRequest presignedPutObjectRequest;
-
+    private S3Presigner presigner;
     private S3StorageAdapter adapter;
 
     @BeforeEach
@@ -61,56 +43,46 @@ public class S3StorageAdapterTest {
         adapter = new S3StorageAdapter(presigner, new S3Properties(REGION, BUCKET, TTL, VIEW_TTL, null, null), null);
     }
 
-    // 어댑터가 넘긴 람다를 실제 빌더에 적용해 무엇을 설정했는지 꺼낸다
-    private PutObjectPresignRequest capturePresignRequest() {
-        ArgumentCaptor<Consumer<PutObjectPresignRequest.Builder>> captor =
-                ArgumentCaptor.forClass(Consumer.class);
-        verify(s3Presigner).presignPutObject(captor.capture());
-        PutObjectPresignRequest.Builder builder = PutObjectPresignRequest.builder();
-        captor.getValue().accept(builder);
-        return builder.build();
+    @AfterEach
+    void tearDown() {
+        presigner.close();
     }
 
-    private static URL presignedUrl() {
-        try {
-            return new URI(PRESIGNED_URL).toURL();
-        } catch (URISyntaxException | MalformedURLException e) {
-            throw new IllegalStateException(e);
-        }
+    private static String queryParam(String url, String name) {
+        String value = url.split("\\?", 2)[1].split(name + "=", 2)[1].split("&", 2)[0];
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
     @Test
-    @DisplayName("설정한 버킷과 요청한 key로 업로드 요청을 만든다")
-    void buildsPutObjectRequestForRequestedKey() {
+    @DisplayName("발급한 URL은 설정한 버킷의 해당 key를 가리킨다")
+    void urlPointsToRequestedKey() {
         // when
-        adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
+        String url = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
 
         // then
-        PutObjectRequest putObjectRequest = capturePresignRequest().putObjectRequest();
-        assertThat(putObjectRequest.bucket()).isEqualTo(BUCKET);
-        assertThat(putObjectRequest.key()).isEqualTo(KEY);
+        assertThat(url).startsWith("https://%s.s3.%s.amazonaws.com/%s?".formatted(BUCKET, REGION, KEY));
     }
 
     @Test
-    @DisplayName("형식과 크기를 요청에 담아 서명 대상으로 넘긴다")
-    void passesContentTypeAndLengthToSigning() {
+    @DisplayName("형식과 크기를 서명에 포함해 다른 값으로는 업로드하지 못하게 한다")
+    void contentTypeAndLengthAreSigned() {
         // when
-        adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
+        String url = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
 
-        // then -> 이 두 값이 서명에 들어가야 클라가 다른 타입·크기로 올리지 못한다
-        PutObjectRequest putObjectRequest = capturePresignRequest().putObjectRequest();
-        assertThat(putObjectRequest.contentType()).isEqualTo(CONTENT_TYPE);
-        assertThat(putObjectRequest.contentLength()).isEqualTo(SIZE_BYTES);
+        // then -> 서명 헤더에 있어야 클라가 헤더를 바꿨을 때 S3가 403으로 막는다
+        assertThat(queryParam(url, "X-Amz-SignedHeaders"))
+                .contains("content-type")
+                .contains("content-length");
     }
 
     @Test
     @DisplayName("만료 시간은 설정한 TTL을 따른다")
     void expirationFollowsConfiguredTtl() {
         // when
-        adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
+        String url = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
 
         // then
-        assertThat(capturePresignRequest().signatureDuration()).isEqualTo(TTL);
+        assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(TTL.toSeconds()));
     }
 
     @Test
@@ -149,9 +121,11 @@ public class S3StorageAdapterTest {
     @DisplayName("key가 다르면 서명도 달라진다")
     void signatureDependsOnKey() {
         // when
-        String uploadUrl = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
+        String first = adapter.generate(KEY, CONTENT_TYPE, SIZE_BYTES);
+        String second = adapter.generate("profiles/other/other.jpg", CONTENT_TYPE, SIZE_BYTES);
 
-        // then
-        assertThat(uploadUrl).isEqualTo(PRESIGNED_URL);
+        // then -> 한 URL을 다른 위치에 재사용할 수 없다
+        assertThat(queryParam(first, "X-Amz-Signature"))
+                .isNotEqualTo(queryParam(second, "X-Amz-Signature"));
     }
 }
