@@ -82,8 +82,8 @@ public class GlobalExceptionHandler {
         log.warn("경로 변수 변환 실패: {}", e.getName());
         return respond(
                 HttpStatus.BAD_REQUEST,
-                CommonErrorCode.INVALID_REQUEST.getCode(),
-                CommonErrorCode.INVALID_REQUEST.getMessage()
+                CommonErrorCode.VALIDATION_FAILED.getCode(),
+                CommonErrorCode.VALIDATION_FAILED.getMessage()
         );
     }
 
