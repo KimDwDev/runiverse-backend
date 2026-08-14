@@ -99,15 +99,14 @@ public class GlobalExceptionHandler {
 
     private HttpStatus toStatus(ErrorCode errorCode) {
         return switch (errorCode) {
-            case ALREADY_ONBOARD,
+            case ALREADY_ONBOARDED,
                  EMAIL_ALREADY_EXISTS,
                  NICKNAME_ALREADY_EXISTS -> HttpStatus.CONFLICT;
-            case INVALID_EMAIL_CREDENTIALS,
-                 INVALID_PASSWORD_CREDENTIALS,
-                 INVALID_CREDENTIALS,
+            case INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN,
-                 OAUTH_CODE_EXCHANGE_FAILED,
-                 USER_NOT_FOUND -> HttpStatus.UNAUTHORIZED;
+                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
+            // 계정 존재 여부를 숨기려고 노출하지 않는다 — ErrorExposurePolicy에서도 제외돼 500으로 응답한다
+            case USER_NOT_FOUND -> HttpStatus.INTERNAL_SERVER_ERROR;
             case OAUTH_EMAIL_NOT_PROVIDED,
                  EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER,

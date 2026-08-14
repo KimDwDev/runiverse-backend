@@ -42,8 +42,8 @@ class AuthFlowE2eTest extends E2eTestSupport {
                 "gender", "MALE",
                 "birthday", "1998-03-21",
                 "averagePaceSecondsPerKm", 330,
-                "weight", new BigDecimal("68.5"),
-                "height", new BigDecimal("176.2")
+                "weightKg", new BigDecimal("68.5"),
+                "heightCm", new BigDecimal("176.2")
         ), signedUp.text("accessToken"));
         assertThat(onboarded.status()).isEqualTo(201);
         assertThat(onboarded.text("nickname")).isEqualTo(nickname);
@@ -64,8 +64,8 @@ class AuthFlowE2eTest extends E2eTestSupport {
                 "gender", "FEMALE",
                 "birthday", "1999-01-02",
                 "averagePaceSecondsPerKm", 400,
-                "weight", new BigDecimal("55.0"),
-                "height", new BigDecimal("162.0")
+                "weightKg", new BigDecimal("55.0"),
+                "heightCm", new BigDecimal("162.0")
         ), accessToken);
         assertThat(reused.status()).isEqualTo(401);
         assertThat(reused.text("code")).isEqualTo("TOKEN_BLOCKED");
@@ -80,8 +80,8 @@ class AuthFlowE2eTest extends E2eTestSupport {
                 "gender", "MALE",
                 "birthday", "1998-03-21",
                 "averagePaceSecondsPerKm", 330,
-                "weight", new BigDecimal("68.5"),
-                "height", new BigDecimal("176.2")
+                "weightKg", new BigDecimal("68.5"),
+                "heightCm", new BigDecimal("176.2")
         ));
         // then
         assertThat(response.status()).isEqualTo(401);

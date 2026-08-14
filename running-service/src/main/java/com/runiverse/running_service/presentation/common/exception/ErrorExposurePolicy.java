@@ -12,7 +12,7 @@ public final class ErrorExposurePolicy {
     private static final Set<String> EXPOSED_CODES = Set.of(
             ErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
             ErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
-            ErrorCode.ALREADY_ONBOARD.getCode(),
+            ErrorCode.ALREADY_ONBOARDED.getCode(),
             ErrorCode.PROFILE_IMAGE_NOT_UPLOADED.getCode(),
             ErrorCode.PROFILE_NOT_FOUND.getCode(),
             ErrorCode.INVALID_PROFILE_IMAGE.getCode(),

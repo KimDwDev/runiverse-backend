@@ -30,7 +30,7 @@ public class LoginHandler implements LoginUsecase {
     @Override
     public LoginResult handle(LoginCommand command) {
 
-        // 1. 이메일 확인
+        // 1. 이메일 확인 — 대소문자를 구분한다. 가입 때 소문자로 정규화해 저장하므로 클라이언트가 소문자로 보낸다
         Optional<User> foundUser = loadUserByEmailPort.loadByEmail(command.email());
         if (foundUser.isEmpty()) {
             throw new InvalidCredentialsException();

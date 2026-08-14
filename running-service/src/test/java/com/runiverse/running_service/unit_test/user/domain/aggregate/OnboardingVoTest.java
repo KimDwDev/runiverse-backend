@@ -68,7 +68,7 @@ public class OnboardingVoTest {
             // when & then
             assertThatThrownBy(() -> new Nickname("김"))
                     .isInstanceOf(InvalidNicknameLengthException.class)
-                    .hasMessage("닉네임은 2자 이상 16자 이하로 작성해주시길 바랍니다.");
+                    .hasMessage("닉네임은 2자 이상 16자 이하여야 합니다.");
 
             assertThatThrownBy(() -> new Nickname("a".repeat(17)))
                     .isInstanceOf(InvalidNicknameLengthException.class);

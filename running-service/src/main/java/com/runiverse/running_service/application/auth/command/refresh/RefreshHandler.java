@@ -1,7 +1,7 @@
-package com.runiverse.running_service.application.auth.command.reissue;
+package com.runiverse.running_service.application.auth.command.refresh;
 
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
-import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
+import com.runiverse.running_service.application.auth.port.in.RefreshUsecase;
 import com.runiverse.running_service.application.auth.port.out.DeleteRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadRefreshTokenPort;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class ReissueHandler implements ReissueUsecase {
+public class RefreshHandler implements RefreshUsecase {
 
     private final ParseRefreshTokenPort parseRefreshTokenPort;
     private final LoadRefreshTokenPort loadRefreshTokenPort;
@@ -24,7 +24,7 @@ public class ReissueHandler implements ReissueUsecase {
     private final SaveRefreshTokenHashPort saveRefreshTokenHashPort;
 
     @Override
-    public ReissueResult handle(ReissueCommand command) {
+    public RefreshResult handle(RefreshCommand command) {
 
         // 1. refresh token 검증 후 소유자 확인 (서명, 만료, issuer, audience)
         UserId userId = parseRefreshTokenPort.parse(command.refreshToken())
@@ -48,6 +48,6 @@ public class ReissueHandler implements ReissueUsecase {
         saveRefreshTokenHashPort.save(userId, refreshTokenHashPort.hash(newRefreshToken));
 
         // 6. 반환
-        return new ReissueResult(newAccessToken, newRefreshToken);
+        return new RefreshResult(newAccessToken, newRefreshToken);
     }
 }

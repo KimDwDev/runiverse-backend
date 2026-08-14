@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.oauth;
 
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
-import com.runiverse.running_service.domain.user.exception.UnsupportedProviderException;
+import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.OauthClientRouter;
@@ -82,7 +82,7 @@ public class OauthClientRouterTest {
         // when & then
         assertThatThrownBy(() ->
                 router.exchange(Provider.KAKAO, AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(UnsupportedProviderException.class);
+                .isInstanceOf(ProviderNotSupportedException.class);
     }
 
 }

@@ -1,5 +1,6 @@
 package com.runiverse.running_service.presentation.user.request;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -53,4 +54,11 @@ public record OnboardingRequest(
         BigDecimal heightCm
 ) {
 
+    // Birthday VO의 하한을 옮긴 값 — 내장 제약에는 날짜 하한이 없어 @AssertTrue로 표현한다
+    private static final LocalDate BIRTHDAY_MIN = LocalDate.of(1900, 1, 1);
+
+    @AssertTrue(message = "생년월일은 1900년 1월 1일 이후여야 합니다.")
+    public boolean isBirthdayInRange() {
+        return birthday == null || !birthday.isBefore(BIRTHDAY_MIN);
+    }
 }

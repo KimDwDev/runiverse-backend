@@ -21,7 +21,7 @@ public enum ErrorCode {
     PROFILE_IMAGE_KEY_TOO_LONG("PROFILE_IMAGE_KEY_TOO_LONG", "프로필 이미지 키는 255자를 초과할 수 없습니다."),
     NICKNAME_REQUIRED("NICKNAME_REQUIRED", "닉네임은 필수입니다."),
     INVALID_NICKNAME_FORMAT("INVALID_NICKNAME_FORMAT", "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."),
-    INVALID_NICKNAME_LENGTH("INVALID_NICKNAME_LENGTH", "닉네임은 2자 이상 16자 이하로 작성해주시길 바랍니다."),
+    INVALID_NICKNAME_LENGTH("INVALID_NICKNAME_LENGTH", "닉네임은 2자 이상 16자 이하여야 합니다."),
     GENDER_REQUIRED("GENDER_REQUIRED", "성별은 필수입니다."),
     UNSUPPORTED_GENDER("UNSUPPORTED_GENDER", "지원하지 않는 성별입니다."),
     BIRTHDAY_REQUIRED("BIRTHDAY_REQUIRED", "생년월일은 필수입니다."),

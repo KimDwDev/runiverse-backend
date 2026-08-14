@@ -106,9 +106,8 @@ public class UserPersistenceAdapterTest {
         // when
         boolean result = userPersistenceAdapter.existsByEmail(email);
 
-        // then
+        // then -> 이메일이 실제로 쿼리에 바인딩됐는지는 반환값으로 증명되지 않는다
         assertThat(result).isFalse();
-
         verify(countQuery).setParameter("email", email);
         verify(countQuery).getSingleResult();
     }
@@ -432,7 +431,7 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("온보딩을 저장하면 user_onboard 행을 영속화한다")
+    @DisplayName("온보딩을 저장하면 user_onboardings 행을 영속화한다")
     void saveOnboardingPersistsOnboardingRow() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();

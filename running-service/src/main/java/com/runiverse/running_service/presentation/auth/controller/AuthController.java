@@ -8,26 +8,26 @@ import com.runiverse.running_service.application.auth.command.login.LoginResult;
 import com.runiverse.running_service.application.auth.command.logout.LogoutCommand;
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginCommand;
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginResult;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueResult;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshCommand;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshResult;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
 import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
 import com.runiverse.running_service.application.auth.port.in.LogoutUsecase;
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
-import com.runiverse.running_service.application.auth.port.in.ReissueUsecase;
+import com.runiverse.running_service.application.auth.port.in.RefreshUsecase;
 import com.runiverse.running_service.application.auth.port.in.SendEmailVerificationUsecase;
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
 import com.runiverse.running_service.presentation.auth.request.EmailVerificationRequest;
 import com.runiverse.running_service.presentation.auth.request.LoginRequest;
 import com.runiverse.running_service.presentation.auth.request.OauthLoginRequest;
-import com.runiverse.running_service.presentation.auth.request.ReissueRequest;
+import com.runiverse.running_service.presentation.auth.request.RefreshRequest;
 import com.runiverse.running_service.presentation.auth.request.SignUpRequest;
 import com.runiverse.running_service.presentation.auth.request.VerifyEmailCodeRequest;
 import com.runiverse.running_service.presentation.auth.response.LoginResponse;
 import com.runiverse.running_service.presentation.auth.response.OauthLoginResponse;
-import com.runiverse.running_service.presentation.auth.response.ReissueResponse;
+import com.runiverse.running_service.presentation.auth.response.RefreshResponse;
 import com.runiverse.running_service.presentation.auth.response.SignUpResponse;
 import com.runiverse.running_service.presentation.auth.response.VerifyEmailCodeResponse;
 import jakarta.validation.Valid;
@@ -55,7 +55,7 @@ public class AuthController {
     private final LoginUsecase loginUsecase;
     private final LogoutUsecase logoutUsecase;
     private final OauthLoginUsecase oauthLoginUsecase;
-    private final ReissueUsecase reissueUsecase;
+    private final RefreshUsecase refreshUsecase;
 
     @PostMapping("/email/verifications")
     public ResponseEntity<Void> sendEmailVerification(
@@ -154,15 +154,15 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ReissueResponse> reissue(
-            @Valid @RequestBody ReissueRequest request
+    public ResponseEntity<RefreshResponse> refresh(
+            @Valid @RequestBody RefreshRequest request
     ) {
-        ReissueCommand command = new ReissueCommand(
+        RefreshCommand command = new RefreshCommand(
                 request.refreshToken()
         );
-        ReissueResult result = reissueUsecase.handle(command);
+        RefreshResult result = refreshUsecase.handle(command);
         return ResponseEntity.status(HttpStatus.OK)
-                .body(new ReissueResponse(
+                .body(new RefreshResponse(
                         result.accessToken(),
                         result.refreshToken()
                 ));

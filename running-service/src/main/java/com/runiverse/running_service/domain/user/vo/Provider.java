@@ -1,7 +1,7 @@
 package com.runiverse.running_service.domain.user.vo;
 
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.exception.UnsupportedProviderException;
+import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
 
 import java.util.Locale;
 
@@ -20,7 +20,7 @@ public enum Provider {
         try {
             return valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            throw new UnsupportedProviderException();
+            throw new ProviderNotSupportedException();
         }
     }
 }

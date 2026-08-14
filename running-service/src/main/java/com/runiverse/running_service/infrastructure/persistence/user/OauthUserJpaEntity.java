@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,12 +16,9 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -33,9 +31,8 @@ import java.util.UUID;
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OauthUserJpaEntity {
+public class OauthUserJpaEntity extends BaseTimeEntity {
 
-    // PK가 (user_id, provider) 이다
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
@@ -46,14 +43,6 @@ public class OauthUserJpaEntity {
 
     @Column(name = "provider_id", nullable = false, updatable = false, length = 255)
     private String providerId;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     private OauthUserJpaEntity(UUID userId, Provider provider, String providerId) {
         this.userId = userId;
