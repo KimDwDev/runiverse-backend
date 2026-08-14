@@ -187,7 +187,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 
@@ -201,7 +201,7 @@
 
 ```json
 {
-  "code": "INTERNAL_ERROR",
+  "code": "INTERNAL_SERVER_ERROR",
   "message": "서버 오류가 발생했습니다."
 }
 ```
@@ -222,16 +222,16 @@
 
 - **Response `204 No Content`** — 본문 없음
 
-- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "올바른 이메일 형식이 아닙니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "이메일은 필수입니다."
 }
 ```
@@ -293,26 +293,26 @@
 
 - `verificationTicket`: 회원가입에 사용할 인증 티켓 (URL-safe Base64, 43자). 발급 후 **30분** 유효, **1회용**
 
-- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분. 인증 코드 자체의 실패는 별도 `code`
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분. 인증 코드 자체의 실패는 별도 `code`
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "올바른 이메일 형식이 아닙니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "이메일은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "인증 코드는 6자리 숫자입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "인증 코드는 필수입니다."
 }
 
@@ -362,26 +362,26 @@
 }
 ```
 
-- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "이메일 인증 티켓은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "비밀번호는 6자 이상 16자 이하여야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "비밀번호는 영문, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "비밀번호는 필수입니다."
 }
 ```
@@ -432,21 +432,21 @@
 
 - 닉네임 등 상세는 `GET /users/me`
 
-- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `VALIDATION_FAILED` 공통, `message`로 사유 구분
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "올바른 이메일 형식이 아닙니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "이메일은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "비밀번호는 필수입니다."
 }
 ```
@@ -488,12 +488,12 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "인가 코드는 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "코드 검증값은 필수입니다."
 }
 
@@ -540,7 +540,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "리프레시 토큰은 필수입니다."
 }
 ```
@@ -607,87 +607,87 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "닉네임은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "닉네임은 2자 이상 16자 이하여야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "성별은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "성별은 MALE 또는 FEMALE이어야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "생년월일은 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "생년월일은 미래일 수 없습니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "생년월일은 1900년 1월 1일 이후여야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "평균 페이스는 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "평균 페이스는 120초 이상이어야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "평균 페이스는 1800초 이하여야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "몸무게는 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "몸무게는 20kg 이상이어야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "몸무게는 300kg 이하여야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "키는 필수입니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "키는 20cm 이상이어야 합니다."
 }
 
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "키는 300cm 이하여야 합니다."
 }
 ```
@@ -717,7 +717,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 ```
@@ -757,7 +757,7 @@
 }
 ```
 
-- **code**: `VALIDATION_FAILED`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청) / `ALREADY_MATCHING`(이미 매칭 대기·방에 있는데 재요청)
+- **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청) / `ALREADY_MATCHING`(이미 매칭 대기·방에 있는데 재요청)
 
 - **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
   - 링크 생성 = 방 배정 시(`MATCH_REQUEST` 처리)
@@ -1285,7 +1285,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 ```
@@ -1534,7 +1534,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 
@@ -1584,7 +1584,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 ```
@@ -1694,7 +1694,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 
@@ -1974,7 +1974,7 @@
 
 ```json
 {
-  "code": "VALIDATION_FAILED",
+  "code": "INVALID_REQUEST",
   "message": "입력값이 올바르지 않습니다."
 }
 ```

@@ -49,8 +49,8 @@ public class GlobalExceptionHandler {
         log.warn("요청 검증 실패: {}", message);
         return respond(
                 HttpStatus.BAD_REQUEST,
-                CommonErrorCode.VALIDATION_FAILED.getCode(),
-                message.isBlank() ? CommonErrorCode.VALIDATION_FAILED.getMessage() : message
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
         );
     }
 
@@ -71,8 +71,8 @@ public class GlobalExceptionHandler {
         log.error("처리하지 못한 예외", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(
-                        CommonErrorCode.INTERNAL_ERROR.getCode(),
-                        CommonErrorCode.INTERNAL_ERROR.getMessage()
+                        CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                        CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage()
                 ));
     }
 
@@ -82,8 +82,8 @@ public class GlobalExceptionHandler {
         log.warn("경로 변수 변환 실패: {}", e.getName());
         return respond(
                 HttpStatus.BAD_REQUEST,
-                CommonErrorCode.VALIDATION_FAILED.getCode(),
-                CommonErrorCode.VALIDATION_FAILED.getMessage()
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                CommonErrorCode.INVALID_REQUEST.getMessage()
         );
     }
 
