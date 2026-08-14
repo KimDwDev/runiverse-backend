@@ -492,6 +492,54 @@ public class UserPersistenceAdapterTest {
                 .isInstanceOf(UserNotFoundException.class);
     }
 
+    @Test
+    @DisplayName("프로필 이미지를 지우면 엔티티의 key를 null로 만든다")
+    void clearProfileImageRemovesKey() {
+        // given -> S3 객체는 그대로 두고 DB의 연결만 끊는다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.clearProfileImage(new UserId(userId));
+
+        // then -> 별도 저장 호출 없이 변경 감지로 반영한다
+        assertThat(entity.getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 이미지가 없어도 지우기는 그대로 성공한다")
+    void clearProfileImageIsIdempotent() {
+        // given -> profile_image_key가 이미 null인 사용자다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.clearProfileImage(new UserId(userId));
+
+        // then
+        assertThat(entity.getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 프로필 이미지를 지우지 않고 예외를 던진다")
+    void clearProfileImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.clearProfileImage(new UserId(userId)))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
     private void givenCountQueryReturns(String parameterName, Object value, long count) {
         when(entityManager.createQuery(anyString(), eq(Long.class)))
                 .thenReturn(countQuery);
