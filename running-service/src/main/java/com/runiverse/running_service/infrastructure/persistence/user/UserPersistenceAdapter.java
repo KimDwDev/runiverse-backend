@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.auth.port.out.LoadUserByProvide
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
+import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
@@ -28,7 +29,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
-        CheckOnboardingPort, UpdateProfileImagePort {
+        CheckOnboardingPort, UpdateProfileImagePort, ClearProfileImagePort {
 
     private final EntityManager entityManager;
 
@@ -103,6 +104,15 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         }
         entity.changeProfileImageKey(profileImageKey.value());
 
+    }
+
+    @Override
+    public void clearProfileImage(UserId userId) {
+        UserJpaEntity entity = entityManager.find(UserJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new UserNotFoundException();
+        }
+        entity.changeProfileImageKey(null); // 변경 감지로 user.profile_image_key = null이 된다.
     }
 
     private User toDomain(UserJpaEntity entity) {
