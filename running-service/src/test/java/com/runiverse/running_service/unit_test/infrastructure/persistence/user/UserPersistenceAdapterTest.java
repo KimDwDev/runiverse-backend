@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Gender;
@@ -31,6 +32,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -457,6 +459,38 @@ public class UserPersistenceAdapterTest {
         assertThat(entity.getAvgPace()).isEqualTo(330);
         assertThat(entity.getWeight()).isEqualByComparingTo("70.5");
         assertThat(entity.getHeight()).isEqualByComparingTo("175.0");
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 key를 바꾸면 조회한 엔티티에 반영한다")
+    void updateProfileImageChangesEntity() {
+        // given -> save()는 persist라 신규 전용이므로 갱신은 변경 감지로 처리한다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+        String newKey = "profiles/" + userId + "/019ffa54-917f-7477-9482-5792597ef3b0.jpg";
+
+        // when
+        userPersistenceAdapter.updateProfileImage(new UserId(userId), new ProfileImageKey(newKey));
+
+        // then -> 별도 저장 호출 없이 엔티티 상태만 바꾼다
+        assertThat(entity.getProfileImageKey()).isEqualTo(newKey);
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 프로필 이미지를 바꾸지 않고 예외를 던진다")
+    void updateProfileImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.updateProfileImage(
+                new UserId(userId), new ProfileImageKey(profileImageKeyOf(userId))))
+                .isInstanceOf(UserNotFoundException.class);
     }
 
     private void givenCountQueryReturns(String parameterName, Object value, long count) {
