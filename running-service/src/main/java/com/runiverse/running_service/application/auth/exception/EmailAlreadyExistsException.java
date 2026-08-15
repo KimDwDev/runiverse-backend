@@ -1,11 +1,11 @@
 package com.runiverse.running_service.application.auth.exception;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
-import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 
 public class EmailAlreadyExistsException extends BusinessException {
 
     public EmailAlreadyExistsException() {
-        super(ErrorCode.EMAIL_ALREADY_EXISTS);
+        super(AuthErrorCode.EMAIL_ALREADY_EXISTS);
     }
 }

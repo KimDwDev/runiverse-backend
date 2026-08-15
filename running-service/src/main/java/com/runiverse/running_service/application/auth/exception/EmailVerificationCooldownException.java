@@ -1,11 +1,11 @@
 package com.runiverse.running_service.application.auth.exception;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
-import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 
 public class EmailVerificationCooldownException extends BusinessException {
 
     public EmailVerificationCooldownException() {
-        super(ErrorCode.EMAIL_VERIFICATION_COOLDOWN);
+        super(AuthErrorCode.EMAIL_VERIFICATION_COOLDOWN);
     }
 }

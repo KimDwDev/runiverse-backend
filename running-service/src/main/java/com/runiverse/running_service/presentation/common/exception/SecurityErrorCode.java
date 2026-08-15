@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum AuthErrorCode {
+public enum SecurityErrorCode {
     AUTHENTICATION_REQUIRED("AUTHENTICATION_REQUIRED", "인증이 필요합니다."),
     TOKEN_EXPIRED("TOKEN_EXPIRED", "액세스 토큰이 만료되었습니다."),
     TOKEN_BLOCKED("TOKEN_BLOCKED", "로그아웃된 액세스 토큰입니다."),

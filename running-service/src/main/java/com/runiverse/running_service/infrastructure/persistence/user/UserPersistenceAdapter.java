@@ -5,12 +5,16 @@ import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPo
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
+import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
@@ -19,6 +23,7 @@ import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +34,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
-        CheckOnboardingPort, UpdateProfileImagePort, ClearProfileImagePort {
+        CheckOnboardingPort, UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort {
 
     private final EntityManager entityManager;
 
@@ -184,5 +189,27 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 onboarding.getWeight().value(),
                 onboarding.getHeight().value()
         ));
+    }
+
+    @Override
+    public Optional<Nickname> loadNickname(UserId userId) {
+        return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
+                .map(UserOnboardingJpaEntity::getNickname)
+                .map(Nickname::new);
+    }
+
+    @Override
+    public void updateNickname(UserId userId, Nickname nickname) {
+        UserOnboardingJpaEntity entity = entityManager.find(UserOnboardingJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new OnboardingNotCompletedException();
+        }
+        entity.changeNickname(nickname.value());
+        try {
+            // 커밋을 미루면 유니크 위반이 밖에 터진다. -> 잡지 못한 것이기 떄문에 오류로 처리
+            entityManager.flush();
+        } catch (PersistenceException e) {
+            throw new NicknameAlreadyExistsException();
+        }
     }
 }
