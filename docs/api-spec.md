@@ -35,7 +35,7 @@
 
 ### 4. 매칭완료 대기방
 
-- 대기방 정보·참가자 목록·이모티콘·나가기: WebSocket (아래 5번)
+- 대기방 정보·참가자 목록·나가기: WebSocket (아래 5번)
 - 친구 초대: 2차 연기 (상세 4번)
 
 ### 5. 매칭·러닝 WebSocket — `/ws/running-matches`
@@ -49,7 +49,6 @@
 | 매칭 중 | `MATCH_PLAYERS_UPDATED` | S→C | |
 | 매칭 방 | `MATCH_STARTED` | S→C | 매칭 성사 통지 |
 | 매칭 방 | `MATCH_ROOM_UPDATED` | S→C | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
-| 매칭 방 | `EMOJI_SEND` / `EMOJI_RECEIVED` | C→S / S→C | 이모티콘 전송/수신 |
 | 러닝 카운트 다운 | `GET_ROOM_PLAYERS` | C→S | 대기방 참여자 조회 |
 | 러닝 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
@@ -852,25 +851,6 @@
 #### `MATCH_ROOM_UPDATED` (S→C) — 매칭방 정보 갱신
 
 - `data` = `RoomInfo` 전체 재전송 — 참가자 입장/퇴장/취소로 목록·팀 평균 페이스가 바뀔 때
-
-#### `EMOJI_SEND` (C→S) / `EMOJI_RECEIVED` (S→C) — 이모티콘
-
-```json
-// EMOJI_SEND (C→S)
-{
-  "runningSessionId": 125,
-  "emojiType": "CHEER"
-}
-// EMOJI_RECEIVED (S→C) — 본인 포함 방 전원 수신
-{
-  "runningSessionId": 125,
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
-  "emojiType": "CHEER",
-  "sentAt": "2026-07-25T10:10:15"
-}
-```
-
-- `emojiType` enum **5종**: `HI`(인사)/`CHEER`(응원)/`FIGHTING`(파이팅)/`FIRE`(준비 완료)/`LAUGH`(웃음) — 아이콘 표현은 프론트 몫, 추가는 하위호환
 
 #### 방 나가기 — 별도 메시지 없음
 

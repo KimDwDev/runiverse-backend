@@ -344,7 +344,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 2명 이상 모였으나 마감 전 / 마감 시점 확정 / 시작 / 종료 / 확정 후 이탈로 2명 미만 |
 | oauth_users.provider | GOOGLE / KAKAO | |
-| (API 전용) emojiType | HI / CHEER / FIGHTING / FIRE / LAUGH | WS 이모티콘 — DB 컬럼 없음(비영속). 인사/응원/파이팅/준비 완료/웃음, 추가는 하위 호환 |
 
 ---
 
