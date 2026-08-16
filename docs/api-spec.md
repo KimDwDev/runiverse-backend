@@ -96,7 +96,6 @@
 | 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
 | 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
 | 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
-| 32 | GET | `/api/v1/search` | 통합 검색 — 단일 엔드포인트, `?type=ACCOUNT\|POST&q=검색어` |
 
 ### 10. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
@@ -118,6 +117,7 @@
 | 43 | DELETE | `/api/v1/users/{userId}/follow` | 언팔로우 |
 | 44 | GET | `/api/v1/users/{userId}/followers` | 팔로워 목록 (+이름 검색) |
 | 45 | GET | `/api/v1/users/{userId}/followings` | 팔로잉 목록 (+이름 검색) |
+| 32 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 12. 프로필 편집 페이지
 
@@ -1616,13 +1616,6 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 - **인증**: 필요
 
-### 9-12. `GET /api/v1/search` — 통합 검색
-
-- **Query**: `type=ACCOUNT|POST`(필수), `q`(필수), `cursor`/`limit`
-- **Response `200 OK`**: `type=ACCOUNT` → `{ items: [{ "userId", "nickname", "profileImageUrl", "isFollowing" }], nextCursor }` / `type=POST` → `{ items: [피드 카드], nextCursor }`
-- **게시글 노출 범위**: `PUBLIC` 피드 + 본인 피드만
-- **인증**: 필요
-
 ## 10. 피드 작성 페이지 (+피드 편집) [MVP 제외]
 
 ### 10-1. `POST /api/v1/feeds/images/presigned-url` — 피드 이미지 업로드 URL 발급 (여러 장)
@@ -1868,6 +1861,14 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
+- **인증**: 필요
+
+### 11-10. `GET /api/v1/users/search` — 사용자 검색
+
+- **화면**: 러너 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
+- **Query**: `q`(필수, 닉네임), `cursor`/`limit`
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
+- 검색 결과에 친구 관계 상태를 함께 내릴지는 친구 API를 정리할 때 확정한다.
 - **인증**: 필요
 
 ## 12. 프로필 편집 페이지
