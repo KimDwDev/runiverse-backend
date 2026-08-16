@@ -36,7 +36,7 @@
 ### 4. 매칭완료 대기방
 
 - 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번)
-- 나가기: `DELETE /api/v1/running-matches/me`
+- 나가기: `DELETE /api/v1/users/me/running-match`
 - 친구 초대: 엔드포인트 미정 — 구현 후순위 (상세 4번)
 
 ### 5. 매칭·러닝 실시간 통신
@@ -48,8 +48,8 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 51 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
-| 52 | DELETE | `/api/v1/running-matches/me` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
-| 53 | GET | `/api/v1/running-matches/me` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
+| 52 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
+| 53 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 54 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 55 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 
@@ -61,11 +61,12 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
-**러닝 WebSocket** — `/ws/running-sessions`, 메시지 5종. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/ws/running-sessions`, 메시지 6종. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
-| 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 — WS 연결 후 첫 메시지 |
+| 카운트 다운 | `SESSION_READY` | S→C | 시작 시각 + 서버 현재 시각 — 클라가 오프셋 보정 |
+| 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
 | 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 강제 종료 포함 — 이 시점에 서버가 `running_records` 저장 |
@@ -756,13 +757,13 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**전환 지점** — `scheduledStartAt` 도달 시:
+**전환 지점** — `scheduledStartAt` 직전:
 
 1. 클라가 WS `/ws/running-sessions` 연결
-2. `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신
-3. **ack를 받은 뒤에** SSE 스트림을 닫는다
+2. 서버가 `SESSION_READY`로 시작 시각과 서버 현재 시각을 내림
+3. **그것을 받은 뒤에** SSE 스트림을 닫는다
 
-ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
+받기 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
 - **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
   - 링크 생성 = 방 배정 시(2명째가 매칭되는 순간)
@@ -775,7 +776,7 @@ ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채�
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
 - **연결 시점**: 매칭 신청 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
-  - 앱 재시작·포그라운드 복귀 시엔 `GET /running-matches/me`로 활성 여부를 확인하고 있으면 재연결한다.
+  - 앱 재시작·포그라운드 복귀 시엔 `GET /users/me/running-match`로 활성 여부를 확인하고 있으면 재연결한다.
 - **종료 시점**: 러닝 시작(위 전환 절차), 매칭 취소, 매칭 실패 — 서버가 스트림을 닫는다.
 - **연결을 화면 생명주기에 묶지 않는다.** 매칭 대기 중 현황 배너가 모든 화면에서 유지돼야 하므로, 홈을 벗어나도 스트림은 살아 있어야 한다.
 - **이벤트 형식** — 타입은 SSE `event` 필드로, 본문은 `data`에 JSON으로 싣는다
@@ -854,7 +855,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
 - **인증**: 필요
 
-#### `DELETE /api/v1/running-matches/me` — 매칭 취소·방 나가기 (겸용)
+#### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
   - 대기 중(`MATCHING`) 또는 방 미배정 = 대기 취소(row 삭제)
@@ -864,9 +865,10 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - **에러 (404 Not Found)**: 활성 신청이 없다
 - **인증**: 필요
 
-#### `GET /api/v1/running-matches/me` — 현재 매칭 상태 조회
+#### `GET /api/v1/users/me/running-match` — 현재 매칭 상태 조회
 
 - **화면**: 홈 진입·앱 재시작 — 스트림에 연결할지 판단하고 홈 상태를 그린다
+- 스트림도 연결 직후 같은 정보를 보내지만 이 API를 따로 둔다. **매칭을 걸지 않은 사용자가 대다수인데 전원에게 스트림을 여는 것은 서버 커넥션과 단말 배터리 양쪽에 부담**이라, 활성 신청이 있는지 먼저 확인하고 있을 때만 연결한다
 - **Response `200 OK`** — 활성 신청이 없으면 `{ "state": "NONE" }`
 
 ```json
@@ -956,18 +958,28 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 #### 방 나가기 — 별도 이벤트 없음
 
-- 확정된 방에서 나가기도 **`DELETE /running-matches/me`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
+- 확정된 방에서 나가기도 **`DELETE /users/me/running-match`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
 - 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED`
 - **확정 후 이탈에 페널티를 두지 않는다** — 이탈 이력은 `running_players.status='LEFT'`로 남으므로 나중에 도입하더라도 과거 데이터로 계산할 수 있다
 
 #### 대기방 참여자 목록 — 별도 조회 없음
 
 - `RoomInfo`가 참가자 전체를 담고 있고 변동 시마다 재전송되므로, 목록만 따로 받는 요청은 두지 않는다
-- 앱 재시작 등으로 스트림이 끊겼다면 `GET /running-matches/me`가 같은 정보를 돌려준다
+- 앱 재시작 등으로 스트림이 끊겼다면 `GET /users/me/running-match`가 같은 정보를 돌려준다
 
 ### 5-C. 러닝 카운트 다운 — SSE에서 WebSocket으로
 
-- 카운트다운은 클라 자체 시계 기준이다. `scheduledStartAt` 도달 시 클라가 러닝 화면으로 전환하면서 §5 머리말의 전환 절차를 수행한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다.
+**카운트다운은 클라가 돌리되 기준 시각은 서버 값을 쓴다.** 타이머 구동과 화면 전환은 클라 몫이다 — 서버가 매초 틱을 보내지 않는다. 다만 기준을 각자 기기 시계로 삼으면 참가자마다 출발이 어긋나므로, 기준점만 서버에서 받아 보정한다.
+
+절차는 다음과 같다.
+
+1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다
+2. 서버가 `SESSION_READY`(S→C)로 `startAt`과 **서버 현재 시각**을 내린다 — 클라는 자기 시계와의 오프셋을 계산해 타이머를 보정한다
+3. 클라는 `SESSION_READY`를 받은 뒤 SSE 스트림을 닫는다
+4. 보정된 시각으로 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱). 이 구간에서는 뒤로가기를 차단한다
+5. 도달 시 클라가 러닝 화면으로 전환하며 `RUNNING_START`(C→S)를 보낸다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다
+
+- 오프셋 보정의 구체 방식(왕복 지연을 어떻게 빼는지)은 미정
 
 #### WebSocket 연결 — `/ws/running-sessions`
 
@@ -996,6 +1008,19 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청)
 
+#### `SESSION_READY` (S→C) — 시작 시각 통지 (WS 연결 직후)
+
+```json
+{
+  "runningSessionId": 125,
+  "startAt": "2026-07-25T19:00:00",
+  "serverTime": "2026-07-25T18:59:42.317"
+}
+```
+
+- 클라는 `serverTime`과 자기 시계의 차이로 오프셋을 구해 카운트다운을 보정한다
+- 이 메시지를 받은 뒤 SSE 스트림을 닫는다 — 받기 전에 닫으면 WS가 실패했을 때 돌아갈 채널이 없다
+
 #### `RUNNING_START` (C→S) — 러닝 시작 알림 (클라 주도)
 
 ```json
@@ -1004,7 +1029,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- WS 연결 후 **첫 메시지**다. `RUNNING_STARTED` ack를 받으면 클라는 SSE 스트림을 닫는다
+- 보정된 시각이 `startAt`에 도달하면 클라가 발신한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾸므로, 이 메시지는 상태 전환의 트리거가 아니라 개별 참가자의 시작 통보다
 - **ack**: `RUNNING_STARTED`
 
 ### 5-D. 러닝 중
