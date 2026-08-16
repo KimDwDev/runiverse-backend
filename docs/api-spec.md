@@ -1880,11 +1880,15 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // friendships에서 COUNT (status=ACCEPTED)
   "friendStatus": "ACCEPTED",          // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
-  "mileageTotalMeters": 320500,        // 누적 마일리지 (`running_records` 합산)
-  "mileageMonthlyMeters": 42200        // 이번 달 마일리지
+  "mileageTotalMeters": 320500,        // 누적 마일리지 — SUM(total_distance)
+  "mileageMonthlyMeters": 42200,       // 이번 달 마일리지
+  "bestPaceSecondsPerKm": 312,         // 최고 페이스 — MIN(avg_pace). 기록이 없으면 null
+  "runningCount": 78                   // 러닝 횟수 — COUNT(*)
 }
 ```
 
+- **네 지표 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
+- **전체 사용자 대비 백분위는 내리지 않는다.** 순위 집계 배치와 저장소가 필요한데 초기에는 표본이 적어 수치 자체가 무의미하다(사용자 20명이면 "상위 12%"는 2등이라는 뜻이다). 나중에 응답 필드만 더하면 된다
 - `friendStatus`로 버튼을 가른다 — `NONE`이면 "친구 요청", `PENDING_SENT`면 "요청 취소", `PENDING_RECEIVED`면 "수락", `ACCEPTED`면 "친구 삭제". 본인 프로필(`isMe=true`)이면 `null`이다
 
 - **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 컬렉션 조회가 `403 PROFILE_PRIVATE`. 사진·닉네임·소개글·마일리지·최고 페이스·러닝 횟수·친구 수는 항상 공개. **친구 목록은 설정과 무관하게 본인만 본다**
