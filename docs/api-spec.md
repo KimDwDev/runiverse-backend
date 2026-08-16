@@ -130,7 +130,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 48 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) 조회 — 공개범위 설정 2차 |
+| 48 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
@@ -960,7 +960,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 ```
 
 - `forced=true` = 목표 도달 전 즉시 종료 — 정상/강제의 서버 처리(현재까지 데이터로 기록 저장 + 세션 종료)가 동일해 플래그로만 구분
-- **이 시점에 서버가 `running_records`(+splits) 저장**. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성(피드 카드용)
+- **이 시점에 서버가 `running_records`(+splits) 저장**. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성(기록 상세·목록의 경로 표시용)
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-sessions/{id}/results`로 대시보드 진입
 - 전원 제출 완료 or 타임아웃 중 먼저 오는 시점에 방 상태 `FINISHED` (타임아웃 값은 운영 정책)
 
@@ -1256,7 +1256,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 ```
 
 - **필수**: `startedAt`, `finishedAt`, `totalDistanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`, `endLatitude/Longitude`, `gpsTrackKey`, `routePolyline`, `splits`
-- **`routePolyline`**: 전체 경로를 다운샘플한 encoded polyline(피드 카드 지도 미리보기용 → `running_records.route_polyline`). 매칭 러닝은 서버가 Redis 버퍼로 생성하므로 솔로만 클라 제출 — 포인트 수 등 다운샘플 정책은 운영값
+- **`routePolyline`**: 전체 경로를 다운샘플한 encoded polyline(기록 상세·목록의 경로 표시용 → `running_records.route_polyline`). 원본 트랙은 `gpsTrackKey`가 가리키는 S3 객체이며 역할이 다르다 — 이쪽은 화면에 선을 그리는 용도라 조회에 딸려 나오고, 원본은 재계산·분석용이다. 매칭 러닝은 서버가 Redis 버퍼로 생성하므로 솔로만 클라 제출 — 포인트 수 등 다운샘플 정책은 운영값
 - **splits 항목별 필수**: `splitNumber`, `distanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`(구간 시작점 → `running_splits.session_lat/lng`), `startedAt`/`finishedAt`(구간 시작/종료 시각 → `session_start_date/session_end_date`) — 매칭 러닝은 서버가 Redis 버퍼로 직접 채우는 값이라 솔로만 클라 제출
 - **선택**: `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters` (구간별 동일)
 - **동작**: 서버가 `running_records`(`running_room_id=null`) + `running_splits` 생성. `gpsTrackKey`가 S3에 존재하는지 검증
@@ -1897,7 +1897,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 ### 12-2. `PATCH /api/v1/users/me` — 프로필 수정
 
-- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboardings.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 2차 예정, 평균 페이스는 수정 불가(서버 자동 갱신)
+- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboardings.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
 - **Response `200 OK`**: 11-1 형태 갱신본
 
 - **에러 (409 Conflict)**

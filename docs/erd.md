@@ -130,8 +130,8 @@
 | cadence | int | nullable | spm (선택) |
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
-| gps_track_key | varchar | NOT NULL | S3 key. 매칭=서버 업로드(Redis 버퍼→S3), 솔로=클라 업로드(presigned URL). 2차 실내러닝 시 nullable |
-| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — 피드 카드 지도 미리보기용. 매칭=서버 생성(Redis 버퍼), 솔로=클라 제출. 2차 실내러닝 시 nullable |
+| gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. 재계산·분석용(고도 소급 계산 등). 매칭=서버 업로드(Redis 버퍼→S3), 솔로=클라 업로드(presigned URL) |
+| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — **기록 상세·목록의 경로 표시용**. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭=서버 생성(Redis 버퍼), 솔로=클라 제출 |
 | start_date / end_date | timestamp | NOT NULL | |
 | start_lat / start_lng / end_lat / end_lng | double precision | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
