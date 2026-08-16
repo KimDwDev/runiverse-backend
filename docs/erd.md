@@ -82,7 +82,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴 |
+| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. **2명째가 매칭되는 순간 생성** — 신청 시점엔 방이 없다 |
 | start_date | timestamp | NOT NULL | 예약 시작 시각 |
 | total_member | int | NOT NULL | 모집 인원(서버 자동 편성 2~4) |
 | running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
@@ -96,7 +96,7 @@
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
 | user_id | UUID | FK → users, NOT NULL | |
-| status | enum | NOT NULL, default CONFIRMED |  |
+| status | enum | NOT NULL, default CONFIRMED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 CONFIRMED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | total_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_date | timestamp | NOT NULL | 희망 시작 시각 |
@@ -104,6 +104,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > `running_players`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
+> **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 방 배정 여부와 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
 
 ### running_room_sessions (연결 테이블)
 
@@ -340,8 +341,8 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[2차]** 피드 기본 공개 범위 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
-| running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 |
-| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 매칭 중 / 매칭 완료 / 시작 / 종료 / 취소 |
+| running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
+| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 2명 이상 모였으나 마감 전 / 마감 시점 확정 / 시작 / 종료 / 확정 후 이탈로 2명 미만 |
 | oauth_users.provider | GOOGLE / KAKAO | |
 | (API 전용) emojiType | HI / CHEER / FIGHTING / FIRE / LAUGH | WS 이모티콘 — DB 컬럼 없음(비영속). 인사/응원/파이팅/준비 완료/웃음, 추가는 하위 호환 |
 
