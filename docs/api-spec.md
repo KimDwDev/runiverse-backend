@@ -36,7 +36,7 @@
 ### 4. 매칭완료 대기방
 
 - 대기방 정보·참가자 목록·나가기: WebSocket (아래 5번)
-- 친구 초대: 2차 연기 (상세 4번)
+- 친구 초대: 엔드포인트 미정 — 구현 후순위 (상세 4번)
 
 ### 5. 매칭·러닝 WebSocket — `/ws/running-matches`
 
@@ -72,7 +72,7 @@
 | 15 | POST | `/api/v1/running-records/gps/presigned-url` | 솔로 러닝 GPS 트랙 업로드 URL |
 | 16 | POST | `/api/v1/running-records` | 솔로 러닝 완주 기록 저장 (매칭 없이 혼자) |
 
-### 8. 대회 화면
+### 8. 대회 화면 [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
@@ -81,7 +81,7 @@
 | 19 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
 | 20 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
 
-### 9. 피드 목록 페이지 (+댓글 모달)
+### 9. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
@@ -98,7 +98,7 @@
 | 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 | 32 | GET | `/api/v1/search` | 통합 검색 — 단일 엔드포인트, `?type=ACCOUNT\|POST&q=검색어` |
 
-### 10. 피드 작성 페이지 (+프로필의 피드 편집)
+### 10. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
@@ -112,10 +112,8 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (누적 고도·마일리지 포함, 1차 전부 공개) |
+| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
 | 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 40 | GET | `/api/v1/users/{userId}/badges` | 뱃지 목록 (더보기 확장 포함) |
-| 41 | GET | `/api/v1/users/{userId}/grass` | 잔디 — 주별 러닝 횟수 `{week, count}` |
 | 42 | POST | `/api/v1/users/{userId}/follow` | 팔로우 — 사용 화면: 프로필, 팔로워/팔로잉 목록 |
 | 43 | DELETE | `/api/v1/users/{userId}/follow` | 언팔로우 |
 | 44 | GET | `/api/v1/users/{userId}/followers` | 팔로워 목록 (+이름 검색) |
@@ -152,6 +150,7 @@
 - **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
+- **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 - **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningSessionId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `badgeId` 등) = **Long**
 
 ### 공통 에러 응답
@@ -729,7 +728,9 @@
 
 ## 4. 친구 초대
 
-친구 초대는 1차 미포함 — 1차 매칭은 랜덤 매칭만.
+MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 뒤에 붙인다. **엔드포인트 미정.**
+
+초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `CONFIRMED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
 
 ## 5. 매칭·러닝 WebSocket — `/ws/running-matches`
 
@@ -1218,7 +1219,7 @@
 
 - **화면**: 솔로 러닝 종료 → 결과 저장. 매칭 러닝은 서버가 WS `RUNNING_FINISH` 때 저장하므로 이 API는 **솔로 전용**(충돌 없음)
 - **시작 알림 없음**: 솔로는 알릴 상대가 없어 시작 API 불필요 — 클라가 로컬로 추적(카운트다운·시계 모두 클라)
-- **Request** (`gpsTrackKey`·좌표 필수 — 1차는 야외 GPS 러닝만. 실내/트레드밀은 2차)
+- **Request** (`gpsTrackKey`·좌표 필수 — 야외 GPS 러닝만. 실내/트레드밀은 **[MVP 제외]**)
 
 ```json
 {
@@ -1282,7 +1283,7 @@
 - **인증**: 필요
 - ⚠️ 솔로는 서버가 실측을 못 해 **클라 제출값을 그대로 저장** — 리더보드·페널티 도입 시 GPS 트랙 기반 검증 추가 여지
 
-## 8. 대회 화면
+## 8. 대회 화면 [MVP 제외]
 
 ### 8-1. `GET /api/v1/contests` — 대회 목록·검색·필터
 
@@ -1337,7 +1338,7 @@
 - **Response `200 OK`**: 8-1과 동일한 대회 객체 배열 (`{ items, nextCursor }`, `isBookmarked` 생략 가능)
 - **인증**: 필요
 
-## 9. 피드 목록 페이지 (+댓글 모달)
+## 9. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 **피드 카드 공통 객체** (9-1/9-2/10-2 응답, 검색 결과 재사용):
 
@@ -1622,7 +1623,7 @@
 - **게시글 노출 범위**: `PUBLIC` 피드 + 본인 피드만
 - **인증**: 필요
 
-## 10. 피드 작성 페이지 (+피드 편집)
+## 10. 피드 작성 페이지 (+피드 편집) [MVP 제외]
 
 ### 10-1. `POST /api/v1/feeds/images/presigned-url` — 피드 이미지 업로드 URL 발급 (여러 장)
 
@@ -1698,7 +1699,7 @@
 ### 10-3. `PATCH /api/v1/feeds/{feedId}` — 피드 수정
 
 - **화면**: 프로필(피드 편집 — 게시글 수정, 노출 범위 설정)
-- **Request**: `{ "content"?, "imageKeys"?, "visibility"? }` (부분 수정). 수정 시마다 **이전 내용을 `delete_feeds`에 스냅샷 저장** (신고/차단 등 활용 기능은 2차지만 이력은 1차부터 축적)
+- **Request**: `{ "content"?, "imageKeys"?, "visibility"? }` (부분 수정). 수정 시마다 **이전 내용을 `delete_feeds`에 스냅샷 저장** (신고/차단 등 활용 기능은 **[MVP 제외]**이나 이력은 처음부터 축적)
 - **Response `200 OK`**: 수정된 피드 카드
 
 - **에러 (403 Forbidden — 본인 피드 아님)**
@@ -1785,8 +1786,7 @@
 }
 ```
 
-- **1차 프로필 전부 공개** — 누적 고도·마일리지·뱃지·잔디·팔로우 목록 모두 공개 조회
-- **[2차] 지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 비맞팔이 조회하면 응답에 `masked=true` + 누적 고도·마일리지는 `null` (사진·닉네임·인사말·팔로워/팔로잉 수는 항상 공개). 뱃지·잔디·팔로워/팔로잉 목록 조회는 `403 PROFILE_PRIVATE`. 1차는 `masked` 없이 전부 공개
+- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 컬렉션·친구 목록 조회가 `403 PROFILE_PRIVATE`. 사진·닉네임·소개글·마일리지·최고 페이스·러닝 횟수·친구 수는 항상 공개
 
 - **에러 (404 Not Found — 탈퇴 포함)**
 
@@ -1817,48 +1817,6 @@
 ```
 
 - **공개범위**: 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+팔로워면 `FOLLOWERS`)
-- **인증**: 필요
-
-### 11-4. `GET /api/v1/users/{userId}/badges` — 뱃지 목록
-
-- **Response `200 OK`**: `{ "items": [ { "badgeId", "name", "description", "imageUrl", "earnedAt" } ] }` (서버 로직 자동 지급 — 지급 API 없음, 조회만)
-
-- **에러 (404 Not Found)**
-
-```json
-{
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
-}
-```
-
-- **인증**: 필요
-
-### 11-5. `GET /api/v1/users/{userId}/grass` — 잔디 (주 단위)
-
-- **Query**: `year`(선택, 기본 올해)
-- **Response `200 OK`** — 주별 러닝 횟수만 반환, 색 단계(1~7회, 8+는 캡) 매핑은 프론트
-
-```json
-{
-  "items": [
-    {
-      "week": "2026-W30",
-      "count": 3
-    }
-  ]
-}
-```
-
-- **에러 (404 Not Found)**
-
-```json
-{
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
-}
-```
-
 - **인증**: 필요
 
 ### 11-6. `POST /api/v1/users/{userId}/follow` — 팔로우 / 11-7. `DELETE` — 언팔로우
@@ -1897,7 +1855,7 @@
 
 ### 11-8. `GET /api/v1/users/{userId}/followers` / 11-9. `.../followings` — 팔로워·팔로잉 목록
 
-- **화면**: 팔로워/팔로잉 목록 페이지 (`mutual` 필터는 친구 초대 기능과 함께 2차 연기)
+- **화면**: 팔로워/팔로잉 목록 페이지
 - **Query**: `q`(이름 필터), `cursor`/`limit`
 - **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "isFollowing", "isMutual" } ], "nextCursor": "..." }`
 
@@ -1972,7 +1930,7 @@
 ```
 
 - **`alertConsent` = 단일 토글** — 좋아요·댓글·팔로우·매칭 확정/실패·시작 리마인더·대회 접수 등 모든 푸시를 한 번에 on/off (`users.alert_consent`)
-- **[2차] 공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off)·`feedDefaultVisibility`(FOLLOWERS/PUBLIC/PRIVATE — 피드 작성 기본값) 필드 추가 예정. 1차는 프로필 전부 공개, 피드 기본값은 클라 PUBLIC 프리셋, 설정 화면엔 알림 토글만
+- **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
 - **인증**: 필요
 
 ### 13-2. `PATCH /api/v1/users/me/settings` — 설정 변경
@@ -1983,6 +1941,6 @@
 ### 13-3. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_badges`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄) + 본인 `user_follow_stats`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄) + 본인 `user_follow_stats`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

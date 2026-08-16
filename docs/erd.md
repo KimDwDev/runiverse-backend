@@ -6,7 +6,7 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`follows`·`feed_likes`·`comment_likes`·`user_badges`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`user_follow_stats`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`follows`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`user_follow_stats`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`follows.follower_id`/`followee_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). `*_date`도 시점이면 `timestamp`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
@@ -14,7 +14,7 @@
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`session_time`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`follows`·`user_follow_stats`·`user_badges`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`follows`·`user_follow_stats`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -29,8 +29,8 @@
 | email | varchar | UNIQUE, NOT NULL | 로컬·소셜 공통 |
 | password_hash | varchar | nullable | 소셜 전용 유저는 null. 원문 미보관 |
 | alert_consent | boolean | NOT NULL, default false | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 13-1/13-2) |
-| profile_visibility | enum | NOT NULL, default PUBLIC | 1차 전부 공개 |
-| feed_default_visibility | enum | NOT NULL, default PUBLIC | 1차 클라 PUBLIC 고정 |
+| profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
+| feed_default_visibility | enum | NOT NULL, default PUBLIC | **[MVP 제외]** 피드 기본 공개 범위 |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
 | introduction | varchar | nullable | 소개글 |
 | created_at / updated_at | timestamp | NOT NULL | |
@@ -71,7 +71,7 @@
 | platform | enum | NOT NULL |  |
 | device_id | varchar | UNIQUE, NOT NULL | 기기 식별자 (`POST /devices` upsert 키) |
 | app_version | varchar | nullable | |
-| is_active | boolean | NOT NULL, default true | 재로그인 시 devices API가 true 갱신. 기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차) — 1차 로그아웃은 토큰 블랙리스트만 |
+| is_active | boolean | NOT NULL, default true | 재로그인 시 devices API가 true 갱신. 기기 단위 비활성화(로그아웃 시 false)는 **[MVP 제외]** — 로그아웃은 토큰 블랙리스트만 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
 ---
@@ -88,7 +88,7 @@
 | running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
 | status | enum | NOT NULL, default MATCHING |  |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | **[2차]** 관리자 부정 방 숨김용 — 1차 미사용 |
+| deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
 
 ### running_players
 
@@ -100,7 +100,7 @@
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | total_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_date | timestamp | NOT NULL | 희망 시작 시각 |
-| desired_member_count | int | nullable | **[2차]** 유저 희망 매칭 인원 (1차 미사용 — 서버 자동 편성 2~4) |
+| desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > `running_players`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
@@ -159,7 +159,9 @@
 
 ---
 
-## 3. 도메인 C — 소셜 (팔로우 · 피드 · 댓글 · 뱃지)
+## 3. 도메인 C — 소셜 (팔로우 · 피드 · 댓글)
+
+> **`[MVP 제외]` 표기**: 지금 만들지 않는 테이블. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이다.
 
 ### follows
 
@@ -180,7 +182,7 @@
 
 > 동기화: 팔로우/언팔로우/탈퇴를 같은 트랜잭션에서 ±1 처리. 드리프트 대비 주기적 재계산 배치 권장.
 
-### feeds
+### feeds [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -194,7 +196,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable |  |
 
-### feed_images
+### feed_images [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -205,7 +207,7 @@
 | sort_order | int | NOT NULL, default 0 | 표시 순서 |
 | created_at | timestamp | NOT NULL | |
 
-### feed_likes
+### feed_likes [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -213,7 +215,7 @@
 | user_id | UUID | PK2, → users | 논리 참조 |
 | created_at | timestamp | NOT NULL | |
 
-### comments
+### comments [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -226,7 +228,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable |  |
 
-### comment_likes
+### comment_likes [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -234,29 +236,11 @@
 | user_id | UUID | PK2, → users | |
 | created_at | timestamp | NOT NULL | |
 
-### badges
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| badge_id | bigint | PK | |
-| name | varchar | UNIQUE, NOT NULL | |
-| description | varchar | nullable | |
-| image_url | varchar | NOT NULL | |
-| created_at | timestamp | NOT NULL | |
-
-### user_badges
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| user_id | UUID | PK1, FK → users | |
-| badge_id | bigint | PK2, FK → badges | |
-| created_at | timestamp | NOT NULL | 유저 뱃지 보유(다대다). 프로필 화면에서만 노출 |
-
 ---
 
-## 4. 도메인 D — 대회
+## 4. 도메인 D — 대회 [MVP 제외]
 
-### running_contests
+### running_contests [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -270,7 +254,7 @@
 | detail_url | varchar | nullable | 외부 상세 링크 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
-### user_running_contests (북마크)
+### user_running_contests (북마크) [MVP 제외]
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -294,7 +278,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | alert_consent | boolean | | |
 | created_at | timestamp | NOT NULL | 스냅샷 시각 |
 
-### delete_feeds
+### delete_feeds [MVP 제외]
 
 피드 수정 이력(수정 시마다 이전 내용 스냅샷 — 신고 시 원본 확인용).
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -305,7 +289,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | content | text | | 스냅샷된 내용 |
 | created_at | timestamp | NOT NULL | 스냅샷 시각 |
 
-### delete_comments
+### delete_comments [MVP 제외]
 
 댓글 삭제/수정 이력.
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -318,18 +302,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | comment | text | | 스냅샷된 내용 |
 | created_at | timestamp | NOT NULL | 스냅샷 시각 |
 
-### delete_badges
-
-뱃지 삭제 이력.
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| delete_badge_id | bigint | PK | |
-| badge_id | bigint | → badges | 원본 뱃지 |
-| name | varchar | | |
-| description | varchar | | |
-| image_url | varchar | | |
-| created_at | timestamp | NOT NULL | 스냅샷 시각 |
-
 ---
 
 ## 6. enum 사전 (컬럼별 값 목록 — DB·API 동일 코드)
@@ -337,8 +309,8 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 컬럼 | 값 | 비고 |
 |---|---|---|
 | feeds.visibility | FOLLOWERS / PUBLIC / PRIVATE | 피드별 개별 저장 |
-| users.profile_visibility | FRIENDS / PUBLIC | **[2차]** 지인 마스킹 |
-| users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[2차]** 피드 기본 공개 범위 |
+| users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 |
+| users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[MVP 제외]** 피드 기본 공개 범위 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
@@ -349,18 +321,18 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버(`feed_likes`·`comment_likes`·`user_badges`·`user_running_contests`는 별도 불필요). `running_splits (running_record_id, sequence)` UNIQUE도 `running_record_id` 조회 커버.
+> 복합 PK는 첫 컬럼 조회를 커버(`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요). `running_splits (running_record_id, sequence)` UNIQUE도 `running_record_id` 조회 커버.
 
 | 인덱스 대상 | 용도 |
 |---|---|
 | user_devices.user_id | 푸시 발송 — 유저의 활성 기기 조회 |
 | follows.followee_id | 팔로워 목록 (PK는 follower_id만 커버) |
-| feeds.user_id | 프로필 피드 그리드·내 피드 |
-| feeds.created_at | 피드 타임라인 최신순 정렬 |
-| feed_images.feed_id | 피드 이미지 조회 |
-| comments.feed_id | 댓글 목록 |
-| comments.parent_comment_id | 답글 지연 로딩 |
-| running_records.user_id | 내 기록·마일리지·누적고도·잔디 |
+| feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
+| feeds.created_at | **[MVP 제외]** 피드 타임라인 최신순 정렬 |
+| feed_images.feed_id | **[MVP 제외]** 피드 이미지 조회 |
+| comments.feed_id | **[MVP 제외]** 댓글 목록 |
+| comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
+| running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.running_room_id | 방 참가자 조회 |
-| running_contests.region, event_date | 대회 검색·필터 |
+| running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |
