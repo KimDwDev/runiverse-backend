@@ -96,7 +96,7 @@ public class UserAggregateTest {
         class OAuthSignupConstructorTest {
 
             @Test
-            @DisplayName("OAuth 회원가입 시 비밀번호 해시와 소개는 빈 값이고 알림 동의는 false, 공개 범위는 PUBLIC이다")
+            @DisplayName("OAuth 회원가입 시 비밀번호 해시와 소개는 빈 값이고 알림 동의는 true, 공개 범위는 PUBLIC이다")
             void createOAuthUserSuccess() {
                 // when
                 User user = new User(USER_ID, EMAIL);
@@ -105,7 +105,7 @@ public class UserAggregateTest {
                 assertThat(user.getUserId().value()).isEqualTo(USER_ID);
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEmpty();
-                assertThat(user.isAlertConsent()).isFalse();
+                assertThat(user.isAlertConsent()).isTrue();   // 거래성 알림뿐이라 기본 수신
                 assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
                 assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
                 assertThat(user.getIntroduction().value()).isEmpty();
@@ -130,7 +130,7 @@ public class UserAggregateTest {
                 assertThat(user.getUserId().value()).isEqualTo(USER_ID);
                 assertThat(user.getEmail().value()).isEqualTo(EMAIL);
                 assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
-                assertThat(user.isAlertConsent()).isFalse();
+                assertThat(user.isAlertConsent()).isTrue();   // 거래성 알림뿐이라 기본 수신
                 assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
                 assertThat(user.getProfileImageKey()).isEmpty();   // 신규 가입자는 프로필 사진이 없다
                 assertThat(user.getIntroduction().value()).isEmpty();
