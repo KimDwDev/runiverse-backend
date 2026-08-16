@@ -50,7 +50,8 @@
 | 51 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
 | 52 | DELETE | `/api/v1/running-matches/me` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
 | 53 | GET | `/api/v1/running-matches/me` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
-| 54 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 54 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 55 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -148,7 +149,7 @@
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 51개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 5종)**
+**합계: REST 52개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 5종)**
 
 ---
 
@@ -794,6 +795,26 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - **keep-alive**: 주기적으로 주석 라인(`: ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
+#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
+
+- **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
+- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘), `targetDistanceMeters`(선택 — 주면 해당 거리 조건만 집계)
+- **Response `200 OK`**
+
+```json
+{
+  "slots": [
+    { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
+    { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
+    { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+  ]
+}
+```
+
+- `waitingCount`는 아직 확정되지 않은 대기자 수다 — 이미 `MATCHED`된 방의 인원은 세지 않는다(들어갈 수 없는 자리다)
+- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다
+- **인증**: 필요
+
 #### `POST /api/v1/running-matches` — 매칭 신청
 
 - **화면**: 홈 (매칭 버튼)
@@ -801,11 +822,20 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "scheduledStartAt": "2026-07-25T10:00:00",
+  "scheduledStartAt": "2026-07-25T19:00:00",
   "targetDistanceMeters": 5000
 }
 ```
 
+- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다
+
+| 필드 | 허용값 |
+|---|---|
+| `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
+| `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
+
+- 조건을 좁게 고정하는 이유는 매칭 성사율이다. 자유 입력이면 같은 조건에 두 명이 모일 확률이 급격히 떨어진다
+- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`
 - 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
