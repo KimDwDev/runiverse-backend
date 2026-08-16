@@ -1925,11 +1925,11 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 ```json
 {
-  "alertConsent": false                  // 전체 알림 on/off (단일 토글)
+  "alertConsent": true                   // 전체 알림 on/off (단일 토글, 기본 on)
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 좋아요·댓글·팔로우·매칭 확정/실패·시작 리마인더·대회 접수 등 모든 푸시를 한 번에 on/off (`users.alert_consent`)
+- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 세션 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`** — 넷 다 거래성 알림이라 수신 동의 대상이 아니고, 가입 직후부터 매칭 확정 푸시가 도달해야 한다. OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
 - **인증**: 필요
 
