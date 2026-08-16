@@ -115,7 +115,7 @@
 | created_at | timestamp | NOT NULL | |
 
 > **이름 혼동 주의**: API "세션"(`runningSessionId`) = `running_rooms.running_room_id`. 이 테이블은 API 미노출, 서버 내부 연결용.
-> **row 트리거**: 링크 생성 = 방 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_players`도 DELETE) / 확정 후 이탈 = 링크 유지 + `running_players.status=LEFT`(어느 방에서 나갔는지 = 페널티 근거) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
+> **row 트리거**: 링크 생성 = 방 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_players`도 DELETE) / 확정 후 이탈 = 링크 유지 + `running_players.status=LEFT`(어느 방에서 나갔는지 = 이탈 이력) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
 
 ### running_records
 

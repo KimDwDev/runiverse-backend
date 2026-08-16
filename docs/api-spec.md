@@ -928,7 +928,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - 확정된 방에서 나가기도 **`DELETE /running-matches/me`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
 - 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED`
-- 확정 후 이탈 페널티는 미설계
+- **확정 후 이탈에 페널티를 두지 않는다** — 이탈 이력은 `running_players.status='LEFT'`로 남으므로 나중에 도입하더라도 과거 데이터로 계산할 수 있다
 
 #### 대기방 참여자 목록 — 별도 조회 없음
 
