@@ -1,7 +1,7 @@
 package com.runiverse.running_service.domain.user.vo;
 
-import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
+import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
 
 import java.util.Locale;
 

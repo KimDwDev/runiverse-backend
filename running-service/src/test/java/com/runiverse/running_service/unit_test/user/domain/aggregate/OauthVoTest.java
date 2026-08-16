@@ -2,8 +2,8 @@ package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderIdTooLongException;
-import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
+import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
 import org.junit.jupiter.api.DisplayName;

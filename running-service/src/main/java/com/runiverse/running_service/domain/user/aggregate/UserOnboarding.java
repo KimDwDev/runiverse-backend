@@ -65,7 +65,7 @@ public class UserOnboarding {
                 height != null ? new Height(height) : this.height
         );
     }
-    
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

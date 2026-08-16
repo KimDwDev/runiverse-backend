@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardingJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Id;
@@ -9,7 +10,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.Checks;
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
