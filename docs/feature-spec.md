@@ -221,6 +221,10 @@
 
 **API 리소스 네이밍**: DB 테이블명(`running_rooms`, `running_players` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일한다(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성되어 있다.
 
+- **`running-match`와 `running-session`은 다른 단계다.** 전자는 매칭 신청·대기(`running_players`), 후자는 확정된 방과 그 이후(`running_rooms`)를 가리킨다.
+- 신청 시점에는 방이 없다 — 2명째가 모여야 생기고 그때 `runningSessionId`가 나온다. 그래서 매칭 단계 경로에는 세션 ID가 없고(`GET /users/me/running-match`), 세션 단계 경로에는 반드시 있다(`GET /running-sessions/{runningSessionId}/results`).
+- "room 대신 session"은 **방을 뭐라 부를지**에 대한 규칙이므로 매칭 신청에는 적용되지 않는다.
+
 **매칭·러닝 설계**: 구간마다 통신 방식이 다르다 — **매칭은 REST + SSE**, **러닝 세션은 WebSocket**(`/ws/running-sessions`)이다.
 
 - 매칭 구간에서 클라가 보내는 것은 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다. 양방향 채널을 쓸 이유가 없어 신청·취소는 REST로 보내고 현황은 SSE 스트림(`/running-matches/stream`)으로 받는다. 러닝 세션은 위치를 주기 발신하는 고빈도 양방향 구간이라 WebSocket을 쓴다.
