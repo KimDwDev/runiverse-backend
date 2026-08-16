@@ -31,26 +31,40 @@
 ### 3. 홈 화면
 
 - 날씨: 서버 API 없음 — 클라이언트가 직접 호출 (상세 3번)
-- 매칭 시작·설정·대기: REST 없음 — 전부 WebSocket (아래 5번)
+- 매칭 시작·취소: REST (아래 5번). 대기 현황은 SSE 스트림으로 수신
 
 ### 4. 매칭완료 대기방
 
-- 대기방 정보·참가자 목록·나가기: WebSocket (아래 5번)
+- 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번)
+- 나가기: `DELETE /api/v1/running-matches/me`
 - 친구 초대: 엔드포인트 미정 — 구현 후순위 (상세 4번)
 
-### 5. 매칭·러닝 WebSocket — `/ws/running-matches`
+### 5. 매칭·러닝 실시간 통신
 
-연결 1개, 메시지 13종(아래 표). 이 외에 요청 결과로 오가는 **ack 3종**(`MATCH_WAITING`·`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **응답 1종**(`ROOM_PLAYERS`, `GET_ROOM_PLAYERS`의 응답)이 있음 — 상세는 5-A~5-D 본문 참고.
+매칭은 **REST + SSE**, 러닝 세션은 **WebSocket**이다. 전환 절차는 상세 5번 머리말 참고.
+
+**매칭 REST**
+
+| # | Method | Path | 설명 |
+|---|--------|------|------|
+| 51 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
+| 52 | DELETE | `/api/v1/running-matches/me` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
+| 53 | GET | `/api/v1/running-matches/me` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
+| 54 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+
+**매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
+
+| 이벤트 | 비고 |
+|--------|------|
+| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 — 방 배정 전에는 `runningSessionId`가 `null` |
+| `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
+| `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
+
+**러닝 WebSocket** — `/ws/running-sessions`, 메시지 5종. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
-| 매칭 중 | `MATCH_REQUEST` | C→S | 매칭 요청 (시각+거리) |
-| 매칭 중 | `MATCH_CANCEL` | C→S | 대기 취소 + 확정 후 나가기 겸용(서버가 방 상태로 분기, ack 없음) |
-| 매칭 중 | `MATCH_PLAYERS_UPDATED` | S→C | |
-| 매칭 방 | `MATCH_STARTED` | S→C | 매칭 성사 통지 |
-| 매칭 방 | `MATCH_ROOM_UPDATED` | S→C | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
-| 러닝 카운트 다운 | `GET_ROOM_PLAYERS` | C→S | 대기방 참여자 조회 |
-| 러닝 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
+| 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 — WS 연결 후 첫 메시지 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
 | 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 강제 종료 포함 — 이 시점에 서버가 `running_records` 저장 |
@@ -134,7 +148,7 @@
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 50개 + WebSocket 채널 1개(메시지 13종)**
+**합계: REST 51개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 5종)**
 
 ---
 
@@ -732,64 +746,120 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `CONFIRMED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
 
-## 5. 매칭·러닝 WebSocket — `/ws/running-matches`
+## 5. 매칭·러닝 실시간 통신
 
-- **연결**: `wss://.../ws/running-matches` + `Authorization: Bearer {accessToken}` (연결 1개로 매칭→대기방→카운트다운→러닝 전 구간 처리)
-- **메시지 공통 형식**
+**구간마다 통신 방식이 다르다.**
 
-```json
-{
-  "type": "...",
-  "data": { ... }
-}
-```
+| 구간 | 방식 | 이유 |
+|---|---|---|
+| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
+| 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-- **ack 규칙**: 상태가 걸린 요청에만 — `MATCH_REQUEST`→`MATCH_WAITING`, `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
-  - **`MATCH_CANCEL`·`RUNNING_LOCATION_UPDATE`는 ack 없음**(보내고 끝 — 실패는 `ERROR`)
-  - ack의 `data`는 비움
-- **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
+**전환 지점** — `scheduledStartAt` 도달 시:
 
-```json
-{
-  "code": "SESSION_NOT_FOUND",
-  "message": "러닝 세션을 찾을 수 없습니다.",
-  "sourceType": "RUNNING_LOCATION_UPDATE"
-}
-```
+1. 클라가 WS `/ws/running-sessions` 연결
+2. `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신
+3. **ack를 받은 뒤에** SSE 스트림을 닫는다
 
-- **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청) / `ALREADY_MATCHING`(이미 매칭 대기·방에 있는데 재요청)
+ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
 - **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
-  - 링크 생성 = 방 배정 시(`MATCH_REQUEST` 처리)
-  - `MATCH_CANCEL` 수신 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 페널티·이력 근거)
+  - 링크 생성 = 방 배정 시(2명째가 매칭되는 순간)
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
-#### `MATCH_REQUEST` (C→S) — 러닝 매칭 요청
+#### `GET /api/v1/running-matches/stream` — 매칭 이벤트 스트림 (SSE)
+
+- **인증**: 필요 / **Content-Type**: `text/event-stream`
+- **연결 시점**: 매칭 신청 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
+  - 앱 재시작·포그라운드 복귀 시엔 `GET /running-matches/me`로 활성 여부를 확인하고 있으면 재연결한다.
+- **종료 시점**: 러닝 시작(위 전환 절차), 매칭 취소, 매칭 실패 — 서버가 스트림을 닫는다.
+- **연결을 화면 생명주기에 묶지 않는다.** 매칭 대기 중 현황 배너가 모든 화면에서 유지돼야 하므로, 홈을 벗어나도 스트림은 살아 있어야 한다.
+- **이벤트 형식** — 타입은 SSE `event` 필드로, 본문은 `data`에 JSON으로 싣는다
+
+```
+event: MATCH_ROOM_UPDATED
+data: {"runningSessionId":125,"status":"MATCHED", ...}
+```
+
+| 이벤트 | 시점 |
+|---|---|
+| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 (방 배정 전후 모두) |
+| `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
+| `MATCH_ROOM_UPDATED` | 확정된 방의 정보 변동 — `data` = `RoomInfo` |
+
+- **연결 직후 서버가 현재 상태를 한 번 보낸다.** 매칭 이벤트는 전부 **전체 상태를 담으므로** 놓친 이벤트를 되짚을 필요가 없다 — `Last-Event-ID` 재개를 쓰지 않는 이유다. 재연결은 곧 스냅샷 재수신이다.
+- **keep-alive**: 주기적으로 주석 라인(`: ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
+- 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
+
+#### `POST /api/v1/running-matches` — 매칭 신청
+
+- **화면**: 홈 (매칭 버튼)
+- **Request**
 
 ```json
 {
-  "scheduledStartAt": "2026-07-25T10:00:00",  // 희망 시작 시각
-  "targetDistanceMeters": 5000                  // 목표 거리(m)
+  "scheduledStartAt": "2026-07-25T10:00:00",
+  "targetDistanceMeters": 5000
 }
 ```
 
 - 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
-- **ack**: `MATCH_WAITING` (매칭 대기 진입)
+- **Response `201 Created`** — 신청이 접수되면 `running_players` row가 생긴다. 이 시점엔 방이 없을 수 있다(2명째가 모여야 생성)
 
-#### `MATCH_CANCEL` (C→S) — 매칭 취소·방 나가기 (겸용)
+```json
+{
+  "scheduledStartAt": "2026-07-25T10:00:00",
+  "targetDistanceMeters": 5000,
+  "confirmDeadline": "2026-07-25T09:30:00"
+}
+```
 
-- Data: 없음 (연결 컨텍스트로 본인 처리)
+- `confirmDeadline`은 서버 계산값 — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다
+- **응답을 받은 뒤 SSE 스트림에 연결한다**
+- **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
+- **인증**: 필요
+
+#### `DELETE /api/v1/running-matches/me` — 매칭 취소·방 나가기 (겸용)
+
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) = 대기 취소(row 삭제)
-  - 확정 후(`MATCHED`) = 이탈(`LEFT` 처리, 페널티 대상)
-  - 남은 인원에 겐 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED` 통지
-- **ack 없음** — 보내고 화면 닫으면 끝, 실패는 `ERROR`
+  - 대기 중(`MATCHING`) 또는 방 미배정 = 대기 취소(row 삭제)
+  - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, row 유지)
+  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, 이탈로 2명 미만이 되면 `status: CANCELLED`
+- **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
+- **에러 (404 Not Found)**: 활성 신청이 없다
+- **인증**: 필요
 
-#### `MATCH_PLAYERS_UPDATED` (S→C) — 매칭 참여자 갱신
+#### `GET /api/v1/running-matches/me` — 현재 매칭 상태 조회
+
+- **화면**: 홈 진입·앱 재시작 — 스트림에 연결할지 판단하고 홈 상태를 그린다
+- **Response `200 OK`** — 활성 신청이 없으면 `{ "state": "NONE" }`
+
+```json
+{
+  "state": "MATCHED",
+  "runningSessionId": 125,
+  "room": { ... }
+}
+```
+
+- **`state`는 저장값이 아니라 파생값이다** — `running_players`와 방 상태·마감 시각으로 계산한다
+
+| `state` | 조건 |
+|---|---|
+| `NONE` | 활성 `running_players` 없음 |
+| `WAITING` | 방 미배정(마감 전) 또는 방이 `MATCHING` |
+| `MATCHED` | 방이 `MATCHED` |
+| `FAILED` | 마감이 지났는데 방 미배정, 또는 방이 `CANCELLED` |
+
+- `room`은 `state`가 `MATCHED`일 때만 채워지며 `RoomInfo`와 같은 구조다
+- **인증**: 필요
+
+#### `MATCH_PLAYERS_UPDATED` (SSE) — 매칭 참여자 갱신
 
 ```json
 {
@@ -809,7 +879,8 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- 매칭 무산(confirm_deadline 시점 2명 미만)·방 취소 통지: 별도 메시지 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 수신 시 클라는 홈으로
+- 방 배정 전에는 `runningSessionId`가 `null`이다 — 같은 조건에 2명째가 모여야 방이 생긴다
+- 매칭 무산(마감 시점 2명 미만)·방 취소 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 수신 시 클라는 홈으로
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
 
@@ -845,50 +916,55 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-#### `MATCH_STARTED` (S→C) — 매칭 성사 통지
+#### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
 
-#### `MATCH_ROOM_UPDATED` (S→C) — 매칭방 정보 갱신
+#### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
 - `data` = `RoomInfo` 전체 재전송 — 참가자 입장/퇴장/취소로 목록·팀 평균 페이스가 바뀔 때
 
-#### 방 나가기 — 별도 메시지 없음
+#### 방 나가기 — 별도 이벤트 없음
 
-- 확정된 방에서 나가기도 **`MATCH_CANCEL`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
+- 확정된 방에서 나가기도 **`DELETE /running-matches/me`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
 - 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED`
 - 확정 후 이탈 페널티는 미설계
 
-### 5-C. 러닝 카운트 다운
+#### 대기방 참여자 목록 — 별도 조회 없음
 
-#### `GET_ROOM_PLAYERS` (C→S) — 대기방 참여자 조회
+- `RoomInfo`가 참가자 전체를 담고 있고 변동 시마다 재전송되므로, 목록만 따로 받는 요청은 두지 않는다
+- 앱 재시작 등으로 스트림이 끊겼다면 `GET /running-matches/me`가 같은 정보를 돌려준다
 
-- 매칭방 참여자 **프로필 표시**용 조회(채팅 등 추후) — 대기열 인원 현황(`~명 대기중`)은 `MATCH_PLAYERS_UPDATED`로 구분
+### 5-C. 러닝 카운트 다운 — SSE에서 WebSocket으로
+
+- 카운트다운은 클라 자체 시계 기준이다. `scheduledStartAt` 도달 시 클라가 러닝 화면으로 전환하면서 §5 머리말의 전환 절차를 수행한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다.
+
+#### WebSocket 연결 — `/ws/running-sessions`
+
+- **연결**: `wss://.../ws/running-sessions` + `Authorization: Bearer {accessToken}`
+- **메시지 공통 형식**
 
 ```json
 {
-  "runningSessionId": 125
+  "type": "...",
+  "data": { ... }
 }
 ```
 
-- **응답**: `ROOM_PLAYERS`
+- **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
+  - **`RUNNING_LOCATION_UPDATE`는 ack 없음**(보내고 끝 — 실패는 `ERROR`)
+  - ack의 `data`는 비움
+- **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
 
 ```json
 {
-  "players": [
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
-      "nickname": "러닝초보",
-      "profileImageUrl": "..."
-    },
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440013",
-      "nickname": "철수",
-      "profileImageUrl": "..."
-    }
-  ]
+  "code": "SESSION_NOT_FOUND",
+  "message": "러닝 세션을 찾을 수 없습니다.",
+  "sourceType": "RUNNING_LOCATION_UPDATE"
 }
 ```
+
+- **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청)
 
 #### `RUNNING_START` (C→S) — 러닝 시작 알림 (클라 주도)
 
@@ -898,7 +974,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- 카운트다운은 클라 자체 시계 기준 — `scheduledStartAt` 도달 시 클라가 러닝 화면 전환 + 이 메시지 발신. 서버는 같은 시각에 스케줄러로 방 상태 `STARTED` 전환
+- WS 연결 후 **첫 메시지**다. `RUNNING_STARTED` ack를 받으면 클라는 SSE 스트림을 닫는다
 - **ack**: `RUNNING_STARTED`
 
 ### 5-D. 러닝 중
