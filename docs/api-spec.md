@@ -69,7 +69,9 @@
 | 카운트 다운 | `SESSION_READY` | S→C | 시작 시각 + 서버 현재 시각 — 클라가 오프셋 보정 |
 | 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
-| 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | |
+| 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | `paused` 포함 — 멈춘 것과 느려진 것을 구분 |
+| 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 본인 기록만 멈춘다 |
+| 러닝 중 | `COACHING_EVENT` | S→C | 음성 코칭 — 서버는 판정·발신만, 재생은 클라 |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 강제 종료 포함 — 이 시점에 서버가 `running_records` 저장 |
 | 공통 | `ERROR` | S→C | WS 요청 실패 통지 |
 
@@ -886,8 +888,10 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   - 대기 중(`MATCHING`) 또는 방 미배정 = 대기 취소(row 삭제)
   - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, row 유지)
   - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, 이탈로 2명 미만이 되면 `status: CANCELLED`
+- **시작 60초 전부터는 취소할 수 없다.** 출발 대기실에 들어선 뒤 빠지면 남은 사람이 대응할 시간이 없다. 그 시각 이후에는 러닝을 시작한 뒤 중도 종료(`RUNNING_FINISH`의 `forced=true`)로 처리한다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
+- **에러 (409 Conflict)**: `CANCEL_WINDOW_CLOSED` — 시작 60초 전을 지났다
 - **인증**: 필요
 
 #### `GET /api/v1/users/me/running-match` — 현재 매칭 상태 조회
@@ -1100,18 +1104,50 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
       "profileImageUrl": "https://...",
       "distanceMeters": 1520,               // 현재까지 이동 거리
       "targetDistanceMeters": 5000,         // 목표 거리(m)
-      "currentPaceSecondsPerKm": 345        // 현재 페이스(초/km)
+      "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km)
+      "paused": false                       // 일시정지 중이면 true
     },
     {
       "userId": "550e8400-e29b-41d4-a716-446655440013",
       "profileImageUrl": "https://...",
       "distanceMeters": 1360,
       "targetDistanceMeters": 5000,
-      "currentPaceSecondsPerKm": 372
+      "currentPaceSecondsPerKm": 372,
+      "paused": true
     }
   ]
 }
 ```
+
+- `paused`가 없으면 상대가 멈춘 것과 느려진 것을 구분할 수 없다 — 화면에서 갑자기 뒤처진 것처럼 보인다
+
+#### `COACHING_EVENT` (S→C) — 음성 코칭 이벤트
+
+```json
+{
+  "runningSessionId": 125,
+  "eventType": "OVERTAKEN",
+  "targetUserId": "550e8400-e29b-41d4-a716-446655440013"
+}
+```
+
+- **서버는 판정과 발신만 한다.** 음성 합성·재생·mute 토글은 전부 클라 몫이다
+- 파티원과의 비교가 필요한 이벤트만 서버가 낸다(추월·역전·격차 등). **구간별 안내(1km 도달, 구간 기록)는 클라가 자기 데이터로 처리한다** — 서버가 관여할 이유가 없다
+- 판정 기준을 서버가 독점하므로 참가자마다 다른 결과가 나오지 않는다. 클라가 각자 판정하면 같은 순간에 누구는 "추월당했다", 누구는 아무 일 없는 상태가 된다
+- **트리거 조건(추월·역전 판정 기준, 격차 임계치)은 미정** — 정해지면 `eventType` 목록과 함께 이 절에 채운다
+
+#### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
+
+```json
+{
+  "runningSessionId": 125
+}
+```
+
+- **일시정지 동안 경과 시간과 거리 계산이 멈춘다.** 클라는 좌표 전송도 중단한다 — 멈춰 있는 동안의 좌표는 트랙에 남길 이유가 없고, GPS 흔들림이 거리로 잡히면 기록이 부풀려진다
+- **다른 참가자는 계속 진행한다.** 일시정지는 본인 기록에만 영향을 주며 세션 전체를 멈추지 않는다
+- 서버는 상태를 다른 참가자에게 `PLAYER_RUNNING_PROGRESS_UPDATED`의 `paused` 필드로 알린다 — 상대가 멈췄는지 모르면 화면에서 갑자기 뒤처진 것처럼 보인다
+- **ack 없음** — 실패는 `ERROR`로 통지
 
 #### `RUNNING_FINISH` (C→S) — 러닝 종료 (정상/강제 통합)
 
@@ -1269,8 +1305,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
           "durationSeconds": 345,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
-          "caloriesKcal": 68,
-          "elevationGainMeters": 8
+          "caloriesKcal": 68
         }
       ]
     }
@@ -1845,7 +1880,6 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   "followingCount": 38,
   "isFollowing": true,
   "isMutual": true,
-  "elevationGainTotalMeters": 3200,    // 평생 누적 상승 고도 (running_records.elevation_gain 전체 합산, null 제외) — 세션 결과의 totalElevationGainMeters(1회 러닝 합)와 다른 값
   "mileageTotalMeters": 320500,        // 누적 마일리지 (`running_records` 합산)
   "mileageMonthlyMeters": 42200        // 이번 달 마일리지
 }
