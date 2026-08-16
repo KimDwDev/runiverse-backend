@@ -102,7 +102,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FOLLOWING\|ALL`, 무한 스크롤 |
+| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
 | 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
 | 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
 | 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
@@ -130,10 +130,12 @@
 | 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
 | 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
 | 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 42 | POST | `/api/v1/users/{userId}/follow` | 팔로우 — 사용 화면: 프로필, 팔로워/팔로잉 목록 |
-| 43 | DELETE | `/api/v1/users/{userId}/follow` | 언팔로우 |
-| 44 | GET | `/api/v1/users/{userId}/followers` | 팔로워 목록 (+이름 검색) |
-| 45 | GET | `/api/v1/users/{userId}/followings` | 팔로잉 목록 (+이름 검색) |
+| 40 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
+| 41 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 42 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 43 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 44 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 45 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
 | 32 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 12. 프로필 편집 페이지
@@ -151,7 +153,7 @@
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 51개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
+**합계: REST 53개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
 
 ---
 
@@ -163,7 +165,7 @@
 - **페이지네이션 limit**: `?limit=` 생략 시 기본 **20**, 최대 **50**(초과 요청은 50으로 클램프)
 - **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜(생일·대회 일정)는 `YYYY-MM-DD`
 - **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
-- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 팔로우·좋아요는 갱신 상태·카운트 포함 `200 OK`, 대회 북마크는 `204 No Content`
+- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`, 대회 북마크는 `204 No Content`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 11-6~11-8로 나뉜다
 - **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
@@ -1466,7 +1468,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
       "sortOrder": 0
     }
   ],
-  "visibility": "PUBLIC",              // FOLLOWERS | PUBLIC | PRIVATE
+  "visibility": "PUBLIC",              // FRIENDS | PUBLIC | PRIVATE
   "likeCount": 12,
   "commentCount": 3,
   "likedByMe": false,
@@ -1484,8 +1486,8 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ### 9-1. `GET /api/v1/feeds` — 피드 목록 (무한 스크롤)
 
-- **Query**: `tab=FOLLOWING|ALL`(필수), `cursor`/`limit`
-- **공개범위 필터**: `FOLLOWING` = 팔로우 유저의 `FOLLOWERS`/`PUBLIC` 피드 + 내 피드 전부, 최신순 / `ALL` = `PUBLIC` 피드 + 팔로우 유저의 `FOLLOWERS` 피드, 최신순 + 가벼운 가중치(개인화 추천은 이후 확장)
+- **Query**: `tab=FRIENDS|ALL`(필수), `cursor`/`limit`
+- **공개범위 필터**: `FRIENDS` = 친구의 `FRIENDS`/`PUBLIC` 피드 + 내 피드 전부, 최신순 / `ALL` = `PUBLIC` 피드 + 친구의 `FRIENDS` 피드, 최신순 + 가벼운 가중치(개인화 추천은 이후 확장)
 - **Response `200 OK`**
 
 ```json
@@ -1502,7 +1504,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - **화면**: 푸시 랜딩(좋아요/댓글 알림), 검색 결과 탭, 프로필 그리드 탭
 - **Response `200 OK`**: 피드 카드
 
-- **에러 (403 Forbidden — 비공개 — `PRIVATE` 타인, `FOLLOWERS` 비팔로워)**
+- **에러 (403 Forbidden — 비공개 — `PRIVATE` 타인, `FRIENDS` 비친구)**
 
 ```json
 {
@@ -1763,7 +1765,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 {
   "content": "오늘도 5km 완주!",          // 선택
   "imageKeys": ["feeds/2026/07/....jpg"],  // 선택 — 업로드 완료된 key, 배열 순서 = sortOrder
-  "visibility": "PUBLIC",                  // 필수. FOLLOWERS|PUBLIC|PRIVATE — 기본 선택값 PUBLIC(클라 프리셋)
+  "visibility": "PUBLIC",                  // 필수. FRIENDS|PUBLIC|PRIVATE — 기본 선택값 PUBLIC(클라 프리셋)
   "runningRecordId": 501                   // 선택 — 러닝기록 템플릿 (대시보드 진입 시 방금 기록 기본 선택). DB 매핑은 feeds.running_record_id
 }
 ```
@@ -1866,7 +1868,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ### 11-2. `GET /api/v1/users/{userId}` — 프로필 요약
 
-- **화면**: 프로필 (본인/타인 공통 — 본인이면 편집·설정 버튼, 타인이면 팔로우 버튼 노출은 `isMe`로 분기)
+- **화면**: 프로필 (본인/타인 공통 — 본인이면 편집·설정 버튼, 타인이면 친구 요청 버튼 노출은 `isMe`로 분기)
 - **Response `200 OK`**
 
 ```json
@@ -1876,16 +1878,16 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   "nickname": "동완러너",
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
-  "followerCount": 42,
-  "followingCount": 38,
-  "isFollowing": true,
-  "isMutual": true,
+  "friendCount": 42,                   // friendships에서 COUNT (status=ACCEPTED)
+  "friendStatus": "ACCEPTED",          // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
   "mileageTotalMeters": 320500,        // 누적 마일리지 (`running_records` 합산)
   "mileageMonthlyMeters": 42200        // 이번 달 마일리지
 }
 ```
 
-- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 컬렉션·친구 목록 조회가 `403 PROFILE_PRIVATE`. 사진·닉네임·소개글·마일리지·최고 페이스·러닝 횟수·친구 수는 항상 공개
+- `friendStatus`로 버튼을 가른다 — `NONE`이면 "친구 요청", `PENDING_SENT`면 "요청 취소", `PENDING_RECEIVED`면 "수락", `ACCEPTED`면 "친구 삭제". 본인 프로필(`isMe=true`)이면 `null`이다
+
+- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 컬렉션 조회가 `403 PROFILE_PRIVATE`. 사진·닉네임·소개글·마일리지·최고 페이스·러닝 횟수·친구 수는 항상 공개. **친구 목록은 설정과 무관하게 본인만 본다**
 
 - **에러 (404 Not Found — 탈퇴 포함)**
 
@@ -1915,66 +1917,77 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **공개범위**: 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+팔로워면 `FOLLOWERS`)
+- **공개범위**: 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+친구면 `FRIENDS`)
 - **인증**: 필요
 
-### 11-6. `POST /api/v1/users/{userId}/follow` — 팔로우 / 11-7. `DELETE` — 언팔로우
+### 11-6. `POST /api/v1/users/{userId}/friend-request` — 친구 요청
 
-- **Response `200 OK`** (대상의 갱신 카운트 — `user_follow_stats`). idempotent
-
-```json
-{
-  "isFollowing": true,
-  "isMutual": false,
-  "followerCount": 43
-}
-```
-
-- 팔로우 시 대상에게 "새 팔로워" 푸시 (수신 동의 시)
-
-- **에러 (400 Bad Request)**
+- **Response `201 Created`**
 
 ```json
 {
-  "code": "CANNOT_FOLLOW_SELF",
-  "message": "자기 자신은 팔로우할 수 없습니다."
+  "friendStatus": "PENDING"
 }
 ```
 
-- **에러 (404 Not Found)**
-
-```json
-{
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
-}
-```
-
+- `friendships`에 `(요청자, 대상, PENDING)` 행을 만들고 대상에게 "친구 요청 도착" 푸시를 보낸다
+- **역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`다
+- **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
+- **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
+- **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
-### 11-8. `GET /api/v1/users/{userId}/followers` / 11-9. `.../followings` — 팔로워·팔로잉 목록
+### 11-7. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
 
-- **화면**: 팔로워/팔로잉 목록 페이지
-- **Query**: `q`(이름 필터), `cursor`/`limit`
-- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "isFollowing", "isMutual" } ], "nextCursor": "..." }`
+- **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
+- **이력을 남기지 않는다**
+- **Response `204 No Content`**
+- **에러 (404 Not Found)**: `PENDING` 요청이 없다
+- **인증**: 필요
 
-- **에러 (404 Not Found)**
+### 11-8. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
 
-```json
-{
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
-}
+- **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 푸시를 보낸다
+  - **Response `201 Created`**: `{ "friendStatus": "ACCEPTED" }`
+  - **에러 (404 Not Found)**: 받은 요청이 없다
+- **DELETE(친구 삭제)**: **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 이력을 남기지 않는다
+  - **Response `204 No Content`**
+  - **에러 (404 Not Found)**: 친구가 아니다
+- **인증**: 필요
+
+> **경로를 `friend-request`와 `friend`로 나눈 이유**: `friend-request`는 항상 `PENDING` 행만, `friend`는 항상 `ACCEPTED` 행만 다뤄 **이름이 상태와 어긋나지 않는다**. 하나로 묶으면 친구 끊기를 "요청 삭제"라 부르게 되고, DELETE 한 곳이 취소·거절·삭제 세 의미를 겸해 핸들러 안에 상태 분기가 들어간다 — 유스케이스 하나당 핸들러 하나인 이 프로젝트 구조와 맞지 않는다.
+>
+> | `friendStatus` | 화면 버튼 | 호출 |
+> |---|---|---|
+> | `NONE` | 친구 요청 | `POST .../friend-request` |
+> | `PENDING_SENT` | 요청 취소 | `DELETE .../friend-request` |
+> | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
+> | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
+
+### 11-9. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
+
+- **화면**: 친구 목록 페이지 (친구 탭 + 받은 요청 탭)
+- **둘 다 본인 것만 조회한다.** 타인의 친구 목록은 열지 않는다 — 친구의 친구를 훑어 사람을 찾는 흐름이 없고(사람 찾기는 `GET /users/search`), 누구와 친구인지는 민감한 정보다. 타인 프로필에는 **친구 수만** 표시된다
+- **Query**: `q`(이름 필터, 친구 목록만), `cursor`/`limit`
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
+- 친구 목록은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 본인인 행이다 — **성립한 뒤로는 방향에 의미가 없어 두 컬럼을 모두 본다**
+
+```sql
+SELECT receiver_id  AS friend_id FROM friendships WHERE requester_id = :me AND status = 'ACCEPTED'
+UNION ALL
+SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND status = 'ACCEPTED'
 ```
 
+- `OR`로 묶지 않고 `UNION ALL`을 쓴다 — `OR`는 인덱스를 타지 못하고, 이 형태는 `requester_id`(PK 앞자리)와 `receiver_id`(보조 인덱스)를 각각 탄다
+- 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
 - **인증**: 필요
 
 ### 11-10. `GET /api/v1/users/search` — 사용자 검색
 
 - **화면**: 러너 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
 - **Query**: `q`(필수, 닉네임), `cursor`/`limit`
-- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
-- 검색 결과에 친구 관계 상태를 함께 내릴지는 친구 API를 정리할 때 확정한다.
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
+- `friendStatus`는 `NONE`/`PENDING_SENT`/`PENDING_RECEIVED`/`ACCEPTED` — 버튼을 무엇으로 그릴지가 이 값에 달렸다. 보낸 요청과 받은 요청을 구분해야 "요청 취소"와 "수락"이 갈린다
 - **인증**: 필요
 
 ## 12. 프로필 편집 페이지
@@ -2048,6 +2061,6 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 ### 13-3. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄) + 본인 `user_follow_stats`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄)
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

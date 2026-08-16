@@ -6,15 +6,15 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`follows`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`user_follow_stats`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
-- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`follows.follower_id`/`followee_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). `*_date`도 시점이면 `timestamp`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`session_time`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`follows`·`user_follow_stats`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -159,28 +159,23 @@
 
 ---
 
-## 3. 도메인 C — 소셜 (팔로우 · 피드 · 댓글)
+## 3. 도메인 C — 소셜 (친구 · 피드 · 댓글)
 
 > **`[MVP 제외]` 표기**: 지금 만들지 않는 테이블. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이다.
 
-### follows
+### friendships
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| follower_id | UUID | PK1, FK → users | 팔로우 거는 쪽 |
-| followee_id | UUID | PK2, FK → users | 팔로우 받는 쪽 |
-| created_at | timestamp | NOT NULL | 맞팔(양방향 존재) = "친구/지인". 회원탈퇴 시 CASCADE 삭제 |
+| requester_id | UUID | PK1, FK → users | 요청을 보낸 쪽 |
+| receiver_id | UUID | PK2, FK → users | 요청을 받은 쪽 |
+| status | enum | NOT NULL, default PENDING | `PENDING`(수락 대기) / `ACCEPTED`(친구 성립) |
+| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 수락 시각. 회원탈퇴 시 CASCADE 삭제 |
 
-### user_follow_stats
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| user_id | UUID | PK, FK → users | |
-| follower_count | int | NOT NULL, default 0 | |
-| following_count | int | NOT NULL, default 0 | follow 변동 시 즉시 재계산 |
-| created_at / updated_at | timestamp | NOT NULL | |
-
-> 동기화: 팔로우/언팔로우/탈퇴를 같은 트랜잭션에서 ±1 처리. 드리프트 대비 주기적 재계산 배치 권장.
+> **관계는 대칭이지만 저장은 방향을 갖는다.** 누가 요청했는지 알아야 "받은 요청 목록"을 만들 수 있어 두 컬럼을 구분한다. 성립한 뒤로는 방향에 의미가 없다 — 친구 목록 조회는 두 컬럼 모두를 본다.
+> **역방향 중복은 앱에서 막는다.** A가 B에게 요청한 상태에서 B가 A에게 요청하면 행이 둘 생기므로, 요청 전에 `(A,B)`와 `(B,A)`를 함께 조회한다. 역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 **수락으로 처리**한다.
+> **거절은 행을 DELETE한다** — 거절 이력을 보관하지 않는다(친구 초대의 거절 처리와 같은 방식).
+> **친구 수는 집계 테이블 없이 `COUNT`로 구한다.** `status='ACCEPTED'`이면서 두 컬럼 중 하나가 본인인 행을 센다. 마일리지·러닝 횟수를 `running_records`에서 직접 계산하는 것과 같은 이유다 — 규모가 작아 캐시할 값어치가 없는 반면, 집계 테이블을 두면 동기화 트랜잭션과 드리프트 재계산 배치가 따라붙는다.
 
 ### feeds [MVP 제외]
 
@@ -308,9 +303,10 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 | 컬럼 | 값 | 비고 |
 |---|---|---|
-| feeds.visibility | FOLLOWERS / PUBLIC / PRIVATE | 피드별 개별 저장 |
-| users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 |
-| users.feed_default_visibility | FOLLOWERS / PUBLIC / PRIVATE | **[MVP 제외]** 피드 기본 공개 범위 |
+| feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
+| users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `friendships`로 직접 판정 |
+| users.feed_default_visibility | FRIENDS / PUBLIC / PRIVATE | **[MVP 제외]** 피드 기본 공개 범위 |
+| friendships.status | PENDING / ACCEPTED | 수락 대기 / 친구 성립 — 거절은 값이 아니라 row DELETE |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
@@ -326,7 +322,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 인덱스 대상 | 용도 |
 |---|---|
 | user_devices.user_id | 푸시 발송 — 유저의 활성 기기 조회 |
-| follows.followee_id | 팔로워 목록 (PK는 follower_id만 커버) |
+| friendships.receiver_id | 받은 요청·친구 목록 (PK는 requester_id만 커버) |
 | feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
 | feeds.created_at | **[MVP 제외]** 피드 타임라인 최신순 정렬 |
 | feed_images.feed_id | **[MVP 제외]** 피드 이미지 조회 |
