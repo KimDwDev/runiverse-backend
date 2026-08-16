@@ -47,12 +47,12 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 51 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
-| 52 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
-| 53 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
-| 54 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 55 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 56 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
+| 52 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
+| 53 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
+| 54 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
+| 55 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 56 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 57 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -136,24 +136,25 @@
 | 43 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
 | 44 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
 | 45 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 46 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) |
 | 32 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 12. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 47 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
+| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 48 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
 
 ### 13. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 48 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 49 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 50 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 51 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 53개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
+**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
 
 ---
 
@@ -1986,7 +1987,47 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
 - **인증**: 필요
 
-### 11-10. `GET /api/v1/users/search` — 사용자 검색
+### 11-10. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션
+
+- **화면**: 프로필 — 획득한 색을 `보유 수 / 전체 수`와 함께 보여준다
+- **Response `200 OK`** — 마스터 전체를 내리고 각 색에 획득 여부를 표시한다
+
+```json
+{
+  "ownedCount": 17,
+  "totalCount": 30,
+  "colors": [
+    {
+      "colorId": 2,
+      "category": "ENDURANCE",
+      "shade": 2,
+      "name": "딥 블루",
+      "hex": "#3c62e2",
+      "description": "10km 이상 완주",
+      "owned": true,
+      "acquiredAt": "2026-08-01T09:12:00"
+    },
+    {
+      "colorId": 3,
+      "category": "ENDURANCE",
+      "shade": 3,
+      "name": "심해 블루",
+      "hex": "#1a3a8f",
+      "description": "누적 100km",
+      "owned": false,
+      "acquiredAt": null
+    }
+  ]
+}
+```
+
+- **못 얻은 색도 함께 내린다.** 컬렉션 화면은 "무엇을 더 모을 수 있는지"를 보여주는 것이 목적이라, 미획득 색과 그 조건(`description`)이 있어야 화면이 성립한다
+- `totalCount`는 마스터 행 수다 — **총 개수를 명세에 박지 않으므로** 클라도 이 값을 그대로 쓴다
+- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 `403 PROFILE_PRIVATE`
+- **에러 (404 Not Found)**: 대상이 없다
+- **인증**: 필요
+
+### 11-11. `GET /api/v1/users/search` — 사용자 검색
 
 - **화면**: 러너 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
 - **Query**: `q`(필수, 닉네임), `cursor`/`limit`

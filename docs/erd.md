@@ -6,15 +6,15 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). `*_date`도 시점이면 `timestamp`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`session_time`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
-- **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
-- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
+- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§6](#6-delete_-스냅샷이력-테이블)).
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -233,7 +233,44 @@
 
 ---
 
-## 4. 도메인 D — 대회 [MVP 제외]
+## 4. 도메인 D — 컬러
+
+> 러닝 지표가 조건을 충족하면 고정 팔레트의 색이 열리는 **잠금 해제 모델**이다. 색을 새로 만들어내지 않는다 — 무한한 색 공간에서 생성하면 같은 5km를 100번 뛴 결과가 비슷한 색 100개로 쌓여 "수집"이라는 개념이 성립하지 않는다.
+
+### colors (색 마스터)
+
+고정 데이터. 운영이 채워 넣으며 사용자 행동으로 늘어나지 않는다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| color_id | bigint | PK | |
+| category | enum | NOT NULL | 12범주 ([§7 enum 사전](#7-enum-사전)) |
+| shade | int | NOT NULL | 범주 내 순번. 개수는 범주마다 다르다(3~4) |
+| name | varchar | NOT NULL | 색 이름("딥 블루") |
+| hex | varchar(7) | NOT NULL | `#3c62e2` |
+| description | varchar | NOT NULL | 획득 조건 안내 문구("10km 이상 완주") |
+| created_at / updated_at | timestamp | NOT NULL | |
+
+> UNIQUE (category, shade) — 범주 내 셰이드 중복 방지.
+> **총 색 개수는 명세에 박지 않는다.** 마스터 행이 늘어도 스키마와 코드가 그대로여야 한다.
+> **획득 조건은 컬럼으로 두지 않는다.** 조건의 축이 제각각이라(단일 러닝 거리 / 누적 거리 / 페이스 / 케이던스 …) 데이터로 표현하면 오히려 복잡해진다. 판정은 서버 로직에 두고 DB에는 사용자에게 보여줄 `description`만 둔다.
+
+### user_colors (획득 이력)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| user_id | UUID | PK1, FK → users | |
+| color_id | bigint | PK2, FK → colors | |
+| running_record_id | bigint | → running_records, nullable | 획득 계기가 된 러닝. 누적 조건으로 열린 색은 특정 기록에 귀속되지 않아 null |
+| created_at | timestamp | NOT NULL | 획득 시각. 회원탈퇴 시 CASCADE 삭제 |
+
+> **복합 PK가 중복 획득을 막는다.** 이미 보유한 색은 다시 지급되지 않으며, 잠금 해제 모델이라 "같은 색을 또 얻는" 상황 자체가 없다.
+> 컬렉션 진행률은 `user_colors` 보유 수 / `colors` 전체 행 수로 계산한다 — 마스터가 늘어도 코드가 바뀌지 않는다.
+> **시그니처 컬러도 블렌드 색도 없다.** 사용자가 색을 고르는 지점이 서비스 어디에도 없고, 파티 색을 합성해 만드는 색도 두지 않는다.
+
+---
+
+## 5. 도메인 E — 대회 [MVP 제외]
 
 ### running_contests [MVP 제외]
 
@@ -259,7 +296,7 @@
 
 ---
 
-## 5. delete_* (스냅샷/이력 테이블)
+## 6. delete_* (스냅샷/이력 테이블)
 
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
 
@@ -299,7 +336,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ---
 
-## 6. enum 사전 (컬럼별 값 목록 — DB·API 동일 코드)
+## 7. enum 사전 (컬럼별 값 목록 — DB·API 동일 코드)
 
 | 컬럼 | 값 | 비고 |
 |---|---|---|
@@ -307,6 +344,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `friendships`로 직접 판정 |
 | users.feed_default_visibility | FRIENDS / PUBLIC / PRIVATE | **[MVP 제외]** 피드 기본 공개 범위 |
 | friendships.status | PENDING / ACCEPTED | 수락 대기 / 친구 성립 — 거절은 값이 아니라 row DELETE |
+| colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
@@ -315,9 +353,9 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ---
 
-## 7. 인덱스 (조회 성능)
+## 8. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버(`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요). `running_splits (running_record_id, sequence)` UNIQUE도 `running_record_id` 조회 커버.
+> 복합 PK는 첫 컬럼 조회를 커버(`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요 — 전부 `user_id`로만 조회한다). `running_splits (running_record_id, sequence)` UNIQUE도 `running_record_id` 조회 커버. `colors`는 마스터라 전체 조회만 하므로 인덱스가 필요 없다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
