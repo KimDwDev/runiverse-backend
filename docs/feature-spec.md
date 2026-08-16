@@ -240,10 +240,14 @@
 
 **이미지 업로드**(`feed_images`, `users.profile_image_key` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
 
-**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. 저장 주체는 러닝 종류에 따라 다름.
+**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. **매칭 러닝과 솔로 러닝이 같은 경로를 쓴다.**
 
-- **매칭 러닝**: 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_records` 저장.
-- **솔로 러닝**(매칭 없이 혼자, `running_players`/`running_rooms` 없이 `running_records`만 생성): 클라이언트가 로컬로 트랙을 추적하고 종료 후 presigned URL로 S3에 직접 업로드한 뒤 기록 저장 API를 호출 — api-spec 7-3·7-4.
+- 클라이언트가 1~2초 간격으로 좌표를 수집해 **로컬에 쌓으면서** 10초마다 모아서 WS로 보낸다. 서버는 Redis(`session_id+user_id` 키)에 버퍼링하고, 종료 신호(WS `RUNNING_FINISH`) 수신 시 S3에 업로드하며 `running_records`를 저장한다.
+- **거리·페이스·구간 분할은 서버가 받은 좌표로 계산한다.** 클라이언트 계산값은 러닝 중 화면 표시용이지 저장값이 아니다.
+- **연결이 끊겼다 돌아오면 못 보낸 구간부터 이어 보낸다.** 클라이언트는 마지막으로 전송에 성공한 순번을 기억했다가 재연결 후 그 다음부터 다시 보내고, 서버는 이미 가진 순번을 무시한다. 그래서 로컬 사본은 종료할 때까지 지우지 않는다.
+  - **한계**: 러닝이 끝날 때까지 연결이 돌아오지 않으면 그 기록은 잃는다 — 종료 신호조차 보낼 수 없기 때문이다. 필요해지면 REST 폴백을 붙인다.
+- **솔로 러닝도 세션을 연다.** 매칭을 거치지 않을 뿐 `running_rooms`·`running_players` 행이 생기고(개시 즉시 `STARTED`), 같은 WS를 쓴다. 클라이언트가 만들 수 있는 세션은 솔로뿐이며 매칭 세션은 서버가 만든다.
+  - 이렇게 하는 이유는 `runningSessionId` 체계를 하나로 유지하기 위해서다. 솔로만 다른 식별자를 쓰면 WS 메시지 스키마가 두 벌이 되어, 코드를 한 벌로 만들려던 목적이 무너진다.
 
 **피드-러닝 기록 연결**: `feeds.running_record_id`는 `running_records` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
 

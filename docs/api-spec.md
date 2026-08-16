@@ -52,6 +52,7 @@
 | 53 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 54 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 55 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 56 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -61,7 +62,7 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
-**러닝 WebSocket** — `/ws/running-sessions`, 메시지 6종. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/ws/running-sessions`, 메시지 6종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
@@ -85,8 +86,6 @@
 |---|--------|------|------|
 | 13 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
 | 14 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
-| 15 | POST | `/api/v1/running-records/gps/presigned-url` | 솔로 러닝 GPS 트랙 업로드 URL |
-| 16 | POST | `/api/v1/running-records` | 솔로 러닝 완주 기록 저장 (매칭 없이 혼자) |
 
 ### 8. 대회 화면 [MVP 제외]
 
@@ -150,7 +149,7 @@
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 52개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 5종)**
+**합계: REST 51개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
 
 ---
 
@@ -757,6 +756,32 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다 — 서버 코드가 한 벌이 되고, 러닝 도중 앱이 죽어도 그 시점까지의 좌표가 서버에 남는다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운·`SESSION_READY`는 건너뛴다 — 맞출 상대가 없다).
+
+#### `POST /api/v1/running-sessions` — 러닝 세션 개시
+
+- **클라가 만들 수 있는 세션은 솔로뿐이다.** 매칭 세션은 2명째가 모일 때 서버가 만들므로 요청 대상이 아니다
+- **Request**
+
+```json
+{
+  "targetDistanceMeters": 5000
+}
+```
+
+- **Response `201 Created`**
+
+```json
+{
+  "runningSessionId": 126
+}
+```
+
+- **동작**: `running_rooms` 행을 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 링크도 함께 만든다 — 참가자 없는 방을 남기지 않는다
+- 이 세션은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다. 모집 중인 자리가 아니다
+- **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+- **인증**: 필요
+
 **전환 지점** — `scheduledStartAt` 직전:
 
 1. 클라가 WS `/ws/running-sessions` 연결
@@ -1034,28 +1059,35 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ### 5-D. 러닝 중
 
-#### `RUNNING_LOCATION_UPDATE` (C→S) — 위치 정보 전송 (주기 발신)
+#### `RUNNING_LOCATION_UPDATE` (C→S) — 위치 정보 전송 (10초 배치)
 
 ```json
 {
   "runningSessionId": 125,
-  "location": {
-    "sequence": 15,                    // Long, 세션 내 순번
-    "latitude": 35.1795543,            // -90~90
-    "longitude": 129.0756416,          // -180~180
-    "altitudeMeters": 18.4,            // m
-    "accuracyMeters": 6.2,             // GPS 수평 오차 반경 m
-    "speedMetersPerSecond": 2.8,
-    "headingDegrees": 85.3,            // 0~360
-    "cadenceSpm": 165,
-    "currentPaceSecondsPerKm": 345,
-    "recordedAt": "2026-07-25T10:10:30"   // 측정 시각
-  }
+  "locations": [
+    {
+      "sequence": 15,                    // Long, 세션 내 순번
+      "latitude": 35.1795543,            // -90~90
+      "longitude": 129.0756416,          // -180~180
+      "altitudeMeters": 18.4,            // m
+      "accuracyMeters": 6.2,             // GPS 수평 오차 반경 m
+      "speedMetersPerSecond": 2.8,
+      "headingDegrees": 85.3,            // 0~360
+      "cadenceSpm": 165,
+      "currentPaceSecondsPerKm": 345,
+      "recordedAt": "2026-07-25T10:10:30"   // 측정 시각
+    }
+  ]
 }
 ```
 
+- **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
+- 페이스·거리·케이던스·칼로리는 **클라가 계산한다**. 진행 시간도 클라 시각 기준이다(시작 시각만 5-C에서 서버 값으로 보정)
 - 서버는 Redis(`sessionId+userId` 키)에 버퍼링 — 종료 시 S3 업로드(`gpsTrackKey`)
-- **ack 없음** — 초 단위 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
+- **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
+- **끊겼다 재연결하면 못 보낸 구간부터 이어 보낸다.** 클라는 마지막으로 전송에 성공한 `sequence`를 기억했다가, 재연결 후 그 다음 순번부터 로컬 사본을 다시 보낸다. 그래서 **로컬 사본은 종료할 때까지 지우지 않는다**
+  - 서버는 이미 가진 `sequence`가 다시 오면 무시한다(멱등)
+  - **한계**: 러닝이 끝날 때까지 연결이 돌아오지 않으면 그 기록은 잃는다 — `RUNNING_FINISH`조차 보낼 수 없기 때문이다. REST 폴백은 필요해지면 그때 붙인다
 
 #### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참여자 진행 정보
 
@@ -1091,7 +1123,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 ```
 
 - `forced=true` = 목표 도달 전 즉시 종료 — 정상/강제의 서버 처리(현재까지 데이터로 기록 저장 + 세션 종료)가 동일해 플래그로만 구분
-- **이 시점에 서버가 `running_records`(+splits) 저장**. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성(기록 상세·목록의 경로 표시용)
+- **이 시점에 서버가 `running_records`(+splits) 저장**. 거리·페이스·구간 분할 모두 **서버가 받은 좌표로 계산한다** — 클라 계산값은 러닝 중 화면 표시용이고 저장값이 아니다. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-sessions/{id}/results`로 대시보드 진입
 - 전원 제출 완료 or 타임아웃 중 먼저 오는 시점에 방 상태 `FINISHED` (타임아웃 값은 운영 정책)
 
@@ -1281,7 +1313,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   "items": [
     {
       "runningRecordId": 501,
-      "runningSessionId": 125,           // null = 솔로 러닝(매칭 없이 혼자)
+      "runningSessionId": 125,           // 솔로 러닝도 세션을 열므로 항상 값이 있다
       "startedAt": "2026-07-25T10:00:30",
       "totalDistanceMeters": 5020,
       "durationSeconds": 1800,
@@ -1320,99 +1352,8 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (본인)
 
-> **솔로 러닝 = `runningSessionId: null`** — 매칭 없이 혼자 뛴 기록. 7-1·7-2 응답의 `runningSessionId`는 nullable(매칭 러닝만 값 존재). 7-1/7-2는 매칭·솔로 공통 조회.
+> **솔로 러닝도 `runningSessionId`를 갖는다** — 매칭을 거치지 않을 뿐 세션은 열린다(§5 참고). 따라서 7-1·7-2 응답의 `runningSessionId`는 항상 값이 있고, 두 API는 매칭·솔로 공통 조회다. 솔로 여부는 참가자 수로 구분한다.
 
-### 7-3. `POST /api/v1/running-records/gps/presigned-url` — 솔로 GPS 트랙 업로드 URL
-
-- **화면**: 솔로 러닝 종료 직후 (클라가 로컬 추적한 GPS 트랙을 업로드). 매칭 러닝은 서버가 Redis 버퍼→S3로 저장하므로 이 API 불필요 — **솔로 전용**
-- **Request**
-
-```json
-{
-  "originalFileName": "track.json",
-  "mimeType": "application/json"
-}
-```
-
-- **Response `200 OK`** — 클라는 `uploadUrl`로 S3에 직접 업로드
-
-```json
-{
-  "gpsTrackKey": "gps/2026/07/uuid.json",
-  "uploadUrl": "https://..."
-}
-```
-
-- **업로드 파일 포맷**: 6-2 `route.gpsPoints[]`와 **동일 구조**(`sequence`/`latitude`/`longitude`/`altitudeMeters`/`accuracyMeters`/`currentPaceSecondsPerKm`/`cadenceSpm`/`recordedAt`) — 서버가 그대로 읽어 7-2 `route`로 반환
-- **인증**: 필요
-
-### 7-4. `POST /api/v1/running-records` — 솔로 러닝 완주 기록 저장
-
-- **화면**: 솔로 러닝 종료 → 결과 저장. 매칭 러닝은 서버가 WS `RUNNING_FINISH` 때 저장하므로 이 API는 **솔로 전용**(충돌 없음)
-- **시작 알림 없음**: 솔로는 알릴 상대가 없어 시작 API 불필요 — 클라가 로컬로 추적(카운트다운·시계 모두 클라)
-- **Request** (`gpsTrackKey`·좌표 필수 — 야외 GPS 러닝만. 실내/트레드밀은 **[MVP 제외]**)
-
-```json
-{
-  "startedAt": "2026-07-26T07:00:00",
-  "finishedAt": "2026-07-26T07:32:10",
-  "totalDistanceMeters": 5020,
-  "durationSeconds": 1930,
-  "averagePaceSecondsPerKm": 384,
-  "averageCadenceSpm": 172,
-  "caloriesKcal": 320,
-  "totalElevationGainMeters": 45,
-  "startLatitude": 35.1795543,
-  "startLongitude": 129.0756416,
-  "endLatitude": 35.1842012,
-  "endLongitude": 129.0831421,
-  "gpsTrackKey": "gps/2026/07/uuid.json",
-  "routePolyline": "u{~vFvyys@fS]pT_@...",
-  "splits": [
-    {
-      "splitNumber": 1,
-      "distanceMeters": 1000,
-      "durationSeconds": 380,
-      "averagePaceSecondsPerKm": 380,
-      "startLatitude": 35.1795543,
-      "startLongitude": 129.0756416,
-      "startedAt": "2026-07-26T07:00:00",
-      "finishedAt": "2026-07-26T07:06:20",
-      "averageCadenceSpm": 170,
-      "caloriesKcal": 65,
-      "elevationGainMeters": 10
-    }
-  ]
-}
-```
-
-- **필수**: `startedAt`, `finishedAt`, `totalDistanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`, `endLatitude/Longitude`, `gpsTrackKey`, `routePolyline`, `splits`
-- **`routePolyline`**: 전체 경로를 다운샘플한 encoded polyline(기록 상세·목록의 경로 표시용 → `running_records.route_polyline`). 원본 트랙은 `gpsTrackKey`가 가리키는 S3 객체이며 역할이 다르다 — 이쪽은 화면에 선을 그리는 용도라 조회에 딸려 나오고, 원본은 재계산·분석용이다. 매칭 러닝은 서버가 Redis 버퍼로 생성하므로 솔로만 클라 제출 — 포인트 수 등 다운샘플 정책은 운영값
-- **splits 항목별 필수**: `splitNumber`, `distanceMeters`, `durationSeconds`, `averagePaceSecondsPerKm`, `startLatitude/Longitude`(구간 시작점 → `running_splits.session_lat/lng`), `startedAt`/`finishedAt`(구간 시작/종료 시각 → `session_start_date/session_end_date`) — 매칭 러닝은 서버가 Redis 버퍼로 직접 채우는 값이라 솔로만 클라 제출
-- **선택**: `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters` (구간별 동일)
-- **동작**: 서버가 `running_records`(`running_room_id=null`) + `running_splits` 생성. `gpsTrackKey`가 S3에 존재하는지 검증
-- **Response `201 Created`**: 7-2 상세 형식 (`runningSessionId: null`)
-
-- **에러 (400 Bad Request — 입력 불량)**
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
-}
-```
-
-- **에러 (409 Conflict — `gpsTrackKey` S3에 없음)**
-
-```json
-{
-  "code": "UPLOAD_NOT_FOUND",
-  "message": "업로드된 파일을 찾을 수 없습니다."
-}
-```
-
-- **인증**: 필요
-- ⚠️ 솔로는 서버가 실측을 못 해 **클라 제출값을 그대로 저장** — 리더보드·페널티 도입 시 GPS 트랙 기반 검증 추가 여지
 
 ## 8. 대회 화면 [MVP 제외]
 

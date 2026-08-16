@@ -82,7 +82,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. **2명째가 매칭되는 순간 생성** — 신청 시점엔 방이 없다 |
+| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. 매칭 방은 **2명째가 매칭되는 순간 생성** — 신청 시점엔 방이 없다. 솔로 러닝은 개시 요청 시 바로 생성되며 `STARTED`로 시작한다 |
 | start_date | timestamp | NOT NULL | 예약 시작 시각 |
 | total_member | int | NOT NULL | 모집 인원(서버 자동 편성 2~4) |
 | running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
@@ -122,7 +122,7 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_record_id | bigint | PK | |
-| running_room_id | bigint | FK → running_rooms, nullable | 솔로 러닝은 방 없음(null), 매칭 러닝만 방 참조 |
+| running_room_id | bigint | FK → running_rooms, NOT NULL | 솔로 러닝도 세션(방)을 열므로 항상 값이 있다 |
 | user_id | UUID | → users, NOT NULL | |
 | avg_pace | int | NOT NULL | 초/km |
 | total_distance | int | NOT NULL | 미터 |
@@ -130,13 +130,13 @@
 | cadence | int | nullable | spm (선택) |
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
-| gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. 재계산·분석용(고도 소급 계산 등). 매칭=서버 업로드(Redis 버퍼→S3), 솔로=클라 업로드(presigned URL) |
-| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — **기록 상세·목록의 경로 표시용**. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭=서버 생성(Redis 버퍼), 솔로=클라 제출 |
+| gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. 재계산·분석용(고도 소급 계산 등). 매칭·솔로 모두 서버가 업로드(Redis 버퍼→S3) |
+| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — **기록 상세·목록의 경로 표시용**. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성 |
 | start_date / end_date | timestamp | NOT NULL | |
 | start_lat / start_lng / end_lat / end_lng | double precision | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
-> UNIQUE (running_room_id, user_id) WHERE running_room_id IS NOT NULL — 매칭 러닝은 유저당 방별 1기록 (솔로는 room null이라 제외).
+> UNIQUE (running_room_id, user_id) — 유저당 방별 1기록. 솔로도 방을 가지므로 부분 인덱스 조건이 필요 없다.
 
 ### running_splits (구간별)
 
