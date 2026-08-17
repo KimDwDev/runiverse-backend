@@ -100,7 +100,7 @@
 | running_room_id | bigint | FK → running_rooms, NOT NULL | 소속 방. **신청·개시 즉시 방이 생기므로 항상 값이 있다**(nullable 아님) |
 | status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
-| total_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
+| target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_date | timestamp | NOT NULL | 희망 시작 시각 |
 | desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |

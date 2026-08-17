@@ -74,7 +74,7 @@
   - 활성 신청은 1개다 — 대기 중에 다시 신청할 수 없다.
     - **`INVITED`는 활성 신청에 넣지 않는다.** 초대는 상대가 보내는 것이라, 수락도 하지 않은 초대에 묶여 랜덤 매칭을 못 걸면 내 의사와 무관하게 서비스가 막힌다. 그래서 초대는 여러 개를 동시에 받을 수 있고, 초대를 받은 채로 랜덤 매칭을 신청할 수도 있다. 활성 여부는 `status='JOINED'`인 행으로만 판정한다.
   - 매칭 방식은 랜덤 매칭과 친구 초대 두 가지. **친구 초대는 랜덤 매칭이 동작한 뒤에 붙인다** — 구현 순서상 후순위이지 범위 밖은 아니다.
-  - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_date`에 저장. "거리"는 `running_players.total_distance`(플레이어별 목표 거리)에 저장.
+  - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_date`에 저장. "거리"는 `running_players.target_distance`(플레이어별 목표 거리)에 저장.
 - 매칭 대기 화면: 매칭 진행 상태·남은 예상 시간·현재 참가자 확인.
   - **방 생성 시점**: **신청 즉시 1인 방**을 만들고 `status='MATCHING'`으로 둔다. 같은 조건에 다음 신청이 들어오면 그 방에 붙여 마감까지 최대 4명까지 모집한다. 즉 `MATCHING`은 "모집 중(마감 전)"인 구간이며, 인원 수는 조건에 들어가지 않는다.
     - 솔로 러닝도 개시 즉시 방이 생긴다 — 둘은 `running_rooms.type`(`MATCH`/`SOLO`)으로 갈린다. 매칭 후보 스캔은 `type='MATCH' AND status='MATCHING'`이라 솔로 방이 섞이지 않는다.
@@ -318,7 +318,7 @@
   - `CONFIRMED`가 아니라 `JOINED`인 이유가 이것이다. "확정"은 매칭 단계 어휘라(`MATCHED`·confirm_deadline) 같은 화면에서 매칭 확정과 참가 의사 확정이 같은 말로 읽힌다. `JOINED`/`LEFT`는 참가↔이탈 대칭이라 축이 무엇인지 값만 봐도 드러난다.
 - 매칭 진행 단계를 이 컬럼에 넣지 말 것(`WAITING`·`FAILED` 등). 방 상태와 같은 사실이 두 곳에 저장돼 드리프트가 생기고, 방 상태가 바뀔 때마다 참가자 전원을 갱신해야 하며, 방이 생기지 않은 신청을 실패로 전환하는 배치가 따로 필요해진다.
 
-**목표 거리 vs 실제 거리**: `running_players.total_distance`는 매칭 시 설정한 목표 거리(플레이어별 저장), `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리 — 서로 다른 값, 혼동 주의.
+**목표 거리 vs 실제 거리**: 이름으로 갈린다 — **목표는 `target_distance`**(`running_players`, 신청 시 고른 3/5/10km), **실제 이동 거리는 `total_distance`**(`running_records`, 러닝 종료 후 확정). API도 같은 축을 쓴다(`targetDistanceMeters` / `totalDistanceMeters`).
 
 **회원탈퇴 시 연관 데이터 처리** (테이블별):
 
