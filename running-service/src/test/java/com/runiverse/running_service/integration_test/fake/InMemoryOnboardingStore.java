@@ -1,6 +1,5 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
@@ -18,7 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-public class InMemoryOnboardingStore implements CheckOnboardingPort, ExistsOnboardingPort,
+public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         CheckNicknameDuplicatePort, SaveOnboardingPort, LoadNicknamePort, UpdateNicknamePort {
 
     private final Map<UUID, UserOnboarding> onboardings = new LinkedHashMap<>();
@@ -36,7 +35,6 @@ public class InMemoryOnboardingStore implements CheckOnboardingPort, ExistsOnboa
         onboardedUserIds.add(userId);
     }
 
-    // CheckOnboardingPort(auth) + ExistsOnboardingPort(user) 두 포트를 함께 만족한다
     @Override
     public boolean existsByUserId(UserId userId) {
         return onboardedUserIds.contains(userId.value());

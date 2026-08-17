@@ -46,8 +46,7 @@ public class ChangePasswordIntegrationTest extends IntegrationTestSupport {
                 passwordHasher,     // PasswordHashPort
                 tokenProvider,      // GenerateTokenPort
                 tokenProvider,      // RefreshTokenHashPort
-                refreshTokenStore,  // SaveRefreshTokenHashPort
-                onboardingStore     // CheckOnboardingPort
+                refreshTokenStore   // SaveRefreshTokenHashPort
         );
         changePasswordHandler = new ChangePasswordHandler(
                 userStore,       // LoadUserByIdPort
