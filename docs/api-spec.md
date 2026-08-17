@@ -2317,6 +2317,11 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 {
   "code": "INVALID_REQUEST",
+  "message": "비밀번호는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "비밀번호는 6자 이상 16자 이하여야 합니다."
 }
 
