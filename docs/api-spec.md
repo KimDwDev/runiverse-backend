@@ -761,7 +761,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다 — 서버 코드가 한 벌이 되고, 러닝 도중 앱이 죽어도 그 시점까지의 좌표가 서버에 남는다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운·`SESSION_READY`는 건너뛴다 — 맞출 상대가 없다).
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운·`SESSION_READY`는 건너뛴다 — 맞출 상대가 없다).
 
 #### `POST /api/v1/running-sessions` — 러닝 세션 개시
 
@@ -822,7 +822,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 | `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
 | `MATCH_ROOM_UPDATED` | 확정된 방의 정보 변동 — `data` = `RoomInfo` |
 
-- **연결 직후 서버가 현재 상태를 한 번 보낸다.** 매칭 이벤트는 전부 **전체 상태를 담으므로** 놓친 이벤트를 되짚을 필요가 없다 — `Last-Event-ID` 재개를 쓰지 않는 이유다. 재연결은 곧 스냅샷 재수신이다.
+- **연결 직후 서버가 현재 상태를 한 번 보낸다.** 매칭 이벤트는 전부 **전체 상태를 담으므로** 놓친 이벤트를 되짚을 필요가 없다 — `Last-Event-ID` 재개를 쓰지 않는 이유다.
 - **keep-alive**: 주기적으로 주석 라인(`: ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
@@ -2094,7 +2094,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 세션 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`** — 넷 다 거래성 알림이라 수신 동의 대상이 아니고, 가입 직후부터 매칭 확정 푸시가 도달해야 한다. OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
+- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 세션 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
 - **인증**: 필요
 
