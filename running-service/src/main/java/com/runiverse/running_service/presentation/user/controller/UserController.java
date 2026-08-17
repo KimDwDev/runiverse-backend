@@ -4,12 +4,14 @@ import com.runiverse.running_service.application.user.command.nickname.ChangeNic
 import com.runiverse.running_service.application.user.command.nickname.ChangeNicknameResult;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingResult;
+import com.runiverse.running_service.application.user.command.password.ChangePasswordCommand;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageResult;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlCommand;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlResult;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageCommand;
 import com.runiverse.running_service.application.user.port.in.ChangeNicknameUsecase;
+import com.runiverse.running_service.application.user.port.in.ChangePasswordUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangeProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.in.CheckNicknameAvailabilityUsecase;
 import com.runiverse.running_service.application.user.port.in.CompleteOnboardingUsecase;
@@ -24,6 +26,7 @@ import com.runiverse.running_service.presentation.common.security.SelfOnly;
 import com.runiverse.running_service.presentation.user.request.NicknameAvailabilityRequest;
 import com.runiverse.running_service.presentation.user.request.NicknameUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
+import com.runiverse.running_service.presentation.user.request.PasswordUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUploadUrlRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileUpdateRequest;
 import com.runiverse.running_service.presentation.user.response.NicknameAvailabilityResponse;
@@ -61,6 +64,7 @@ public class UserController {
     private final DeleteProfileImageUsecase deleteProfileImageUsecase;
     private final CheckNicknameAvailabilityUsecase checkNicknameAvailabilityUsecase;
     private final ChangeNicknameUsecase changeNicknameUsecase;
+    private final ChangePasswordUsecase changePasswordUsecase;
 
     @PostMapping("/onboarding")
     public ResponseEntity<OnboardingResponse> completeOnboarding(
@@ -138,5 +142,19 @@ public class UserController {
                 new CheckNicknameAvailabilityQuery(request.nickname()));
         return ResponseEntity.ok(
                 new NicknameAvailabilityResponse(result.nickname(), result.available()));
+    }
+
+    @SelfOnly
+    @PatchMapping("/{userId}/password")
+    public ResponseEntity<Void> changePassword(
+            @PathVariable UUID userId,
+            @Valid @RequestBody PasswordUpdateRequest request
+    ) {
+        changePasswordUsecase.handle(new ChangePasswordCommand(
+                userId,
+                request.currentPassword(),
+                request.newPassword()
+        ));
+        return ResponseEntity.noContent().build();
     }
 }
