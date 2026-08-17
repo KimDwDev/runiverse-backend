@@ -86,6 +86,8 @@
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. 모집 단계가 없는 솔로는 null |
+| target_distance | int | NOT NULL | 방의 목표 거리(미터). 매칭 조건이라 **생성 시 정해지고 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
+| avg_pace | int | NOT NULL | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
 | max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
 | current_member | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
 | status | enum | NOT NULL, default MATCHING |  |
@@ -103,6 +105,7 @@
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
+| left_at | timestamp | nullable | 이탈 시각. `status='LEFT'`일 때만 값이 있다. **언제 나갔는지는 사실이라 저장하고, 제재 대상인지는 저장하지 않는다** — `close_at`과 비교해 계산한다(정책이 바뀌어도 과거 row가 거짓이 되지 않는다) |
 | desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
@@ -362,5 +365,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_players.running_room_id | 방 참가자 조회 |
-| running_rooms.(type, status, start_at) | 매칭 후보 방 조회 — 슬롯별 모집 중인 방(`type='MATCH' AND status='MATCHING'`). 솔로 방을 인덱스 단계에서 배제 |
+| running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
+| running_players.(user_id, status, left_at) | 페널티 판정 — 최근 쿨다운 구간에 제재 대상 이탈이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
 | running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |
