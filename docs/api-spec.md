@@ -2155,9 +2155,13 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 ### 13-3. `GET /api/v1/users/me/settings` — 설정 조회
 
+- **화면**: 설정
+- **Response `200 OK`**
+
 ```json
 {
-  "alertConsent": true                   // 전체 알림 on/off (단일 토글, 기본 on)
+  "alertConsent": true,                  // 전체 알림 on/off (단일 토글, 기본 on)
+  "profileVisibility": "PUBLIC"          // FRIENDS | PUBLIC — 지인 마스킹 on/off
 }
 ```
 
