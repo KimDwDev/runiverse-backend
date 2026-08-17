@@ -32,8 +32,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 passwordHasher,
                 tokenProvider,
                 tokenProvider,
-                refreshTokenStore,
-                onboardingStore
+                refreshTokenStore
         );
     }
 
@@ -88,29 +87,6 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 .isInstanceOf(InvalidCredentialsException.class);
         // 실패한 로그인은 토큰을 새로 발급하지 않는다
         assertThat(refreshTokenStore.loadById(userId)).contains(issuedAtSignUp);
-    }
-
-    @Test
-    @DisplayName("가입 직후 로그인하면 isOnboarded가 false다")
-    void loginBeforeOnboarding() {
-        // given
-        signUp();
-        // when
-        LoginResult result = loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
-        // then
-        assertThat(result.isOnboarded()).isFalse();
-    }
-
-    @Test
-    @DisplayName("온보딩을 마친 유저가 로그인하면 isOnboarded가 true다")
-    void loginAfterOnboarding() {
-        // given
-        UUID userId = signUp();
-        onboardingStore.markOnboarded(userId);
-        // when
-        LoginResult result = loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
-        // then
-        assertThat(result.isOnboarded()).isTrue();
     }
 
     @Test

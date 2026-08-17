@@ -2,12 +2,11 @@ package com.runiverse.running_service.application.auth.command.login;
 
 import com.runiverse.running_service.application.auth.exception.InvalidCredentialsException;
 import com.runiverse.running_service.application.auth.port.in.LoginUsecase;
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
-import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
+import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,7 +24,6 @@ public class LoginHandler implements LoginUsecase {
     private final GenerateTokenPort generateTokenPort;
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final SaveRefreshTokenHashPort saveRefreshTokenPort;
-    private final CheckOnboardingPort checkOnboardingPort;
 
     @Override
     public LoginResult handle(LoginCommand command) {
@@ -54,10 +52,7 @@ public class LoginHandler implements LoginUsecase {
         // 5. refresh token redis 저장
         saveRefreshTokenPort.save(user.getUserId(), hashedRefreshToken);
 
-        // 6. 온보딩 완료 여부 조회
-        boolean isOnboarded = checkOnboardingPort.existsByUserId(user.getUserId());
-
-        // 7. 반환
-        return new LoginResult(user.getUserId().value(), accessToken, refreshToken, isOnboarded);
+        // 6. 반환
+        return new LoginResult(user.getUserId().value(), accessToken, refreshToken);
     }
 }

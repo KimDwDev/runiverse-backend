@@ -5,6 +5,8 @@ import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedExc
 import com.runiverse.running_service.domain.user.exception.OauthNotLinkedException;
 import com.runiverse.running_service.domain.user.exception.OnboardingAlreadyCompletedException;
 import com.runiverse.running_service.domain.user.exception.OnboardingNotCompletedException;
+import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
+import com.runiverse.running_service.domain.user.exception.PasswordNotSetException;
 import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequiredException;
 import com.runiverse.running_service.domain.user.vo.Email;
 import com.runiverse.running_service.domain.user.vo.Introduction;
@@ -25,7 +27,7 @@ public class User {
 
     private final UserId userId;
     private final Email email;
-    private final PasswordHash passwordHash;
+    private PasswordHash passwordHash;
     private final boolean alertConsent;
     private final ProfileVisibility profileVisibility;
     private final ProfileImageKey profileImageKey;
@@ -60,6 +62,23 @@ public class User {
     // alertConsent, introduction이 없는 경우 — 알림은 기본 수신
     public User(UUID userId, String email, String passwordHash) {
         this(userId, email, passwordHash, true, null, ProfileVisibility.PUBLIC, "");
+    }
+
+    // 로컬 로그인 비밀번호가 없는 계정인지 — OAuth 전용 계정은 빈 해시를 갖는다
+    public boolean isPasswordNotSet() {
+        return passwordHash.value().isEmpty();
+    }
+
+    // 비밀번호 변경 - 해싱은 인프라에서 즉 변경된걸 적용한다. -> 도메인만 책임
+    public void changePassword(String newPasswordHash) {
+        if (isPasswordNotSet()) {
+            throw new PasswordNotSetException();
+        }
+        PasswordHash changed = new PasswordHash(newPasswordHash);
+        if (changed.value().isEmpty()) {
+            throw new PasswordHashRequiredException();
+        }
+        this.passwordHash = changed;
     }
 
     // oauth로 회원가입 할때 사용하는 생성자
@@ -106,7 +125,7 @@ public class User {
     }
 
     private boolean isLastSignInMethod() {
-        return passwordHash.value().isEmpty();
+        return isPasswordNotSet();
     }
 
     public void completeOnboarding(String nickname, String gender, LocalDate birthday,

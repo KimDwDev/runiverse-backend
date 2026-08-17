@@ -55,7 +55,6 @@ public class EmailVerificationSignUpFlowIntegrationTest extends IntegrationTestS
         // 가입과 동시에 자동 로그인된다
         assertThat(signedUp.accessToken()).isNotBlank();
         assertThat(signedUp.refreshToken()).isNotBlank();
-        assertThat(signedUp.isOnboarded()).isFalse();
         // 티켓과 코드는 모두 소진돼 재사용할 수 없다
         assertThat(verificationTicketStore.size()).isZero();
         assertThat(emailVerificationStore.hasCode(EMAIL)).isFalse();

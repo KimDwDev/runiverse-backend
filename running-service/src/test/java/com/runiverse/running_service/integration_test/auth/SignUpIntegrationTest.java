@@ -132,14 +132,6 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("가입 직후에는 온보딩을 하지 않았으므로 isOnboarded가 false다")
-    void signUpIsNotOnboarded() {
-        SignUpResult result = signUpHandler.handle(
-                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
-        assertThat(result.isOnboarded()).isFalse();
-    }
-
-    @Test
     @DisplayName("발급받은 적 없는 티켓이면 EmailNotVerifiedException이 발생하고 저장되지 않는다")
     void signUpWithUnknownTicket() {
         assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand("not-a-ticket", PASSWORD)))

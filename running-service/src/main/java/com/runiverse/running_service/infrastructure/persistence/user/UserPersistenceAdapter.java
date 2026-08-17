@@ -1,7 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
@@ -15,10 +14,12 @@ import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
+import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.UserId;
@@ -34,7 +35,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
-        CheckOnboardingPort, UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort {
+        UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
+        UpdatePasswordPort {
 
     private final EntityManager entityManager;
 
@@ -118,6 +120,15 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
             throw new UserNotFoundException();
         }
         entity.changeProfileImageKey(null); // 변경 감지로 user.profile_image_key = null이 된다.
+    }
+
+    @Override
+    public void updatePassword(UserId userId, PasswordHash passwordHash) {
+        UserJpaEntity entity = entityManager.find(UserJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new UserNotFoundException();
+        }
+        entity.changePasswordHash(passwordHash.value());
     }
 
     private User toDomain(UserJpaEntity entity) {

@@ -42,8 +42,8 @@ public class SignUpHandler implements SignUpUsecase {
         // 4. refresh token해시화 후 refresh token redis 저장
         saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
 
-        // 5. 결과 반환 (방금 회원가입 했으니 온보딩 여부는 항상 false)
-        return new SignUpResult(user.getUserId().value(), accessToken, refreshToken, false);
+        // 5. 결과 반환
+        return new SignUpResult(user.getUserId().value(), accessToken, refreshToken);
     }
 
 }
