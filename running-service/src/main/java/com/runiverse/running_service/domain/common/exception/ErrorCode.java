@@ -13,6 +13,7 @@ public enum ErrorCode {
     EMAIL_TOO_LONG("EMAIL_TOO_LONG", "이메일은 254자를 초과할 수 없습니다."),
     INVALID_EMAIL_FORMAT("INVALID_EMAIL_FORMAT", "올바른 이메일 형식이 아닙니다."),
     PASSWORD_HASH_REQUIRED("PASSWORD_HASH_REQUIRED", "비밀번호 해시는 필수입니다."),
+    PASSWORD_NOT_SET("PASSWORD_NOT_SET", "비밀번호가 설정되지 않은 계정입니다."),
     INVALID_PASSWORD_HASH_FORMAT("INVALID_PASSWORD_HASH_FORMAT", "비밀번호 해시는 빈 값이거나 올바른 Argon2id 형식이어야 합니다."),
     INTRODUCTION_REQUIRED("INTRODUCTION_REQUIRED", "소개는 null일 수 없습니다."),
     INTRODUCTION_TOO_LONG("INTRODUCTION_TOO_LONG", "소개는 100자를 초과할 수 없습니다."),
