@@ -902,13 +902,24 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - `closeAt`은 모집이 마감되는 시각(`running_rooms.close_at`) — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
+- **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 확정된 매칭에서 이탈해 신청이 제한된 상태다. 응답에 해제 시각을 담는다
+
+```json
+{
+  "code": "MATCH_COOLDOWN",
+  "message": "확정된 매칭에서 이탈해 일정 시간 신청이 제한됩니다.",
+  "cooldownUntil": "2026-07-26T07:30:00"
+}
+```
+
+- 솔로 러닝(`POST /running-sessions`)은 이 제한을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) = 대기 취소(`running_players`·링크 row 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다
-  - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, row 유지)
+  - 대기 중(`MATCHING`) = 대기 취소(`running_players` row 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다. 제재 없음
+  - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, `left_at` 기록, row 유지). **`close_at` + 유예를 지난 뒤면 매칭 신청 쿨다운이 걸린다** — 클라는 나가기 전에 그 사실을 안내한다
   - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, **확정 후** 이탈로 2명 미만이 되면 `status: CANCELLED`(모집 중에는 1명으로 줄어도 방을 유지하고 계속 모집한다)
 - **시작 60초 전부터는 취소할 수 없다.** 출발 대기실에 들어선 뒤 빠지면 남은 사람이 대응할 시간이 없다. 그 시각 이후에는 러닝을 시작한 뒤 중도 종료(`RUNNING_FINISH`의 `forced=true`)로 처리한다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
