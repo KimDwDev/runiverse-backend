@@ -95,8 +95,7 @@ public class AuthController {
                 .body(new SignUpResponse(
                         result.userId(),
                         result.accessToken(),
-                        result.refreshToken(),
-                        result.isOnboarded()
+                        result.refreshToken()
                 ));
     }
 
@@ -116,8 +115,7 @@ public class AuthController {
                 .body(new LoginResponse(
                         result.userId(),
                         result.accessToken(),
-                        result.refreshToken(),
-                        result.isOnboarded()
+                        result.refreshToken()
                 ));
     }
 
@@ -148,8 +146,7 @@ public class AuthController {
                 .body(new OauthLoginResponse(
                         result.userId(),
                         result.accessToken(),
-                        result.refreshToken(),
-                        result.isOnboarded()
+                        result.refreshToken()
                 ));
     }
 

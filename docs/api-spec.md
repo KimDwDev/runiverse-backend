@@ -357,8 +357,7 @@
 {
   "userId": "550e8400-e29b-41d4-a716-446655440001",
   "accessToken": "ey...",
-  "refreshToken": "ey...",
-  "isOnboarded": false
+  "refreshToken": "ey..."
 }
 ```
 
@@ -425,8 +424,7 @@
 {
   "userId": "550e8400-e29b-41d4-a716-446655440001",
   "accessToken": "ey...",
-  "refreshToken": "ey...",
-  "isOnboarded": false
+  "refreshToken": "ey..."
 }
 ```
 
@@ -474,7 +472,7 @@
 ```
 
 - **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
-- **Response `200 OK`**: 1-4 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`/`isOnboarded`) — 최초 가입 여부와 무관하게 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`) — 최초 가입 여부와 무관하게 토큰 발급
 - **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
 
 ```json

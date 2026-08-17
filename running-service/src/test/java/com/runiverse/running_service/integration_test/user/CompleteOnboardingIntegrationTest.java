@@ -1,8 +1,6 @@
 package com.runiverse.running_service.integration_test.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.auth.command.login.LoginCommand;
-import com.runiverse.running_service.application.auth.command.login.LoginHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
@@ -38,15 +36,11 @@ public class CompleteOnboardingIntegrationTest extends IntegrationTestSupport {
     private static final BigDecimal WEIGHT = new BigDecimal("70.5");
     private static final BigDecimal HEIGHT = new BigDecimal("175.0");
     private SignUpHandler signUpHandler;
-    private LoginHandler loginHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
 
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
-        loginHandler = new LoginHandler(
-                userStore, passwordHasher, tokenProvider,
-                tokenProvider, refreshTokenStore, onboardingStore);
         completeOnboardingHandler = new CompleteOnboardingHandler(
                 userStore,     // LoadUserByIdPort
                 onboardingStore,  // ExistsOnboardingPort
@@ -83,18 +77,6 @@ public class CompleteOnboardingIntegrationTest extends IntegrationTestSupport {
         assertThat(saved.getAvgPace().secondPerKm()).isEqualTo(AVG_PACE);
         assertThat(saved.getWeight().value()).isEqualByComparingTo(WEIGHT);
         assertThat(saved.getHeight().value()).isEqualByComparingTo(HEIGHT);
-    }
-
-    @Test
-    @DisplayName("온보딩을 마치면 이후 로그인에서 isOnboarded가 true가 된다")
-    void onboardingIsReflectedInLogin() {
-        // given
-        UUID userId = signUp(EMAIL);
-        assertThat(loginHandler.handle(new LoginCommand(EMAIL, PASSWORD)).isOnboarded()).isFalse();
-        // when
-        completeOnboardingHandler.handle(command(userId, NICKNAME));
-        // then
-        assertThat(loginHandler.handle(new LoginCommand(EMAIL, PASSWORD)).isOnboarded()).isTrue();
     }
 
     @Test

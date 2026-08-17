@@ -44,8 +44,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 oauthUserResolver,
                 tokenProvider,      // GenerateTokenPort
                 tokenProvider,      // RefreshTokenHashPort
-                refreshTokenStore,  // SaveRefreshTokenHashPort
-                onboardingStore        // CheckOnboardingPort
+                refreshTokenStore   // SaveRefreshTokenHashPort
         );
         oauthClient.register(AUTH_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
     }
@@ -63,7 +62,6 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         assertThat(userStore.size()).isEqualTo(1);
         assertThat(result.accessToken()).isNotBlank();
         assertThat(result.refreshToken()).isNotBlank();
-        assertThat(result.isOnboarded()).isFalse();
 
         User saved = userStore.findById(result.userId()).orElseThrow();
         assertThat(saved.getEmail().value()).isEqualTo(KAKAO_EMAIL);
@@ -102,18 +100,6 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         String storedHash = refreshTokenStore.loadById(result.userId()).orElseThrow();
         assertThat(storedHash).isNotEqualTo(result.refreshToken());
         assertThat(tokenProvider.matches(result.refreshToken(), storedHash)).isTrue();
-    }
-
-    @Test
-    @DisplayName("온보딩을 마친 소셜 유저는 isOnboarded가 true다")
-    void oauthLoginReturnsOnboardedStatus() {
-        // given
-        OauthLoginResult first = login();
-        onboardingStore.markOnboarded(first.userId());
-        // when
-        OauthLoginResult second = login();
-        // then
-        assertThat(second.isOnboarded()).isTrue();
     }
 
     @Test

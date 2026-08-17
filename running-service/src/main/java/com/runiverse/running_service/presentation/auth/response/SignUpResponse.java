@@ -5,8 +5,7 @@ import java.util.UUID;
 public record SignUpResponse(
         UUID userId,
         String accessToken,
-        String refreshToken,
-        boolean isOnboarded
+        String refreshToken
 ) {
 
 }

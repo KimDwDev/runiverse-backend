@@ -37,7 +37,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
-                tokenProvider, refreshTokenStore, onboardingStore);
+                tokenProvider, refreshTokenStore);
         refreshHandler = new RefreshHandler(
                 tokenProvider, refreshTokenStore, tokenProvider,
                 refreshTokenStore, tokenProvider, refreshTokenStore);

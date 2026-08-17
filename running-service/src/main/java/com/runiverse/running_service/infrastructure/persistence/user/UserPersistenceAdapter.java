@@ -1,7 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
-import com.runiverse.running_service.application.auth.port.out.CheckOnboardingPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
@@ -36,7 +35,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
-        CheckOnboardingPort, UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
+        UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
         UpdatePasswordPort {
 
     private final EntityManager entityManager;
