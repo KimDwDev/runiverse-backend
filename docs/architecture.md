@@ -23,16 +23,19 @@ domain/                 프레임워크 의존 없음
   common/exception/     BusinessException · ErrorCode (도메인용)
 
 application/
-  <domain>/command/     기능별 Command · Handler · Result(선택)
-  <domain>/port/in/     *Usecase — Handler가 구현
+  <domain>/command/     상태를 바꾸는 유스케이스 — 기능별 Command · Handler · Result(선택)
+  <domain>/query/       조회 유스케이스 — 기능별 Query · Handler · Result
+  <domain>/port/in/     *Usecase — Handler가 구현 (command·query 공통)
   <domain>/port/out/    아웃바운드 인터페이스 · 전용 입출력 모델
   <domain>/exception/   외부 확인이 필요한 실패
   common/exception/     BusinessException · ErrorCode (유스케이스용)
 
-infrastructure/         기술 단위 — persistence · redis · security · oauth · identifier …
+infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config
 presentation/
   <domain>/             controller · request · response
   common/exception/     GlobalExceptionHandler · *ErrorCode · ErrorExposurePolicy
+  common/response/      ErrorResponse
+  common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler · SelfOnly
 ```
 
 ## 요청 흐름
@@ -49,7 +52,7 @@ AuthController ──▶ SignUpUsecase ──▶ SignUpHandler ──▶ SaveUse
 ## 레이어별 규칙
 
 - **domain/**: 프레임워크 의존 금지. VO는 생성 시점에 검증하고 도메인 예외를 던진다. 하위는 `aggregate`·`vo`·`exception`으로 나눈다.
-- **application/**: Handler는 `*Usecase`를 구현한다. 반환값이 있을 때만 `Result`를 둔다. DB 트랜잭션은 application에서 관리하며 보통 Handler, 필요하면 내부 컴포넌트가 경계다 — Redis 전용처럼 DB를 쓰지 않으면 경계가 없는 것이 정상이다.
+- **application/**: Handler는 `*Usecase`를 구현한다. 반환값이 있을 때만 `Result`를 둔다. 상태를 바꾸면 `command/`, 조회만 하면 `query/`에 두고 후자는 `@Transactional(readOnly = true)`를 건다 — 포트(`port/in`)는 둘을 구분하지 않는다. DB 트랜잭션은 application에서 관리하며 보통 Handler, 필요하면 내부 컴포넌트가 경계다 — Redis 전용처럼 DB를 쓰지 않으면 경계가 없는 것이 정상이다.
 - **port/out**: 작고 응집된 인터페이스로 나누고 Handler에는 필요한 포트만 주입한다. 사용 유스케이스나 변경 이유가 다르면 포트를 분리한다.
 - **infrastructure/**: 도메인 ↔ JPA 변환을 담당한다. application 포트를 기술 경계에 연결하는 기본 구현체는 `*Adapter`, 외부 제공자와 직접 통신하는 구현은 `*Client`, 여러 Client를 선택하면서 application 포트를 구현하는 컴포넌트는 `*Router`로 명명한다. 세 접미사는 역할에 따라 구분하며 서로 바꿔 쓰지 않는다. 같은 애그리거트와 저장 기술의 포트는 어댑터 하나가 함께 구현할 수 있다.
 - **presentation/**: 컨트롤러 + DTO. 컨트롤러 처리 중 발생한 예외는 `GlobalExceptionHandler`, 인증 진입 실패는 `AuthenticationEntryPoint`에서 변환한다.
