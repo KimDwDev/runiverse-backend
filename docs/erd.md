@@ -9,7 +9,7 @@
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
-- **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). `*_date`도 시점이면 `timestamp`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
+- **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`), 달력 날짜는 `*_date`(`date`, 시각·시간대 없음, API `YYYY-MM-DD`). 달력 날짜는 대회 `event_date`·`registration_start_date`·`registration_end_date`뿐이고, `user_onboardings.birthday`는 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
@@ -84,7 +84,7 @@
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. **신청·개시 즉시 1인 방으로 생성** — 매칭은 `MATCHING`, 솔로는 `STARTED`로 시작한다 |
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
-| start_date | timestamp | NOT NULL | 예약 시작 시각 |
+| start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
 | current_member | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
 | status | enum | NOT NULL, default MATCHING |  |
@@ -101,7 +101,7 @@
 | status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
-| start_date | timestamp | NOT NULL | 희망 시작 시각 |
+| start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
@@ -124,7 +124,7 @@
 | calories | int | nullable | kcal (선택) |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. 재계산·분석용(고도 소급 계산 등). 매칭·솔로 모두 서버가 업로드(Redis 버퍼→S3) |
 | route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline) — **기록 상세·목록의 경로 표시용**. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성 |
-| start_date / end_date | timestamp | NOT NULL | |
+| start_at / end_at | timestamp | NOT NULL | |
 | start_lat / start_lng / end_lat / end_lng | double precision | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
@@ -143,7 +143,7 @@
 | cadence | int | nullable | spm (선택) |
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
-| start_date / end_date | timestamp | NOT NULL | |
+| start_at / end_at | timestamp | NOT NULL | |
 | start_lat / start_lng | double precision | NOT NULL | 구간 시작점. 종료 지점은 다음 구간의 시작점이라 따로 두지 않는다 |
 | created_at | timestamp | NOT NULL | |
 
@@ -361,5 +361,5 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_players.running_room_id | 방 참가자 조회 |
-| running_rooms.(type, status, start_date) | 매칭 후보 방 조회 — 슬롯별 모집 중인 방(`type='MATCH' AND status='MATCHING'`). 솔로 방을 인덱스 단계에서 배제 |
+| running_rooms.(type, status, start_at) | 매칭 후보 방 조회 — 슬롯별 모집 중인 방(`type='MATCH' AND status='MATCHING'`). 솔로 방을 인덱스 단계에서 배제 |
 | running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |
