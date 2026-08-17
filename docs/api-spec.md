@@ -800,7 +800,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- **동작**: `running_rooms` 행을 `type='SOLO'`, `total_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 링크도 함께 만든다 — 참가자 없는 방을 남기지 않는다
+- **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member=1`, `current_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
 - 이 세션은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
@@ -888,7 +888,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
-- **Response `201 Created`** — 신청이 접수되면 `running_players` row와 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `total_member=4`)이 함께 생긴다
+- **Response `201 Created`** — 신청이 접수되면 `running_players` row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
   - **응답 본문에 `runningSessionId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 세션 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
 
 ```json

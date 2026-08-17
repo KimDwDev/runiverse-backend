@@ -85,8 +85,8 @@
 | running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. **신청·개시 즉시 1인 방으로 생성** — 매칭은 `MATCHING`, 솔로는 `STARTED`로 시작한다 |
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
 | start_date | timestamp | NOT NULL | 예약 시작 시각 |
-| total_member | int | NOT NULL | 모집 인원. 매칭 방은 생성 시 상한 `4`로 두고 **마감(`MATCHED`) 시 확정 인원으로 갱신**, **솔로 세션은 1** |
-| running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
+| max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
+| current_member | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
 | status | enum | NOT NULL, default MATCHING |  |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
