@@ -41,7 +41,7 @@
 
 ### 5. 매칭·러닝 실시간 통신
 
-매칭은 **REST + SSE**, 러닝 세션은 **WebSocket**이다. 전환 절차는 상세 5번 머리말 참고.
+매칭은 **REST + SSE**, 러닝 구간은 **WebSocket**이다. 전환 절차는 상세 5번 머리말 참고.
 
 **매칭 REST**
 
@@ -52,17 +52,17 @@
 | 13 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 16 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
+| 16 | POST | `/api/v1/running-rooms` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
 | 이벤트 | 비고 |
 |--------|------|
-| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 — 방 배정 전에는 `runningSessionId`가 `null` |
+| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 — 방 배정 전에는 `runningRoomId`가 `null` |
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
-**러닝 WebSocket** — `/ws/running-sessions`, 메시지 8종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/ws/running-rooms`, 메시지 8종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
@@ -78,8 +78,8 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | GET | `/api/v1/running-sessions/{runningSessionId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
-| 18 | GET | `/api/v1/running-sessions/{runningSessionId}/split-results` | 구간별 상세 + GPS 경로 |
+| 17 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
+| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + GPS 경로 |
 
 ### 7. 기록 화면
 
@@ -177,7 +177,7 @@
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
-- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningSessionId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `colorId` 등) = **Long**
+- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningRoomId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `colorId` 등) = **Long**
 
 ### 공통 에러 응답
 
@@ -777,13 +777,13 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 | 구간 | 방식 | 이유 |
 |---|---|---|
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
-| 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
+| 러닝 구간 (5-C·5-D) | **WebSocket** `/ws/running-rooms` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
-#### `POST /api/v1/running-sessions` — 러닝 세션 개시
+#### `POST /api/v1/running-rooms` — 솔로 러닝 개시
 
-- **클라가 만들 수 있는 세션은 솔로뿐이다.** 매칭 세션은 신청 시 서버가 만들므로 요청 대상이 아니다
+- **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다
 - **Request**
 
 ```json
@@ -796,18 +796,18 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 ```json
 {
-  "runningSessionId": 126
+  "runningRoomId": 126
 }
 ```
 
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member=1`, `current_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
-- 이 세션은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
+- 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
 **전환 지점** — `scheduledStartAt` 도달 시:
 
-1. 클라가 WS `/ws/running-sessions` 연결
+1. 클라가 WS `/ws/running-rooms` 연결
 2. `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신
 3. **ack를 받은 뒤에** SSE 스트림을 닫는다
 
@@ -831,7 +831,7 @@ ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채�
 
 ```
 event: MATCH_ROOM_UPDATED
-data: {"runningSessionId":125,"status":"MATCHED", ...}
+data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 | 이벤트 | 시점 |
@@ -889,7 +889,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
-  - **응답 본문에 `runningSessionId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 세션 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
+  - **응답 본문에 `runningRoomId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 방 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
 
 ```json
 {
@@ -912,7 +912,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 솔로 러닝(`POST /running-sessions`)은 이 제한을 받지 않는다
+- 솔로 러닝(`POST /running-rooms`)은 이 제한을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
@@ -935,7 +935,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 ```json
 {
   "state": "MATCHED",
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "room": { ... }
 }
 ```
@@ -956,7 +956,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -972,7 +972,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `runningSessionId`는 **항상 값이 있다** — 신청 즉시 1인 방이 생기므로 매칭 대기 중에도 가리킬 방이 존재한다. 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_ROOM_UPDATED`의 `status`와 `GET /users/me/running-match`의 `state`로만 판정한다
+- `runningRoomId`는 **항상 값이 있다** — 신청 즉시 1인 방이 생기므로 매칭 대기 중에도 가리킬 방이 존재한다. 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_ROOM_UPDATED`의 `status`와 `GET /users/me/running-match`의 `state`로만 판정한다
 - 매칭 무산(마감 시점 2명 미만)·방 취소 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 수신 시 클라는 홈으로
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
@@ -983,7 +983,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
   "scheduledStartAt": "2026-07-25T10:00:00",
   "targetDistanceMeters": 5000,
@@ -1041,9 +1041,9 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 3. 도달 시 클라가 러닝 화면으로 전환하며 `RUNNING_START`(C→S)를 보낸다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다
 4. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
-#### WebSocket 연결 — `/ws/running-sessions`
+#### WebSocket 연결 — `/ws/running-rooms`
 
-- **연결**: `wss://.../ws/running-sessions` + `Authorization: Bearer {accessToken}`
+- **연결**: `wss://.../ws/running-rooms` + `Authorization: Bearer {accessToken}`
 - **메시지 공통 형식**
 
 ```json
@@ -1060,19 +1060,19 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "code": "SESSION_NOT_FOUND",
-  "message": "러닝 세션을 찾을 수 없습니다.",
+  "code": "ROOM_NOT_FOUND",
+  "message": "러닝 정보를 찾을 수 없습니다.",
   "sourceType": "RUNNING_LOCATION_UPDATE"
 }
 ```
 
-- **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청)
+- **code**: `INVALID_REQUEST`(요청 검증 실패) / `ROOM_NOT_FOUND`(방 없음) / `NOT_ROOM_PLAYER`(참가자 아님) / `INVALID_ROOM_STATE`(현재 상태에서 불가한 요청)
 
 #### `RUNNING_START` (C→S) — 러닝 시작 알림 (클라 주도)
 
 ```json
 {
-  "runningSessionId": 125
+  "runningRoomId": 125
 }
 ```
 
@@ -1085,10 +1085,10 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "locations": [
     {
-      "sequence": 15,                    // Long, 세션 내 순번
+      "sequence": 15,                    // Long, 러닝 내 좌표 순번
       "latitude": 35.1795543,            // -90~90
       "longitude": 129.0756416,          // -180~180
       "altitudeMeters": 18.4,            // m
@@ -1115,7 +1115,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1143,7 +1143,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "eventType": "OVERTAKEN",
   "targetUserId": "550e8400-e29b-41d4-a716-446655440013"
 }
@@ -1158,12 +1158,12 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125
+  "runningRoomId": 125
 }
 ```
 
 - **일시정지 동안 경과 시간과 거리 계산이 멈춘다.** 클라는 좌표 전송도 중단한다 — 멈춰 있는 동안의 좌표는 트랙에 남길 이유가 없고, GPS 흔들림이 거리로 잡히면 기록이 부풀려진다
-- **다른 참가자는 계속 진행한다.** 일시정지는 본인 기록에만 영향을 주며 세션 전체를 멈추지 않는다
+- **다른 참가자는 계속 진행한다.** 일시정지는 본인 기록에만 영향을 주며 다른 참가자를 멈추지 않는다
 - 서버는 상태를 다른 참가자에게 `PLAYER_RUNNING_PROGRESS_UPDATED`의 `paused` 필드로 알린다 — 상대가 멈췄는지 모르면 화면에서 갑자기 뒤처진 것처럼 보인다
 - **ack 없음** — 실패는 `ERROR`로 통지
 
@@ -1171,28 +1171,28 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "forced": false
 }
 ```
 
-- `forced=true` = 목표 도달 전 즉시 종료 — 정상/강제의 서버 처리(현재까지 데이터로 기록 저장 + 세션 종료)가 동일해 플래그로만 구분
+- `forced=true` = 목표 도달 전 즉시 종료 — 정상/강제의 서버 처리(현재까지 데이터로 기록 저장 + 러닝 종료)가 동일해 플래그로만 구분
 - **이 시점에 서버가 `running_records`(+splits) 저장**. 거리·페이스·구간 분할 모두 **서버가 받은 좌표로 계산한다** — 클라 계산값은 러닝 중 화면 표시용이고 저장값이 아니다. GPS 트랙은 서버가 S3 업로드 + 다운샘플 `route_polyline` 생성
-- **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-sessions/{id}/results`로 대시보드 진입
+- **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
 - 전원 제출 완료 or 타임아웃 중 먼저 오는 시점에 방 상태 `FINISHED` (타임아웃 값은 운영 정책)
 
 ## 6. 러닝 중 / 러닝 후 대시보드 (REST)
 
 > **러닝 사진**: 앱에서 촬영해 디바이스 갤러리에만 저장 — 서버 업로드/조회 API 없음. results 등 응답에 사진 필드 없음.
 
-### 6-1. `GET /api/v1/running-sessions/{runningSessionId}/results` — 러닝 종료 결과 (참가자 전원 요약)
+### 6-1. `GET /api/v1/running-rooms/{runningRoomId}/results` — 러닝 종료 결과 (참가자 전원 요약)
 
 - **화면**: 러닝 후 - 대시보드 (참가자 공통 정보). `RUNNING_FINISHED` 수신 후 진입
 - **Response `200 OK`**
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "startedAt": "2026-07-25T10:00:30",
   "finishedAt": "2026-07-25T10:30:30",
   "players": [
@@ -1254,8 +1254,8 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "code": "NOT_SESSION_PLAYER",
-  "message": "같은 세션 참가자만 조회할 수 있습니다."
+  "code": "NOT_ROOM_PLAYER",
+  "message": "같은 방 참가자만 조회할 수 있습니다."
 }
 ```
 
@@ -1268,16 +1268,16 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (같은 세션 참가자)
+- **인증**: 필요 (같은 방 참가자)
 
-### 6-2. `GET /api/v1/running-sessions/{runningSessionId}/split-results` — 구간별 상세 + GPS 경로
+### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + GPS 경로
 
 - **화면**: 러닝 후 - 대시보드 (본인 경로 확인 + 참가자 상세·구간별 비교)
 - **Response `200 OK`** (구조 요약)
 
 ```json
 {
-  "runningSessionId": 125,
+  "runningRoomId": 125,
   "splitDistanceMeters": 1000,          // 기본 구간 거리
   "totalDistanceMeters": 5020,          // 현재 사용자 총 거리
   "startedAt": "2026-07-25T10:00:30",
@@ -1337,8 +1337,8 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "code": "NOT_SESSION_PLAYER",
-  "message": "같은 세션 참가자만 조회할 수 있습니다."
+  "code": "NOT_ROOM_PLAYER",
+  "message": "같은 방 참가자만 조회할 수 있습니다."
 }
 ```
 
@@ -1351,7 +1351,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (같은 세션 참가자)
+- **인증**: 필요 (같은 방 참가자)
 
 ## 7. 기록 화면
 
@@ -1366,7 +1366,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   "items": [
     {
       "runningRecordId": 501,
-      "runningSessionId": 125,           // 솔로 러닝도 세션을 열므로 항상 값이 있다
+      "runningRoomId": 125,           // 솔로 러닝도 방을 만드므로 항상 값이 있다
       "startedAt": "2026-07-25T10:00:30",
       "totalDistanceMeters": 5020,
       "durationSeconds": 1800,
@@ -1383,7 +1383,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
 - **Response `200 OK`**: 7-1 필드 + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 GPS 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm` 등)
-- 같은 방 참가자 비교는 6-1·6-2(세션 API) 사용 — 이 API는 **본인 기록 전용**
+- 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
 - **에러 (403 Forbidden — 본인 기록 아님)**
 
@@ -1405,7 +1405,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (본인)
 
-> **솔로 러닝도 `runningSessionId`를 갖는다** — 매칭을 거치지 않을 뿐 세션은 열린다(§5 참고). 따라서 7-1·7-2 응답의 `runningSessionId`는 항상 값이 있고, 두 API는 매칭·솔로 공통 조회다. 솔로 여부는 참가자 수로 구분한다.
+> **솔로 러닝도 `runningRoomId`를 갖는다** — 매칭을 거치지 않을 뿐 방은 만들어진다(§5 참고). 따라서 7-1·7-2 응답의 `runningRoomId`는 항상 값이 있고, 두 API는 매칭·솔로 공통 조회다. 솔로 여부는 참가자 수로 구분한다.
 
 
 ## 8. 대회 화면 [MVP 제외]
@@ -2401,7 +2401,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 세션 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
+- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 러닝 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
 - **인증**: 필요
 
