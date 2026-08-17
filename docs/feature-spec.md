@@ -306,6 +306,6 @@
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):
 
-- **`users`/`badges`**: 하드delete + 아카이브 — 실제 DELETE 전에 `delete_users`/`delete_badges`에 스냅샷 먼저 저장(감사/로그 용도, 복구 기능 없음).
+- **`users`**: 하드delete + 아카이브 — 실제 DELETE 전에 `delete_users`에 스냅샷 먼저 저장(감사/로그 용도, 복구 기능 없음).
 - **`feeds`**: `deleted_at` 소프트delete(복구 가능·조회 제외 처리).
 - **`comments`**: 답글 유무로 분기(레딧 방식, 두 경우 모두 `delete_comments` 스냅샷 먼저 저장) — 답글 없으면 하드delete, 답글 있으면 톰스톤(row 유지 + 내용 비움 + `deleted_at` 기록, "삭제된 댓글입니다" 자리표시로 노출하고 답글 스레드 유지).

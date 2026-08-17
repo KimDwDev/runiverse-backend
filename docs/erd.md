@@ -84,7 +84,7 @@
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. 매칭 방은 **2명째가 매칭되는 순간 생성** — 신청 시점엔 방이 없다. 솔로 러닝은 개시 요청 시 바로 생성되며 `STARTED`로 시작한다 |
 | start_date | timestamp | NOT NULL | 예약 시작 시각 |
-| total_member | int | NOT NULL | 모집 인원(서버 자동 편성 2~4) |
+| total_member | int | NOT NULL | 모집 인원 — 매칭은 서버가 2~4명으로 자동 편성, **솔로 세션은 1** |
 | running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
 | status | enum | NOT NULL, default MATCHING |  |
 | created_at / updated_at | timestamp | NOT NULL | |

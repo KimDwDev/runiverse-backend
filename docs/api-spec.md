@@ -62,7 +62,7 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
-**러닝 WebSocket** — `/ws/running-sessions`, 메시지 6종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/ws/running-sessions`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
@@ -154,7 +154,7 @@
 | 50 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 51 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 6종)**
+**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종)**
 
 ---
 
@@ -167,11 +167,11 @@
 - **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜(생일·대회 일정)는 `YYYY-MM-DD`
 - **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
 - **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`, 대회 북마크는 `204 No Content`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 11-6~11-8로 나뉜다
-- **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
+- **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §7(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
-- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningSessionId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `badgeId` 등) = **Long**
+- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningSessionId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `colorId` 등) = **Long**
 
 ### 공통 에러 응답
 

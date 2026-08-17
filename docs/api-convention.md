@@ -6,9 +6,9 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - Base path: `/api/v1`
 - 필드명: JSON 요청/응답은 camelCase — DB 컬럼은 snake_case 유지, 백엔드에서 매핑한다.
-- ID 타입: `userId`만 UUID, 그 외 **리소스 ID**(`feedId`·`commentId`·`contestId`·`runningRecordId`·`runningSessionId`·`badgeId` 등 서버가 발급하는 PK)는 Long. 클라이언트가 만드는 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열.
+- ID 타입: `userId`만 UUID, 그 외 **리소스 ID**(`feedId`·`commentId`·`contestId`·`runningRecordId`·`runningSessionId`·`colorId` 등 서버가 발급하는 PK)는 Long. 클라이언트가 만드는 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열.
 - 날짜/시간: ISO 8601 `yyyy-MM-ddTHH:mm:ss` — KST 기준, 오프셋 없이 초 단위까지 (예: `2026-07-20T13:00:00`). 저장도 KST(`TimeZoneConfig`), 직렬화 형식은 `JacksonConfig`가 고정한다.
-- enum: DB·API 동일한 영문 코드 (예: `"visibility": "PUBLIC"`) — 변환 매핑 없음, 값 목록은 [erd.md](erd.md) §6(enum 사전).
+- enum: DB·API 동일한 영문 코드 (예: `"visibility": "PUBLIC"`) — 변환 매핑 없음, 값 목록은 [erd.md](erd.md) §7(enum 사전).
 
 ## 하위 호환
 
