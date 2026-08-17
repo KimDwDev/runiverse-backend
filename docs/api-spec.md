@@ -47,12 +47,12 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 52 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
-| 53 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
-| 54 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
-| 55 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 56 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 57 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
+| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
+| 12 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
+| 13 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
+| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 16 | POST | `/api/v1/running-sessions` | 러닝 세션 개시 (솔로 전용 — 매칭 세션은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -79,80 +79,80 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | GET | `/api/v1/running-sessions/{runningSessionId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
-| 12 | GET | `/api/v1/running-sessions/{runningSessionId}/split-results` | 구간별 상세 + GPS 경로 |
+| 17 | GET | `/api/v1/running-sessions/{runningSessionId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
+| 18 | GET | `/api/v1/running-sessions/{runningSessionId}/split-results` | 구간별 상세 + GPS 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 13 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
-| 14 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
+| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
+| 20 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
 
 ### 8. 대회 화면 [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | GET | `/api/v1/contests` | 대회 목록 + 검색·필터(날짜/지역/거리). 상세 API 없음 — 목록에 `detailUrl` 포함(공식 홈페이지 이동) |
-| 18 | POST | `/api/v1/contests/{contestId}/bookmark` | 일정 추가(북마크) |
-| 19 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
-| 20 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
+| 21 | GET | `/api/v1/contests` | 대회 목록 + 검색·필터(날짜/지역/거리). 상세 API 없음 — 목록에 `detailUrl` 포함(공식 홈페이지 이동) |
+| 22 | POST | `/api/v1/contests/{contestId}/bookmark` | 일정 추가(북마크) |
+| 23 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
+| 24 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
 
 ### 9. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
-| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 25 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 26 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
+| 27 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 28 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 29 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 30 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 31 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 32 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 33 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 34 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 35 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 10. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 33 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 34 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 35 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 36 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 36 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 37 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 38 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 39 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 11. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
-| 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 40 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
-| 41 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 42 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 43 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 44 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 45 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 46 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) |
-| 32 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 40 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
+| 41 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
+| 42 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
+| 43 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
+| 44 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 45 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 46 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 47 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 48 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 49 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) |
+| 50 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 12. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 48 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
+| 51 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 52 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
 
 ### 13. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 49 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 50 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 51 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 53 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 54 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 55 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
 **합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종)**
 
@@ -911,7 +911,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`state`는 저장값이 아니라 파생값이다** — `running_players`와 방 상태·마감 시각으로 계산한다
+- **`state`는 저장값이 아니라 파생값이다** — `running_players`와 방 상태·마감 시각으로 계산한다. `feature-spec.md`의 홈 화면 상태 표와 **같은 규칙**이며 이름만 한글/영문으로 다르다
 
 | `state` | 조건 |
 |---|---|
