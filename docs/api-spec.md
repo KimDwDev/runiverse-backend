@@ -920,11 +920,10 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - **서버가 방 상태로 분기**
   - 대기 중(`MATCHING`) = 대기 취소(`running_players` row 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다. 제재 없음
   - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, `left_at` 기록, row 유지). **`close_at` + 유예를 지난 뒤면 매칭 신청 쿨다운이 걸린다** — 클라는 나가기 전에 그 사실을 안내한다
-  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, **확정 후** 이탈로 2명 미만이 되면 `status: CANCELLED`(모집 중에는 1명으로 줄어도 방을 유지하고 계속 모집한다)
-- **시작 60초 전부터는 취소할 수 없다.** 출발 대기실에 들어선 뒤 빠지면 남은 사람이 대응할 시간이 없다. 그 시각 이후에는 러닝을 시작한 뒤 중도 종료(`RUNNING_FINISH`의 `forced=true`)로 처리한다
+  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다** — 남은 사람은 그대로 러닝을 진행한다
+- **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고, 늦게 나가는 것은 차단이 아니라 쿨다운으로 다룬다 — 막아도 앱 강제 종료로 우회되며 그 경우 `LEFT`조차 남지 않는다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
-- **에러 (409 Conflict)**: `CANCEL_WINDOW_CLOSED` — 시작 60초 전을 지났다
 - **인증**: 필요
 
 #### `GET /api/v1/users/me/running-match` — 현재 매칭 상태 조회
@@ -1021,7 +1020,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 #### 방 나가기 — 별도 이벤트 없음
 
 - 확정된 방에서 나가기도 **`DELETE /users/me/running-match`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
-- 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신, 이탈로 2명 미만이면 `status: CANCELLED`
+- 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신한다 — 혼자 남아도 방은 유지되고 그대로 러닝을 진행한다
 - **확정 후 이탈에 페널티를 두지 않는다** — 이탈 이력은 `running_players.status='LEFT'`로 남으므로 나중에 도입하더라도 과거 데이터로 계산할 수 있다
 
 #### 대기방 참여자 목록 — 별도 조회 없음
