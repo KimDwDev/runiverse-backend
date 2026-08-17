@@ -1,6 +1,9 @@
 package com.runiverse.running_service.application.user.command.password;
 
+import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 import com.runiverse.running_service.application.user.port.in.ChangePasswordUsecase;
+import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
+import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class ChangePasswordHandler implements ChangePasswordUsecase {
+
+    private final LoadUserByIdPort loadUserByIdPort;
+    private final PasswordHashPort passwordHashPort;
+    private final UpdatePasswordPort updatePasswordPort;
 
     @Override
     public void handle(ChangePasswordCommand command) {
