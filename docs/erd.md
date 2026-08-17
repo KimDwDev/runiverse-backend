@@ -97,7 +97,7 @@
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
 | user_id | UUID | FK → users, NOT NULL | |
-| status | enum | NOT NULL, default CONFIRMED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 CONFIRMED가 맞다 |
+| status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | total_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_date | timestamp | NOT NULL | 희망 시작 시각 |
@@ -348,7 +348,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
-| running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
+| running_players.status | INVITED / JOINED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대 — 생성 시 확정, 불변 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정 / 시작 / 종료 / 마감 시 2명 미만이거나 확정 후 이탈로 2명 미만 |
 | oauth_users.provider | GOOGLE / KAKAO | |

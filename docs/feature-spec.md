@@ -307,11 +307,12 @@
 
 **`running_rooms.status`**: MATCHING/MATCHED/STARTED/FINISHED/CANCELLED. 매칭 취소 시 `status='CANCELLED'`만 사용 — 취소 이력도 조회 가능해야 하므로 목록에서 제외하지 않음. `deleted_at`은 별도 용도(예: 관리자의 부정 방 숨김 처리)로 남겨두고 이번 명세에서는 다루지 않는다.
 
-**`STARTED`→`FINISHED` 전환**: 둘 중 먼저 오는 시점에 자동 전환 — ① `CONFIRMED` 참가자 전원이 기록 제출 완료 시 즉시 `FINISHED`, ② 미제출자가 있어도 시작 후 서버 설정 시간 경과 시(타임아웃) 스케줄러가 `FINISHED` 처리. 타임아웃 값은 운영 정책.
+**`STARTED`→`FINISHED` 전환**: 둘 중 먼저 오는 시점에 자동 전환 — ① `JOINED` 참가자 전원이 기록 제출 완료 시 즉시 `FINISHED`, ② 미제출자가 있어도 시작 후 서버 설정 시간 경과 시(타임아웃) 스케줄러가 `FINISHED` 처리. 타임아웃 값은 운영 정책.
 
-**`running_players.status`**: CONFIRMED(참가중)/LEFT(이탈)/INVITED(초대됨). `INVITED`는 친구 초대용 — 초대를 받았고 아직 응답하지 않은 상태. 거절 시에는 별도 상태값 없이 row 자체를 DELETE(거절 이력 보관 안 함).
+**`running_players.status`**: INVITED(초대됨)/JOINED(참가중)/LEFT(이탈). `INVITED`는 친구 초대용 — 초대를 받았고 아직 응답하지 않은 상태. 거절 시에는 별도 상태값 없이 row 자체를 DELETE(거절 이력 보관 안 함).
 
-- **이 컬럼은 "참가 의사" 축이지 매칭 진행 단계가 아니다.** 그래서 기본값이 `CONFIRMED`인 것이 맞다 — "매칭이 확정됐다"가 아니라 "참가 의사가 확정됐다"는 뜻이라, 매칭 버튼을 누른 직후가 곧 `CONFIRMED`다. 매칭이 어디까지 진행됐는지는 `running_rooms.status`가 표현한다.
+- **이 컬럼은 "참가 의사" 축이지 매칭 진행 단계가 아니다.** 그래서 기본값이 `JOINED`다 — 매칭 버튼을 누른 순간이 곧 참가 의사 표명이다. 매칭이 어디까지 진행됐는지는 `running_rooms.status`가 표현한다.
+  - `CONFIRMED`가 아니라 `JOINED`인 이유가 이것이다. "확정"은 매칭 단계 어휘라(`MATCHED`·confirm_deadline) 같은 화면에서 매칭 확정과 참가 의사 확정이 같은 말로 읽힌다. `JOINED`/`LEFT`는 참가↔이탈 대칭이라 축이 무엇인지 값만 봐도 드러난다.
 - 매칭 진행 단계를 이 컬럼에 넣지 말 것(`WAITING`·`FAILED` 등). 방 상태와 같은 사실이 두 곳에 저장돼 드리프트가 생기고, 방 상태가 바뀔 때마다 참가자 전원을 갱신해야 하며, 방이 생기지 않은 신청을 실패로 전환하는 배치가 따로 필요해진다.
 
 **목표 거리 vs 실제 거리**: `running_players.total_distance`는 매칭 시 설정한 목표 거리(플레이어별 저장), `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리 — 서로 다른 값, 혼동 주의.

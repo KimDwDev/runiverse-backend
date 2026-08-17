@@ -756,7 +756,7 @@
 
 MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 뒤에 붙인다. **엔드포인트 미정.**
 
-초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `CONFIRMED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
+초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `JOINED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
 
 초대방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 남의 초대방에 모르는 사람이 배정되므로 값 분리가 필수다.
 
@@ -972,7 +972,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
       "nickname": "동완러너",
-      "status": "CONFIRMED",              // PlayerStatus: INVITED | CONFIRMED | LEFT
+      "status": "JOINED",              // PlayerStatus: INVITED | JOINED | LEFT
       "profileImageUrl": "https://...",
       "introduction": "즐겁게 같이 달려요!",   // users.introduction
       "averagePaceSecondsPerKm": 360
@@ -980,7 +980,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
     {
       "userId": "550e8400-e29b-41d4-a716-446655440013",
       "nickname": "철수",
-      "status": "CONFIRMED",
+      "status": "JOINED",
       "profileImageUrl": "https://...",
       "introduction": "천천히 오래 달려요.",
       "averagePaceSecondsPerKm": 390
