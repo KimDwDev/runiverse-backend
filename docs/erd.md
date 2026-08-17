@@ -354,7 +354,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 8. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버(`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요 — 전부 `user_id`로만 조회한다). `running_splits (running_record_id, sequence)` UNIQUE도 `running_record_id` 조회 커버. `colors`는 마스터라 전체 조회만 하므로 인덱스가 필요 없다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요). `running_splits (running_record_id, sequence)` UNIQUE도 마찬가지. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
 
 | 인덱스 대상 | 용도 |
 |---|---|

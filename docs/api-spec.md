@@ -62,11 +62,10 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
-**러닝 WebSocket** — `/ws/running-sessions`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/ws/running-sessions`, 메시지 8종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
-| 카운트 다운 | `SESSION_READY` | S→C | 시작 시각 + 서버 현재 시각 — 클라가 오프셋 보정 |
 | 카운트 다운 | `RUNNING_START` | C→S | 클라 주도 시작 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
 | 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | `paused` 포함 — 멈춘 것과 느려진 것을 구분 |
@@ -154,7 +153,7 @@
 | 54 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 55 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종)**
+**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
 
 ---
 
@@ -761,7 +760,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 세션 (5-C·5-D) | **WebSocket** `/ws/running-sessions` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운·`SESSION_READY`는 건너뛴다 — 맞출 상대가 없다).
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-sessions`로 세션을 열어 `runningSessionId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
 #### `POST /api/v1/running-sessions` — 러닝 세션 개시
 
@@ -787,13 +786,13 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
-**전환 지점** — `scheduledStartAt` 직전:
+**전환 지점** — `scheduledStartAt` 도달 시:
 
 1. 클라가 WS `/ws/running-sessions` 연결
-2. 서버가 `SESSION_READY`로 시작 시각과 서버 현재 시각을 내림
-3. **그것을 받은 뒤에** SSE 스트림을 닫는다
+2. `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신
+3. **ack를 받은 뒤에** SSE 스트림을 닫는다
 
-받기 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
+ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
 - **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
   - 링크 생성 = 방 배정 시(2명째가 매칭되는 순간)
@@ -1003,15 +1002,14 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 **카운트다운은 클라가 돌리되 기준 시각은 서버 값을 쓴다.** 타이머 구동과 화면 전환은 클라 몫이다 — 서버가 매초 틱을 보내지 않는다. 다만 기준을 각자 기기 시계로 삼으면 참가자마다 출발이 어긋나므로, 기준점만 서버에서 받아 보정한다.
 
+**서버 시각은 별도 메시지 없이 HTTP 응답의 `Date` 헤더로 얻는다.** 매칭 API를 부를 때마다 받으므로 클라는 그 시점에 오프셋을 계산해 둔다. 오프셋 보정의 구체 방식(왕복 지연을 어떻게 빼는지)은 미정이다.
+
 절차는 다음과 같다.
 
 1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다
-2. 서버가 `SESSION_READY`(S→C)로 `startAt`과 **서버 현재 시각**을 내린다 — 클라는 자기 시계와의 오프셋을 계산해 타이머를 보정한다
-3. 클라는 `SESSION_READY`를 받은 뒤 SSE 스트림을 닫는다
-4. 보정된 시각으로 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱). 이 구간에서는 뒤로가기를 차단한다
-5. 도달 시 클라가 러닝 화면으로 전환하며 `RUNNING_START`(C→S)를 보낸다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다
-
-- 오프셋 보정의 구체 방식(왕복 지연을 어떻게 빼는지)은 미정
+2. 보정된 시각으로 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱). 이 구간에서는 뒤로가기를 차단한다
+3. 도달 시 클라가 러닝 화면으로 전환하며 `RUNNING_START`(C→S)를 보낸다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾼다
+4. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
 #### WebSocket 연결 — `/ws/running-sessions`
 
@@ -1040,19 +1038,6 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 - **code**: `INVALID_REQUEST`(요청 검증 실패) / `SESSION_NOT_FOUND`(세션 없음) / `NOT_SESSION_PLAYER`(참가자 아님) / `INVALID_SESSION_STATE`(현재 상태에서 불가한 요청)
 
-#### `SESSION_READY` (S→C) — 시작 시각 통지 (WS 연결 직후)
-
-```json
-{
-  "runningSessionId": 125,
-  "startAt": "2026-07-25T19:00:00",
-  "serverTime": "2026-07-25T18:59:42.317"
-}
-```
-
-- 클라는 `serverTime`과 자기 시계의 차이로 오프셋을 구해 카운트다운을 보정한다
-- 이 메시지를 받은 뒤 SSE 스트림을 닫는다 — 받기 전에 닫으면 WS가 실패했을 때 돌아갈 채널이 없다
-
 #### `RUNNING_START` (C→S) — 러닝 시작 알림 (클라 주도)
 
 ```json
@@ -1062,7 +1047,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 ```
 
 - 보정된 시각이 `startAt`에 도달하면 클라가 발신한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾸므로, 이 메시지는 상태 전환의 트리거가 아니라 개별 참가자의 시작 통보다
-- **ack**: `RUNNING_STARTED`
+- **ack**: `RUNNING_STARTED` — 이걸 받으면 클라는 SSE 스트림을 닫는다
 
 ### 5-D. 러닝 중
 
@@ -1960,7 +1945,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
   - **에러 (404 Not Found)**: 친구가 아니다
 - **인증**: 필요
 
-> **경로를 `friend-request`와 `friend`로 나눈 이유**: `friend-request`는 항상 `PENDING` 행만, `friend`는 항상 `ACCEPTED` 행만 다뤄 **이름이 상태와 어긋나지 않는다**. 하나로 묶으면 친구 끊기를 "요청 삭제"라 부르게 되고, DELETE 한 곳이 취소·거절·삭제 세 의미를 겸해 핸들러 안에 상태 분기가 들어간다 — 유스케이스 하나당 핸들러 하나인 이 프로젝트 구조와 맞지 않는다.
+> **경로가 둘로 나뉜 이유**: `friend-request`는 `PENDING` 행만, `friend`는 `ACCEPTED` 행만 다뤄 이름이 상태와 어긋나지 않는다. 하나로 묶으면 DELETE 한 곳이 취소·거절·삭제를 겸해 핸들러에 상태 분기가 들어간다.
 >
 > | `friendStatus` | 화면 버튼 | 호출 |
 > |---|---|---|
