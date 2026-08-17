@@ -895,11 +895,11 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 {
   "scheduledStartAt": "2026-07-25T10:00:00",
   "targetDistanceMeters": 5000,
-  "confirmDeadline": "2026-07-25T09:30:00"
+  "closeAt": "2026-07-25T09:45:00"
 }
 ```
 
-- `confirmDeadline`은 서버 계산값 — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다
+- `closeAt`은 모집이 마감되는 시각(`running_rooms.close_at`) — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
 - **인증**: 필요
