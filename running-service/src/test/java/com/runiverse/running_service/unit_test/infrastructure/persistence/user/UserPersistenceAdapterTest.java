@@ -6,6 +6,7 @@ import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -537,6 +538,38 @@ public class UserPersistenceAdapterTest {
 
         // when & then
         assertThatThrownBy(() -> userPersistenceAdapter.clearProfileImage(new UserId(userId)))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("비밀번호를 바꾸면 엔티티의 해시가 갱신된다")
+    void updatePasswordChangesEntity() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+        String newHash = "$argon2id$v=19$m=16384,t=2,p=1$YW5vdGhlcnNhbHQ$bmV3aGFzaA";
+
+        // when
+        userPersistenceAdapter.updatePassword(new UserId(userId), new PasswordHash(newHash));
+
+        // then -> 유니크 제약이 없어 flush 없이 변경 감지에 맡긴다
+        assertThat(entity.getPasswordHash()).isEqualTo(newHash);
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 비밀번호를 바꾸지 않고 예외를 던진다")
+    void updatePasswordThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.updatePassword(
+                new UserId(userId), new PasswordHash(PASSWORD_HASH)))
                 .isInstanceOf(UserNotFoundException.class);
     }
 
