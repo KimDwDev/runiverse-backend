@@ -149,11 +149,13 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 53 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 54 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 55 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 53 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
+| 54 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 55 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 54개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
+**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
 
 ---
 
@@ -1848,8 +1850,9 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 
 ### 11-1. `GET /api/v1/users/me` — 내 기본 정보
 
-- **화면**: 전역 (내 프로필 진입, 편집 프리필 등)
-- **Response `200 OK`**: `{ "userId", "email", "nickname", "profileImageUrl", "introduction", "isOnboarded" }` — `email`은 항상 존재(소셜 포함 모든 유저 이메일 보유, 미동의 시 가입 자체가 `403`으로 거부)
+- **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기, 로그인 직후 상세 조회, 편집 프리필)
+- **Response `200 OK`**: `{ "userId", "nickname", "profileImageUrl", "introduction", "isOnboarded" }`
+- **`email`은 내리지 않는다** — 이메일을 보여주는 화면은 설정 페이지의 계정 항목뿐이라 13-1이 담당한다. 이 응답은 앱을 열 때마다 타는 경로이므로 특정 화면에서만 쓰는 값을 싣지 않는다
 - **인증**: 필요
 
 ### 11-2. `GET /api/v1/users/{userId}` — 프로필 요약
@@ -2071,7 +2074,86 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 ## 13. 설정 페이지
 
-### 13-1. `GET /api/v1/users/me/settings` — 설정 조회
+### 13-1. `GET /api/v1/users/me/account` — 계정 정보
+
+- **화면**: 설정 (계정 항목)
+- **Response `200 OK`**
+
+```json
+{
+  "email": "run@example.com",
+  "loginType": "GOOGLE"                  // LOCAL | GOOGLE | KAKAO
+}
+```
+
+- **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
+- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 자동 연동하지 않고 `409`로 거부한다(1-5/1-6). 그래서 단일 값으로 표현된다
+- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출한다. 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 비밀번호 변경 메뉴를 감춘다. 로컬에 "이메일 계정" 같은 문구를 붙이지 않는 이유 — 바로 위에 이메일이 떠 있고, 비밀번호 변경 메뉴의 존재 자체가 이미 로컬이라는 표시다. 소셜 문구가 필요한 건 어느 provider로 가입했는지 잊으면 다른 버튼을 눌러 별개 계정이 되기 때문이다
+- **인증**: 필요
+
+### 13-2. `PATCH /api/v1/users/me/password` — 비밀번호 변경
+
+로컬 계정만 가능. 현재 비밀번호로 본인을 재확인한다.
+
+- **화면**: 설정 (계정 항목 → 비밀번호 변경)
+- **Request**
+
+```json
+{
+  "currentPassword": "********",                                          // 필수
+  "newPassword": "********"                                               // 필수 — 6~16자, 영문·숫자·특수문자 각 1자 이상 (확인 일치 검증은 클라이언트)
+}
+```
+
+- **Response**: `204 No Content`
+- **기존 토큰은 무효화하지 않는다** — 다른 기기 세션이 유지된다. 변경 즉시 전 기기 로그아웃은 **[MVP 제외]**
+- **새 비밀번호가 현재와 같아도 거부하지 않는다** — 별도 검증을 두지 않는다
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "현재 비밀번호는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "비밀번호는 6자 이상 16자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "비밀번호는 영문, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다."
+}
+```
+
+- **에러 (403 Forbidden — 현재 비밀번호 불일치)**
+
+```json
+{
+  "code": "CURRENT_PASSWORD_MISMATCH",
+  "message": "현재 비밀번호가 올바르지 않습니다."
+}
+```
+
+- `401`을 쓰지 않는다 — 클라이언트가 액세스 토큰 만료로 오인해 refresh 후 재시도하는 루프에 빠진다. `401`은 토큰 문제 전용으로 남긴다
+
+- **에러 (409 Conflict — 소셜 계정)**
+
+```json
+{
+  "code": "PASSWORD_CHANGE_NOT_ALLOWED",
+  "message": "소셜 계정은 비밀번호를 변경할 수 없습니다."
+}
+```
+
+- 클라는 13-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
+- **인증**: 필요
+
+> **비밀번호 찾기(로그인 전 재설정)는 명세에 없다** — 로그인 화면에 진입점이 없다. 필요해지면 이메일 인증(1-1/1-2)의 `verificationTicket`을 받는 별도 엔드포인트로 정의한다. 이 API는 로그인된 상태 전용이다.
+
+### 13-3. `GET /api/v1/users/me/settings` — 설정 조회
 
 ```json
 {
@@ -2083,12 +2165,12 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
 - **인증**: 필요
 
-### 13-2. `PATCH /api/v1/users/me/settings` — 설정 변경
+### 13-4. `PATCH /api/v1/users/me/settings` — 설정 변경
 
-- **Request**: 13-1 필드 부분 수정 / **Response `200 OK`**: 갱신본
+- **Request**: 13-3 필드 부분 수정 / **Response `200 OK`**: 갱신본
 - **인증**: 필요
 
-### 13-3. `DELETE /api/v1/users/me` — 회원탈퇴
+### 13-5. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
 - **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄)

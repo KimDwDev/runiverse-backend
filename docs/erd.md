@@ -28,7 +28,7 @@
 | user_id | UUID | PK | |
 | email | varchar | UNIQUE, NOT NULL | 로컬·소셜 공통 |
 | password_hash | varchar | nullable | 소셜 전용 유저는 null. 원문 미보관 |
-| alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 13-1/13-2). 거래성 알림뿐이라 **기본 on** |
+| alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 13-3/13-4). 거래성 알림뿐이라 **기본 on** |
 | profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
 | feed_default_visibility | enum | NOT NULL, default PUBLIC | **[MVP 제외]** 피드 기본 공개 범위 |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
