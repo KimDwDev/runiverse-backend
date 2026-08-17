@@ -6,7 +6,7 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)·`running_room_sessions`은 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). `*_date`도 시점이면 `timestamp`. **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)는 `date`(시각·시간대 없음, API `YYYY-MM-DD`).
@@ -14,7 +14,7 @@
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`session_time`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§6](#6-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. `running_players` 삭제는 연결 테이블 `running_room_sessions`으로 연쇄(아래 참조). **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -97,6 +97,7 @@
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
 | user_id | UUID | FK → users, NOT NULL | |
+| running_room_id | bigint | FK → running_rooms, NOT NULL | 소속 방. **신청·개시 즉시 방이 생기므로 항상 값이 있다**(nullable 아님) |
 | status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | total_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
@@ -104,20 +105,9 @@
 | desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
-> `running_players`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
+> **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
 > **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
-
-### running_room_sessions (연결 테이블)
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| running_player_id | bigint | PK, FK → running_players, ON DELETE CASCADE | 한 플레이어 = 최대 한 방 (PK가 유일성 보장 — 여러 방 동시 링크 차단). 플레이어 삭제(탈퇴 CASCADE 포함) 시 링크도 연쇄 삭제 |
-| running_room_id | bigint | FK → running_rooms, NOT NULL | 배정된 방 |
-| created_at | timestamp | NOT NULL | |
-
-> **이름 혼동 주의**: API "세션"(`runningSessionId`) = `running_rooms.running_room_id`. 이 테이블은 API 미노출, 서버 내부 연결용.
-> **row 트리거**: 링크 생성 = **방 생성과 동시**(매칭 신청·솔로 개시) 또는 기존 모집 중인 방에 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_players`도 DELETE — 마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = 링크 유지 + `running_players.status=LEFT`(어느 방에서 나갔는지 = 이탈 이력) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
-> **모든 플레이어는 항상 방을 하나 갖는다** — "방 미배정" 상태가 없다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다".
 
 ### running_records
 
@@ -370,6 +360,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
-| running_room_sessions.running_room_id | 방 참가자 조회 |
+| running_players.running_room_id | 방 참가자 조회 |
 | running_rooms.(type, status, start_date) | 매칭 후보 방 조회 — 슬롯별 모집 중인 방(`type='MATCH' AND status='MATCHING'`). 솔로 방을 인덱스 단계에서 배제 |
 | running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |

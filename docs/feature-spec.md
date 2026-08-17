@@ -79,6 +79,8 @@
   - **방 생성 시점**: **신청 즉시 1인 방**을 만들고 `status='MATCHING'`으로 둔다. 같은 조건에 다음 신청이 들어오면 그 방에 붙여 마감까지 최대 4명까지 모집한다. 즉 `MATCHING`은 "모집 중(마감 전)"인 구간이며, 인원 수는 조건에 들어가지 않는다.
     - 솔로 러닝도 개시 즉시 방이 생긴다 — 둘은 `running_rooms.type`(`MATCH`/`SOLO`)으로 갈린다. 매칭 후보 스캔은 `type='MATCH' AND status='MATCHING'`이라 솔로 방이 섞이지 않는다.
     - **"방 미배정" 상태는 없다.** 활성 신청이 있으면 방도 반드시 있고, 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
+    - **왜 신청 시점에 만드는가** — 솔로는 원래부터 개시 즉시 방을 만든다. 매칭만 나중에 만들면 방 조회·상태 전이·WS 연결이 전부 두 갈래가 되는데, `runningSessionId` 체계를 하나로 유지하기로 한 결정(아래 매칭·러닝 설계)을 절반만 지키는 셈이다. 생성 시점을 맞추면 "방이 아직 없는 신청"이라는 상태가 사라져 홈 상태 판정·실패 처리·`runningSessionId` nullable 분기가 함께 없어지고, 신청 row가 방을 직접 가리킬 수 있어 연결 테이블도 필요 없다.
+      - 대가는 혼자 신청하고 아무도 오지 않은 방이 `CANCELLED`로 남는 것뿐이다. 조합(시각 9 × 거리 3)당 최대 하나라 양이 문제가 되지 않는다.
   - 확정 판정: 판정 시각 confirm_deadline은 `start_date`의 X시간 전으로 계산하는 파생값(X는 서버 설정값, DB 컬럼 아님). 그 시점 참가자가 2명 이상이면 `status='MATCHED'` 자동 확정 — 목표 인원(`total_member`) 도달 여부와 무관하며, 이때 `total_member`를 확정 인원으로 갱신한다.
   - 실패 처리는 한 갈래다. 마감 시점에 참가자가 2명 미만이면 `status='CANCELLED'`. 확정 후 이탈로 2명 미만이 된 경우도 같은 값을 쓴다 — 방은 신청 즉시 생기므로 "취소할 방이 없는" 경우가 없다.
   - **홈 화면 상태는 저장값이 아니라 파생값이다.** 별도 상태 컬럼이나 취소 사유 컬럼을 두지 않고 아래 규칙으로 계산한다.
@@ -322,7 +324,7 @@
 
 - **유지**: `feeds`, `comments`, `running_records`(+`running_splits`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
 - **유지 (카운트 재계산 안 함)**: `feed_likes`, `comment_likes` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `friendships`(`ON DELETE CASCADE` — 친구 목록·받은 요청 목록에서 탈퇴 유저 노출 방지. 요청·수락 어느 쪽이든 삭제), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_running_contests`, `running_players`(연결 테이블 `running_room_sessions`은 FK `ON DELETE CASCADE`로 연쇄), `user_colors`(획득 컬러 이력)
+- **즉시 삭제**: `friendships`(`ON DELETE CASCADE` — 친구 목록·받은 요청 목록에서 탈퇴 유저 노출 방지. 요청·수락 어느 쪽이든 삭제), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_running_contests`, `running_players`, `user_colors`(획득 컬러 이력)
 - 친구 수는 집계 컬럼이 아니라 `friendships` COUNT라 **재계산이 필요 없다** — row가 사라지면 수도 함께 줄어든다. (`feed_likes`는 row를 유지해 카운트도 유지 — 기준이 다름.)
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):

@@ -813,9 +813,9 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
-- **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
-  - 링크 생성 = **방 생성과 동시**(매칭 신청·솔로 개시) 또는 기존 모집 중인 방에 배정 시
-  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
+- **DB row 트리거** — `running_players`가 `running_room_id`로 방을 직접 가리킨다(신청 즉시 방이 생기므로 항상 값이 있다)
+  - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players` row DELETE(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
@@ -2403,6 +2403,6 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ### 13-5. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄)
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요
