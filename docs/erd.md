@@ -82,9 +82,10 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. 매칭 방은 **2명째가 매칭되는 순간 생성** — 신청 시점엔 방이 없다. 솔로 러닝은 개시 요청 시 바로 생성되며 `STARTED`로 시작한다 |
+| running_room_id | bigint | PK | API `runningSessionId`(Long)가 이 값을 가리킴. **신청·개시 즉시 1인 방으로 생성** — 매칭은 `MATCHING`, 솔로는 `STARTED`로 시작한다 |
+| type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
 | start_date | timestamp | NOT NULL | 예약 시작 시각 |
-| total_member | int | NOT NULL | 모집 인원 — 매칭은 서버가 2~4명으로 자동 편성, **솔로 세션은 1** |
+| total_member | int | NOT NULL | 모집 인원. 매칭 방은 생성 시 상한 `4`로 두고 **마감(`MATCHED`) 시 확정 인원으로 갱신**, **솔로 세션은 1** |
 | running_member | int | nullable | 실제 러닝 인원(러닝 시작 후 확정) |
 | status | enum | NOT NULL, default MATCHING |  |
 | created_at / updated_at | timestamp | NOT NULL | |
@@ -104,7 +105,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > `running_players`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
-> **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 방 배정 여부와 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
+> **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
 
 ### running_room_sessions (연결 테이블)
 
@@ -115,7 +116,8 @@
 | created_at | timestamp | NOT NULL | |
 
 > **이름 혼동 주의**: API "세션"(`runningSessionId`) = `running_rooms.running_room_id`. 이 테이블은 API 미노출, 서버 내부 연결용.
-> **row 트리거**: 링크 생성 = 방 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_players`도 DELETE) / 확정 후 이탈 = 링크 유지 + `running_players.status=LEFT`(어느 방에서 나갔는지 = 이탈 이력) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
+> **row 트리거**: 링크 생성 = **방 생성과 동시**(매칭 신청·솔로 개시) 또는 기존 모집 중인 방에 배정 시 / 삭제 = 대기 취소·초대 거절 시(`running_players`도 DELETE — 마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = 링크 유지 + `running_players.status=LEFT`(어느 방에서 나갔는지 = 이탈 이력) / 방 자동 취소 = 전원 유지(방 status만 CANCELLED).
+> **모든 플레이어는 항상 방을 하나 갖는다** — "방 미배정" 상태가 없다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
 
 ### running_records
 
@@ -347,7 +349,8 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | running_players.status | INVITED / CONFIRMED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
-| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 2명 이상 모였으나 마감 전 / 마감 시점 확정 / 시작 / 종료 / 확정 후 이탈로 2명 미만 |
+| running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대 — 생성 시 확정, 불변 |
+| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정 / 시작 / 종료 / 마감 시 2명 미만이거나 확정 후 이탈로 2명 미만 |
 | oauth_users.provider | GOOGLE / KAKAO | |
 
 ---
@@ -368,4 +371,5 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.running_room_id | 방 참가자 조회 |
+| running_rooms.(type, status, start_date) | 매칭 후보 방 조회 — 슬롯별 모집 중인 방(`type='MATCH' AND status='MATCHING'`). 솔로 방을 인덱스 단계에서 배제 |
 | running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |

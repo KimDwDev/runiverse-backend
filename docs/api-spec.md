@@ -758,6 +758,8 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `CONFIRMED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
 
+초대방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 남의 초대방에 모르는 사람이 배정되므로 값 분리가 필수다.
+
 ## 5. 매칭·러닝 실시간 통신
 
 **구간마다 통신 방식이 다르다.**
@@ -771,7 +773,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 #### `POST /api/v1/running-sessions` — 러닝 세션 개시
 
-- **클라가 만들 수 있는 세션은 솔로뿐이다.** 매칭 세션은 2명째가 모일 때 서버가 만들므로 요청 대상이 아니다
+- **클라가 만들 수 있는 세션은 솔로뿐이다.** 매칭 세션은 신청 시 서버가 만들므로 요청 대상이 아니다
 - **Request**
 
 ```json
@@ -788,8 +790,8 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- **동작**: `running_rooms` 행을 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 링크도 함께 만든다 — 참가자 없는 방을 남기지 않는다
-- 이 세션은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다. 모집 중인 자리가 아니다
+- **동작**: `running_rooms` 행을 `type='SOLO'`, `total_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 링크도 함께 만든다 — 참가자 없는 방을 남기지 않는다
+- 이 세션은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
@@ -802,8 +804,8 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
 - **DB row 트리거** — `running_room_sessions`은 방↔플레이어 순수 연결 테이블
-  - 링크 생성 = 방 배정 시(2명째가 매칭되는 순간)
-  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE, 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
+  - 링크 생성 = **방 생성과 동시**(매칭 신청·솔로 개시) 또는 기존 모집 중인 방에 배정 시
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players`와 링크 DELETE(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **둘 다 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
@@ -848,7 +850,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `waitingCount`는 아직 확정되지 않은 대기자 수다 — 이미 `MATCHED`된 방의 인원은 세지 않는다(들어갈 수 없는 자리다)
+- `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외
 - `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다
 - **인증**: 필요
 
@@ -876,7 +878,8 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 - 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
-- **Response `201 Created`** — 신청이 접수되면 `running_players` row가 생긴다. 이 시점엔 방이 없을 수 있다(2명째가 모여야 생성)
+- **Response `201 Created`** — 신청이 접수되면 `running_players` row와 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `total_member=4`)이 함께 생긴다
+  - **응답 본문에 `runningSessionId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 세션 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
 
 ```json
 {
@@ -894,9 +897,9 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) 또는 방 미배정 = 대기 취소(row 삭제)
+  - 대기 중(`MATCHING`) = 대기 취소(`running_players`·링크 row 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다
   - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, row 유지)
-  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, 이탈로 2명 미만이 되면 `status: CANCELLED`
+  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신, **확정 후** 이탈로 2명 미만이 되면 `status: CANCELLED`(모집 중에는 1명으로 줄어도 방을 유지하고 계속 모집한다)
 - **시작 60초 전부터는 취소할 수 없다.** 출발 대기실에 들어선 뒤 빠지면 남은 사람이 대응할 시간이 없다. 그 시각 이후에는 러닝을 시작한 뒤 중도 종료(`RUNNING_FINISH`의 `forced=true`)로 처리한다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
@@ -922,9 +925,9 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 | `state` | 조건 |
 |---|---|
 | `NONE` | 활성 `running_players` 없음 |
-| `WAITING` | 방 미배정(마감 전) 또는 방이 `MATCHING` |
+| `WAITING` | 방이 `MATCHING`이고 마감 전 |
 | `MATCHED` | 방이 `MATCHED` |
-| `FAILED` | 마감이 지났는데 방 미배정, 또는 방이 `CANCELLED` |
+| `FAILED` | 방이 `CANCELLED`, 또는 마감이 지났는데 아직 `MATCHING`(스케줄러가 아직 닫지 않은 구간) |
 
 - `room`은 `state`가 `MATCHED`일 때만 채워지며 `RoomInfo`와 같은 구조다
 - **인증**: 필요
@@ -949,7 +952,7 @@ data: {"runningSessionId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 방 배정 전에는 `runningSessionId`가 `null`이다 — 같은 조건에 2명째가 모여야 방이 생긴다
+- `runningSessionId`는 **항상 값이 있다** — 신청 즉시 1인 방이 생기므로 매칭 대기 중에도 가리킬 방이 존재한다. 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_ROOM_UPDATED`의 `status`와 `GET /users/me/running-match`의 `state`로만 판정한다
 - 매칭 무산(마감 시점 2명 미만)·방 취소 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 수신 시 클라는 홈으로
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
