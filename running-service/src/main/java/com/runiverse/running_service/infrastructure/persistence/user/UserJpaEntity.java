@@ -84,4 +84,8 @@ public class UserJpaEntity extends BaseTimeEntity {
     public void changeProfileImageKey(String profileImageKey) {
         this.profileImageKey = profileImageKey;
     }
+
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

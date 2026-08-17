@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -89,6 +90,17 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // 메서드 보안(@PreAuthorize) 거부 — 필터 밖에서 터져 JwtAccessDeniedHandler가 받지 못한다
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException e) {
+        log.warn("접근 거부: {}", e.getMessage());
+        return respond(
+                HttpStatus.FORBIDDEN,
+                SecurityErrorCode.ACCESS_DENIED.getCode(),
+                SecurityErrorCode.ACCESS_DENIED.getMessage()
+        );
+    }
+
     // 노출 대상이 아닌 경우 전부 500으로 대체
     private ResponseEntity<ErrorResponse> respond(HttpStatus status, String code, String message) {
         if (!ErrorExposurePolicy.isExposed(status, code)) {
@@ -109,14 +121,16 @@ public class GlobalExceptionHandler {
 
     private HttpStatus toStatus(UserErrorCode code) {
         return switch (code) {
-            case ALREADY_ONBOARDED,
-                 ONBOARDING_NOT_COMPLETED,
-                 NICKNAME_ALREADY_EXISTS -> HttpStatus.CONFLICT;
-            // 계정 존재 여부를 숨기려고 노출하지 않는다 — ErrorExposurePolicy에서도 제외돼 500으로 응답한다
-            case USER_NOT_FOUND -> HttpStatus.INTERNAL_SERVER_ERROR;
             case PROFILE_IMAGE_NOT_UPLOADED,
                  INVALID_PROFILE_IMAGE,
                  PROFILE_NOT_FOUND -> HttpStatus.BAD_REQUEST;
+            case INVALID_CURRENT_PASSWORD -> HttpStatus.UNAUTHORIZED;
+            case ALREADY_ONBOARDED,
+                 ONBOARDING_NOT_COMPLETED,
+                 NICKNAME_ALREADY_EXISTS,
+                 PASSWORD_NOT_SET -> HttpStatus.CONFLICT;
+            // 계정 존재 여부를 숨기려고 노출하지 않는다 — ErrorExposurePolicy에서도 제외돼 500으로 응답한다
+            case USER_NOT_FOUND -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }
 
