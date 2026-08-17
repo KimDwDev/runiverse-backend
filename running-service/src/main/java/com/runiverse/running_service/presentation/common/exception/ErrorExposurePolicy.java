@@ -13,6 +13,8 @@ public final class ErrorExposurePolicy {
     private static final Set<String> EXPOSED_CODES = Set.of(
             AuthErrorCode.EMAIL_ALREADY_EXISTS.getCode(),
             UserErrorCode.NICKNAME_ALREADY_EXISTS.getCode(),
+            UserErrorCode.INVALID_CURRENT_PASSWORD.getCode(),
+            UserErrorCode.PASSWORD_NOT_SET.getCode(),
             UserErrorCode.ALREADY_ONBOARDED.getCode(),
             UserErrorCode.ONBOARDING_NOT_COMPLETED.getCode(),
             UserErrorCode.PROFILE_IMAGE_NOT_UPLOADED.getCode(),

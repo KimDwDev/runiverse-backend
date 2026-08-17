@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.auth.port.out;
+package com.runiverse.running_service.application.common.port.out;
 
 public interface PasswordHashPort {
 

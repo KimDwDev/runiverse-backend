@@ -1,6 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
+import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
