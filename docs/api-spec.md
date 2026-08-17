@@ -155,7 +155,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 58 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 59 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 59 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
 | 60 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
 | 61 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 62 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
@@ -381,10 +381,11 @@
 {
   "userId": "550e8400-e29b-41d4-a716-446655440001",
   "accessToken": "ey...",
-  "refreshToken": "ey...",
-  "isOnboarded": false
+  "refreshToken": "ey..."
 }
 ```
+
+- **`isOnboarded`는 내리지 않는다** — 온보딩 완료 여부는 `GET /users/me`로 판정한다. 인증 응답 셋(회원가입·로그인·소셜 로그인)이 모두 같다
 
 - **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
@@ -449,12 +450,11 @@
 {
   "userId": "550e8400-e29b-41d4-a716-446655440001",
   "accessToken": "ey...",
-  "refreshToken": "ey...",
-  "isOnboarded": false
+  "refreshToken": "ey..."
 }
 ```
 
-- 닉네임 등 상세는 `GET /users/me`
+- 닉네임 등 상세와 **온보딩 완료 여부(`isOnboarded`)는 `GET /users/me`** 로 확인한다
 
 - **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
@@ -498,7 +498,7 @@
 ```
 
 - **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
-- **Response `200 OK`**: 1-4 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`/`isOnboarded`) — 최초 가입 여부와 무관하게 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태 (`userId`/`accessToken`/`refreshToken`) — 최초 가입 여부와 무관하게 토큰 발급. `isOnboarded`는 담지 않으며 `GET /users/me`로 판정한다
 - **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
 
 ```json
@@ -2289,7 +2289,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출한다. 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 비밀번호 변경 메뉴를 감춘다. 로컬에 "이메일 계정" 같은 문구를 붙이지 않는 이유 — 바로 위에 이메일이 떠 있고, 비밀번호 변경 메뉴의 존재 자체가 이미 로컬이라는 표시다. 소셜 문구가 필요한 건 어느 provider로 가입했는지 잊으면 다른 버튼을 눌러 별개 계정이 되기 때문이다
 - **인증**: 필요
 
-### 13-2. `PATCH /api/v1/users/me/password` — 비밀번호 변경
+### 13-2. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
 
 로컬 계정만 가능. 현재 비밀번호로 본인을 재확인한다.
 
@@ -2326,28 +2326,38 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 }
 ```
 
-- **에러 (403 Forbidden — 현재 비밀번호 불일치)**
+- **에러 (401 Unauthorized — 현재 비밀번호 불일치)**
 
 ```json
 {
-  "code": "CURRENT_PASSWORD_MISMATCH",
+  "code": "INVALID_CURRENT_PASSWORD",
   "message": "현재 비밀번호가 올바르지 않습니다."
 }
 ```
 
-- `401`을 쓰지 않는다 — 클라이언트가 액세스 토큰 만료로 오인해 refresh 후 재시도하는 루프에 빠진다. `401`은 토큰 문제 전용으로 남긴다
+- **클라이언트는 이 `401`을 토큰 만료로 오인하면 안 된다.** 액세스 토큰 문제는 `TOKEN_EXPIRED`·`TOKEN_BLOCKED`·`INVALID_TOKEN`·`AUTHENTICATION_REQUIRED`이며, `code`가 `INVALID_CURRENT_PASSWORD`이면 refresh 후 재시도하지 말고 입력 오류로 처리한다
 
 - **에러 (409 Conflict — 소셜 계정)**
 
 ```json
 {
-  "code": "PASSWORD_CHANGE_NOT_ALLOWED",
-  "message": "소셜 계정은 비밀번호를 변경할 수 없습니다."
+  "code": "PASSWORD_NOT_SET",
+  "message": "소셜 로그인으로 가입한 계정은 비밀번호를 변경할 수 없습니다."
 }
 ```
 
 - 클라는 13-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
-- **인증**: 필요
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **인증**: 필요 (본인만 — `{userId}`가 토큰 주체와 다르면 403)
 
 > **비밀번호 찾기(로그인 전 재설정)는 명세에 없다** — 로그인 화면에 진입점이 없다. 필요해지면 이메일 인증(1-1/1-2)의 `verificationTicket`을 받는 별도 엔드포인트로 정의한다. 이 API는 로그인된 상태 전용이다.
 
