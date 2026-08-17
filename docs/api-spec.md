@@ -142,20 +142,25 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 51 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 52 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
+| 51 | POST | `/api/v1/users/{userId}/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 52 | PATCH | `/api/v1/users/{userId}/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 53 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 54 | DELETE | `/api/v1/users/{userId}/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 55 | PATCH | `/api/v1/users/me` | 인사말 변경 |
+| 56 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
+| 57 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 13. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 53 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 54 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 55 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 58 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
+| 59 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 60 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 61 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 62 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
+**합계: REST 62개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
 
 ---
 
@@ -2025,41 +2030,142 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 ## 12. 프로필 편집 페이지
 
-### 12-1. `POST /api/v1/users/me/profile-image/presigned-url` — 프로필 사진 업로드 URL
+### 12-1. `POST /api/v1/users/{userId}/profile-image/presigned-url` — 프로필 사진 업로드 URL
 
 - **Request**
 
 ```json
 {
-  "originalFileName": "me.jpg",
-  "mimeType": "image/jpeg"
+  "mimeType": "image/jpeg",
+  "fileSizeBytes": 204800
 }
 ```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `mimeType` | String | 필수. `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
+| `fileSizeBytes` | Long | 필수. 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
 
 - **Response `200 OK`**
 
 ```json
 {
-  "profileImageKey": "profiles/....jpg",
+  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg",
   "uploadUrl": "https://..."
 }
 ```
 
-- **인증**: 필요
+`profileImageKey` 포맷은 `profiles/{userId}/{imageId}.{확장자}` — 소유자 검증에 쓰이므로 클라가 임의로 만들지 않는다. 확장자는 `mimeType`이 정한다(`image/jpeg`→`jpg`, `image/png`→`png`, `image/webp`→`webp`). 클라는 `uploadUrl`로 S3에 직접 업로드하며, 업로드 헤더의 `Content-Type`은 요청한 `mimeType`과 일치해야 한다(서명에 포함).
 
-### 12-2. `PATCH /api/v1/users/me` — 프로필 수정
-
-- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboardings.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
-- **Response `200 OK`**: 11-1 형태 갱신본
-
-- **에러 (409 Conflict)**
+- **에러 (403 Forbidden — 본인 아님)**
 
 ```json
 {
-  "code": "NICKNAME_ALREADY_EXISTS",
-  "message": "이미 사용 중인 닉네임입니다."
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
 }
 ```
+
+- **인증**: 필요 (본인만 — `{userId}`가 토큰 주체와 다르면 403)
+
+### 12-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 반영
+
+12-1로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.profile_image_key`를 갱신한다.
+
+- **Request**
+
+```json
+{
+  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `profileImageKey` | String | 필수, 255자 이하. 12-1이 발급한 키 그대로 |
+
+- **Response `200 OK`**
+
+```json
+{
+  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+}
+```
+
+- **에러 (400 Bad Request — 본인 키가 아니거나 형식이 어긋남)**
+
+```json
+{
+  "code": "INVALID_PROFILE_IMAGE",
+  "message": "프로필 이미지가 올바르지 않습니다."
+}
+```
+
+- **에러 (400 Bad Request — 키에 해당하는 객체가 S3에 없음)**
+
+```json
+{
+  "code": "PROFILE_IMAGE_NOT_UPLOADED",
+  "message": "업로드되지 않은 이미지입니다."
+}
+```
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **인증**: 필요 (본인만)
+
+### 12-3. `GET /api/v1/users/{userId}/profile-image` — 프로필 사진 URL 조회
+
+- **Response `200 OK`**
+
+```json
+{
+  "profileImageUrl": "https://..."
+}
+```
+
+사진이 등록돼 있지 않으면 `profileImageUrl`은 `null`이다.
+
+- **에러 (400 Bad Request — 대상 사용자 없음)**
+
+```json
+{
+  "code": "PROFILE_NOT_FOUND",
+  "message": "사용자를 찾을 수 없습니다."
+}
+```
+
+- **인증**: 불필요
+
+### 12-4. `DELETE /api/v1/users/{userId}/profile-image` — 프로필 사진 삭제
+
+`users.profile_image_key`를 비운다. **S3 객체는 지우지 않고 DB의 키 연결만 끊는다.** 사진이 없는 상태에서 호출해도 에러 없이 성공한다(idempotent).
+
+- **Request**: 본문 없음
+- **Response `204 No Content`**
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **인증**: 필요 (본인만)
+
+### 12-5. `PATCH /api/v1/users/me` — 프로필 수정
+
+- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 12-6, 사진은 12-1~12-4로 각각 전용 엔드포인트를 쓴다. 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
+- **Response `200 OK`**: 11-1 형태 갱신본
 
 - **에러 (400 Bad Request)**
 
@@ -2071,6 +2177,98 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ```
 
 - **인증**: 필요
+
+### 12-6. `PATCH /api/v1/users/{userId}/nickname` — 닉네임 변경
+
+닉네임은 `user_onboardings.nickname`에 있어 온보딩을 마쳐야 바꿀 수 있다. 서비스 전반의 표시명이 이 값이다.
+
+- **Request**
+
+```json
+{
+  "nickname": "완두콩"
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `nickname` | String | 필수, 2~16자, 한글·영문·숫자·`_`만 |
+
+- **Response `200 OK`**
+
+```json
+{
+  "userId": "550e8400-...-440001",
+  "nickname": "완두콩"
+}
+```
+
+현재 닉네임과 같은 값을 보내면 아무것도 바꾸지 않고 그대로 반환한다(idempotent).
+
+- **에러 (409 Conflict — 남이 쓰고 있음)**
+
+```json
+{
+  "code": "NICKNAME_ALREADY_EXISTS",
+  "message": "이미 사용 중인 닉네임입니다."
+}
+```
+
+- **에러 (409 Conflict — 온보딩 미완료)**
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **인증**: 필요 (본인만)
+
+### 12-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
+
+저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 12-6·1-9의 409다. — 사용 화면: 프로필 편집, 온보딩
+
+- **Request**
+
+```json
+{
+  "nickname": "완두콩"
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `nickname` | String | 필수, 2~16자, 한글·영문·숫자·`_`만 |
+
+- **Response `200 OK`**
+
+```json
+{
+  "nickname": "완두콩",
+  "available": true
+}
+```
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "닉네임은 2자 이상 16자 이하여야 합니다."
+}
+```
+
+- **인증**: 불필요
 
 ## 13. 설정 페이지
 
