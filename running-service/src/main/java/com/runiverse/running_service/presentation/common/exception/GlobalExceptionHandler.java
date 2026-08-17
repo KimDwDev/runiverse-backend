@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -86,6 +87,17 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.INVALID_REQUEST.getCode(),
                 CommonErrorCode.INVALID_REQUEST.getMessage()
+        );
+    }
+
+    // 메서드 보안(@PreAuthorize) 거부 — 필터 밖에서 터져 JwtAccessDeniedHandler가 받지 못한다
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException e) {
+        log.warn("접근 거부: {}", e.getMessage());
+        return respond(
+                HttpStatus.FORBIDDEN,
+                SecurityErrorCode.ACCESS_DENIED.getCode(),
+                SecurityErrorCode.ACCESS_DENIED.getMessage()
         );
     }
 
