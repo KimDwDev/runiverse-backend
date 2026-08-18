@@ -137,9 +137,7 @@ public class GlobalExceptionHandler {
     private HttpStatus toStatus(AuthErrorCode code) {
         return switch (code) {
             case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
-            case INVALID_EMAIL_CREDENTIALS,
-                 INVALID_PASSWORD_CREDENTIALS,
-                 INVALID_CREDENTIALS,
+            case INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN,
                  OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED,

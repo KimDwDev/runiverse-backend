@@ -7,8 +7,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum AuthErrorCode implements ErrorCode {
     EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다. 로그인해 주세요."),
-    INVALID_EMAIL_CREDENTIALS("INVALID_EMAIL_CREDENTIALS", "이메일이 존재하지 않습니다."),
-    INVALID_PASSWORD_CREDENTIALS("INVALID_PASSWORD_CREDENTIALS", "비밀번호가 올바르지 않습니다."),
     INVALID_CREDENTIALS("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "리프레시 토큰이 유효하지 않습니다."),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 소셜 로그인입니다."),
