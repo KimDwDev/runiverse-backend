@@ -58,7 +58,7 @@
 
 | 이벤트 | 비고 |
 |--------|------|
-| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 — 방 배정 전에는 `runningRoomId`가 `null` |
+| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 (방은 신청 즉시 생기므로 "배정 전" 상태가 없다) |
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | `RoomInfo`에 `status` 포함 — 취소 통지도 `status: CANCELLED`로 처리 |
 
@@ -1012,6 +1012,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
+- **발화 시점은 모집 마감(`close_at`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다.** 방은 신청 즉시 생기지만 그건 "성사"가 아니라 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다 — 확정은 `max_member` 도달과 무관하게 마감 시각에만 일어난다(`feature-spec.md` 확정 판정)
 
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
@@ -1021,7 +1022,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 확정된 방에서 나가기도 **`DELETE /users/me/running-match`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
 - 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신한다 — 혼자 남아도 방은 유지되고 그대로 러닝을 진행한다
-- **확정 후 이탈에 페널티를 두지 않는다** — 이탈 이력은 `running_players.status='LEFT'`로 남으므로 나중에 도입하더라도 과거 데이터로 계산할 수 있다
+- **확정 후 이탈에는 페널티가 붙는다** — `close_at` + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다. 판정은 저장하지 않고 `left_at`·`close_at`으로 계산한다(`feature-spec.md` 페널티 절). 쿨다운 중 신청은 `409 MATCH_COOLDOWN`
 
 #### 대기방 참여자 목록 — 별도 조회 없음
 
