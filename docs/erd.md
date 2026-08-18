@@ -10,7 +10,8 @@
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`), 달력 날짜는 `*_date`(`date`, 시각·시간대 없음, API `YYYY-MM-DD`). 달력 날짜는 대회 `event_date`·`registration_start_date`·`registration_end_date`뿐이고, `user_onboardings.birthday`는 접미사 없는 예외다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
+- **컬럼 순서**: `식별자(PK·FK) → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§6](#6-delete_-스냅샷이력-테이블)).
@@ -84,13 +85,13 @@
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningRoomId`(Long)가 이 값을 가리킴. **신청·개시 즉시 1인 방으로 생성** — 매칭은 `MATCHING`, 솔로는 `STARTED`로 시작한다 |
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
+| status | enum | NOT NULL, default MATCHING | 진행 단계 — [§7 enum 사전](#7-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. 모집 단계가 없는 솔로는 null |
 | target_distance | int | NOT NULL | 방의 목표 거리(미터). 매칭 조건이라 **생성 시 정해지고 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
 | avg_pace | int | NOT NULL | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
 | max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
 | current_member | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
-| status | enum | NOT NULL, default MATCHING |  |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
 
