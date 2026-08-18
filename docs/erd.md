@@ -31,7 +31,6 @@
 | password_hash | varchar | nullable | 소셜 전용 유저는 null. 원문 미보관 |
 | alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 13-3/13-4). 거래성 알림뿐이라 **기본 on** |
 | profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
-| feed_default_visibility | enum | NOT NULL, default PUBLIC | **[MVP 제외]** 피드 기본 공개 범위 |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
 | introduction | varchar | nullable | 소개글 |
 | created_at / updated_at | timestamp | NOT NULL | |
@@ -363,7 +362,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `friendships`로 직접 판정 |
-| users.feed_default_visibility | FRIENDS / PUBLIC / PRIVATE | **[MVP 제외]** 피드 기본 공개 범위 |
 | friendships.status | PENDING / ACCEPTED | 수락 대기 / 친구 성립 — 거절은 값이 아니라 row DELETE |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |

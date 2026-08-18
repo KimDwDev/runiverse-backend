@@ -2406,7 +2406,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ```
 
 - **`alertConsent` = 단일 토글** — 매칭 확정/실패, 러닝 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
-- **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off). `feedDefaultVisibility`(피드 작성 기본값)는 **[MVP 제외]** — 피드 기본값은 클라 PUBLIC 프리셋
+- **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off) 하나뿐이다. **피드 작성 기본값은 서버에 두지 않는다** — 매 피드마다 `feeds.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
 ### 13-4. `PATCH /api/v1/users/me/settings` — 설정 변경
