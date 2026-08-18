@@ -87,7 +87,7 @@
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
 | status | enum | NOT NULL, default MATCHING | 진행 단계 — [§7 enum 사전](#7-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
-| close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. 모집 단계가 없는 솔로는 null |
+| close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `type='MATCH' AND status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. **`type` 조건이 있어야 `(type, status, …)` 인덱스의 선두 컬럼을 쓴다.** 모집 단계가 없는 솔로는 null |
 | target_distance | int | NOT NULL | 방의 목표 거리(미터). 매칭 조건이라 **생성 시 정해지고 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
 | avg_pace | int | NOT NULL | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
 | max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
@@ -113,7 +113,7 @@
 > UNIQUE (running_room_id, user_id) — 한 방에 같은 유저는 한 번만. `running_records`와 같은 축이다. 재초대·재입장을 허용하게 되면 부분 인덱스(`WHERE status <> 'LEFT'`)로 바꾼다.
 > **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
 > **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다".
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다". **지우기 전에 `delete_running_players`에 스냅샷을 남긴다**([§6](#6-delete_-스냅샷이력-테이블)) — 취소는 소급 수집이 불가능하므로 관찰 근거를 잃지 않기 위함이다.
 
 ### running_records
 
@@ -297,6 +297,8 @@
 
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
 
+> **스냅샷은 앱이 남긴다.** `ON DELETE CASCADE`는 DB가 처리하므로 애플리케이션을 거치지 않는다 — 탈퇴로 지워지는 row를 남기려면 탈퇴 유스케이스에서 **명시적으로 INSERT**해야 한다.
+
 ### delete_users
 
 회원탈퇴 스냅샷(최소 정보만).
@@ -306,6 +308,25 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | email | varchar | | |
 | alert_consent | boolean | | |
 | created_at | timestamp | NOT NULL | 스냅샷 시각 |
+
+### delete_running_players
+
+러닝 참가자 삭제 스냅샷. 대기 취소·초대 거절로 `running_players` row가 **하드 딜리트될 때** 남긴다(확정 후 이탈은 row가 유지되므로 대상이 아니다).
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| delete_running_player_id | bigint | PK | |
+| running_room_id | bigint | → running_rooms | 논리 참조. `(running_room_id, user_id)`가 원본 참가를 특정한다(원본의 UNIQUE 축) |
+| user_id | UUID | → users | 논리 참조 |
+| status | enum | NOT NULL | 삭제 시점 참가 상태 — `INVITED`=초대 거절 / `JOINED`=대기 취소. **삭제 사유가 이 값으로 갈리므로 별도 사유 컬럼을 두지 않는다** |
+| current_member | int | NOT NULL | 삭제 시점 방 인원(`running_rooms.current_member` 스냅샷). "사람이 붙은 뒤 취소"인지 판별하는 신호 |
+| joined_at | timestamp | NOT NULL | 원본 `running_players.created_at` — `created_at`과의 차가 곧 신청→취소 소요 시간 |
+| created_at | timestamp | NOT NULL | 스냅샷 시각 = 취소·거절 시각 |
+
+> **담는 기준은 "원본이 사라져 복원 불가한 값"이다.** `running_rooms`는 취소돼도 row가 남으므로(`CANCELLED`) 방의 불변 값(`type`·`close_at`·`target_distance`)은 조인으로 얻는다 — 담지 않는다. `current_member`만 예외로, 이후에도 계속 변하는 **시점 값**이라 조인으로 복원할 수 없다. 원본 `running_player_id`도 담지 않는다 — 하드 딜리트라 가리킬 대상이 영원히 없다.
+> **왜 두는가**: 취소는 소급 수집이 불가능한 이벤트다. 남기지 않으면 상습 대기 취소가 문제인지조차 판단할 수 없다. 조회 경로(후보 방 스캔·인원 집계·페널티 판정)에는 들어가지 않는 write-once 테이블이라 `running_players`에 `deleted_at`을 두는 것과 달리 조회를 오염시키지 않는다.
+> **제재 근거가 아니다.** 현재 정책상 마감 전 이탈은 제재 대상이 아니며, 이 테이블은 관찰용이다. 제재에 쓰려면 별도 결정이 필요하다.
+> 회원 탈퇴로 CASCADE 삭제되는 row는 여기 남지 않는다 — 필요하면 탈퇴 유스케이스에서 명시적으로 INSERT한다(위 공통 규칙).
 
 ### delete_feeds [MVP 제외]
 
@@ -367,6 +388,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_players.running_room_id | 방 참가자 조회 |
-| running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
+| running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`type='MATCH' AND status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
 | running_players.(user_id, status, left_at) | 페널티 판정 — 최근 쿨다운 구간에 제재 대상 이탈이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
+| delete_running_players.(user_id, created_at) | 유저별 취소·거절 이력 조회 (상습 취소 관찰) |
 | running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |
