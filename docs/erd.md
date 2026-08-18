@@ -107,7 +107,7 @@
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | left_at | timestamp | nullable | 이탈 시각. `status='LEFT'`일 때만 값이 있다. **언제 나갔는지는 사실이라 저장하고, 제재 대상인지는 저장하지 않는다** — `close_at`과 비교해 계산한다(정책이 바뀌어도 과거 row가 거짓이 되지 않는다) |
-| desired_member_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
+| desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
