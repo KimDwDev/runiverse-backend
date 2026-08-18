@@ -135,6 +135,9 @@
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
 > UNIQUE (running_room_id, user_id) — 유저당 방별 1기록. 솔로도 방을 가지므로 부분 인덱스 조건이 필요 없다.
+> **개인 단위 진행 상태는 컬럼으로 두지 않는다 — 이 행의 존재가 곧 상태다.** 해당 `(running_room_id, user_id)` 행이 **있으면 완주(제출), 없으면 미제출**이다. 방이 `STARTED`인데 기록이 없으면 러닝 중이고, `running_players.status`는 그동안 `JOINED`로 유지된다.
+> 상태 컬럼을 두지 않는 이유: `RUNNING`→`COMPLETED` 같은 UPDATE는 놓치면 사실과 어긋나지만, 이 행은 종료 처리의 산물이라 **없으면 애초에 종료되지 않은 것**이라 어긋날 수 없다.
+> **한계**: "아직 뛰는 중"과 "앱이 죽어 영영 제출하지 않을 사람"이 둘 다 "행 없음"이라 구분되지 않는다. 그래서 `STARTED`→`FINISHED`는 전원 제출 또는 타임아웃 중 먼저 오는 시점에 닫는다(`feature-spec.md` 상태 절).
 
 ### running_splits (구간별)
 
