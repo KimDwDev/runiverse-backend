@@ -11,7 +11,7 @@
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`), 달력 날짜는 `*_date`(`date`, 시각·시간대 없음, API `YYYY-MM-DD`). 달력 날짜는 대회 `event_date`·`registration_start_date`·`registration_end_date`뿐이고, `user_onboardings.birthday`는 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
-- **컬럼 순서**: `식별자(PK·FK) → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
+- **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§6](#6-delete_-스냅샷이력-테이블)).
@@ -100,8 +100,8 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
-| user_id | UUID | FK → users, NOT NULL | |
 | running_room_id | bigint | FK → running_rooms, NOT NULL | 소속 방. **신청·개시 즉시 방이 생기므로 항상 값이 있다**(nullable 아님) |
+| user_id | UUID | FK → users, NOT NULL | |
 | status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
