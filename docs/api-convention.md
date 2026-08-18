@@ -6,9 +6,9 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - Base path: `/api/v1`
 - 필드명: JSON 요청/응답은 camelCase — DB 컬럼은 snake_case 유지, 백엔드에서 매핑한다.
-- ID 타입: `userId`만 UUID, 그 외 **리소스 ID**(`feedId`·`commentId`·`contestId`·`runningRecordId`·`runningRoomId`·`colorId` 등 서버가 발급하는 PK)는 Long. 클라이언트가 만드는 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열.
+- ID 타입: `userId`만 UUID, 그 외 **리소스 ID**(`feedId`·`commentId`·`runningRecordId`·`runningRoomId`·`colorId` 등 서버가 발급하는 PK)는 Long. 클라이언트가 만드는 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열.
 - 날짜/시간: ISO 8601 `yyyy-MM-ddTHH:mm:ss` — KST 기준, 오프셋 없이 초 단위까지 (예: `2026-07-20T13:00:00`). 저장도 KST(`TimeZoneConfig`), 직렬화 형식은 `JacksonConfig`가 고정한다.
-- enum: DB·API 동일한 영문 코드 (예: `"visibility": "PUBLIC"`) — 변환 매핑 없음, 값 목록은 [erd.md](erd.md) §7(enum 사전).
+- enum: DB·API 동일한 영문 코드 (예: `"visibility": "PUBLIC"`) — 변환 매핑 없음, 값 목록은 [erd.md](erd.md) §6(enum 사전).
 
 ## 하위 호환
 
@@ -20,7 +20,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - 에러 응답: `{ code, message }` 평면 구조 — `error` 래핑·status 필드 없음, HTTP 상태 코드로만 표현한다.
 - 페이지네이션: 커서 기반(`?cursor=&limit=`), 응답은 `{ items: [...], nextCursor: string | null }`
-- 토글형 액션: POST(등록)/DELETE(취소)로 분리한다. 좋아요처럼 갱신된 상태·카운트가 필요하면 `200 OK`로 반환하고, 대회 북마크처럼 반환할 값이 없으면 `204 No Content`로 응답한다.
+- 토글형 액션: POST(등록)/DELETE(취소)로 분리한다. 좋아요처럼 갱신된 상태·카운트가 필요하면 `200 OK`로 반환하고, 친구 삭제처럼 반환할 값이 없으면 `204 No Content`로 응답한다.
 
 ## 인증
 

@@ -88,79 +88,70 @@
 | 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
 | 20 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
 
-### 8. 대회 화면 [MVP 제외]
+### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/contests` | 대회 목록 + 검색·필터(날짜/지역/거리). 상세 API 없음 — 목록에 `detailUrl` 포함(공식 홈페이지 이동) |
-| 22 | POST | `/api/v1/contests/{contestId}/bookmark` | 일정 추가(북마크) |
-| 23 | DELETE | `/api/v1/contests/{contestId}/bookmark` | 북마크 해제 |
-| 24 | GET | `/api/v1/users/me/contest-bookmarks` | 북마크한 대회 목록 — 사용 화면: 기록(캘린더 병합), 대회 |
+| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
+| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
-### 9. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
-
-| # | Method | Path | 설명 |
-|---|--------|------|------|
-| 25 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 26 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 검색 결과, 프로필 그리드 탭 |
-| 27 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 28 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 29 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 30 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 31 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 32 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 33 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 34 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 35 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
-
-### 10. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
+### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 36 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 37 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 38 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 39 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 32 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 33 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 34 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 35 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
-### 11. 프로필 페이지 (본인/타인)
-
-| # | Method | Path | 설명 |
-|---|--------|------|------|
-| 40 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 41 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
-| 42 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 43 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
-| 44 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 45 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 46 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 47 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 48 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 49 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) |
-| 50 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
-
-### 12. 프로필 편집 페이지
+### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 51 | POST | `/api/v1/users/{userId}/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 52 | PATCH | `/api/v1/users/{userId}/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 53 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 54 | DELETE | `/api/v1/users/{userId}/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 55 | PATCH | `/api/v1/users/me` | 인사말 변경 |
-| 56 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
-| 57 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
+| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
+| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
+| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
+| 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 43 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 44 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 45 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) |
+| 46 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
-### 13. 설정 페이지
+### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 58 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 59 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
-| 60 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 61 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 62 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 47 | POST | `/api/v1/users/{userId}/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 48 | PATCH | `/api/v1/users/{userId}/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 50 | DELETE | `/api/v1/users/{userId}/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 51 | PATCH | `/api/v1/users/me` | 인사말 변경 |
+| 52 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
+| 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
-**합계: REST 62개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
+### 12. 설정 페이지
+
+| # | Method | Path | 설명 |
+|---|--------|------|------|
+| 54 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
+| 55 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
+| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+
+**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종)**
 
 ---
 
@@ -170,14 +161,14 @@
 
 - **인증**: `Authorization: Bearer {accessToken}` 헤더. Access+Refresh 토큰 이원화, **refresh rotation** — 재발급 시 accessToken·refreshToken 모두 교체(이전 refreshToken 무효). refreshToken은 **바디 전달 + 클라 Keychain/Keystore 보관**. **로그아웃 시 해당 access 토큰은 서버 차단(블랙리스트)**
 - **페이지네이션 limit**: `?limit=` 생략 시 기본 **20**, 최대 **50**(초과 요청은 50으로 클램프)
-- **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜(생일·대회 일정)는 `YYYY-MM-DD`
+- **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜는 생일뿐이며 `YYYY-MM-DD`
 - **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
-- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`, 대회 북마크는 `204 No Content`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 11-6~11-8로 나뉜다
-- **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §7(enum 사전)
+- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 10-6~10-8로 나뉜다
+- **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
-- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningRoomId`, `feedId`, `commentId`, `contestId`, `runningRecordId`, `colorId` 등) = **Long**
+- **ID 타입 규칙**: `userId` = **UUID 문자열** (ERD `users.user_id`가 UUID). 그 외 리소스 ID(`runningRoomId`, `feedId`, `commentId`, `runningRecordId`, `colorId` 등) = **Long**
 
 ### 공통 에러 응답
 
@@ -1360,7 +1351,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 7-1. `GET /api/v1/users/me/running-records` — 내 러닝 기록 목록
 
-- **화면**: 기록(캘린더 — 북마크 대회 API와 클라이언트가 날짜 기준 병합), 피드 작성(러닝기록 템플릿 선택)
+- **화면**: 기록(캘린더), 피드 작성(러닝기록 템플릿 선택)
 - **Query**: `from`/`to`(ISO date, 캘린더 월 조회용) 또는 `cursor`/`limit`(최근순 목록용 — 템플릿 선택 모달)
 - **Response `200 OK`**
 
@@ -1411,64 +1402,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > **솔로 러닝도 `runningRoomId`를 갖는다** — 매칭을 거치지 않을 뿐 방은 만들어진다(§5 참고). 따라서 7-1·7-2 응답의 `runningRoomId`는 항상 값이 있고, 두 API는 매칭·솔로 공통 조회다. 솔로 여부는 참가자 수로 구분한다.
 
 
-## 8. 대회 화면 [MVP 제외]
+## 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
-### 8-1. `GET /api/v1/contests` — 대회 목록·검색·필터
-
-- **화면**: 대회 (검색 + 날짜/지역/거리 필터). 상세 페이지 없음 — `detailUrl`로 공식 홈페이지 이동
-- **Query**: `q`(대회명 검색), `region`, `dateFrom`/`dateTo`(개최일 범위), `distanceMeters`(예: `10000`), `cursor`/`limit` — 전부 선택
-- **Response `200 OK`**
-
-```json
-{
-  "items": [
-    {
-      "contestId": 42,
-      "name": "부산 마라톤 2026",
-      "region": "부산",
-      "venue": "광안리 해변",
-      "eventDate": "2026-10-15",
-      "distancesMeters": [5000, 10000, 21097.5, 42195],
-      "thumbnailImageUrl": "https://...",
-      "registrationStartDate": "2026-08-01",
-      "registrationEndDate": "2026-09-30",
-      "detailUrl": "https://busanmarathon.example.com",
-      "isBookmarked": false
-    }
-  ],
-  "nextCursor": "..."
-}
-```
-
-- **날짜 필드**: `eventDate`·`registrationStartDate`·`registrationEndDate`는 전부 **Date(`YYYY-MM-DD`, 시각·시간대 없음)** — 대회는 달력 일정이라 §0 "달력 날짜=Date" 규칙 적용. 클라는 변환 없이 그대로 표시.
-- **인증**: 필요
-
-### 8-2. `POST /api/v1/contests/{contestId}/bookmark` — 일정 추가(북마크) / 8-3. `DELETE` — 해제
-
-- **동작**: `user_running_contests` row 생성/삭제 (단순 연결 — 참가 상태값 없음). idempotent
-- 북마크한 대회는 "대회 접수 시작" 푸시 대상이 됨
-- **Response**: `204 No Content`
-
-- **에러 (404 Not Found)**
-
-```json
-{
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
-}
-```
-
-- **인증**: 필요
-
-### 8-4. `GET /api/v1/users/me/contest-bookmarks` — 북마크한 대회 목록
-
-- **화면**: 기록(캘린더 병합용), 대회(북마크 탭/표시)
-- **Response `200 OK`**: 8-1과 동일한 대회 객체 배열 (`{ items, nextCursor }`, `isBookmarked` 생략 가능)
-- **인증**: 필요
-
-## 9. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
-
-**피드 카드 공통 객체** (9-1/9-2/10-2 응답, 검색 결과 재사용):
+**피드 카드 공통 객체** (8-1/8-2/9-2 응답, 검색 결과 재사용):
 
 ```json
 {
@@ -1503,7 +1439,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-### 9-1. `GET /api/v1/feeds` — 피드 목록 (무한 스크롤)
+### 8-1. `GET /api/v1/feeds` — 피드 목록 (무한 스크롤)
 
 - **Query**: `tab=FRIENDS|ALL`(필수), `cursor`/`limit`
 - **공개범위 필터**: `FRIENDS` = 친구의 `FRIENDS`/`PUBLIC` 피드 + 내 피드 전부, 최신순 / `ALL` = `PUBLIC` 피드 + 친구의 `FRIENDS` 피드, 최신순 + 가벼운 가중치(개인화 추천은 이후 확장)
@@ -1518,7 +1454,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-2. `GET /api/v1/feeds/{feedId}` — 피드 단건
+### 8-2. `GET /api/v1/feeds/{feedId}` — 피드 단건
 
 - **화면**: 푸시 랜딩(좋아요/댓글 알림), 검색 결과 탭, 프로필 그리드 탭
 - **Response `200 OK`**: 피드 카드
@@ -1543,7 +1479,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-3. `POST /api/v1/feeds/{feedId}/like` — 좋아요 / 9-4. `DELETE` — 취소
+### 8-3. `POST /api/v1/feeds/{feedId}/like` — 좋아요 / 8-4. `DELETE` — 취소
 
 - **Response `200 OK`** (재조회 방지). idempotent
 
@@ -1576,7 +1512,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-5. `GET /api/v1/feeds/{feedId}/comments` — 댓글 목록
+### 8-5. `GET /api/v1/feeds/{feedId}/comments` — 댓글 목록
 
 - **정렬**: 등록순(오래된 것부터). 답글은 미포함 — `replyCount`만 제공(“답글 N개 보기” 지연 로딩)
 - **Response `200 OK`**
@@ -1606,7 +1542,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-6. `POST /api/v1/feeds/{feedId}/comments` — 댓글/답글 작성
+### 8-6. `POST /api/v1/feeds/{feedId}/comments` — 댓글/답글 작성
 
 - **Request** — `parentCommentId`는 답글일 때만(선택)
 
@@ -1618,7 +1554,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **depth 1 제한**: `parentCommentId`가 이미 답글인 댓글이면 `400 REPLY_DEPTH_EXCEEDED`
-- **Response `201 Created`**: 작성된 댓글 객체 (9-5 형식)
+- **Response `201 Created`**: 작성된 댓글 객체 (8-5 형식)
 - 피드 소유자(답글이면 원댓글 작성자)에게 푸시 (수신 동의 시)
 
 - **에러 (403 Forbidden)**
@@ -1655,12 +1591,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-7. `PATCH /api/v1/comments/{commentId}` — 댓글 수정
+### 8-7. `PATCH /api/v1/comments/{commentId}` — 댓글 수정
 
 - **Request**: `{ "comment": "..." }` (필수, 빈 값 불가)
 - **권한**: 댓글 **작성자 본인만** (피드 소유자는 삭제만 가능 — 남의 발언 내용 변경 불가)
 - 톰스톤(삭제된 댓글)은 수정 불가. 수정 시 이전 내용을 `delete_comments`에 스냅샷 저장(피드와 동일 — 신고 시 원본 확인용), `updatedAt` 갱신
-- **Response `200 OK`**: 수정된 댓글 객체 (9-5 형식)
+- **Response `200 OK`**: 수정된 댓글 객체 (8-5 형식)
 
 - **에러 (403 Forbidden — 작성자 아님)**
 
@@ -1700,12 +1636,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (작성자)
 
-### 9-8. `GET /api/v1/comments/{commentId}/replies` — 답글 목록 (지연 로딩)
+### 8-8. `GET /api/v1/comments/{commentId}/replies` — 답글 목록 (지연 로딩)
 
-- **Response `200 OK`**: 9-5와 동일 형식(등록순, `replyCount` 없음)
+- **Response `200 OK`**: 8-5와 동일 형식(등록순, `replyCount` 없음)
 - **인증**: 필요
 
-### 9-9. `DELETE /api/v1/comments/{commentId}` — 댓글 삭제
+### 8-9. `DELETE /api/v1/comments/{commentId}` — 댓글 삭제
 
 - **권한**: 댓글 작성자 본인 **또는** 그 댓글이 달린 피드의 소유자
 - **동작(레딧 방식)**: 답글 없으면 하드delete, 답글 있으면 톰스톤(내용 비움 + `deletedAt`, 스레드 유지). 두 경우 모두 `delete_comments` 스냅샷 선저장
@@ -1731,7 +1667,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 9-10. `POST /api/v1/comments/{commentId}/like` — 댓글 좋아요 / 9-11. `DELETE` — 취소
+### 8-10. `POST /api/v1/comments/{commentId}/like` — 댓글 좋아요 / 8-11. `DELETE` — 취소
 
 - **Response `200 OK`** — idempotent
 
@@ -1744,9 +1680,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-## 10. 피드 작성 페이지 (+피드 편집) [MVP 제외]
+## 9. 피드 작성 페이지 (+피드 편집) [MVP 제외]
 
-### 10-1. `POST /api/v1/feeds/images/presigned-url` — 피드 이미지 업로드 URL 발급 (여러 장)
+### 9-1. `POST /api/v1/feeds/images/presigned-url` — 피드 이미지 업로드 URL 발급 (여러 장)
 
 - **Request**
 
@@ -1776,7 +1712,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 10-2. `POST /api/v1/feeds` — 피드 작성
+### 9-2. `POST /api/v1/feeds` — 피드 작성
 
 - **Request**
 
@@ -1817,7 +1753,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 10-3. `PATCH /api/v1/feeds/{feedId}` — 피드 수정
+### 9-3. `PATCH /api/v1/feeds/{feedId}` — 피드 수정
 
 - **화면**: 프로필(피드 편집 — 게시글 수정, 노출 범위 설정)
 - **Request**: `{ "content"?, "imageKeys"?, "visibility"? }` (부분 수정). 수정 시마다 **이전 내용을 `delete_feeds`에 스냅샷 저장** (신고/차단 등 활용 기능은 **[MVP 제외]**이나 이력은 처음부터 축적)
@@ -1852,7 +1788,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (소유자)
 
-### 10-4. `DELETE /api/v1/feeds/{feedId}` — 피드 삭제
+### 9-4. `DELETE /api/v1/feeds/{feedId}` — 피드 삭제
 
 - **동작**: `deletedAt` 소프트delete — 전체 조회에서 제외
 - **Response**: `204 No Content`
@@ -1877,16 +1813,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (소유자)
 
-## 11. 프로필 페이지
+## 10. 프로필 페이지
 
-### 11-1. `GET /api/v1/users/me` — 내 기본 정보
+### 10-1. `GET /api/v1/users/me` — 내 기본 정보
 
 - **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기, 로그인 직후 상세 조회, 편집 프리필)
 - **Response `200 OK`**: `{ "userId", "nickname", "profileImageUrl", "introduction", "isOnboarded" }`
-- **`email`은 내리지 않는다** — 이메일을 보여주는 화면은 설정 페이지의 계정 항목뿐이라 13-1이 담당한다. 이 응답은 앱을 열 때마다 타는 경로이므로 특정 화면에서만 쓰는 값을 싣지 않는다
+- **`email`은 내리지 않는다** — 이메일을 보여주는 화면은 설정 페이지의 계정 항목뿐이라 12-1이 담당한다. 이 응답은 앱을 열 때마다 타는 경로이므로 특정 화면에서만 쓰는 값을 싣지 않는다
 - **인증**: 필요
 
-### 11-2. `GET /api/v1/users/{userId}` — 프로필 요약
+### 10-2. `GET /api/v1/users/{userId}` — 프로필 요약
 
 - **화면**: 프로필 (본인/타인 공통 — 본인이면 편집·설정 버튼, 타인이면 친구 요청 버튼 노출은 `isMe`로 분기)
 - **Response `200 OK`**
@@ -1925,9 +1861,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-3. `GET /api/v1/users/{userId}/feeds` — 피드 그리드 (경량)
+### 10-3. `GET /api/v1/users/{userId}/feeds` — 피드 그리드 (경량)
 
-- **Response `200 OK`** — 탭하면 9-2 단건 조회로 상세
+- **Response `200 OK`** — 탭하면 8-2 단건 조회로 상세
 
 ```json
 {
@@ -1945,7 +1881,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **공개범위**: 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+친구면 `FRIENDS`)
 - **인증**: 필요
 
-### 11-6. `POST /api/v1/users/{userId}/friend-request` — 친구 요청
+### 10-6. `POST /api/v1/users/{userId}/friend-request` — 친구 요청
 
 - **Response `201 Created`**
 
@@ -1962,7 +1898,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
-### 11-7. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
+### 10-7. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
 
 - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
 - **이력을 남기지 않는다**
@@ -1970,7 +1906,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **에러 (404 Not Found)**: `PENDING` 요청이 없다
 - **인증**: 필요
 
-### 11-8. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
+### 10-8. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
 
 - **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 푸시를 보낸다
   - **Response `201 Created`**: `{ "friendStatus": "ACCEPTED" }`
@@ -1989,7 +1925,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
 > | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
 
-### 11-9. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
+### 10-9. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
 
 - **화면**: 친구 목록 페이지 (친구 탭 + 받은 요청 탭)
 - **둘 다 본인 것만 조회한다.** 타인의 친구 목록은 열지 않는다 — 친구의 친구를 훑어 사람을 찾는 흐름이 없고(사람 찾기는 `GET /users/search`), 누구와 친구인지는 민감한 정보다. 타인 프로필에는 **친구 수만** 표시된다
@@ -2007,7 +1943,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
 - **인증**: 필요
 
-### 11-10. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션
+### 10-10. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션
 
 - **화면**: 프로필 — 획득한 색을 `보유 수 / 전체 수`와 함께 보여준다
 - **Response `200 OK`** — 마스터 전체를 내리고 각 색에 획득 여부를 표시한다
@@ -2047,7 +1983,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
-### 11-11. `GET /api/v1/users/search` — 사용자 검색
+### 10-11. `GET /api/v1/users/search` — 사용자 검색
 
 - **화면**: 러너 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
 - **Query**: `q`(필수, 닉네임), `cursor`/`limit`
@@ -2055,9 +1991,9 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - `friendStatus`는 `NONE`/`PENDING_SENT`/`PENDING_RECEIVED`/`ACCEPTED` — 버튼을 무엇으로 그릴지가 이 값에 달렸다. 보낸 요청과 받은 요청을 구분해야 "요청 취소"와 "수락"이 갈린다
 - **인증**: 필요
 
-## 12. 프로필 편집 페이지
+## 11. 프로필 편집 페이지
 
-### 12-1. `POST /api/v1/users/{userId}/profile-image/presigned-url` — 프로필 사진 업로드 URL
+### 11-1. `POST /api/v1/users/{userId}/profile-image/presigned-url` — 프로필 사진 업로드 URL
 
 - **Request**
 
@@ -2095,9 +2031,9 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 필요 (본인만 — `{userId}`가 토큰 주체와 다르면 403)
 
-### 12-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 반영
+### 11-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 반영
 
-12-1로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.profile_image_key`를 갱신한다.
+11-1로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.profile_image_key`를 갱신한다.
 
 - **Request**
 
@@ -2109,7 +2045,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 | 필드 | 타입 | 제약 |
 |---|---|---|
-| `profileImageKey` | String | 필수, 255자 이하. 12-1이 발급한 키 그대로 |
+| `profileImageKey` | String | 필수, 255자 이하. 11-1이 발급한 키 그대로 |
 
 - **Response `200 OK`**
 
@@ -2148,7 +2084,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 필요 (본인만)
 
-### 12-3. `GET /api/v1/users/{userId}/profile-image` — 프로필 사진 URL 조회
+### 11-3. `GET /api/v1/users/{userId}/profile-image` — 프로필 사진 URL 조회
 
 - **Response `200 OK`**
 
@@ -2171,7 +2107,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 불필요
 
-### 12-4. `DELETE /api/v1/users/{userId}/profile-image` — 프로필 사진 삭제
+### 11-4. `DELETE /api/v1/users/{userId}/profile-image` — 프로필 사진 삭제
 
 `users.profile_image_key`를 비운다. **S3 객체는 지우지 않고 DB의 키 연결만 끊는다.** 사진이 없는 상태에서 호출해도 에러 없이 성공한다(idempotent).
 
@@ -2189,10 +2125,10 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 필요 (본인만)
 
-### 12-5. `PATCH /api/v1/users/me` — 프로필 수정
+### 11-5. `PATCH /api/v1/users/me` — 프로필 수정
 
-- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 12-6, 사진은 12-1~12-4로 각각 전용 엔드포인트를 쓴다. 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
-- **Response `200 OK`**: 11-1 형태 갱신본
+- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 11-6, 사진은 11-1~11-4로 각각 전용 엔드포인트를 쓴다. 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
+- **Response `200 OK`**: 10-1 형태 갱신본
 
 - **에러 (400 Bad Request)**
 
@@ -2205,7 +2141,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 필요
 
-### 12-6. `PATCH /api/v1/users/{userId}/nickname` — 닉네임 변경
+### 11-6. `PATCH /api/v1/users/{userId}/nickname` — 닉네임 변경
 
 닉네임은 `user_onboardings.nickname`에 있어 온보딩을 마쳐야 바꿀 수 있다. 서비스 전반의 표시명이 이 값이다.
 
@@ -2261,9 +2197,9 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 필요 (본인만)
 
-### 12-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
+### 11-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
 
-저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 12-6·1-9의 409다. — 사용 화면: 프로필 편집, 온보딩
+저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-6·1-9의 409다. — 사용 화면: 프로필 편집, 온보딩
 
 - **Request**
 
@@ -2297,9 +2233,9 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **인증**: 불필요
 
-## 13. 설정 페이지
+## 12. 설정 페이지
 
-### 13-1. `GET /api/v1/users/me/account` — 계정 정보
+### 12-1. `GET /api/v1/users/me/account` — 계정 정보
 
 - **화면**: 설정 (계정 항목)
 - **Response `200 OK`**
@@ -2316,7 +2252,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출한다. 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 비밀번호 변경 메뉴를 감춘다. 로컬에 "이메일 계정" 같은 문구를 붙이지 않는 이유 — 바로 위에 이메일이 떠 있고, 비밀번호 변경 메뉴의 존재 자체가 이미 로컬이라는 표시다. 소셜 문구가 필요한 건 어느 provider로 가입했는지 잊으면 다른 버튼을 눌러 별개 계정이 되기 때문이다
 - **인증**: 필요
 
-### 13-2. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
+### 12-2. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
 
 로컬 계정만 가능. 현재 비밀번호로 본인을 재확인한다.
 
@@ -2378,7 +2314,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 }
 ```
 
-- 클라는 13-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
+- 클라는 12-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
 
 - **에러 (403 Forbidden — 본인 아님)**
 
@@ -2393,7 +2329,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 > **비밀번호 찾기(로그인 전 재설정)는 명세에 없다** — 로그인 화면에 진입점이 없다. 필요해지면 이메일 인증(1-1/1-2)의 `verificationTicket`을 받는 별도 엔드포인트로 정의한다. 이 API는 로그인된 상태 전용이다.
 
-### 13-3. `GET /api/v1/users/me/settings` — 설정 조회
+### 12-3. `GET /api/v1/users/me/settings` — 설정 조회
 
 - **화면**: 설정
 - **Response `200 OK`**
@@ -2409,14 +2345,14 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **공개범위 설정**: `profileVisibility`(FRIENDS/PUBLIC — 지인 마스킹 on/off) 하나뿐이다. **피드 작성 기본값은 서버에 두지 않는다** — 매 피드마다 `feeds.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
-### 13-4. `PATCH /api/v1/users/me/settings` — 설정 변경
+### 12-4. `PATCH /api/v1/users/me/settings` — 설정 변경
 
-- **Request**: 13-3 필드 부분 수정 / **Response `200 OK`**: 갱신본
+- **Request**: 12-3 필드 부분 수정 / **Response `200 OK`**: 갱신본
 - **인증**: 필요
 
-### 13-5. `DELETE /api/v1/users/me` — 회원탈퇴
+### 12-5. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_running_contests`/`running_players`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`running_players`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

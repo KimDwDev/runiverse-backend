@@ -6,16 +6,16 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_players`·`running_records`·`running_splits`·`colors`).
-- **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`), 달력 날짜는 `*_date`(`date`, 시각·시간대 없음, API `YYYY-MM-DD`). 달력 날짜는 대회 `event_date`·`registration_start_date`·`registration_end_date`뿐이고, `user_onboardings.birthday`는 접미사 없는 예외다.
+- **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`). 달력 날짜(`date`, 시각·시간대 없음, API `YYYY-MM-DD`)는 `user_onboardings.birthday` 하나뿐이고, 이건 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
-- **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§7 enum 사전](#7-enum-사전).
-- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§6](#6-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`user_running_contests`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
+- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -84,7 +84,7 @@
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningRoomId`(Long)가 이 값을 가리킴. **신청·개시 즉시 1인 방으로 생성** — 매칭은 `MATCHING`, 솔로는 `STARTED`로 시작한다 |
 | type | enum | NOT NULL | `SOLO`(솔로 러닝) / `MATCH`(랜덤 매칭) / `INVITE`(친구 초대). 생성 시 정해지고 바뀌지 않는다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방과 초대방이 섞이지 않는다 |
-| status | enum | NOT NULL, default MATCHING | 진행 단계 — [§7 enum 사전](#7-enum-사전) |
+| status | enum | NOT NULL, default MATCHING | 진행 단계 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `type='MATCH' AND status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. **`type` 조건이 있어야 `(type, status, …)` 인덱스의 선두 컬럼을 쓴다.** 모집 단계가 없는 솔로는 null |
 | target_distance | int | NOT NULL | 방의 목표 거리(미터). 매칭 조건이라 **생성 시 정해지고 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
@@ -112,7 +112,7 @@
 > UNIQUE (running_room_id, user_id) — 한 방에 같은 유저는 한 번만. `running_records`와 같은 축이다. 재초대·재입장을 허용하게 되면 부분 인덱스(`WHERE status <> 'LEFT'`)로 바꾼다.
 > **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
 > **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다". **지우기 전에 `delete_running_players`에 스냅샷을 남긴다**([§6](#6-delete_-스냅샷이력-테이블)) — 취소는 소급 수집이 불가능하므로 관찰 근거를 잃지 않기 위함이다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다". **지우기 전에 `delete_running_players`에 스냅샷을 남긴다**([§5](#5-delete_-스냅샷이력-테이블)) — 취소는 소급 수집이 불가능하므로 관찰 근거를 잃지 않기 위함이다.
 
 ### running_records
 
@@ -244,7 +244,7 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | color_id | bigint | PK | |
-| category | enum | NOT NULL | 12범주 ([§7 enum 사전](#7-enum-사전)) |
+| category | enum | NOT NULL | 12범주 ([§6 enum 사전](#6-enum-사전)) |
 | shade | int | NOT NULL | 범주 내 순번. 개수는 범주마다 다르다(3~4) |
 | name | varchar | NOT NULL | 색 이름("딥 블루") |
 | hex | varchar(7) | NOT NULL | `#3c62e2` |
@@ -269,33 +269,7 @@
 
 ---
 
-## 5. 도메인 E — 대회 [MVP 제외]
-
-### running_contests [MVP 제외]
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| running_contest_id | bigint | PK | API `contestId` |
-| name | varchar | NOT NULL | |
-| region / venue | varchar | nullable | |
-| event_date | date | NOT NULL | |
-| distances | numeric[] | NOT NULL | km 단위 배열(예: {5,10,21.0975,42.195}) — API는 미터로 변환 노출 |
-| thumbnail_image_url | varchar | nullable | 외부 URL |
-| registration_start_date / registration_end_date | date | nullable | 접수 시작/마감일 — 달력 날짜(시각 없음), API는 `YYYY-MM-DD` |
-| detail_url | varchar | nullable | 외부 상세 링크 |
-| created_at / updated_at | timestamp | NOT NULL | |
-
-### user_running_contests (북마크) [MVP 제외]
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| user_id | UUID | PK1, FK → users | |
-| running_contest_id | bigint | PK2, FK → running_contests | |
-| created_at | timestamp | NOT NULL | 관심 대회 북마크(참가 신청 아님, 단순 연결) |
-
----
-
-## 6. delete_* (스냅샷/이력 테이블)
+## 5. delete_* (스냅샷/이력 테이블)
 
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각.
 
@@ -356,7 +330,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ---
 
-## 7. enum 사전 (컬럼별 값 목록 — DB·API 동일 코드)
+## 6. enum 사전 (컬럼별 값 목록 — DB·API 동일 코드)
 
 | 컬럼 | 값 | 비고 |
 |---|---|---|
@@ -373,9 +347,9 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ---
 
-## 8. 인덱스 (조회 성능)
+## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
@@ -392,4 +366,3 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`type='MATCH' AND status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
 | running_players.(user_id, status, left_at) | 페널티 판정 — 최근 쿨다운 구간에 제재 대상 이탈이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
 | delete_running_players.(user_id, created_at) | 유저별 취소·거절 이력 조회 (상습 취소 관찰) |
-| running_contests.region, event_date | **[MVP 제외]** 대회 검색·필터 |
