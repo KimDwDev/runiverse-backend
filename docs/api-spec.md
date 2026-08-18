@@ -749,7 +749,7 @@
 
 MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 뒤에 붙인다. **엔드포인트 미정.**
 
-초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `JOINED`, 거절하면 row를 DELETE한다(거절 이력 보관 안 함).
+초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `JOINED`, 거절하면 `deleted_at`을 찍어 소프트 삭제한다.
 
 초대방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 남의 초대방에 모르는 사람이 배정되므로 값 분리가 필수다.
 
@@ -761,7 +761,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 - 수락에 성공하면 **그 유저의 남은 `INVITED` row를 전부 DELETE한다** — 하나를 고른 이상 나머지 초대는 소멸한다
 - 방이 마감·취소로 넘어갈 때 응답 없이 남은 `INVITED` row도 함께 정리한다 — 두지 않으면 죽은 row가 쌓인다
 
-`INVITED` 상태에서는 SSE를 연결하지 않는다(활성 신청이 아니므로 — 15번 참조). 초대 도착은 푸시로 알리고, 수락한 뒤에 스트림을 연다. 초대에 응답하지 않아도 이탈로 보지 않는다 — `status`가 `LEFT`가 되지 않기 때문이다.
+`INVITED` 상태에서는 SSE를 연결하지 않는다(활성 신청이 아니므로 — 15번 참조). 초대 도착은 푸시로 알리고, 수락한 뒤에 스트림을 연다. 초대에 응답하지 않아도 이탈로 보지 않는다 — `status`가 `*_LEFT_*`가 되지 않기 때문이다.
 
 ## 5. 매칭·러닝 실시간 통신
 
@@ -808,7 +808,7 @@ ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채�
 
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
-  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players` row DELETE(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `deleted_at` 소프트 삭제(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **`status=MATCHED_LEFT_*` + `deleted_at` 기록**. 어느 쪽이든 배정 행은 `is_connected=false`로 남아 이력이 된다
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
@@ -911,10 +911,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) = 대기 취소(`running_players` row 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다. 제재 없음
-  - 확정 후(`MATCHED`) = 이탈(`status=LEFT`, `left_at` 기록, row 유지). **`close_at` + 유예를 지난 뒤면 매칭 신청 쿨다운이 걸린다** — 클라는 나가기 전에 그 사실을 안내한다
+  - 대기 중(`MATCHING`) = 대기 취소(`deleted_at` 소프트 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다. 제재 없음
+  - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 `close_at` + 유예와 비교해 판정해 값에 굳힌다**. 쿨다운이 걸리면 클라는 나가기 전에 그 사실을 안내한다
   - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다** — 남은 사람은 그대로 러닝을 진행한다
-- **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고, 늦게 나가는 것은 차단이 아니라 쿨다운으로 다룬다 — 막아도 앱 강제 종료로 우회되며 그 경우 `LEFT`조차 남지 않는다
+- **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고, 늦게 나가는 것은 차단이 아니라 쿨다운으로 다룬다 — 막아도 앱 강제 종료로 우회되며 그 경우 이탈 기록조차 남지 않는다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
 - **인증**: 필요
@@ -985,7 +985,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
       "nickname": "동완러너",
-      "status": "JOINED",              // PlayerStatus: INVITED | JOINED | LEFT
+      "status": "JOINED",              // PlayerStatus — 값 목록은 erd.md §6
       "profileImageUrl": "https://...",
       "introduction": "즐겁게 같이 달려요!",   // users.introduction
       "averagePaceSecondsPerKm": 360
@@ -1014,8 +1014,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### 방 나가기 — 별도 이벤트 없음
 
 - 확정된 방에서 나가기도 **`DELETE /users/me/running-match`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
-- 나간 사람만 `LEFT` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신한다 — 혼자 남아도 방은 유지되고 그대로 러닝을 진행한다
-- **확정 후 이탈에는 페널티가 붙는다** — `close_at` + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다. 판정은 저장하지 않고 `left_at`·`close_at`으로 계산한다(`feature-spec.md` 페널티 절). 쿨다운 중 신청은 `409 MATCH_COOLDOWN`
+- 나간 사람만 `MATCHED_LEFT_*` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신한다 — 혼자 남아도 방은 유지되고 그대로 러닝을 진행한다
+- **확정 후 이탈에는 페널티가 붙는다** — `close_at` + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다. 제재 대상 여부는 이탈 시점에 판정해 `status`에 굳히고, 쿨다운 만료는 `deleted_at`으로 잰다(`feature-spec.md` 페널티 절). 쿨다운 중 신청은 `409 MATCH_COOLDOWN`
 
 #### 대기방 참여자 목록 — 별도 조회 없음
 

@@ -14,7 +14,7 @@
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. 좌표(`*_lat`/`*_lng`) = **`double precision`**(degree). PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
-- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
+- **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`·`running_players`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
 - **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
@@ -100,17 +100,20 @@
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
 | user_id | UUID | FK → users, NOT NULL | |
-| status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
+| status | enum | NOT NULL, default JOINED | 참가·진행 상태 — [§6 enum 사전](#6-enum-사전) |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
-| left_at | timestamp | nullable | 이탈 시각. `status='LEFT'`일 때만 값이 있다. **언제 나갔는지는 사실이라 저장하고, 제재 대상인지는 저장하지 않는다** — `close_at`과 비교해 계산한다(정책이 바뀌어도 과거 row가 거짓이 되지 않는다) |
 | desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
+| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈 공통. 한 번 찍히면 바뀌지 않는다 |
 
 > **방과의 연결은 `running_room_sessions`가 갖는다** — `running_players`는 "매칭 신청" 단위이고, 그 신청이 어느 방에 배정됐는지는 연결 테이블이 기록한다. 참가자가 여러 방을 거칠 수 있어(재배정·병합) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없다. 현재 속한 방은 `running_room_sessions.is_connected`로 가린다.
-> **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다". **지우기 전에 `delete_running_players`에 스냅샷을 남긴다**([§5](#5-delete_-스냅샷이력-테이블)) — 취소는 소급 수집이 불가능하므로 관찰 근거를 잃지 않기 위함이다.
+> **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)·초대(`INVITED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점(확정 후 / 러닝 중)과 제재 여부로 네 값이 갈린다.
+> **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"(시각)다. 쿨다운은 이 둘로 판정한다: `status IN ('MATCHED_LEFT_PENALTY','RUNNING_LEFT_PENALTY')`이면서 `deleted_at`이 쿨다운 안이면 재신청을 막는다.
+> **이탈 시각으로 `updated_at`을 쓰지 않는 이유**: 이후 그 row가 다른 이유로 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다. `deleted_at`은 끝난 시점에 한 번 찍히고 다시 바뀌지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 대기 취소·초대 거절 = `deleted_at` 기록 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED`, `deleted_at`은 null(정상 종료라 삭제가 아니다) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`).
+> **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`. `INVITED`는 활성으로 치지 않는다.
 
 ### running_room_sessions (참가자 ↔ 방 배정)
 
@@ -145,9 +148,8 @@
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
 > UNIQUE (running_room_id, user_id) — 유저당 방별 1기록. 솔로도 방을 가지므로 부분 인덱스 조건이 필요 없다.
-> **개인 단위 진행 상태는 컬럼으로 두지 않는다 — 이 행의 존재가 곧 상태다.** 해당 `(running_room_id, user_id)` 행이 **있으면 완주(제출), 없으면 미제출**이다. 방이 `STARTED`인데 기록이 없으면 러닝 중이고, `running_players.status`는 그동안 `JOINED`로 유지된다.
-> 상태 컬럼을 두지 않는 이유: `RUNNING`→`COMPLETED` 같은 UPDATE는 놓치면 사실과 어긋나지만, 이 행은 종료 처리의 산물이라 **없으면 애초에 종료되지 않은 것**이라 어긋날 수 없다.
-> **한계**: "아직 뛰는 중"과 "앱이 죽어 영영 제출하지 않을 사람"이 둘 다 "행 없음"이라 구분되지 않는다. 그래서 `STARTED`→`FINISHED`는 전원 제출 또는 타임아웃 중 먼저 오는 시점에 닫는다(`feature-spec.md` 상태 절).
+> **개인 단위 진행 상태는 `running_players.status`가 갖는다** — 러닝 중이면 `RUNNING`, 완주하면 `COMPLETED`다. 이 행은 종료 처리의 산물이라 `COMPLETED`와 함께 만들어진다.
+> **한계**: "아직 뛰는 중"과 "앱이 죽어 영영 제출하지 않을 사람"이 둘 다 `RUNNING`이라 구분되지 않는다. 그래서 `STARTED`→`FINISHED`는 전원 제출 또는 타임아웃 중 먼저 오는 시점에 닫는다(`feature-spec.md` 상태 절).
 
 ### running_splits (구간별)
 
@@ -296,25 +298,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | alert_consent | boolean | | |
 | created_at | timestamp | NOT NULL | 스냅샷 시각 |
 
-### delete_running_players
-
-러닝 참가자 삭제 스냅샷. 대기 취소·초대 거절로 `running_players` row가 **하드 딜리트될 때** 남긴다(확정 후 이탈은 row가 유지되므로 대상이 아니다).
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| delete_running_player_id | bigint | PK | |
-| running_room_id | bigint | → running_rooms | 논리 참조. `(running_room_id, user_id)`가 원본 참가를 특정한다(원본의 UNIQUE 축) |
-| user_id | UUID | → users | 논리 참조 |
-| status | enum | NOT NULL | 삭제 시점 참가 상태 — `INVITED`=초대 거절 / `JOINED`=대기 취소. **삭제 사유가 이 값으로 갈리므로 별도 사유 컬럼을 두지 않는다** |
-| current_member | int | NOT NULL | 삭제 시점 방 인원(`running_rooms.current_member` 스냅샷). "사람이 붙은 뒤 취소"인지 판별하는 신호 |
-| joined_at | timestamp | NOT NULL | 원본 `running_players.created_at` — `created_at`과의 차가 곧 신청→취소 소요 시간 |
-| created_at | timestamp | NOT NULL | 스냅샷 시각 = 취소·거절 시각 |
-
-> **담는 기준은 "원본이 사라져 복원 불가한 값"이다.** `running_rooms`는 취소돼도 row가 남으므로(`CANCELLED`) 방의 불변 값(`type`·`close_at`·`target_distance`)은 조인으로 얻는다 — 담지 않는다. `current_member`만 예외로, 이후에도 계속 변하는 **시점 값**이라 조인으로 복원할 수 없다. 원본 `running_player_id`도 담지 않는다 — 하드 딜리트라 가리킬 대상이 영원히 없다.
-> **왜 두는가**: 취소는 소급 수집이 불가능한 이벤트다. 남기지 않으면 상습 대기 취소가 문제인지조차 판단할 수 없다. 조회 경로(후보 방 스캔·인원 집계·페널티 판정)에는 들어가지 않는 write-once 테이블이라 `running_players`에 `deleted_at`을 두는 것과 달리 조회를 오염시키지 않는다.
-> **제재 근거가 아니다.** 현재 정책상 마감 전 이탈은 제재 대상이 아니며, 이 테이블은 관찰용이다. 제재에 쓰려면 별도 결정이 필요하다.
-> 회원 탈퇴로 CASCADE 삭제되는 row는 여기 남지 않는다 — 필요하면 탈퇴 유스케이스에서 명시적으로 INSERT한다(위 공통 규칙).
-
 ### delete_feeds [MVP 제외]
 
 피드 변경 이력(변경 전 내용 스냅샷 — 신고 시 원본 확인용). **수정 시에만 쌓인다** — 피드는 소프트 삭제라 삭제해도 `feeds.content`가 남는다.
@@ -351,7 +334,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
-| running_players.status | INVITED / JOINED / LEFT | 초대됨 / 참가중 / 이탈 — **참가 의사 축**(매칭 단계 아님) |
+| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | 초대됨 / 참가 / 확정 후 이탈(제재) / 확정 후 이탈(제재 없음) / 러닝 중 / 러닝 중 이탈(제재) / 러닝 중 이탈(제재 없음) / 완주 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대 — 생성 시 확정, 불변 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정 / 시작 / 종료 / 마감 시 2명 미만이거나 참가자 전원이 취소 |
 | oauth_users.provider | GOOGLE / KAKAO | |
@@ -375,5 +358,4 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.running_player_id | 참가자의 현재 방 조회 (복합 PK가 `running_room_id` 방향만 커버) |
 | running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`type='MATCH' AND status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
-| running_players.(user_id, status, left_at) | 페널티 판정 — 최근 쿨다운 구간에 제재 대상 이탈이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
-| delete_running_players.(user_id, created_at) | 유저별 취소·거절 이력 조회 (상습 취소 관찰) |
+| running_players.(user_id, status, deleted_at) | 페널티 판정 — 쿨다운 구간에 제재 대상 이탈(`*_LEFT_PENALTY`)이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
