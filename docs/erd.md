@@ -12,7 +12,7 @@
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`). 달력 날짜(`date`, 시각·시간대 없음, API `YYYY-MM-DD`)는 `user_onboardings.birthday` 하나뿐이고, 이건 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
-- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
+- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`·`running_players`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
 - **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
@@ -143,6 +143,8 @@
 | calories | int | nullable | kcal (선택) |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. **API 응답에는 쓰지 않는다** — 재계산·분석용(고도 소급 계산 등). 매칭·솔로 모두 서버가 업로드(Redis 버퍼→S3) |
 | route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드(6-2)·기록 목록(7-1)·기록 상세(7-2)·피드 카드가 전부 이 값을 쓴다. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성 |
+| weather_code | int | nullable | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
+| temperature | numeric(3,1) | nullable | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
@@ -151,6 +153,10 @@
 > **한계**: "아직 뛰는 중"과 "앱이 죽어 영영 제출하지 않을 사람"이 둘 다 `RUNNING`이라 구분되지 않는다. 그래서 `STARTED`→`FINISHED`는 전원 제출 또는 타임아웃 중 먼저 오는 시점에 닫는다(`feature-spec.md` 상태 절).
 > **좌표 컬럼은 두지 않는다 — `route_polyline`에서 뽑는다.** 시작점은 인코딩된 폴리라인의 첫 점이라 앞 몇 글자만 읽으면 되고(O(1)), 종료점은 전체 디코딩이지만 단건 상세에서만 필요하며 그 응답은 어차피 경로를 통째로 싣는다. 같은 사실을 두 벌 저장하지 않는다.
 > **경로는 2계층이다** — 화면에 선을 그리는 건 `route_polyline`(DB), 점별 원본은 `gps_track_key`(S3). 조회 패턴이 달라서 나눈다: 기록 목록은 한 번에 수십 건의 경로가 필요해 S3 왕복이 불가능하고, 상세도 화면이 요구하는 건 선 하나뿐이라 점별 데이터를 읽을 이유가 없다. 고도·순간 페이스 같은 점별 표시를 켤 때 S3를 연다.
+> **날씨(`weather_code`·`temperature`)는 서버가 채운다.** 클라이언트가 보낸 값을 쓰지 않는 건 거리·페이스와 같은 원칙이다(`api-spec.md`의 `RUNNING_FINISH`) — 컬러 획득에 쓰이므로 신고값이면 위조가 가능하다.
+> **INSERT 전에 조회하고, 실패하면 null인 채로 넣는다.** 나중에 UPDATE로 채우면 write-once가 깨져 `updated_at`이 필요해진다. 종료 처리가 외부 API에 매이지 않도록 타임아웃을 짧게 둔다.
+> **관측값만 저장하고 판정 결과는 저장하지 않는다** — "악조건이었나"를 미리 계산해 넣지 않는다. 컬러 조건표가 바뀌어도 과거 row가 거짓이 되지 않는다(`colors`의 획득 조건을 DB에 두지 않는 것과 같은 원칙).
+> **API에 노출하지 않는다** — `elevation_gain`처럼 저장만 하고 컬러 판정에 쓴다(`feature-spec.md` 대시보드 절).
 
 ### running_splits (구간별)
 
