@@ -8,7 +8,7 @@
 
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`user_running_contests`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_players`·`running_records`·`running_splits`·`colors`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`), 달력 날짜는 `*_date`(`date`, 시각·시간대 없음, API `YYYY-MM-DD`). 달력 날짜는 대회 `event_date`·`registration_start_date`·`registration_end_date`뿐이고, `user_onboardings.birthday`는 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
@@ -110,6 +110,7 @@
 | desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
+> UNIQUE (running_room_id, user_id) — 한 방에 같은 유저는 한 번만. `running_records`와 같은 축이다. 재초대·재입장을 허용하게 되면 부분 인덱스(`WHERE status <> 'LEFT'`)로 바꾼다.
 > **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
 > **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
 > **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다".
