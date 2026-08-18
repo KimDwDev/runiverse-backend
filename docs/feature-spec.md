@@ -355,13 +355,13 @@
 - **매칭 진행 단계는 이 컬럼에 넣지 않는다**(`WAITING`·`FAILED` 등). 그건 `running_rooms.status`가 갖는다 — 같은 사실이 두 곳에 저장되면 방 상태가 바뀔 때마다 참가자 전원을 갱신해야 하고 드리프트가 생긴다.
 - **"끝난 시각"은 `deleted_at`이 따로 갖는다.** `status`는 어떻게 끝났는지, `deleted_at`은 언제 끝났는지다. 완주(`COMPLETED`)는 정상 종료라 `deleted_at`이 null이다.
 
-**목표 거리 vs 실제 거리**: 이름으로 갈린다 — **목표는 `target_distance`**(`running_players`, 신청 시 고른 3/5/10km), **실제 이동 거리는 `total_distance`**(`running_records`, 러닝 종료 후 확정). API도 같은 축을 쓴다(`targetDistanceMeters` / `totalDistanceMeters`).
+**목표 거리 vs 실제 거리**: 이름으로 갈린다 — **목표는 `target_*`**(`running_players.target_distance` = 신청 시 고른 3/5/10km, `running_rooms.target_distance` = 방의 조건), **실제 이동 거리는 `total_*`**(`running_records.total_distance` = 러닝 종료 후 확정). 테이블을 몰라도 컬럼명만으로 구분된다. API도 같은 규칙이다(`targetDistanceMeters` / `totalDistanceMeters`).
 
 **회원탈퇴 시 연관 데이터 처리** (테이블별):
 
 - **유지**: `feeds`, `comments`, `running_records`(+`running_splits`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
 - **유지 (카운트 재계산 안 함)**: `feed_likes`, `comment_likes` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `friendships`(`ON DELETE CASCADE` — 친구 목록·받은 요청 목록에서 탈퇴 유저 노출 방지. 요청·수락 어느 쪽이든 삭제), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `running_players`, `user_colors`(획득 컬러 이력)
+- **즉시 삭제**: `friendships`(`ON DELETE CASCADE` — 친구 목록·받은 요청 목록에서 탈퇴 유저 노출 방지. 요청·수락 어느 쪽이든 삭제), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `running_players`(+`running_room_sessions` CASCADE), `user_colors`(획득 컬러 이력)
 - 친구 수는 집계 컬럼이 아니라 `friendships` COUNT라 **재계산이 필요 없다** — row가 사라지면 수도 함께 줄어든다. (`feed_likes`는 row를 유지해 카운트도 유지 — 기준이 다름.)
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):

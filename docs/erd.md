@@ -15,7 +15,8 @@
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`·`running_players`)은 소프트 삭제. `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`·`running_players`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+  - **`running_players`는 둘 중 어느 쪽도 아니다** — `user_id`가 **논리 참조**(FK 없음)인데 탈퇴 시에는 **삭제** 대상이다. FK가 없으니 DB가 지워주지 않는다 — 탈퇴 유스케이스에서 **명시적으로 DELETE**한다(딸린 `running_room_sessions`는 `running_player_id` FK의 ON DELETE CASCADE로 함께 지워진다). 논리 참조라도 신청자 없는 참가 row는 성립하지 않으므로 **NOT NULL**이다 — 논리 참조 컬럼이 전부 NOT NULL인 것과 같다(nullable은 스냅샷 테이블 `delete_feeds`·`delete_comments`뿐).
 - **`feeds.running_record_id` 참조 정책**: `feeds`↔`running_records`는 별개 애그리거트라 하드 FK 없이 **ID로만 논리 참조**(DDD *Reference by Identity* — `user_id` 논리 참조와 일관). 표기 `→ running_records`. **무결성은 앱 레벨**: 저장 시 `running_records` 존재 검증, 조회 시 유령 참조 방어(기록 카드 미표시).
 
 ---
@@ -99,10 +100,10 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
-| user_id | UUID | FK → users, NOT NULL | |
+| user_id | UUID | → users, NOT NULL | 논리 참조(FK 제약 없음). 탈퇴 시 앱이 명시적으로 삭제 — [§0](#0-공통-규칙) |
 | status | enum | NOT NULL, default JOINED | 참가·진행 상태 — [§6 enum 사전](#6-enum-사전) |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
-| target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`) |
+| target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`). **목표는 `target_*`, 실적은 `total_*`** — `running_records.total_distance`(실제 이동 거리)와 이름으로 갈린다 |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
