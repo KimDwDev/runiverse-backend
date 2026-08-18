@@ -79,7 +79,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 17 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 최종 결과 — 사용 화면: 러닝 후 대시보드 |
-| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + GPS 경로 |
+| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
 
 ### 7. 기록 화면
 
@@ -163,6 +163,7 @@
 - **페이지네이션 limit**: `?limit=` 생략 시 기본 **20**, 최대 **50**(초과 요청은 50으로 클램프)
 - **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜는 생일뿐이며 `YYYY-MM-DD`
 - **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
+- **경로(`routePolyline`)**: Google Encoded Polyline Algorithm Format, **precision 5**(소수점 5자리, 약 1m). 지도 SDK 기본값과 같다 — Android `PolyUtil.decode`, iOS `GMSPath(fromEncodedPath:)`, Flutter `google_maps_flutter` 모두 별도 설정 없이 디코드된다. **precision을 6으로 인코딩하면 좌표가 10배 어긋나 경로가 엉뚱한 곳에 그려지므로 서버·클라가 같은 값을 써야 한다**
 - **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 10-6~10-8로 나뉜다
 - **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
@@ -1264,7 +1265,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요 (같은 방 참가자)
 
-### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + GPS 경로
+### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + 경로
 
 - **화면**: 러닝 후 - 대시보드 (본인 경로 확인 + 참가자 상세·구간별 비교)
 - **Response `200 OK`** (구조 요약)
@@ -1285,18 +1286,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "latitude": 35.1842012,
       "longitude": 129.0831421
     },
-    "gpsPoints": [
-      {
-        "sequence": 1,
-        "latitude": 35.1795543,
-        "longitude": 129.0756416,
-        "altitudeMeters": 18.4,
-        "accuracyMeters": 6.2,
-        "currentPaceSecondsPerKm": 345,
-        "cadenceSpm": 165,
-        "recordedAt": "2026-07-25T10:00:30"
-      }
-    ]
+    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline). running_records.route_polyline
   },
   "splits": [
     {
@@ -1326,6 +1316,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 아직 안 끝난(미완주) 유저는 해당 구간에 정보가 없을 수 있음
+- **경로는 점 배열이 아니라 encoded polyline으로 내린다.** 지도 SDK가 디코더를 내장하고 있어 클라이언트가 그대로 그릴 수 있고(`google_maps_flutter` 등), 점 배열보다 응답이 한 자릿수 작다. `running_records.route_polyline`을 그대로 실으므로 **S3 왕복이 없다**
+- **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 `running_splits.route_polyline`의 첫 점이다(ERD에 좌표 컬럼을 두지 않는다)
+- **구간 경로 자체를 내리는 필드는 아직 없다.** `running_splits.route_polyline`은 저장하되, 구간별 지도 강조가 화면에 들어갈 때 `splits[].routePolyline`을 더한다
+- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 표시하지 않기로 했고(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 원본 트랙은 S3(`gps_track_key`)에 남아 있으므로 점별 표시가 필요해지면 그때 필드를 더한다
 
 - **에러 (403 Forbidden)**
 
@@ -1364,19 +1358,23 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "startedAt": "2026-07-25T10:00:30",
       "totalDistanceMeters": 5020,
       "durationSeconds": 1800,
-      "averagePaceSecondsPerKm": 359
+      "averagePaceSecondsPerKm": 359,
+      "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
     }
   ],
   "nextCursor": null
 }
 ```
 
+- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절). 거리·시간 숫자만으로는 어느 러닝인지 구분되지 않는다
+- **목록에 실을 수 있는 건 폴리라인이라서다** — 한 응답에 최대 50건(캘린더 `from`/`to`는 그 달 전체)이면 경로도 그만큼인데, 건당 수 KB라 다 실어도 수십~수백 KB에 그친다. 점 배열이면 한 자릿수 커지고, 건별 S3 왕복은 아예 성립하지 않는다
 - **인증**: 필요 (본인 기록만)
 
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**: 7-1 필드 + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 GPS 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm` 등)
+- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm` 등)
+- **`routePolyline`은 최상위가 아니라 `route` 안에 있다** — 상세 화면은 시작·종료 지점 마커까지 찍으므로 `route` 한 덩어리로 받는다. 목록(7-1)은 카드에 선만 그려서 최상위 필드로 둔다. 같은 값을 두 곳에 싣지 않는다
 - 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
 - **에러 (403 Forbidden — 본인 기록 아님)**
