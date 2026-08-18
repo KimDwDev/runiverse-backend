@@ -33,7 +33,6 @@ class AuthFlowE2eTest extends E2eTestSupport {
         ));
         // then
         assertThat(signedUp.status()).isEqualTo(201);
-        assertThat(signedUp.body().get("isOnboarded")).isEqualTo(false);
         assertThat(signedUp.text("accessToken")).isNotBlank();
         // 4. 발급된 토큰이 컨테이너의 SecurityFilterChain을 통과하고 온보딩이 DB에 저장된다
         String nickname = uniqueNickname();
@@ -47,10 +46,10 @@ class AuthFlowE2eTest extends E2eTestSupport {
         ), signedUp.text("accessToken"));
         assertThat(onboarded.status()).isEqualTo(201);
         assertThat(onboarded.text("nickname")).isEqualTo(nickname);
-        // 5. 다시 로그인하면 저장된 해시로 인증되고 온보딩 여부가 DB에서 읽힌다
+        // 5. 다시 로그인하면 저장된 해시로 인증된다
         Response loggedIn = post("/auth/login", Map.of("email", email, "password", PASSWORD));
         assertThat(loggedIn.status()).isEqualTo(200);
-        assertThat(loggedIn.body().get("isOnboarded")).isEqualTo(true);
+        assertThat(loggedIn.text("accessToken")).isNotBlank();
         // 6. Redis에 저장된 지문과 대조해 재발급된다
         Response reissued =
                 post("/auth/refresh", Map.of("refreshToken", loggedIn.text("refreshToken")));

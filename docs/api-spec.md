@@ -126,8 +126,8 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 47 | PATCH | `/api/v1/users/me` | 사진 key·닉네임(409)·인사말 변경 |
+| 46 | POST | `/api/v1/users/{userId}/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 (본인만) |
+| 47 | PATCH | `/api/v1/users/{userId}/profile-image` | 프로필 사진 확정 (업로드된 key 반영, 본인만) |
 
 ### 13. 설정 페이지
 
@@ -136,8 +136,9 @@
 | 48 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) 조회 — 공개범위 설정 2차 |
 | 49 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 50 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 51 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (본인만, 로컬 계정 전용) |
 
-**합계: REST 50개 + WebSocket 채널 1개(메시지 13종)**
+**합계: REST 51개 + WebSocket 채널 1개(메시지 13종)**
 
 ---
 
@@ -1932,14 +1933,16 @@
 
 ## 12. 프로필 편집 페이지
 
-### 12-1. `POST /api/v1/users/me/profile-image/presigned-url` — 프로필 사진 업로드 URL
+### 12-1. `POST /api/v1/users/{userId}/profile-image/presigned-url` — 프로필 사진 업로드 URL
+
+사진 변경은 3단계다. **URL 발급(12-1) → 클라가 S3에 직접 업로드 → key 확정(12-2)**. 업로드만으로는 프로필이 바뀌지 않는다.
 
 - **Request**
 
 ```json
 {
-  "originalFileName": "me.jpg",
-  "mimeType": "image/jpeg"
+  "mimeType": "image/jpeg",       // 필수 — image/jpeg·image/png·image/webp만 허용 (대소문자 무시)
+  "fileSizeBytes": 204800         // 필수 — 1 이상 10,485,760(10MB) 이하
 }
 ```
 
@@ -1947,17 +1950,118 @@
 
 ```json
 {
-  "profileImageKey": "profiles/....jpg",
+  "profileImageKey": "profiles/550e8400-e29b-41d4-a716-446655440001/019ffa54-917f-7477-9482-5792597ef3b0.jpg",
   "uploadUrl": "https://..."
 }
 ```
 
-- **인증**: 필요
+- `profileImageKey` 포맷은 `profiles/{userId}/{imageId}.{확장자}`다 — 소유자 검증(12-2)에 쓰이므로 클라가 임의로 만들지 않는다. 확장자는 `mimeType`이 정한다(`image/jpeg` → `jpg`).
+- `uploadUrl` 유효 시간은 **10분**이다. 만료 후 업로드하면 서버가 아니라 **S3가** 403을 돌려준다.
+- 업로드 요청의 `Content-Type`은 요청한 `mimeType`과, `Content-Length`는 `fileSizeBytes`와 **정확히 같아야 한다** — 둘 다 서명에 포함되므로 다르면 S3가 거부한다.
 
-### 12-2. `PATCH /api/v1/users/me` — 프로필 수정
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
 
-- **Request**: `{ "nickname"?, "introduction"?, "profileImageKey"? }` (부분 수정) — `nickname`은 서버가 `user_onboardings.nickname` 갱신(서비스 전반 표시 갱신). 키·몸무게 수정은 2차 예정, 평균 페이스는 수정 불가(서버 자동 갱신)
-- **Response `200 OK`**: 11-1 형태 갱신본
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지 형식은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 필수 입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 1바이트 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 10MB 이하만 업로드할 수 있습니다."
+}
+```
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **인증**: 필요 (본인만)
+
+### 12-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 확정
+
+12-1로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.profile_image_key`를 갱신한다. 닉네임 변경은 이 API가 아니라 별도 엔드포인트를 쓴다.
+
+- **Request**
+
+```json
+{
+  "profileImageKey": "profiles/550e8400-e29b-41d4-a716-446655440001/019ffa54-917f-7477-9482-5792597ef3b0.jpg"   // 필수 — 255자 이하, 12-1이 발급한 키 그대로
+}
+```
+
+- **Response `200 OK`**
+
+```json
+{
+  "profileImageKey": "profiles/550e8400-e29b-41d4-a716-446655440001/019ffa54-917f-7477-9482-5792597ef3b0.jpg"
+}
+```
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "프로필 이미지 키는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "프로필 이미지 키는 255자 이하여야 합니다."
+}
+```
+
+- **에러 (400 Bad Request — 키가 본인 것이 아니거나, 올라온 실물이 형식·크기 제약을 벗어남)**
+
+```json
+{
+  "code": "INVALID_PROFILE_IMAGE",
+  "message": "프로필 이미지가 올바르지 않습니다."
+}
+```
+
+- **에러 (400 Bad Request — 키에 해당하는 객체가 S3에 없음)**
+
+```json
+{
+  "code": "PROFILE_IMAGE_NOT_UPLOADED",
+  "message": "업로드되지 않은 이미지입니다."
+}
+```
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- 서버는 클라가 보낸 key를 믿지 않는다. **키 접두사가 `profiles/{userId}/`인지**, **S3에 실물이 있는지**, **실물의 `Content-Type`이 허용 3종인지**, **실물 크기가 10MB 이하인지**를 모두 확인한 뒤에야 갱신한다.
+- **인증**: 필요 (본인만)
 
 - **에러 (409 Conflict)**
 
@@ -2004,3 +2108,84 @@
 - **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `follows` + 상대방 `user_follow_stats` 탈퇴 트랜잭션 내 즉시 재계산. **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`user_badges`/`user_running_contests`/`running_players`(연결 `running_room_sessions` 연쇄) + 본인 `user_follow_stats`
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요
+
+### 13-4. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
+
+로컬 계정만 가능하며 현재 비밀번호로 본인을 재확인한다.
+
+- **화면**: 설정 (계정 항목 → 비밀번호 변경)
+
+- **Request**
+
+```json
+{
+  "currentPassword": "********",   // 필수 — 형식 검증 없음
+  "newPassword": "********"        // 필수 — 6~16자, 영문·숫자·특수문자 각 1자 이상 (확인 일치 검증은 클라이언트)
+}
+```
+
+- `currentPassword`에 형식 제약을 걸지 않는 것은 의도다. 비밀번호 정책이 강화되기 전에 만들어진 값이 400에 막히면 그 계정은 비밀번호를 영영 바꿀 수 없다. 맞고 틀림은 대조로만 판단한다.
+
+- **Response `204 No Content`**: 본문 없음
+
+- **기존 토큰은 무효화하지 않는다** — 다른 기기 세션이 유지된다. 변경 즉시 전 기기 로그아웃은 **[MVP 제외]**
+- **새 비밀번호가 현재와 같아도 거부하지 않는다** — 별도 검증을 두지 않는다
+
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "현재 비밀번호는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "비밀번호는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "비밀번호는 6자 이상 16자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "비밀번호는 영문, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다."
+}
+```
+
+- **에러 (401 Unauthorized — 현재 비밀번호 불일치)**
+
+```json
+{
+  "code": "INVALID_CURRENT_PASSWORD",
+  "message": "현재 비밀번호가 올바르지 않습니다."
+}
+```
+
+- **클라이언트는 이 `401`을 토큰 만료로 오인하면 안 된다.** 액세스 토큰 문제는 `TOKEN_EXPIRED`·`TOKEN_BLOCKED`·`INVALID_TOKEN`·`AUTHENTICATION_REQUIRED`이며, `code`가 `INVALID_CURRENT_PASSWORD`이면 refresh 후 재시도하지 말고 입력 오류로 처리한다.
+
+- **에러 (403 Forbidden — 본인 아님)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
+}
+```
+
+- **에러 (409 Conflict — 소셜 계정)**
+
+```json
+{
+  "code": "PASSWORD_NOT_SET",
+  "message": "소셜 로그인으로 가입한 계정은 비밀번호를 변경할 수 없습니다."
+}
+```
+
+- 소셜 전용 계정은 비밀번호 해시가 비어 있어 대조할 값 자체가 없다. 클라가 계정 종류로 메뉴를 감추더라도 서버가 막는다 — 구버전 앱과 직접 호출이 있다. (클라가 쓸 판별 필드는 아직 명세에 없다)
+- 대상 사용자가 없으면 계정 존재 여부를 숨기려고 500으로 마스킹한다.
+- **인증**: 필요 (본인만)
+
+> **비밀번호 찾기(로그인 전 재설정)는 명세에 없다** — 로그인 화면에 진입점이 없다. 필요해지면 이메일 인증(1-1·1-2)의 `verificationTicket`을 받는 별도 엔드포인트로 정의한다. 이 API는 로그인된 상태 전용이다.
