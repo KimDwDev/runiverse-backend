@@ -488,6 +488,8 @@
 
 ### 1-5. `POST /api/v1/auth/oauth/google` / 1-6. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
 
+> **서버 매핑은 `POST /auth/oauth/{provider}` 하나다.** 위 두 경로는 클라이언트가 실제로 호출하는 구체 URL이며, provider별 핸들러를 따로 두지 않는다. `{provider}`는 `google`·`kakao`(대소문자 무시). 지원하지 않는 값은 404가 아니라 **400 `UNSUPPORTED_PROVIDER`**로 응답한다 — 경로 자체는 매칭되기 때문이다.
+
 - **Request** (둘 다 필수, 구글·카카오 공통)
 
 ```json
