@@ -793,7 +793,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member=1`, `current_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
+- **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member=1`, `current_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 `running_room_sessions` 배정 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
@@ -806,7 +806,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
 
-- **DB row 트리거** — `running_players`가 `running_room_id`로 방을 직접 가리킨다(신청 즉시 방이 생기므로 항상 값이 있다)
+- **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
   - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `running_players` row DELETE(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이력 근거)
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
@@ -881,7 +881,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
-- **Response `201 Created`** — 신청이 접수되면 `running_players` row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
+- **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
   - **응답 본문에 `runningRoomId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 방 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
 
 ```json
@@ -2353,6 +2353,6 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ### 12-5. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
-- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`running_players`
+- **동작 (테이블별 정책)**: `delete_users` 스냅샷(email/alertConsent/createdAt) → `users` 하드delete. **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요(카운트 유지) — 작성자는 "탈퇴한 사용자" 고정 표시. **CASCADE 삭제**: `friendships`(요청·수락 양쪽 모두 — 친구 수는 COUNT라 재계산이 필요 없다). **삭제**: `user_onboardings`/`user_devices`/`oauth_users`/`running_players`(+`running_room_sessions` CASCADE)
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

@@ -6,9 +6,9 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_players`·`running_records`·`running_splits`·`colors`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`colors`).
 - **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`). 달력 날짜(`date`, 시각·시간대 없음, API `YYYY-MM-DD`)는 `user_onboardings.birthday` 하나뿐이고, 이건 접미사 없는 예외다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
@@ -87,8 +87,8 @@
 | status | enum | NOT NULL, default MATCHING | 진행 단계 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `type='MATCH' AND status='MATCHING' AND close_at <= now()`로 마감 대상을 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. **`type` 조건이 있어야 `(type, status, …)` 인덱스의 선두 컬럼을 쓴다.** 모집 단계가 없는 솔로는 null |
-| target_distance | int | NOT NULL | 방의 목표 거리(미터). 매칭 조건이라 **생성 시 정해지고 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
-| avg_pace | int | NOT NULL | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
+| target_distance | int | nullable | 방의 목표 거리(미터). 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**(같은 조건인 사람만 들어오므로). 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
+| avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
 | max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
 | current_member | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
 | created_at / updated_at | timestamp | NOT NULL | |
@@ -99,7 +99,6 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 요청 = 이 row |
-| running_room_id | bigint | FK → running_rooms, NOT NULL | 소속 방. **신청·개시 즉시 방이 생기므로 항상 값이 있다**(nullable 아님) |
 | user_id | UUID | FK → users, NOT NULL | |
 | status | enum | NOT NULL, default JOINED | **참가 의사** 축(매칭 진행 단계 아님) — 신청 즉시 JOINED가 맞다 |
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
@@ -109,10 +108,22 @@
 | desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
-> UNIQUE (running_room_id, user_id) — 한 방에 같은 유저는 한 번만. `running_records`와 같은 축이다. 재초대·재입장을 허용하게 되면 부분 인덱스(`WHERE status <> 'LEFT'`)로 바꾼다.
-> **모든 플레이어는 항상 방을 하나 갖는다** — 신청·개시 즉시 방이 생기므로 "방 미배정" 상태가 없다. 그래서 `running_room_id`를 nullable로 둘 이유가 없고, 방과 이어주는 별도 연결 테이블도 두지 않는다. 매칭 진행 단계는 배정 여부가 아니라 `running_rooms.status`로만 판정한다.
+> **방과의 연결은 `running_room_sessions`가 갖는다** — `running_players`는 "매칭 신청" 단위이고, 그 신청이 어느 방에 배정됐는지는 연결 테이블이 기록한다. 참가자가 여러 방을 거칠 수 있어(재배정·병합) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없다. 현재 속한 방은 `running_room_sessions.is_connected`로 가린다.
 > **`status`는 참가 의사만 표현한다.** 매칭이 어디까지 갔는지는 `running_rooms.status`가 갖는다 — 진행 단계 값(`WAITING`·`FAILED` 등)을 이 컬럼에 추가하지 말 것(같은 사실 이중 저장 → 드리프트).
 > **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 삭제 = 대기 취소·초대 거절(마지막 참가자였으면 방도 `CANCELLED`) / 확정 후 이탈 = **row 유지 + `status=LEFT`**(어느 방에서 나갔는지가 이탈 이력) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`). 원칙은 "확정 전엔 지우고, 확정 후엔 남긴다". **지우기 전에 `delete_running_players`에 스냅샷을 남긴다**([§5](#5-delete_-스냅샷이력-테이블)) — 취소는 소급 수집이 불가능하므로 관찰 근거를 잃지 않기 위함이다.
+
+### running_room_sessions (참가자 ↔ 방 배정)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
+| running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
+| leave_count | int | nullable | 해당 방에서 이탈한 횟수 — 매칭 품질 개선 시 참고 |
+| is_connected | boolean | nullable | 현재 소속 여부. 복합 PK로 참여 이력이 쌓이므로, 지금 속한 방은 이 값으로 가린다 |
+| created_at | timestamp | NOT NULL | |
+
+> **복합 PK가 참여 이력을 만든다** — 한 참가자가 방을 옮기면 row가 하나 더 쌓이고, 이전 방 row는 `is_connected=false`로 남는다. 어느 방을 거쳤는지가 그대로 이력이다.
+> `running_rooms.current_member`는 방 이동 시 두 방이 한 트랜잭션에서 같이 갱신된다.
 
 ### running_records
 
@@ -349,7 +360,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
@@ -362,7 +373,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
 | running_records.user_id | 내 기록·마일리지·러닝 횟수 |
 | running_records.running_room_id | 방 결과 조회 |
-| running_players.running_room_id | 방 참가자 조회 |
+| running_room_sessions.running_player_id | 참가자의 현재 방 조회 (복합 PK가 `running_room_id` 방향만 커버) |
 | running_rooms.(type, status, start_at, target_distance) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리 있는 방(`type='MATCH' AND status='MATCHING'`). 솔로 방과 초대방을 인덱스 단계에서 배제하며, 마감 스케줄러(`type='MATCH' AND status='MATCHING' AND close_at <= now()`)도 앞 두 컬럼으로 커버된다 |
 | running_players.(user_id, status, left_at) | 페널티 판정 — 최근 쿨다운 구간에 제재 대상 이탈이 있었는지. 대부분 0행이라 조인 없이 끝난다 |
 | delete_running_players.(user_id, created_at) | 유저별 취소·거절 이력 조회 (상습 취소 관찰) |
