@@ -93,15 +93,6 @@ public class RunningRoom {
         return room;
     }
 
-    // 네트워크가 끊긴 것 — leave_count만 오르고 인원은 그대로다
-    public void disconnect(Long runningPlayerId) {
-        session(runningPlayerId).disconnect();
-    }
-
-    public void reconnect(Long runningPlayerId) {
-        session(runningPlayerId).connect();
-    }
-
     public void start() {
         this.status = status.transitionTo(RunningRoomStatus.STARTED);
     }
@@ -148,9 +139,23 @@ public class RunningRoom {
         this.status = status.transitionTo(RunningRoomStatus.MATCHED);
     }
 
+    // 나갔던 사람이 돌아옴 — 러닝 중에도 가능해서 join()의 모집 조건을 타지 않는다
+    public void rejoin(Long runningPlayerId) {
+        if (status.isTerminal()) {
+            throw new RoomNotJoinableException();   // 끝났거나 취소된 방엔 돌아올 수 없다
+        }
+        RoomSession session = session(runningPlayerId);
+        if (session.isConnected()) {
+            throw new AlreadyRoomPlayerException();
+        }
+        this.playerCount = playerCount.join();   // 그새 자리가 찼으면 RoomIsFullException
+        session.rejoin();
+    }
+
     public void leave(Long runningPlayerId) {
+        RoomSession session = session(runningPlayerId);   // 참가자 확인이 먼저 — 아니면 인원만 줄고 예외가 난다
         this.playerCount = playerCount.leave();
-        session(runningPlayerId).disconnect();
+        session.leave();
         if (playerCount.current() == 0) {
             cancel();   // 남은 사람이 없으면 방도 없다
         }

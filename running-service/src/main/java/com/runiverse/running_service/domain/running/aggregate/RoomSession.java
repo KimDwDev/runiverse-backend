@@ -22,13 +22,15 @@ public class RoomSession {
         return new RoomSession(runningPlayerId, 0, true);
     }
 
-    void connect() {
-        this.connected = true;
-    }
-
-    void disconnect() {
+    // 방에서 나감 — 관계 row는 남기고 나간 이력만 새긴다
+    void leave() {
         this.connected = false;
         this.leaveCount = leaveCount.increase();
+    }
+
+    // 다시 들어옴 — 세션을 새로 만들지 않고 되살린다
+    void rejoin() {
+        this.connected = true;
     }
 
     public boolean isSamePlayer(RunningPlayerId playerId) {

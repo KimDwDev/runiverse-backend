@@ -182,7 +182,7 @@
 - 매칭 시작 = 방 배정 — 조건이 맞는 모집 중인 방에 합류하거나, 없으면 1인 방을 새로 만든다(`type='MATCH'`, `status='MATCHING'`). 대기 상태·참가자·성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번).
 - 방 `type`은 생성 시 고정된다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방·초대방이 후보에 섞이지 않는다.
 - 러닝 시작은 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계). 메시지 네이밍 규칙: 클라 발신 현재형 / 서버 발신 과거형.
-- 러닝 중 다른 참가자 위치·진행상황 공유도 WS로 처리 — 러닝방 입장 시 연결, 위치를 주기적으로 발신/수신. 연결 상태와 끊김 횟수는 `running_room_sessions.is_connected`·`leave_count`에 기록하고 페널티 판정 근거로 쓴다.
+- 러닝 중 다른 참가자 위치·진행상황 공유도 WS로 처리 — 러닝방 입장 시 연결, 위치를 주기적으로 발신/수신. `running_room_sessions.is_connected`·`leave_count`는 **WS 연결 상태가 아니라 방 잔류 여부·이탈 횟수**를 기록하며 페널티 판정 근거로 쓴다 — 네트워크가 끊긴 것과 방을 나간 것은 구분한다.
 - 매칭 성사 후에는 `runningRoomId`(Long, = `running_rooms.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음.
 
 **`user_devices.is_active`**: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). 기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차) — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
