@@ -752,9 +752,9 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 초대받은 사람은 `running_players.status='INVITED'`로 생성되고, 수락하면 `JOINED`, 거절하면 `deleted_at`을 찍어 소프트 삭제한다.
 
-초대방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 남의 초대방에 모르는 사람이 배정되므로 값 분리가 필수다.
+초대방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 남의 초대방에 모르는 사람이 배정된다.
 
-**`INVITED`는 활성 신청이 아니다.** 초대를 여러 개 동시에 받을 수 있고, 초대를 받은 채로 랜덤 매칭도 신청할 수 있다(근거는 `feature-spec.md`). 활성 판정은 `status='JOINED'`인 행으로만 하므로, 제약은 전부 **수락 시점 한 곳**에 모인다.
+**`INVITED`는 활성 신청이 아니다**(근거는 `feature-spec.md`) — 초대를 여러 개 동시에 받을 수 있고 받은 채로 랜덤 매칭도 신청할 수 있다. 활성 판정은 `status='JOINED'`인 행으로만 하므로 제약은 전부 **수락 시점 한 곳**에 모인다.
 
 - 이미 `JOINED` 행이 있으면 **`409 ALREADY_MATCHING`** — 클라는 기존 매칭 취소를 안내한 뒤 다시 수락시킨다
 - 방이 정원까지 찼으면 409 — 먼저 수락한 사람에게 자리가 갔다
@@ -799,13 +799,7 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
-**전환 지점** — `scheduledStartAt` 도달 시:
-
-1. 클라가 WS `/ws/running-rooms` 연결
-2. `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신
-3. **ack를 받은 뒤에** SSE 스트림을 닫는다
-
-ack 전에 SSE를 닫지 않는다 — WS 연결이 실패하면 돌아갈 채널이 없어진다.
+**전환 지점**은 `scheduledStartAt` 도달 시다 — WS 연결 → `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신 → SSE 닫기. **ack 전에 SSE를 닫지 않는다**(WS 연결이 실패하면 돌아갈 채널이 없어진다). 절차 전문은 5-C.
 
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
@@ -877,10 +871,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
 
-- 조건을 좁게 고정하는 이유는 매칭 성사율이다. 자유 입력이면 같은 조건에 두 명이 모일 확률이 급격히 떨어진다
-- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`
-- 모든 방은 공개 랜덤 매칭 — 프라이빗 방 없음
-- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용 (온보딩 입력값에서 시작, 이후 러닝 기록 기반 자동 갱신)
+- 조건을 좁게 고정하는 이유는 매칭 성사율이다 — 자유 입력이면 같은 조건에 두 명이 모일 확률이 급격히 떨어진다
+- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 모든 방은 공개 랜덤 매칭이라 프라이빗 방은 없다
+- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
   - **응답 본문에 `runningRoomId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 방 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
@@ -912,9 +905,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) = 대기 취소(`deleted_at` 소프트 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`** — 참가자 없는 방을 모집 대상으로 남기지 않는다. 제재 없음
+  - 대기 중(`MATCHING`) = 대기 취소(`deleted_at` 소프트 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
   - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 `close_at` + 유예와 비교해 판정해 값에 굳힌다**. 쿨다운이 걸리면 클라는 나가기 전에 그 사실을 안내한다
-  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다** — 남은 사람은 그대로 러닝을 진행한다
+  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
 - **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고, 늦게 나가는 것은 차단이 아니라 쿨다운으로 다룬다 — 막아도 앱 강제 종료로 우회되며 그 경우 이탈 기록조차 남지 않는다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
@@ -923,7 +916,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `GET /api/v1/users/me/running-match` — 현재 매칭 상태 조회
 
 - **화면**: 홈 진입·앱 재시작 — 스트림에 연결할지 판단하고 홈 상태를 그린다
-- 스트림도 연결 직후 같은 정보를 보내지만 이 API를 따로 둔다. **매칭을 걸지 않은 사용자가 대다수인데 전원에게 스트림을 여는 것은 서버 커넥션과 단말 배터리 양쪽에 부담**이라, 활성 신청이 있는지 먼저 확인하고 있을 때만 연결한다
+- 스트림도 연결 직후 같은 정보를 보내지만 이 API를 따로 둔다 — **매칭을 걸지 않은 사용자가 대다수인데 전원에게 스트림을 여는 것은 서버 커넥션과 단말 배터리 양쪽에 부담**이라, 활성 신청이 있을 때만 연결한다
 - **Response `200 OK`** — 활성 신청이 없으면 `{ "state": "NONE" }`
 
 ```json
@@ -966,7 +959,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `runningRoomId`는 **항상 값이 있다** — 신청 즉시 1인 방이 생기므로 매칭 대기 중에도 가리킬 방이 존재한다. 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_ROOM_UPDATED`의 `status`와 `GET /users/me/running-match`의 `state`로만 판정한다
+- `runningRoomId`는 **항상 값이 있다**(신청 즉시 1인 방이 생긴다). 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다 — 확정 여부는 `MATCH_ROOM_UPDATED`의 `status`와 `GET /users/me/running-match`의 `state`로만 판정한다
 - 매칭 무산(마감 시점 2명 미만)·방 취소 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 수신 시 클라는 홈으로
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
@@ -1006,7 +999,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
-- **발화 시점은 모집 마감(`close_at`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다.** 방은 신청 즉시 생기지만 그건 "성사"가 아니라 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다 — 확정은 `max_member` 도달과 무관하게 마감 시각에만 일어난다(`feature-spec.md` 확정 판정)
+- **발화 시점은 모집 마감(`close_at`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
 
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
@@ -1025,9 +1018,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 5-C. 러닝 카운트 다운 — SSE에서 WebSocket으로
 
-**카운트다운은 클라가 돌리되 기준 시각은 서버 값을 쓴다.** 타이머 구동과 화면 전환은 클라 몫이다 — 서버가 매초 틱을 보내지 않는다. 다만 기준을 각자 기기 시계로 삼으면 참가자마다 출발이 어긋나므로, 기준점만 서버에서 받아 보정한다.
+**카운트다운은 클라가 돌리되 기준 시각은 서버 값을 쓴다.** 서버가 매초 틱을 보내지 않는다 — 다만 기준을 각자 기기 시계로 삼으면 참가자마다 출발이 어긋나므로 기준점만 서버에서 받아 보정한다.
 
-**서버 시각은 별도 메시지 없이 HTTP 응답의 `Date` 헤더로 얻는다.** 매칭 API를 부를 때마다 받으므로 클라는 그 시점에 오프셋을 계산해 둔다. 오프셋 보정의 구체 방식(왕복 지연을 어떻게 빼는지)은 미정이다.
+**서버 시각은 별도 메시지 없이 HTTP 응답의 `Date` 헤더로 얻는다.** 매칭 API를 부를 때마다 받으므로 클라는 그 시점에 오프셋을 계산해 둔다(보정 방식은 미정).
 
 절차는 다음과 같다.
 
@@ -1102,9 +1095,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 페이스·거리·케이던스·칼로리는 **클라가 계산한다**. 진행 시간도 클라 시각 기준이다(시작 시각만 5-C에서 서버 값으로 보정)
 - 서버는 Redis(`sessionId+userId` 키)에 버퍼링 — 종료 시 S3 업로드(`gpsTrackKey`)
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
-- **끊겼다 재연결하면 못 보낸 구간부터 이어 보낸다.** 클라는 마지막으로 전송에 성공한 `sequence`를 기억했다가, 재연결 후 그 다음 순번부터 로컬 사본을 다시 보낸다. 그래서 **로컬 사본은 종료할 때까지 지우지 않는다**
-  - 서버는 이미 가진 `sequence`가 다시 오면 무시한다(멱등)
-  - **한계**: 러닝이 끝날 때까지 연결이 돌아오지 않으면 그 기록은 잃는다 — `RUNNING_FINISH`조차 보낼 수 없기 때문이다. REST 폴백은 필요해지면 그때 붙인다
+- **끊겼다 재연결하면 못 보낸 구간부터 이어 보낸다.** 클라는 마지막으로 전송에 성공한 `sequence`를 기억했다가 그 다음 순번부터 다시 보내고, 서버는 이미 가진 `sequence`를 무시한다(멱등). 그래서 **로컬 사본은 종료할 때까지 지우지 않는다** — 한계는 `feature-spec.md` GPS 트랙 절
 
 #### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참여자 진행 정보
 
@@ -1204,18 +1195,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalElevationGainMeters": 42
     },
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440028",
-      "nickname": "부산러너",
-      "profileImageUrl": "https://...",
-      "isMe": false,
-      "totalDistanceMeters": 5000,
-      "durationSeconds": 1750,
-      "caloriesKcal": 340,
-      "averagePaceSecondsPerKm": 350,
-      "averageCadenceSpm": 172,
-      "totalElevationGainMeters": 35
-    },
-    {
       "userId": "550e8400-e29b-41d4-a716-446655440031",
       "nickname": "러닝초보",
       "profileImageUrl": null,
@@ -1226,22 +1205,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "averagePaceSecondsPerKm": 370,
       "averageCadenceSpm": 158,
       "totalElevationGainMeters": 28
-    },
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440001",
-      "nickname": "완두콩",
-      "profileImageUrl": "https://...",
-      "isMe": false,
-      "totalDistanceMeters": 5010,
-      "durationSeconds": 1765,
-      "caloriesKcal": 344,
-      "averagePaceSecondsPerKm": 352,
-      "averageCadenceSpm": 168,
-      "totalElevationGainMeters": 38
     }
   ]
 }
 ```
+
+- 매칭 방은 최대 4명이며, 위 예시는 그중 2명만 보인 것이다
 
 - 미제출(미완주) 참가자는 목록에서 제외되거나 부분 데이터일 수 있음
 
@@ -1316,10 +1285,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 아직 안 끝난(미완주) 유저는 해당 구간에 정보가 없을 수 있음
-- **경로는 점 배열이 아니라 encoded polyline으로 내린다.** 지도 SDK가 디코더를 내장하고 있어 클라이언트가 그대로 그릴 수 있고(`google_maps_flutter` 등), 점 배열보다 응답이 한 자릿수 작다. `running_records.route_polyline`을 그대로 실으므로 **S3 왕복이 없다**
-- **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 `running_splits.route_polyline`의 첫 점이다(ERD에 좌표 컬럼을 두지 않는다)
+- **경로는 점 배열이 아니라 encoded polyline으로 내린다.** 지도 SDK가 디코더를 내장하고 있어 그대로 그릴 수 있고(`google_maps_flutter` 등), 점 배열보다 응답이 한 자릿수 작다. `running_records.route_polyline`을 그대로 실으므로 **S3 왕복이 없다**
+- **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 `running_splits.route_polyline`의 첫 점이다
 - **구간 경로 자체를 내리는 필드는 아직 없다.** `running_splits.route_polyline`은 저장하되, 구간별 지도 강조가 화면에 들어갈 때 `splits[].routePolyline`을 더한다
-- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 누적치(`totalElevationGainMeters`)만 보여주고 점별 값은 GPS 수직 오차 때문에 쓰지 않으며(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 원본 트랙은 S3(`gps_track_key`)에 남아 있으므로 점별 표시가 필요해지면 그때 필드를 더한다
+- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 누적치(`totalElevationGainMeters`)만 보여주고(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 점별 표시가 필요해지면 S3 원본(`gps_track_key`)에서 꺼내 필드를 더한다
 
 - **에러 (403 Forbidden)**
 
@@ -1366,8 +1335,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절). 거리·시간 숫자만으로는 어느 러닝인지 구분되지 않는다
-- **목록에 실을 수 있는 건 폴리라인이라서다** — 한 응답에 최대 50건(캘린더 `from`/`to`는 그 달 전체)이면 경로도 그만큼인데, 건당 수 KB라 다 실어도 수십~수백 KB에 그친다. 점 배열이면 한 자릿수 커지고, 건별 S3 왕복은 아예 성립하지 않는다
+- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절)
+- **목록에 실을 수 있는 건 폴리라인이라서다** — 한 응답에 최대 50건(캘린더 `from`/`to`는 그 달 전체)이라도 건당 수 KB라 수십~수백 KB에 그친다. 점 배열이면 한 자릿수 커지고, 건별 S3 왕복은 아예 성립하지 않는다
 - **인증**: 필요 (본인 기록만)
 
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
@@ -1843,7 +1812,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **네 지표 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
 - **유효 러닝만 집계한다** — 최소 거리·최소 시간(운영 설정)에 미달하는 기록은 네 지표에서 제외한다. 기록 자체는 저장되고 본인 기록 목록·대시보드에는 보인다(`feature-spec.md` 유효 러닝 판정)
-- **전체 사용자 대비 백분위는 내리지 않는다.** 순위 집계 배치와 저장소가 필요한데 초기에는 표본이 적어 수치 자체가 무의미하다(사용자 20명이면 "상위 12%"는 2등이라는 뜻이다). 나중에 응답 필드만 더하면 된다
+- **전체 사용자 대비 백분위는 내리지 않는다** — 순위 집계 배치가 필요한데 초기에는 표본이 적어 수치가 무의미하다. 나중에 응답 필드만 더하면 된다
 - `friendStatus`로 버튼을 가른다 — `NONE`이면 "친구 요청", `PENDING_SENT`면 "요청 취소", `PENDING_RECEIVED`면 "수락", `ACCEPTED`면 "친구 삭제". 본인 프로필(`isMe=true`)이면 `null`이다
 
 - **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 컬렉션 조회가 `403 PROFILE_PRIVATE`. 사진·닉네임·소개글·마일리지·최고 페이스·러닝 횟수·친구 수는 항상 공개. **친구 목록은 설정과 무관하게 본인만 본다**
@@ -2247,7 +2216,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 - **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
 - **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 자동 연동하지 않고 `409`로 거부한다(1-5/1-6). 그래서 단일 값으로 표현된다
-- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출한다. 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 비밀번호 변경 메뉴를 감춘다. 로컬에 "이메일 계정" 같은 문구를 붙이지 않는 이유 — 바로 위에 이메일이 떠 있고, 비밀번호 변경 메뉴의 존재 자체가 이미 로컬이라는 표시다. 소셜 문구가 필요한 건 어느 provider로 가입했는지 잊으면 다른 버튼을 눌러 별개 계정이 되기 때문이다
+- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
 - **인증**: 필요
 
 ### 12-2. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
