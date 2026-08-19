@@ -1987,6 +1987,35 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 `profileImageKey` 포맷은 `profiles/{userId}/{imageId}.{확장자}` — 소유자 검증에 쓰이므로 클라가 임의로 만들지 않는다. 확장자는 `mimeType`이 정한다(`image/jpeg`→`jpg`, `image/png`→`png`, `image/webp`→`webp`). 클라는 `uploadUrl`로 S3에 직접 업로드하며, 업로드 헤더의 `Content-Type`은 요청한 `mimeType`과 일치해야 한다(서명에 포함).
 
+- **에러 (400 Bad Request)** — 검증 실패 시 `code`는 `INVALID_REQUEST` 공통, `message`로 사유 구분
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지 형식은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 1바이트 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 10MB 이하만 업로드할 수 있습니다."
+}
+```
+
 - **에러 (403 Forbidden — 본인 아님)**
 
 ```json
