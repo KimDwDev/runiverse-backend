@@ -1,6 +1,6 @@
 # Runiverse API 명세서
 
-> 구성: 엔드포인트 목록(색인) → 상세 명세 0~13. ERD 기준: `erd.md`
+> 구성: 엔드포인트 목록(색인) → 상세 명세 0~12. ERD 기준: `erd.md`
 
 ---
 
@@ -119,8 +119,8 @@
 |---|--------|------|------|
 | 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
 | 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
-| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) |
-| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 러너 검색 |
+| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
 | 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
 | 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
 | 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
@@ -137,7 +137,7 @@
 | 48 | PATCH | `/api/v1/users/{userId}/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
 | 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
 | 50 | DELETE | `/api/v1/users/{userId}/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | PATCH | `/api/v1/users/me` | 인사말 변경 |
+| 51 | PATCH | `/api/v1/users/me` | 소개글 변경 |
 | 52 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
 | 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
@@ -162,9 +162,9 @@
 - **인증**: `Authorization: Bearer {accessToken}` 헤더. Access+Refresh 토큰 이원화, **refresh rotation** — 재발급 시 accessToken·refreshToken 모두 교체(이전 refreshToken 무효). refreshToken은 **바디 전달 + 클라 Keychain/Keystore 보관**. **로그아웃 시 해당 access 토큰은 서버 차단(블랙리스트)**
 - **페이지네이션 limit**: `?limit=` 생략 시 기본 **20**, 최대 **50**(초과 요청은 50으로 클램프)
 - **시각**: 시점은 ISO 8601 **`yyyy-MM-ddTHH:mm:ss`**(예: `2026-07-20T13:00:00`) — **KST 기준, 타임존 오프셋 없이 초 단위까지**. 클라이언트는 이 값을 KST로 해석한다. 달력 날짜는 생일뿐이며 `YYYY-MM-DD`
-- **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫(DB에 km로 저장된 값도 API에선 미터)
+- **단위**: **거리는 전부 미터, 페이스는 초/km 정수**(`390` → "6:30") — 표시 변환은 프론트 몫
 - **경로(`routePolyline`)**: Google Encoded Polyline Algorithm Format, **precision 5**(소수점 5자리, 약 1m). 지도 SDK 기본값과 같다 — Android `PolyUtil.decode`, iOS `GMSPath(fromEncodedPath:)`, Flutter `google_maps_flutter` 모두 별도 설정 없이 디코드된다. **precision을 6으로 인코딩하면 좌표가 10배 어긋나 경로가 엉뚱한 곳에 그려지므로 서버·클라가 같은 값을 써야 한다**
-- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 10-6~10-8로 나뉜다
+- **토글 액션**: POST(등록)/DELETE(취소) 분리, idempotent(중복 호출 시 에러 없이 성공 응답) — 좋아요는 갱신 상태·카운트 포함 `200 OK`. **친구는 토글이 아니다** — 요청·수락·삭제가 각각 다른 동작이라 10-4~10-6로 나뉜다
 - **enum**: DB·API **동일한 영문 코드**(변환 매핑 없음) — 값 목록은 `erd.md` §6(enum 사전)
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 작성자 표시**: `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }` (고정 문구, `userId`는 UUID 문자열 유지)
@@ -871,7 +871,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
 
-- 조건을 좁게 고정하는 이유는 매칭 성사율이다 — 자유 입력이면 같은 조건에 두 명이 모일 확률이 급격히 떨어진다
 - **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 모든 방은 공개 랜덤 매칭이라 프라이빗 방은 없다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredPlayerCount` 필드 없음)
@@ -880,9 +879,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "scheduledStartAt": "2026-07-25T10:00:00",
+  "scheduledStartAt": "2026-07-25T19:00:00",
   "targetDistanceMeters": 5000,
-  "closeAt": "2026-07-25T09:45:00"
+  "closeAt": "2026-07-25T18:45:00"
 }
 ```
 
@@ -972,7 +971,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "runningRoomId": 125,
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
-  "scheduledStartAt": "2026-07-25T10:00:00",
+  "scheduledStartAt": "2026-07-25T19:00:00",
   "targetDistanceMeters": 5000,
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
@@ -1064,7 +1063,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 보정된 시각이 `startAt`에 도달하면 클라가 발신한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾸므로, 이 메시지는 상태 전환의 트리거가 아니라 개별 참가자의 시작 통보다
+- 보정된 시각이 `scheduledStartAt`에 도달하면 클라가 발신한다. 서버는 같은 시각에 스케줄러로 방 상태를 `STARTED`로 바꾸므로, 이 메시지는 상태 전환의 트리거가 아니라 개별 참가자의 시작 통보다
 - **ack**: `RUNNING_STARTED` — 이걸 받으면 클라는 SSE 스트림을 닫는다
 
 ### 5-D. 러닝 중
@@ -1085,7 +1084,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "headingDegrees": 85.3,            // 0~360
       "cadenceSpm": 165,
       "currentPaceSecondsPerKm": 345,
-      "recordedAt": "2026-07-25T10:10:30"   // 측정 시각
+      "recordedAt": "2026-07-25T19:10:30"   // 측정 시각
     }
   ]
 }
@@ -1093,7 +1092,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
 - 페이스·거리·케이던스·칼로리는 **클라가 계산한다**. 진행 시간도 클라 시각 기준이다(시작 시각만 5-C에서 서버 값으로 보정)
-- 서버는 Redis(`sessionId+userId` 키)에 버퍼링 — 종료 시 S3 업로드(`gpsTrackKey`)
+- 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링 — 종료 시 S3 업로드(`gpsTrackKey`)
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
 - **끊겼다 재연결하면 못 보낸 구간부터 이어 보낸다.** 클라는 마지막으로 전송에 성공한 `sequence`를 기억했다가 그 다음 순번부터 다시 보내고, 서버는 이미 가진 `sequence`를 무시한다(멱등). 그래서 **로컬 사본은 종료할 때까지 지우지 않는다** — 한계는 `feature-spec.md` GPS 트랙 절
 
@@ -1179,8 +1178,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "runningRoomId": 125,
-  "startedAt": "2026-07-25T10:00:30",   // 현재 사용자 기준
-  "finishedAt": "2026-07-25T10:30:30",  // 현재 사용자 기준
+  "startedAt": "2026-07-25T19:00:30",   // 현재 사용자 기준
+  "finishedAt": "2026-07-25T19:30:30",  // 현재 사용자 기준
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1209,8 +1208,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   ]
 }
 ```
-
-- 매칭 방은 최대 4명이며, 위 예시는 그중 2명만 보인 것이다
 
 - 미제출(미완주) 참가자는 목록에서 제외되거나 부분 데이터일 수 있음
 
@@ -1247,8 +1244,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "splitDistanceMeters": 1000,          // 기본 구간 거리
   "totalDistanceMeters": 5020,          // 현재 사용자 총 거리
-  "startedAt": "2026-07-25T10:00:30",
-  "finishedAt": "2026-07-25T10:30:30",
+  "startedAt": "2026-07-25T19:00:30",
+  "finishedAt": "2026-07-25T19:30:30",
   "route": {                             // 현재 사용자의 전체 경로
     "startLocation": {
       "latitude": 35.1795543,
@@ -1329,7 +1326,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 솔로 러닝도 방을 만드므로 항상 값이 있다
-      "startedAt": "2026-07-25T10:00:30",
+      "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
       "durationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
@@ -1815,8 +1812,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **네 지표 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
-- **유효 러닝만 집계한다** — 최소 거리·최소 시간(운영 설정)에 미달하는 기록은 네 지표에서 제외한다. 기록 자체는 저장되고 본인 기록 목록·대시보드에는 보인다(`feature-spec.md` 유효 러닝 판정)
+- **위 네 필드 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
+- **유효 러닝만 집계한다** — 최소 거리·최소 시간(운영 설정)에 미달하는 기록은 네 필드에서 제외한다. 기록 자체는 저장되고 본인 기록 목록·대시보드에는 보인다(`feature-spec.md` 유효 러닝 판정)
 - **전체 사용자 대비 백분위는 내리지 않는다** — 순위 집계 배치가 필요한데 초기에는 표본이 적어 수치가 무의미하다. 나중에 응답 필드만 더하면 된다
 - `friendStatus`로 버튼을 가른다 — `NONE`이면 "친구 요청", `PENDING_SENT`면 "요청 취소", `PENDING_RECEIVED`면 "수락", `ACCEPTED`면 "친구 삭제". 본인 프로필(`isMe=true`)이면 `null`이다
 
@@ -1833,7 +1830,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 10-3. `GET /api/v1/users/{userId}/feeds` — 피드 그리드 (경량)
+### 10-3. `GET /api/v1/users/{userId}/feeds` — 피드 그리드 (경량) [MVP 제외]
 
 - **Response `200 OK`** — 탭하면 8-2 단건 조회로 상세
 
@@ -1853,13 +1850,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **공개범위**: 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+친구면 `FRIENDS`)
 - **인증**: 필요
 
-### 10-6. `POST /api/v1/users/{userId}/friend-request` — 친구 요청
+### 10-4. `POST /api/v1/users/{userId}/friend-request` — 친구 요청
 
 - **Response `201 Created`**
 
 ```json
 {
-  "friendStatus": "PENDING"
+  "friendStatus": "PENDING_SENT"
 }
 ```
 
@@ -1870,7 +1867,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
-### 10-7. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
+### 10-5. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
 
 - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
 - **이력을 남기지 않는다**
@@ -1878,7 +1875,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **에러 (404 Not Found)**: `PENDING` 요청이 없다
 - **인증**: 필요
 
-### 10-8. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
+### 10-6. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
 
 - **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 푸시를 보낸다
   - **Response `201 Created`**: `{ "friendStatus": "ACCEPTED" }`
@@ -1897,7 +1894,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
 > | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
 
-### 10-9. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
+### 10-7. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
 
 - **화면**: 친구 목록 페이지 (친구 탭 + 받은 요청 탭)
 - **둘 다 본인 것만 조회한다.** 타인의 친구 목록은 열지 않는다 — 친구의 친구를 훑어 사람을 찾는 흐름이 없고(사람 찾기는 `GET /users/search`), 누구와 친구인지는 민감한 정보다. 타인 프로필에는 **친구 수만** 표시된다
@@ -1915,7 +1912,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
 - **인증**: 필요
 
-### 10-10. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션
+### 10-8. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션
 
 - **화면**: 프로필 — 획득한 색을 `보유 수 / 전체 수`와 함께 보여준다
 - **Response `200 OK`** — 마스터 전체를 내리고 각 색에 획득 여부를 표시한다
@@ -1923,7 +1920,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ```json
 {
   "unlockedCount": 17,
-  "totalCount": 30,
+  "totalCount": 42,
   "colors": [
     {
       "colorId": 2,
@@ -1955,9 +1952,9 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 - **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
-### 10-11. `GET /api/v1/users/search` — 사용자 검색
+### 10-9. `GET /api/v1/users/search` — 사용자 검색
 
-- **화면**: 러너 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
+- **화면**: 사용자 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
 - **Query**: `q`(필수, 닉네임), `cursor`/`limit`
 - **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
 - `friendStatus`는 `NONE`/`PENDING_SENT`/`PENDING_RECEIVED`/`ACCEPTED` — 버튼을 무엇으로 그릴지가 이 값에 달렸다. 보낸 요청과 받은 요청을 구분해야 "요청 취소"와 "수락"이 갈린다
@@ -2200,7 +2197,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 ### 11-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
 
-저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-6·1-9의 409다. — 사용 화면: 프로필 편집, 온보딩
+저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-6·1-9의 409다. 사용 화면은 프로필 편집·온보딩이다
 
 - **Request**
 

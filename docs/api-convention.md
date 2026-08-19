@@ -20,7 +20,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - 에러 응답: `{ code, message }` 평면 구조 — `error` 래핑·status 필드 없음, HTTP 상태 코드로만 표현한다.
 - 페이지네이션: 커서 기반(`?cursor=&limit=`), 응답은 `{ items: [...], nextCursor: string | null }`
-- 토글형 액션: POST(등록)/DELETE(취소)로 분리한다. 좋아요처럼 갱신된 상태·카운트가 필요하면 `200 OK`로 반환하고, 친구 삭제처럼 반환할 값이 없으면 `204 No Content`로 응답한다.
+- 토글형 액션: POST(등록)/DELETE(취소)로 분리한다. 좋아요처럼 갱신된 상태·카운트가 필요하면 `200 OK`로 반환하고, 반환할 값이 없으면 `204 No Content`로 응답한다.
 
 ## 인증
 
