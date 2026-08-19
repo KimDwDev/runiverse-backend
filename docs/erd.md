@@ -144,7 +144,7 @@
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
-| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드(6-2)·기록 목록(7-1)·기록 상세(7-2)·피드 카드가 전부 이 값을 쓴다 |
+| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드(6-2)·기록 목록(7-1)·기록 상세(7-2)·피드 카드가 전부 이 값을 쓴다. **다운샘플 시 구간 경계점을 반드시 보존한다** — `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리키므로 경계가 틀어지면 구간이 어긋난다 |
 | weather_code | int | nullable | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | nullable | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
@@ -170,13 +170,17 @@
 | cadence | int | nullable | spm (선택) |
 | elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
 | calories | int | nullable | kcal (선택) |
-| route_polyline | text | NOT NULL | 구간 경로(encoded polyline, precision 5) |
+| route_start_index | int | NOT NULL | `running_records.route_polyline`에서 이 구간이 시작하는 점 번호(0부터). 구간 경로를 텍스트로 중복 저장하지 않고 위치만 가리킨다 |
+| route_end_index | int | NOT NULL | 끝나는 점 번호(포함). 구간 N의 끝점은 구간 N+1의 시작점과 같아 값이 하나 겹친다 — 한 행만 읽어도 구간을 자를 수 있게 둘 다 저장한다 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | |
 
 > UNIQUE (running_record_id, split_number) — 기록당 구간 번호 중복 방지.
-> **구간 시작점은 이 폴리라인의 첫 점이다** — 좌표 컬럼을 따로 두지 않는다. 기록 폴리라인에서 뽑으려면 누적 거리로 위치를 찾아야 하는데 다운샘플이라 값이 어긋난다.
-> 구간 폴리라인을 이으면 `running_records.route_polyline`이 된다. 중복이지만 구간별 지도 강조(탭한 구간만)를 기록 폴리라인만으로는 잘라낼 수 없어 따로 둔다.
+> **구간 시작점은 `route_start_index`가 가리키는 점이다** — 좌표 컬럼을 따로 두지 않는다.
+> **경로를 두 벌 저장하지 않는다** — 구간 경로는 `running_records.route_polyline`의 한 토막이므로 위치만 갖는다. 텍스트로 따로 담으면 같은 좌표가 두 벌이 되고, 기록 폴리라인을 다시 만들 때 두 값이 어긋난다.
+> **성립 조건은 다운샘플이 구간 경계점을 보존하는 것이다.** 서버가 Redis 버퍼에서 구간을 나누며 만드는 값이라 경계는 이미 알고 있다 — 구간별로 나눠 다운샘플한 뒤 이으면 자연히 만족한다.
+> **구간별 지도 강조**(탭한 구간만)는 클라가 전체 경로를 디코드한 배열을 이 범위로 잘라 그린다. 경로를 그리느라 어차피 디코드한 배열이라 추가 비용이 없다.
+> **대가는 `running_records`와의 결합이다** — `route_polyline`을 재생성하면 점 개수가 달라져 그 기록의 모든 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. 둘 다 write-once라 재생성 자체가 예외적 상황이다.
 
 ---
 
