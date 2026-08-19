@@ -794,16 +794,16 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 }
 ```
 
-- **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member=1`, `current_member=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 `running_room_sessions` 배정 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
+- **동작**: `running_rooms` 행을 `type='SOLO'`, `max_member_count=1`, `current_member_count=1`로 만들고 바로 `status='STARTED'`로 둔다(매칭을 거치지 않으므로 `MATCHING` 단계가 없다). 본인 `running_players` 1행과 `running_room_sessions` 배정 1행도 함께 만든다 — 참가자 없는 방을 남기지 않는다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
 **전환 지점**은 `scheduledStartAt` 도달 시다 — WS 연결 → `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신 → SSE 닫기. **ack 전에 SSE를 닫지 않는다**(WS 연결이 실패하면 돌아갈 채널이 없어진다). 절차 전문은 5-C.
 
-- **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
+- **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_current=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
-  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `deleted_at` 소프트 삭제(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **`status=MATCHED_LEFT_*` + `deleted_at` 기록**. 어느 쪽이든 배정 행은 `is_connected=false`로 남아 이력이 된다
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `deleted_at` 소프트 삭제(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **`status=MATCHED_LEFT_*` + `deleted_at` 기록**. 어느 쪽이든 배정 행은 `is_current=false`로 남아 이력이 된다
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
@@ -875,7 +875,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 모든 방은 공개 랜덤 매칭이라 프라이빗 방은 없다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredMemberCount` 필드 없음)
-- **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member=4`, `current_member=1`)이 새로 생긴다
+- **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생기고, 같은 조건에 모집 중인 방이 있으면 거기 배정되고 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_member_count=4`, `current_member_count=1`)이 새로 생긴다
   - **응답 본문에 `runningRoomId`를 넣지 않는다.** 방은 있지만 매칭 단계의 클라는 방 ID로 호출할 곳이 없다 — 필요한 시점(참가자·방 갱신)에 SSE로 내려간다
 
 ```json
@@ -1276,7 +1276,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
           "durationSeconds": 345,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
-          "caloriesKcal": 68
+          "caloriesKcal": 68,
+          "elevationChangeMeters": 12       // 순고도차 — 내리막이면 음수
         }
       ]
     }
@@ -1288,7 +1289,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **경로는 점 배열이 아니라 encoded polyline으로 내린다.** 지도 SDK가 디코더를 내장하고 있어 그대로 그릴 수 있고(`google_maps_flutter` 등), 점 배열보다 응답이 한 자릿수 작다. `running_records.route_polyline`을 그대로 실으므로 **S3 왕복이 없다**
 - **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 같은 폴리라인에서 `running_splits.route_start_index`가 가리키는 점이다
 - **구간 경로 자체를 내리는 필드는 아직 없다.** 구간별 지도 강조가 화면에 들어갈 때 `splits[].routeStartIndex`·`routeEndIndex`를 더하면 된다 — 클라는 이미 디코드한 `route.routePolyline` 배열을 그 범위로 자른다. 같은 좌표를 구간마다 다시 싣지 않는다
-- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 누적치(`totalElevationGainMeters`)만 보여주고(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 점별 표시가 필요해지면 S3 원본(`gps_track_key`)에서 꺼내 필드를 더한다
+- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 페이스·케이던스·고도는 `splits[]`의 구간 단위로만 보여준다. 점별 표시가 필요해지면 S3 원본(`gps_track_key`)에서 꺼내 필드를 더한다
+- **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절). 클라는 둘을 합산하거나 검산하지 않는다
 
 - **에러 (403 Forbidden)**
 
@@ -1342,7 +1344,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm` 등)
+- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm`/`elevationChangeMeters` 등)
 - **`routePolyline`은 최상위가 아니라 `route` 안에 있다** — 상세 화면은 시작·종료 지점 마커까지 찍으므로 `route` 한 덩어리로 받는다. 목록(7-1)은 카드에 선만 그려서 최상위 필드로 둔다. 같은 값을 두 곳에 싣지 않는다
 - 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
@@ -1495,11 +1497,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
         "profileImageUrl": "...",
         "isDeleted": false
       },
-      "comment": "고생하셨어요!",
+      "content": "고생하셨어요!",
       "likeCount": 2,
       "likedByMe": false,
       "replyCount": 1,
-      "isDeleted": false,               // true면 톰스톤(댓글 삭제) — comment=null, "삭제된 댓글입니다" 자리표시. author.isDeleted(작성자 탈퇴)와는 다른 의미
+      "isDeleted": false,               // true면 톰스톤(댓글 삭제) — content=null, "삭제된 댓글입니다" 자리표시. author.isDeleted(작성자 탈퇴)와는 다른 의미
       "createdAt": "2026-07-25T11:05:00"
     }
   ],
@@ -1515,7 +1517,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "comment": "...",
+  "content": "...",
   "parentCommentId": 201
 }
 ```
@@ -1560,7 +1562,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 8-7. `PATCH /api/v1/comments/{commentId}` — 댓글 수정
 
-- **Request**: `{ "comment": "..." }` (필수, 빈 값 불가)
+- **Request**: `{ "content": "..." }` (필수, 빈 값 불가)
 - **권한**: 댓글 **작성자 본인만** (피드 소유자는 삭제만 가능 — 남의 발언 내용 변경 불가)
 - 톰스톤(삭제된 댓글)은 수정 불가. 수정 시 이전 내용을 `delete_comments`에 스냅샷 저장(피드와 동일 — 신고 시 원본 확인용), `updatedAt` 갱신
 - **Response `200 OK`**: 수정된 댓글 객체 (8-5 형식)
@@ -1917,7 +1919,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 
 ```json
 {
-  "ownedCount": 17,
+  "unlockedCount": 17,
   "totalCount": 30,
   "colors": [
     {
@@ -1925,26 +1927,26 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
       "category": "ENDURANCE",
       "shade": 2,
       "name": "딥 블루",
-      "hex": "#3c62e2",
-      "description": "10km 이상 완주",
-      "owned": true,
-      "acquiredAt": "2026-08-01T09:12:00"
+      "hexCode": "#3c62e2",
+      "unlockDescription": "10km 이상 완주",
+      "unlocked": true,
+      "unlockedAt": "2026-08-01T09:12:00"
     },
     {
       "colorId": 3,
       "category": "ENDURANCE",
       "shade": 3,
       "name": "심해 블루",
-      "hex": "#1a3a8f",
-      "description": "누적 100km",
-      "owned": false,
-      "acquiredAt": null
+      "hexCode": "#1a3a8f",
+      "unlockDescription": "누적 100km",
+      "unlocked": false,
+      "unlockedAt": null
     }
   ]
 }
 ```
 
-- **못 얻은 색도 함께 내린다.** 컬렉션 화면은 "무엇을 더 모을 수 있는지"를 보여주는 것이 목적이라, 미획득 색과 그 조건(`description`)이 있어야 화면이 성립한다
+- **못 얻은 색도 함께 내린다.** 컬렉션 화면은 "무엇을 더 모을 수 있는지"를 보여주는 것이 목적이라, 미획득 색과 그 조건(`unlockDescription`)이 있어야 화면이 성립한다
 - `totalCount`는 마스터 행 수다 — **총 개수를 명세에 박지 않으므로** 클라도 이 값을 그대로 쓴다
 - **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 `403 PROFILE_PRIVATE`
 - **에러 (404 Not Found)**: 대상이 없다
