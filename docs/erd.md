@@ -401,7 +401,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | comments.feed_id | 댓글 목록 |
 | comments.parent_comment_id | 답글 지연 로딩 |
 | running_rooms (type, status, close_at) | 스케줄러 모집 마감 판정 — `type='MATCH' AND status='MATCHING' AND close_at <= now()` |
-| running_rooms (type, status, start_at, target_distance) | 매칭 후보 방 스캔 |
+| running_rooms (type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 스캔 — 앞 4개는 등가 조건, `avg_pace`는 범위(±30초/km) 조건이라 마지막에 둔다 |
 | running_players.user_id | 내 신청 조회·중복 신청 검사·탈퇴 시 삭제 (논리 참조라 FK 인덱스가 없음) |
 | running_room_sessions.running_player_id | 플레이어 → 배정된 방 역방향 조회 (복합 PK 선두가 room_id라 미커버) |
 | running_records.user_id | 내 기록·마일리지·누적고도·잔디 |

@@ -26,6 +26,11 @@ public enum RunningRoomType {
         }
     }
 
+    // 솔로는 모집 단계가 없어 STARTED로 태어난다 — 방 생성이 이 규칙을 여기서만 읽는다
+    public RunningRoomStatus initialStatus() {
+        return this == SOLO ? RunningRoomStatus.STARTED : RunningRoomStatus.MATCHING;
+    }
+
     // 모집 마감(close_at)·후보 스캔 대상인지
     public boolean isMatchable() {
         return this == MATCH;

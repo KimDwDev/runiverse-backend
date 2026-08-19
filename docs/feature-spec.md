@@ -45,9 +45,10 @@
 - 매칭 정보 입력 모달: 거리/시간 입력.
   - 모집 인원은 입력받지 않음 — 서버가 2~4명 범위에서 자동 편성. 친구 초대(친구 선택 모달)는 1차 미포함, 랜덤 매칭만.
   - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_at`에 저장. "거리"는 `running_players.target_distance`(플레이어별 목표 거리)에 저장.
-  - 요청과 동시에 방이 정해진다 — 조건이 맞는 모집 중인 방(`type='MATCH'`, `current_player_count < max_player_count`)이 있으면 합류하고, 없으면 **본인만 있는 1인 방을 새로 만든다**. 즉 대기 중에도 항상 방이 존재한다.
+  - 요청과 동시에 방이 정해진다 — 조건이 맞는 모집 중인 방(`type='MATCH'`, `status='MATCHING'`, `current_player_count < max_player_count`)이 있으면 합류하고, 없으면 **본인만 있는 1인 방을 새로 만든다**. 즉 대기 중에도 항상 방이 존재한다.
+  - **합류 조건**: `start_at`·`target_distance`는 **정확히 일치**해야 하고, `running_rooms.avg_pace`와 신청자 페이스 차가 **30초/km 이내**여야 한다. 조건을 만족하는 방이 여럿이면 **페이스 차가 가장 작은 방**을 고른다. 기준이 되는 방 페이스는 참가·이탈마다 갱신된 현재 평균이다 — 즉 방이 채워질수록 합류 기준선도 함께 움직인다.
 - 매칭 대기 화면: 매칭 진행 상태·남은 예상 시간·현재 참가자 확인.
-  - 확정/취소 판정: 판정 시각은 방 생성 시 `running_rooms.close_at`(= `start_at` - 서버 설정값)으로 **고정 저장**한다. 설정을 바꿔도 이미 만들어진 방의 마감은 움직이지 않는다. `close_at` 도달 시 `current_player_count >= 2`면 `status='MATCHED'` 자동 확정, `1`이면 `status='CANCELLED'` 자동 취소 — 자리 수(`max_player_count`) 충족 여부와 무관.
+  - 확정 판정: 판정 시각은 방 생성 시 `running_rooms.close_at`(= `start_at` - 서버 설정값)으로 **고정 저장**한다. 설정을 바꿔도 이미 만들어진 방의 마감은 움직이지 않는다. `close_at` 도달 시 인원 수와 무관하게 `status='MATCHED'`로 자동 확정 — 자리 수(`max_player_count`) 충족 여부와도 무관. **1인이면 매칭 실패가 아니라 1인으로 확정돼 혼자 뛴다** — 인원 부족으로 인한 자동 취소는 없다.
 
 **매칭완료 대기방**
 
@@ -58,7 +59,7 @@
   - 카운트다운은 각 클라이언트가 자체 시계 기준으로 표시하고, `start_at` 도달 시 스스로 러닝 화면으로 전환하며 WS `RUNNING_START`(C→S)로 시작을 알림.
   - 서버는 같은 시각에 내부 스케줄러로 `running_rooms.status='STARTED'` 전환 — 클라이언트가 호출하는 REST API 없음.
 - 나가기: 나간 사람만 `running_players.status`를 `MATCHED_LEFT_PENALTY`/`MATCHED_LEFT_NO_PENALTY`로 전환하고 `deleted_at`을 찍는다. 방은 유지되고 남은 참가자는 계속 대기(`current_player_count` 감소).
-- 확정(`MATCHED`) 이후 이탈 시 페널티 부여 — 페널티 여부는 이탈 시점에 서버가 판정해 `running_players.status`에 고정 저장한다(별도 페널티 테이블 없음). 이탈로 `current_player_count`가 2 미만이 되면 방 취소, 자동 재매칭(빈자리 채우기)은 하지 않음.
+- 확정(`MATCHED`) 이후 이탈 시 페널티 부여 — 페널티 여부는 이탈 시점에 서버가 판정해 `running_players.status`에 고정 저장한다(별도 페널티 테이블 없음). 이탈로 `current_player_count`가 1이 돼도 방은 유지되고 남은 1인이 혼자 뛴다(`0`이 되면 방 취소), 자동 재매칭(빈자리 채우기)은 하지 않음.
 
 ### 러닝
 
