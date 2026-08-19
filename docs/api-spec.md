@@ -139,18 +139,19 @@
 | 51 | PATCH | `/api/v1/users/me` | 소개글 변경 |
 | 52 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
 | 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 54 | PATCH | `/api/v1/users/{userId}/body` | 키·몸무게 변경 (온보딩 완료 후) |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 54 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 55 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
-| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 55 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
+| 56 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
+| 57 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
 
 ---
 
@@ -2043,7 +2044,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 11-5. `PATCH /api/v1/users/me` — 프로필 수정
 
-- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 11-6, 사진은 11-1~11-4로 각각 전용 엔드포인트를 쓴다. 키·몸무게 수정은 **[MVP 제외]**, 평균 페이스는 수정 불가(서버 자동 갱신)
+- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 11-6, 사진은 11-1~11-4, 키·몸무게는 11-8로 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버 자동 갱신)
 - **Response `200 OK`**: 10-1 형태 갱신본
 
 - **인증**: 필요
@@ -2130,6 +2131,68 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **인증**: 불필요
+
+### 11-8. `PATCH /api/v1/users/{userId}/body` — 키·몸무게 변경
+
+키·몸무게는 `user_onboardings`에 있어 온보딩을 마쳐야 바꿀 수 있다. 러닝 기록의 칼로리 계산에 쓰는 값이라 프로필 요약(10-2)에는 나가지 않는다.
+
+- **Request** (부분 수정 — 보낸 값만 바꾼다)
+
+```json
+{
+  "weightKg": 70.5,
+  "heightCm": 175.0
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `weightKg` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
+| `heightCm` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
+
+- **Response `200 OK`** — 갱신본
+
+```json
+{
+  "weightKg": 70.5,
+  "heightCm": 175.0
+}
+```
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "몸무게는 20kg 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "몸무게는 300kg 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "키는 20cm 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "키는 300cm 이하여야 합니다."
+}
+```
+
+- **에러 (409 Conflict — 온보딩 미완료)**
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- **인증**: 필요 (본인만)
 
 ## 12. 설정 페이지
 
