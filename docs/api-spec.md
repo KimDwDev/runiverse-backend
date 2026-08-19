@@ -939,7 +939,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `room`은 `state`가 `MATCHED`일 때만 채워지며 `RoomInfo`와 같은 구조다
 - **인증**: 필요
 
-#### `MATCH_PLAYERS_UPDATED` (SSE) — 매칭 참여자 갱신
+#### `MATCH_PLAYERS_UPDATED` (SSE) — 매칭 참가자 갱신
 
 ```json
 {
@@ -1011,7 +1011,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 나간 사람만 `MATCHED_LEFT_*` 처리, 방 유지. 남은 인원은 `MATCH_ROOM_UPDATED`로 갱신한다 — 혼자 남아도 방은 유지되고 그대로 러닝을 진행한다
 - **확정 후 이탈에는 페널티가 붙는다** — `close_at` + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다. 제재 대상 여부는 이탈 시점에 판정해 `status`에 굳히고, 쿨다운 만료는 `deleted_at`으로 잰다(`feature-spec.md` 페널티 절). 쿨다운 중 신청은 `409 MATCH_COOLDOWN`
 
-#### 대기방 참여자 목록 — 별도 조회 없음
+#### 대기방 참가자 목록 — 별도 조회 없음
 
 - `RoomInfo`가 참가자 전체를 담고 있고 변동 시마다 재전송되므로, 목록만 따로 받는 요청은 두지 않는다
 - 앱 재시작 등으로 스트림이 끊겼다면 `GET /users/me/running-match`가 같은 정보를 돌려준다
@@ -1097,7 +1097,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
 - **끊겼다 재연결하면 못 보낸 구간부터 이어 보낸다.** 클라는 마지막으로 전송에 성공한 `sequence`를 기억했다가 그 다음 순번부터 다시 보내고, 서버는 이미 가진 `sequence`를 무시한다(멱등). 그래서 **로컬 사본은 종료할 때까지 지우지 않는다** — 한계는 `feature-spec.md` GPS 트랙 절
 
-#### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참여자 진행 정보
+#### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
 
 ```json
 {
