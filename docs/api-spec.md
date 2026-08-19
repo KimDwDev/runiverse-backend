@@ -801,9 +801,9 @@ MVP 범위이나 **구현 순서상 후순위** — 랜덤 매칭이 동작한 �
 
 **전환 지점**은 `scheduledStartAt` 도달 시다 — WS 연결 → `RUNNING_START` 발신 → `RUNNING_STARTED` ack 수신 → SSE 닫기. **ack 전에 SSE를 닫지 않는다**(WS 연결이 실패하면 돌아갈 채널이 없어진다). 절차 전문은 5-C.
 
-- **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_current=true`인 행이다
+- **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
-  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `deleted_at` 소프트 삭제(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **`status=MATCHED_LEFT_*` + `deleted_at` 기록**. 어느 쪽이든 배정 행은 `is_current=false`로 남아 이력이 된다
+  - 취소·나가기 요청 시 서버가 방 상태로 분기 — 대기 중(`MATCHING`)이면 `deleted_at` 소프트 삭제(마지막 참가자였으면 방도 `CANCELLED`), 확정 후(`MATCHED`)면 **`status=MATCHED_LEFT_*` + `deleted_at` 기록**. 어느 쪽이든 배정 행은 `is_connected=false`로 남아 이력이 된다
   - 방 자동 취소 시 전원 유지. 원칙: "확정 전엔 지우고, 확정 후엔 남긴다"
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)

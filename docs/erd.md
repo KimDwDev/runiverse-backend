@@ -112,7 +112,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈 공통. 한 번 찍히면 바뀌지 않는다 |
 
-> **방과의 연결은 `running_room_sessions`가 갖는다** — `running_players`는 "매칭 신청" 단위다. 참가자가 재배정·병합으로 여러 방을 거칠 수 있어 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_current`로 가린다.
+> **방과의 연결은 `running_room_sessions`가 갖는다** — `running_players`는 "매칭 신청" 단위다. 참가자가 재배정·병합으로 여러 방을 거칠 수 있어 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)·초대(`INVITED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점(확정 후 / 러닝 중)과 제재 여부로 네 값이 갈린다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는 이유는 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산되기 때문이다. 쿨다운 판정: `status IN ('MATCHED_LEFT_PENALTY','RUNNING_LEFT_PENALTY')`이면서 `deleted_at`이 쿨다운 안이면 재신청을 막는다.
 > **row 생명주기**: 생성 = 매칭 신청·솔로 개시·초대 발송(`INVITED`) / 대기 취소·초대 거절 = `deleted_at` 기록 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED`, `deleted_at`은 null(정상 종료라 삭제가 아니다) / 방 자동 취소 = 전원 유지(방 `status`만 `CANCELLED`).
@@ -125,11 +125,11 @@
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
 | leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수. 참가자는 매칭 과정에서 여러 방을 옮겨 다니고 **같은 방으로 돌아올 수도 있어** 2 이상이 된다(복합 PK라 row는 그대로 두고 이 값만 오른다). 배정 시 **이 값이 낮은 방을 우선 연결한다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
-| is_current | boolean | NOT NULL, default true | 현재 소속 여부. 복합 PK로 참여 이력이 쌓이므로, 지금 속한 방은 이 값으로 가린다. **한 참가자의 행 중 정확히 하나만 true이고 나머지는 전부 false다** — 값이 없는 배정은 성립하지 않으므로 nullable로 두지 않는다(nullable이면 "떠난 방"과 "아직 안 정해진 방"이 구분되지 않는다) |
-| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_current` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 재배정·복귀로 갱신되는 테이블이다 |
+| is_connected | boolean | NOT NULL, default true | 현재 소속 여부. **방과의 결합을 뜻하며 네트워크 연결이 아니다** — WebSocket(`/ws/running-rooms`) 접속 상태는 이 컬럼과 무관하고 DB에 저장하지 않는다. 복합 PK로 참여 이력이 쌓이므로, 지금 속한 방은 이 값으로 가린다. **한 참가자의 행 중 정확히 하나만 true이고 나머지는 전부 false다** — 값이 없는 배정은 성립하지 않으므로 nullable로 두지 않는다(nullable이면 "떠난 방"과 "아직 안 정해진 방"이 구분되지 않는다) |
+| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 재배정·복귀로 갱신되는 테이블이다 |
 
-> **복합 PK가 참여 이력을 만든다** — 한 참가자가 새 방으로 옮기면 row가 하나 더 쌓이고, 이전 방 row는 `is_current=false`로 남는다. 어느 방을 거쳤는지가 그대로 이력이다.
-> **거쳐 간 방으로 되돌아오면 row를 새로 만들지 않는다** — 복합 PK가 같으므로 기존 행의 `is_current`를 다시 true로 돌리고 `leave_count`만 누적된다. 그래서 "몇 번 거쳤나"가 아니라 "몇 번 떠났나"가 남는다.
+> **복합 PK가 참여 이력을 만든다** — 한 참가자가 새 방으로 옮기면 row가 하나 더 쌓이고, 이전 방 row는 `is_connected=false`로 남는다. 어느 방을 거쳤는지가 그대로 이력이다.
+> **거쳐 간 방으로 되돌아오면 row를 새로 만들지 않는다** — 복합 PK가 같으므로 기존 행의 `is_connected`를 다시 true로 돌리고 `leave_count`만 누적된다. 그래서 "몇 번 거쳤나"가 아니라 "몇 번 떠났나"가 남는다.
 > `running_rooms.current_player_count`는 방 이동 시 두 방이 한 트랜잭션에서 같이 갱신된다.
 
 ### running_records
