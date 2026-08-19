@@ -114,7 +114,7 @@
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | desired_player_count | int | nullable | 유저 희망 매칭 인원. **1차에는 입력 UI가 없어 항상 4로 저장**되고 합류 조건에도 쓰지 않는다 — 인원 선택이 생기면 이 값이 방의 `max_player_count`가 되고 후보 스캔 조건에 합류한다 |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈 공통. 한 번 찍히면 바뀌지 않는다. 정상 완주(`COMPLETED`)에는 찍지 않는다 |
+| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈·정상 완주 공통. 한 번 찍히면 바뀌지 않는다. **이 값이 NULL인 신청만 "진행 중"**이라, 완주해도 찍어야 유저가 다음 매칭을 걸 수 있다 |
 
 > `running_players`는 `running_room_id` FK 없음 — 매칭 조건을 담은 "요청" 엔티티, 방과는 연결 테이블로 약결합.
 > 매칭 후보 스캔·중복 신청 검사는 `deleted_at IS NULL`을 항상 함께 본다.
@@ -378,7 +378,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | RUNNING | 러닝 진행 중 | null |
 | RUNNING_LEFT_PENALTY | 러닝 중 이탈 — 페널티 대상 | 찍는다 |
 | RUNNING_LEFT_NO_PENALTY | 러닝 중 이탈이지만 페널티 면제 | 찍는다 |
-| COMPLETED | 기록 제출까지 완료 (정상 종료) | null |
+| COMPLETED | 기록 제출까지 완료 (정상 종료) | 찍는다 |
 
 > **페널티 판정은 이탈 시점에 끝난다** — 서버가 `*_PENALTY` / `*_NO_PENALTY` 중 하나로 고정 저장하므로 별도 페널티 테이블 없이 이 컬럼이 근거가 된다. 판정 기준(`leave_count` 임계값 등)은 운영 정책.
 > **취소·거절에는 별도 status 값이 없다** — `JOINED`/`INVITED` 상태 그대로 `deleted_at`만 찍고, `running_room_sessions` 링크는 삭제한다. 이탈과 달리 방 이력을 남길 필요가 없기 때문이다.
