@@ -27,14 +27,14 @@ import com.runiverse.running_service.presentation.user.request.NicknameAvailabil
 import com.runiverse.running_service.presentation.user.request.NicknameUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
 import com.runiverse.running_service.presentation.user.request.PasswordUpdateRequest;
+import com.runiverse.running_service.presentation.user.request.ProfileImageUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUploadUrlRequest;
-import com.runiverse.running_service.presentation.user.request.ProfileUpdateRequest;
 import com.runiverse.running_service.presentation.user.response.NicknameAvailabilityResponse;
 import com.runiverse.running_service.presentation.user.response.NicknameUpdateResponse;
 import com.runiverse.running_service.presentation.user.response.OnboardingResponse;
+import com.runiverse.running_service.presentation.user.response.ProfileImageUpdateResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUploadUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUrlResponse;
-import com.runiverse.running_service.presentation.user.response.ProfileUpdateResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -100,13 +100,13 @@ public class UserController {
 
     @SelfOnly
     @PatchMapping("/{userId}/profile-image")
-    public ResponseEntity<ProfileUpdateResponse> changeProfileImage(
+    public ResponseEntity<ProfileImageUpdateResponse> changeProfileImage(
             @PathVariable UUID userId,
-            @Valid @RequestBody ProfileUpdateRequest request
+            @Valid @RequestBody ProfileImageUpdateRequest request
     ) {
         ChangeProfileImageResult result = changeProfileImageUsecase.handle(
                 new ChangeProfileImageCommand(userId, request.profileImageKey()));
-        return ResponseEntity.ok(new ProfileUpdateResponse(result.profileImageKey()));
+        return ResponseEntity.ok(new ProfileImageUpdateResponse(result.profileImageKey()));
     }
 
     @GetMapping("/{userId}/profile-image")
