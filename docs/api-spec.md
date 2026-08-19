@@ -1928,7 +1928,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
     {
       "colorId": 2,
       "category": "ENDURANCE",
-      "shade": 2,
+      "shadeNumber": 2,
       "name": "딥 블루",
       "hexCode": "#3c62e2",
       "unlockDescription": "10km 이상 완주",
@@ -1938,7 +1938,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
     {
       "colorId": 3,
       "category": "ENDURANCE",
-      "shade": 3,
+      "shadeNumber": 3,
       "name": "심해 블루",
       "hexCode": "#1a3a8f",
       "unlockDescription": "누적 100km",

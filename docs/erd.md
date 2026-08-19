@@ -273,13 +273,13 @@
 |---|---|---|---|
 | color_id | bigint | PK | |
 | category | enum | NOT NULL | 12범주 ([§6 enum 사전](#6-enum-사전)) |
-| shade | int | NOT NULL | 범주 내 순번. 개수는 범주마다 다르다(3~4) |
+| shade_number | int | NOT NULL | 범주 내 순번(1부터). 개수는 범주마다 다르다(3~4). API `shadeNumber` |
 | name | varchar | NOT NULL | 색 이름("딥 블루") |
 | hex_code | varchar(7) | NOT NULL | `#3c62e2` |
 | unlock_description | varchar | NOT NULL | 획득 조건 안내 문구("10km 이상 완주") |
 | created_at / updated_at | timestamp | NOT NULL | |
 
-> UNIQUE (category, shade) — 범주 내 셰이드 중복 방지.
+> UNIQUE (category, shade_number) — 범주 내 셰이드 번호 중복 방지.
 > 총 색 개수는 고정하지 않는다 — 마스터 행이 늘어도 스키마와 코드가 그대로다.
 > **획득 조건은 컬럼으로 두지 않는다.** 조건의 축이 제각각이라 데이터로 표현하기 어렵다 — 판정은 서버 로직에, DB에는 안내 문구(`unlock_description`)만 둔다.
 
