@@ -1179,8 +1179,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "runningRoomId": 125,
-  "startedAt": "2026-07-25T10:00:30",
-  "finishedAt": "2026-07-25T10:30:30",
+  "startedAt": "2026-07-25T10:00:30",   // 현재 사용자 기준
+  "finishedAt": "2026-07-25T10:30:30",  // 현재 사용자 기준
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1213,6 +1213,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 매칭 방은 최대 4명이며, 위 예시는 그중 2명만 보인 것이다
 
 - 미제출(미완주) 참가자는 목록에서 제외되거나 부분 데이터일 수 있음
+
+- **`startedAt`·`finishedAt`은 본인 기록 기준이다**(`running_records.start_at`/`end_at`) — 방 단위 시각을 따로 저장하지 않는다. 참가자마다 실제 시작·종료가 다르므로 방 하나의 값으로는 누구의 것인지 정해지지 않는다. 6-2의 최상위 필드도 같은 기준이다
+  - **조회하는 본인의 기록은 항상 있다** — 이 API는 `RUNNING_FINISHED` 수신 후 진입하고 강제 종료(`forced=true`)도 기록을 남기므로(5-D), 값이 비는 경우는 남의 미제출 기록뿐이다
 
 - **에러 (403 Forbidden — 같은 방 참가자만 열람)**
 
