@@ -9,8 +9,8 @@ import com.runiverse.running_service.domain.running.vo.ElevationChange;
 import com.runiverse.running_service.domain.running.vo.Pace;
 import com.runiverse.running_service.domain.running.vo.RouteRange;
 import com.runiverse.running_service.domain.running.vo.RunningPeriod;
+import com.runiverse.running_service.domain.running.vo.RunningSplitId;
 import com.runiverse.running_service.domain.running.vo.SplitNumber;
-import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,6 +20,7 @@ import java.util.Optional;
 @Getter
 public class RunningSplit {
 
+    private final RunningSplitId runningSplitId;
     private final SplitNumber splitNumber;
     private final Pace avgPace;
     private final Distance distance;
@@ -31,12 +32,13 @@ public class RunningSplit {
     private final Cadence avgCadence;
     private final ElevationChange elevationChange;
 
-    @Builder(access = AccessLevel.PACKAGE)
-    private RunningSplit(int splitNumber, int avgPace, int distance, int duration,
+    @Builder
+    private RunningSplit(Long runningSplitId, int splitNumber, int avgPace, int distance, int duration,
                          int routeStartIndex, int routeEndIndex,
                          LocalDateTime startAt, LocalDateTime endAt,
                          Integer calories, // calories만 0이 나올가능성이 가장 크다
                          Integer avgCadence, Integer elevationChange) {
+        this.runningSplitId = runningSplitId == null ? null : new RunningSplitId(runningSplitId);
         this.splitNumber = new SplitNumber(splitNumber);
         this.avgPace = new Pace(avgPace);
         this.distance = new Distance(distance);
@@ -49,6 +51,15 @@ public class RunningSplit {
         this.calories = new Calories(calories);
         this.avgCadence = avgCadence == null ? null : new Cadence(avgCadence);
         this.elevationChange = elevationChange == null ? null : new ElevationChange(elevationChange);
+    }
+
+    // running_id가 null일 수 있음으로 처리해주어야 한다.
+    public boolean isNew() {
+        return runningSplitId == null;
+    }
+
+    public Optional<RunningSplitId> getRunningSplitId() {
+        return Optional.ofNullable(runningSplitId);
     }
 
     // cadence는 있을 수도 없을 수도

@@ -16,6 +16,7 @@ public enum RunningMetricErrorCode implements ErrorCode {
     CALORIES_OUT_OF_RANGE("CALORIES_OUT_OF_RANGE", "칼로리는 0 이상 20000 이하여야 합니다."),
     ELEVATION_GAIN_OUT_OF_RANGE("ELEVATION_GAIN_OUT_OF_RANGE", "누적 상승 고도는 0m 이상 20000m 이하여야 합니다."),
     ELEVATION_CHANGE_OUT_OF_RANGE("ELEVATION_CHANGE_OUT_OF_RANGE", "고도 변화는 -10000m 이상 10000m 이하여야 합니다."),
+    WEATHER_CODE_REQUIRED("WEATHER_CODE_REQUIRED", "날씨 코드는 필수입니다."),
     WEATHER_CODE_OUT_OF_RANGE("WEATHER_CODE_OUT_OF_RANGE", "날씨 코드는 0 이상 99 이하여야 합니다."),
     TEMPERATURE_REQUIRED("TEMPERATURE_REQUIRED", "기온은 null일 수 없습니다."),
     TEMPERATURE_OUT_OF_RANGE("TEMPERATURE_OUT_OF_RANGE", "기온은 -99.9도 이상 99.9도 이하여야 합니다.");
