@@ -212,7 +212,7 @@
 
 **목표 거리 vs 실제 거리**: 목표는 `target_*`, 실적은 `total_*`로 이름이 갈린다 — `running_players.target_distance`·`running_rooms.target_distance`는 설정한 목표 거리, `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리. 서로 다른 값이다.
 
-**날씨 기록**: `running_records.weather_code`(WMO 4677 원본값)·`temperature`만 저장하고 "악조건 여부" 같은 판정 결과는 저장하지 않는다 — 기준이 바뀌어도 과거 기록을 다시 계산할 수 있어야 하기 때문.
+**날씨 기록**: `running_records.weather_code`(WMO 4677 원본값)·`temperature`만 저장하고 "악조건 여부" 같은 판정 결과는 저장하지 않는다 — 기준이 바뀌어도 과거 기록을 다시 계산할 수 있어야 하기 때문. 둘 다 **NOT NULL**이며 **클라이언트가 종료 신호(`RUNNING_FINISH`)에 실어 보낸다.** 서버가 종료 시점에 외부 날씨 API를 호출하지 않는 이유는, 그 API가 실패하면 한 시간짜리 러닝 기록 저장이 통째로 실패하기 때문이다. 클라이언트는 홈 화면에서 이미 같은 API를 쓰고 있어 추가 비용이 없다. ⚠️ `api-spec.md` 5-D의 `RUNNING_FINISH` 메시지에 날씨 필드를 추가해야 한다.
 
 **회원탈퇴 시 연관 데이터 처리** (테이블별):
 

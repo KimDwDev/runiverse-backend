@@ -13,7 +13,7 @@
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리(`total_distance`·`target_distance`·`distance`) = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 고도(`total_elevation_gain`·`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**, 날씨(`weather_code`) = **WMO 4677 코드**.
 - **좌표는 컬럼으로 두지 않는다**: 경로는 `route_polyline`(encoded polyline, precision 5), 원본 좌표는 S3의 GPS 트랙(`gps_track_key`)에만 있다. 구간 경로는 polyline을 인덱스로 잘라 쓴다(`running_splits.route_start_index`/`route_end_index`). PostGIS 미사용(위치 기반 기능 도입 시 검토).
-- **측정값 접두사**: 사용자가 정한 목표는 `target_*`(`target_distance`), 합계는 `total_*`(`total_distance`·`total_duration`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`). 목표와 실적은 이름으로 갈린다 — `running_players.target_distance`(설정한 목표)와 `running_records.total_distance`(실제 이동 거리)는 다른 값이다.
+- **측정값 접두사**: 사용자가 정한 목표는 `target_*`(`target_distance`), 합계는 `total_*`(`total_distance`·`total_duration`·`total_elevation_gain`·`total_calories`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`). 목표와 실적은 이름으로 갈린다 — `running_players.target_distance`(설정한 목표)와 `running_records.total_distance`(실제 이동 거리)는 다른 값이다. **구간(`running_splits`)은 그 자체가 부분값이라 접두사를 붙이지 않는다**(`distance`·`duration`·`calories`) — 평균값(`avg_pace`·`avg_cadence`)만 예외다.
 - **인원 컬럼**: 참가자 수는 `*_player_count`로 통일한다(`max_player_count`·`current_player_count`·`desired_player_count`) — 참조 테이블이 `running_players`라 `member`를 쓰지 않는다.
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `running_players.deleted_at`은 **삭제가 아니라 "신청 종료" 시각**이라 의미가 다르다(취소·거절·이탈 이력을 남기려고 row를 지우지 않는다). `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
@@ -145,16 +145,17 @@
 | total_duration | int | NOT NULL | 초 |
 | avg_cadence | int | nullable | spm (선택) |
 | total_elevation_gain | int | nullable | **누적 상승 고도**(미터, 선택). 오르막 구간의 상승분만 더한 값이라 항상 0 이상 — `running_splits.elevation_change`(순변화)의 합과 **일치하지 않는다** |
-| calories | int | nullable | kcal (선택) |
+| total_calories | int | NOT NULL | kcal — 서버가 러닝 종료 시점에 계산한다 |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. **API 응답에는 쓰지 않는다** — 재계산·분석용(고도 소급 계산 등). 매칭·솔로 모두 서버가 업로드(Redis 버퍼→S3) |
 | route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 목록·기록 상세·피드 카드가 전부 이 값을 쓴다. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성. `running_splits`의 구간 경로도 이 값을 인덱스로 잘라 쓴다 |
-| weather_code | int | nullable | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
-| temperature | numeric(3,1) | nullable | 섭씨. 영하 포함 |
+| weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다. **클라이언트가 `RUNNING_FINISH`에 실어 보낸다**(아래 참조) |
+| temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료(`RUNNING_FINISH`) 시점 일괄 INSERT — 진행 중 PATCH 없음 (write-once) |
 
 > UNIQUE (running_room_id, user_id) — 유저당 방별 1기록. 솔로도 방이 있으므로 부분 인덱스가 아니다.
 > 좌표 컬럼(`start_lat`/`end_lat` 등)은 두지 않는다 — 시작·종료 지점은 `route_polyline`의 양 끝점이고, 정밀 좌표가 필요하면 `gps_track_key`의 원본 트랙을 읽는다.
+> **날씨는 클라이언트가 보낸다**: `weather_code`·`temperature`는 종료 신호(`RUNNING_FINISH`)에 담겨 온다. 서버가 종료 시점에 외부 날씨 API를 호출하는 방식은 쓰지 않는다 — 그 API가 실패하면 한 시간짜리 러닝 기록 저장이 통째로 실패하기 때문이다. 클라이언트는 홈 화면에서 이미 같은 API를 쓰고 있어 추가 비용이 없다.
 
 ### running_splits (구간별)
 
@@ -167,8 +168,8 @@
 | distance | int | NOT NULL | 구간 거리(미터). 마지막 구간은 1000 미만일 수 있다 |
 | duration | int | NOT NULL | 구간 소요 시간(초) |
 | avg_cadence | int | nullable | spm (선택) |
+| calories | int | NOT NULL | kcal — 구간 값이라 `total_` 접두사가 붙지 않는다 |
 | elevation_change | int | nullable | **고도 순변화**(미터, 선택) — 구간 시작점과 끝점의 고도 차. 내리막 구간은 **음수**다. 누적 상승만 세는 `running_records.total_elevation_gain`과 기준이 달라 구간을 다 더해도 전체와 일치하지 않는다 |
-| calories | int | nullable | kcal (선택) |
 | route_start_index / route_end_index | int | NOT NULL | 구간 경로 — `running_records.route_polyline`을 디코딩한 좌표 배열의 인덱스 범위. 구간 경로를 따로 저장하지 않고 잘라 쓴다 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | |
