@@ -112,7 +112,7 @@
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`). **목표는 `target_*`, 실적은 `total_*`** — `running_records.total_distance`(실제 이동 거리)와 이름으로 갈린다 |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
-| desired_player_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
+| desired_player_count | int | nullable | 유저 희망 매칭 인원. **1차에는 입력 UI가 없어 항상 4로 저장**되고 합류 조건에도 쓰지 않는다 — 인원 선택이 생기면 이 값이 방의 `max_player_count`가 되고 후보 스캔 조건에 합류한다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈 공통. 한 번 찍히면 바뀌지 않는다. 정상 완주(`COMPLETED`)에는 찍지 않는다 |
 
