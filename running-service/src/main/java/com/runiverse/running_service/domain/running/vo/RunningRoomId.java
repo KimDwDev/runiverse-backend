@@ -5,7 +5,7 @@ import com.runiverse.running_service.domain.running.exception.InvalidRunningRoom
 public record RunningRoomId(Long value) {
 
     public RunningRoomId {
-        if (value == null || value < 0) {
+        if (value == null || value < 1) {
             throw new InvalidRunningRoomIdException();
         }
     }

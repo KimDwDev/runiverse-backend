@@ -5,7 +5,7 @@ import com.runiverse.running_service.domain.running.exception.InvalidRunningPlay
 public record RunningPlayerId(Long value) {
 
     public RunningPlayerId {
-        if (value == null || value < 0) {
+        if (value == null || value < 1) {
             throw new InvalidRunningPlayerIdException();
         }
     }
