@@ -132,21 +132,21 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 47 | POST | `/api/v1/users/{userId}/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 48 | PATCH | `/api/v1/users/{userId}/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
 | 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 50 | DELETE | `/api/v1/users/{userId}/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
 | 51 | PATCH | `/api/v1/users/me` | 소개글 변경 |
-| 52 | PATCH | `/api/v1/users/{userId}/nickname` | 닉네임 변경 (중복 시 409) |
+| 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
 | 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
-| 54 | PATCH | `/api/v1/users/{userId}/body` | 키·몸무게 변경 (온보딩 완료 후) |
+| 54 | PATCH | `/api/v1/users/me/body` | 키·몸무게 변경 (온보딩 완료 후) |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 55 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 56 | PATCH | `/api/v1/users/{userId}/password` | 비밀번호 변경 (로컬 계정만, 본인만) |
+| 56 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
 | 57 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
 | 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
@@ -168,7 +168,7 @@
 
 ### 공통 에러 응답
 
-인증 필요(`인증: 필요`) API → **401**, 본인만 호출 가능(`인증: 필요 (본인만)`) API → **403**, 모든 API → **400**·**500** 공통 발생. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
+인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
 
 - **에러 (401 Unauthorized — 인증 실패)**
 
@@ -191,15 +191,6 @@
 {
   "code": "AUTHENTICATION_REQUIRED",
   "message": "인증이 필요합니다."
-}
-```
-
-- **에러 (403 Forbidden — 본인만 호출 가능)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
 }
 ```
 
@@ -1908,7 +1899,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 11. 프로필 편집 페이지
 
-### 11-1. `POST /api/v1/users/{userId}/profile-image/presigned-url` — 프로필 사진 업로드 URL
+### 11-1. `POST /api/v1/users/me/profile-image/presigned-url` — 프로필 사진 업로드 URL
 
 - **Request**
 
@@ -1964,9 +1955,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
-### 11-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 반영
+### 11-2. `PATCH /api/v1/users/me/profile-image` — 프로필 사진 반영
 
 11-1로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.profile_image_key`를 갱신한다.
 
@@ -2008,7 +1999,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
 ### 11-3. `GET /api/v1/users/{userId}/profile-image` — 프로필 사진 URL 조회
 
@@ -2033,14 +2024,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 불필요
 
-### 11-4. `DELETE /api/v1/users/{userId}/profile-image` — 프로필 사진 삭제
+### 11-4. `DELETE /api/v1/users/me/profile-image` — 프로필 사진 삭제
 
 `users.profile_image_key`를 비운다. **S3 객체는 지우지 않고 DB의 키 연결만 끊는다.** 사진이 없는 상태에서 호출해도 에러 없이 성공한다(idempotent).
 
 - **Request**: 본문 없음
 - **Response `204 No Content`**
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
 ### 11-5. `PATCH /api/v1/users/me` — 프로필 수정
 
@@ -2049,7 +2040,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-6. `PATCH /api/v1/users/{userId}/nickname` — 닉네임 변경
+### 11-6. `PATCH /api/v1/users/me/nickname` — 닉네임 변경
 
 닉네임은 `user_onboardings.nickname`에 있어 온보딩을 마쳐야 바꿀 수 있다. 서비스 전반의 표시명이 이 값이다.
 
@@ -2094,7 +2085,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
 ### 11-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
 
@@ -2132,7 +2123,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 불필요
 
-### 11-8. `PATCH /api/v1/users/{userId}/body` — 키·몸무게 변경
+### 11-8. `PATCH /api/v1/users/me/body` — 키·몸무게 변경
 
 키·몸무게는 `user_onboardings`에 있어 온보딩을 마쳐야 바꿀 수 있다. 러닝 기록의 칼로리 계산에 쓰는 값이라 프로필 요약(10-2)에는 나가지 않는다.
 
@@ -2192,7 +2183,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
 ## 12. 설정 페이지
 
@@ -2213,7 +2204,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
 - **인증**: 필요
 
-### 12-2. `PATCH /api/v1/users/{userId}/password` — 비밀번호 변경
+### 12-2. `PATCH /api/v1/users/me/password` — 비밀번호 변경
 
 로컬 계정만 가능. 현재 비밀번호로 본인을 재확인한다.
 
@@ -2277,7 +2268,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 클라는 12-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
 
-- **인증**: 필요 (본인만)
+- **인증**: 필요
 
 > 비밀번호 찾기(로그인 전 재설정)는 명세에 없다. 이 API는 로그인 상태 전용이다.
 

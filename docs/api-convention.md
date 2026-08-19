@@ -9,6 +9,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 - ID 타입: `userId`만 UUID, 서버가 발급하는 그 외 리소스 ID는 Long이다. 클라이언트 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열이다.
 - 시각: ISO 8601 `yyyy-MM-ddTHH:mm:ss` — KST 기준, 오프셋 없이 초 단위까지(예: `2026-07-20T13:00:00`). 달력 날짜는 `YYYY-MM-DD`다. 저장은 KST(`TimeZoneConfig`), 직렬화 형식은 `JacksonConfig`가 고정한다.
 - DB enum: API에 노출할 때도 동일한 영문 코드를 사용한다. 변환 매핑은 없고 값 목록은 [erd.md](erd.md) §6을 따른다.
+- 사용자 리소스 경로: 타인도 접근할 수 있으면 `/users/{userId}/...`, 본인만 접근하면 `/users/me/...`를 쓴다. 후자는 토큰 주체가 곧 대상이라 경로에 식별자를 받지 않는다.
 
 ## 하위 호환
 

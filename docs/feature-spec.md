@@ -51,7 +51,7 @@
 
 - 온보딩 폼: 닉네임, 생년월일, 성별, 키, 몸무게, 평균 페이스 입력 후 제출. 약관 동의는 받지 않는다 — 가입 흐름 첫 화면에서 이미 받았다.
   - 닉네임 중복 체크(`NICKNAME_ALREADY_EXISTS`)는 온보딩 API의 에러 케이스.
-  - 1회성 입력 — 닉네임은 `PATCH /users/{userId}/nickname`, 키·몸무게는 `PATCH /users/{userId}/body`로 수정한다. 평균 페이스는 수정 UI 없이 서버가 러닝 기록 기반 자동 갱신.
+  - 1회성 입력 — 닉네임은 `PATCH /users/me/nickname`, 키·몸무게는 `PATCH /users/me/body`로 수정한다. 평균 페이스는 수정 UI 없이 서버가 러닝 기록 기반 자동 갱신.
 
 **하단 네비게이션 바**
 
