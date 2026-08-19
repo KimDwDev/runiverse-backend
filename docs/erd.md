@@ -9,8 +9,8 @@
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`colors`).
-- **타임스탬프**: `*_at`은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`). 달력 날짜(`date`, 시각·시간대 없음, API `YYYY-MM-DD`)는 `user_onboardings.birthday` 하나뿐이고, 이건 접미사 없는 예외다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다** — 한 번 쓰고 고치지 않으므로(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) `updated_at`이 늘 `created_at`과 같아 의미가 없다. 엔티티도 `BaseCreatedAtEntity`를 상속한다.
+- **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`TimeZoneConfig`). 달력 날짜(`date`, API `YYYY-MM-DD`)는 `user_onboardings.birthday` 하나뿐인 예외다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
@@ -157,7 +157,7 @@
 > **날씨(`weather_code`·`temperature`)는 서버가 채운다.** 클라이언트가 보낸 값을 쓰지 않는 건 거리·페이스와 같은 원칙이다(`api-spec.md`의 `RUNNING_FINISH`) — 컬러 획득에 쓰이므로 신고값이면 위조가 가능하다.
 > **INSERT 전에 조회하고, 실패하면 null인 채로 넣는다.** 나중에 UPDATE로 채우면 write-once가 깨져 `updated_at`이 필요해진다. 종료 처리가 외부 API에 매이지 않도록 타임아웃을 짧게 둔다.
 > **관측값만 저장하고 판정 결과는 저장하지 않는다** — "악조건이었나"를 미리 계산해 넣지 않는다. 컬러 조건표가 바뀌어도 과거 row가 거짓이 되지 않는다(`colors`의 획득 조건을 DB에 두지 않는 것과 같은 원칙).
-> **API에 노출하지 않는다** — `elevation_gain`처럼 저장만 하고 컬러 판정에 쓴다(`feature-spec.md` 대시보드 절).
+> **API에 노출하지 않는다** — 저장만 하고 컬러 판정에 쓴다. `elevation_gain`은 `totalElevationGainMeters`로 응답에 나가지만 날씨는 나가지 않는다 — 화면에 쓸 곳이 없다.
 
 ### running_splits (구간별)
 

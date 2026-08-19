@@ -1319,7 +1319,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **경로는 점 배열이 아니라 encoded polyline으로 내린다.** 지도 SDK가 디코더를 내장하고 있어 클라이언트가 그대로 그릴 수 있고(`google_maps_flutter` 등), 점 배열보다 응답이 한 자릿수 작다. `running_records.route_polyline`을 그대로 실으므로 **S3 왕복이 없다**
 - **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 `running_splits.route_polyline`의 첫 점이다(ERD에 좌표 컬럼을 두지 않는다)
 - **구간 경로 자체를 내리는 필드는 아직 없다.** `running_splits.route_polyline`은 저장하되, 구간별 지도 강조가 화면에 들어갈 때 `splits[].routePolyline`을 더한다
-- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 표시하지 않기로 했고(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 원본 트랙은 S3(`gps_track_key`)에 남아 있으므로 점별 표시가 필요해지면 그때 필드를 더한다
+- **점별 데이터(고도·정확도·순간 페이스·케이던스·시각)는 내리지 않는다.** 이걸 쓰는 화면이 없다 — 고도는 누적치(`totalElevationGainMeters`)만 보여주고 점별 값은 GPS 수직 오차 때문에 쓰지 않으며(`feature-spec.md` 대시보드 절), 페이스·케이던스는 `splits[]`의 구간 단위로만 보여준다. 원본 트랙은 S3(`gps_track_key`)에 남아 있으므로 점별 표시가 필요해지면 그때 필드를 더한다
 
 - **에러 (403 Forbidden)**
 
