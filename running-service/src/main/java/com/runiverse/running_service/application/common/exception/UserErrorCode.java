@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum UserErrorCode implements ErrorCode {
     USER_NOT_FOUND("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."),
-    ALREADY_ONBOARDED("ALREADY_ONBOARDED", "이미 온보딩을 완료했습니다."),
+    ALREADY_ONBOARDED("ALREADY_ONBOARDED", "이미 온보딩을 완료한 계정입니다."),
     ONBOARDING_NOT_COMPLETED("ONBOARDING_NOT_COMPLETED", "온보딩을 먼저 완료해 주세요."),
     NICKNAME_ALREADY_EXISTS("NICKNAME_ALREADY_EXISTS", "이미 사용 중인 닉네임입니다."),
     INVALID_CURRENT_PASSWORD("INVALID_CURRENT_PASSWORD", "현재 비밀번호가 올바르지 않습니다."),
