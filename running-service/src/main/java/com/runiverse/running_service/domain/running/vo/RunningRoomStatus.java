@@ -33,7 +33,7 @@ public enum RunningRoomStatus {
             case MATCHING -> Set.of(MATCHED, CANCELLED);
             case MATCHED -> Set.of(STARTED, CANCELLED);
             case STARTED -> Set.of(FINISHED, CANCELLED);
-            // 러닝이 시작 된 후에는 CANCELLED가 있을지 고민 중 현재는 없는 걸로 생각을 했습니다.
+            // 러닝이 시작 된 후에는 CANCELLED가 있을지 고민 중 현재는 있는 걸로 생각을 했습니다.
             case FINISHED, CANCELLED -> Set.of();
         };
     }
