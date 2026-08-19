@@ -271,6 +271,8 @@
 - **SSE → WS 전환**: `start_at` 직전에 WS를 연결하고, 서버의 `MATCH_ROOM_UPDATED(status=STARTED)`를 받으면 `RUNNING_START`를 보낸다. `RUNNING_STARTED` ack를 받은 뒤 SSE를 닫는다.
 - 메시지 네이밍 규칙: 클라 발신 현재형 / 서버 발신 과거형.
 
+**방 배정 기준**: 모집 중인 방 중 페이스가 가까운 방(`running_rooms.avg_pace`)을 먼저 고르고, 같으면 `running_room_sessions.leave_count`가 낮은 방을 우선한다.
+
 **이미지 업로드**(`feed_images`, `users.profile_image_key` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
 
 **GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. **매칭 러닝과 솔로 러닝이 같은 경로를 쓴다.**

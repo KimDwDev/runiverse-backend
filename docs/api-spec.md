@@ -167,7 +167,7 @@
 
 ### 공통 에러 응답
 
-인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
+인증 필요(`인증: 필요`) API → **401**, 본인만 호출 가능(`인증: 필요 (본인만)`) API → **403**, 모든 API → **400**·**500** 공통 발생. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
 
 - **에러 (401 Unauthorized — 인증 실패)**
 
@@ -190,6 +190,15 @@
 {
   "code": "AUTHENTICATION_REQUIRED",
   "message": "인증이 필요합니다."
+}
+```
+
+- **에러 (403 Forbidden — 본인만 호출 가능)**
+
+```json
+{
+  "code": "ACCESS_DENIED",
+  "message": "본인만 요청할 수 있습니다."
 }
 ```
 
@@ -733,6 +742,7 @@
 
 엔드포인트와 방 생명주기는 정의하지 않는다. `INVITE`·`INVITED`는 미래 예약값이다.
 
+- 초대방은 `running_rooms.type='INVITE'`로 새로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 모르는 사람이 배정된다.
 - 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다.
 - 초대 발송 수는 제한하지 않는다.
 - 방은 최대 4명이며 먼저 수락한 순서대로 입장시키고 이후 수락은 막는다.
@@ -844,7 +854,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
 
-- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 마감이 지난 `MATCHING` 방은 먼저 자동 실패 처리하므로 재신청을 막지 않는다. 모든 방은 공개 랜덤 매칭이라 프라이빗 방은 없다
+- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 마감이 지난 `MATCHING` 방은 먼저 자동 실패 처리하므로 재신청을 막지 않는다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredPlayerCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생긴다. 같은 조건에 모집 중인 방이 있으면 거기 배정되고, 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`)이 새로 생긴다
@@ -990,6 +1000,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### WebSocket 연결 — `/ws/running-rooms`
 
 - **연결**: `wss://.../ws/running-rooms` + `Authorization: Bearer {accessToken}`
+- **인증 실패**: 업그레이드를 거부하고 **HTTP 401**로 응답한다 — 연결이 서기 전이라 `ERROR` 프레임을 쓸 수 없다. 본문은 REST 에러 포맷과 같다. 클라는 `POST /auth/refresh` 후 재연결하고, 다시 실패하면 재로그인으로 보낸다. 같은 이유로 아래 `ERROR`의 code 목록에는 인증 코드가 없다
+- **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길 수 있어 중간에 끊으면 트랙이 갈린다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
+- **중복 연결은 마지막 것만 남긴다** — 같은 사용자의 새 연결이 들어오면 서버가 기존 연결을 close code `4001`로 닫는다. 기기 전환·앱 재시작 때 이전 소켓이 남아 있을 수 있는데 둘 다 살려두면 같은 `(runningRoomId, userId, sequence)`에 서로 다른 트랙이 섞인다. `4001`을 받은 클라는 재연결하지 않는다 — 다른 기기가 이어받은 것이다
+- **keep-alive**: 서버가 주기적으로 ping 프레임을 보내고 클라는 pong으로 응답한다. 주기와 허용 미응답 횟수는 운영값. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
+- **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 5-D의 종료 타임아웃은 **마지막 좌표 수신 시각** 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
 - **메시지 공통 형식**
 
 ```json
@@ -1141,8 +1156,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "isDeleted": false,
       "isMe": true,
       "totalDistanceMeters": 5020,
-      "durationSeconds": 1800,
-      "caloriesKcal": 352,
+      "totalDurationSeconds": 1800,
+      "totalCaloriesKcal": 352,
       "averagePaceSecondsPerKm": 359,
       "averageCadenceSpm": 165,
       "totalElevationGainMeters": 42
@@ -1155,8 +1170,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "isDeleted": false,
       "isMe": false,
       "totalDistanceMeters": 4870,
-      "durationSeconds": 1800,
-      "caloriesKcal": 315,
+      "totalDurationSeconds": 1800,
+      "totalCaloriesKcal": 315,
       "averagePaceSecondsPerKm": 370,
       "averageCadenceSpm": 158,
       "totalElevationGainMeters": 28
@@ -1165,7 +1180,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 시작 전 이탈자는 제외한다. 기록이 없으면 사용자 정보와 `status`만 채우고 `totalDistanceMeters`·`durationSeconds`·`caloriesKcal`·`averagePaceSecondsPerKm`·`averageCadenceSpm`·`totalElevationGainMeters`는 null로 내려 화면에 "기록 없음"으로 표시한다
+- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 시작 전 이탈자는 제외한다. 기록이 없으면 사용자 정보와 `status`만 채우고 `totalDistanceMeters`·`totalDurationSeconds`·`totalCaloriesKcal`·`averagePaceSecondsPerKm`·`averageCadenceSpm`·`totalElevationGainMeters`는 null로 내려 화면에 "기록 없음"으로 표시한다
 - 기록이 있어도 케이던스·유효 고도 표본이 부족하면 `averageCadenceSpm`·`totalElevationGainMeters`는 null일 수 있다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
 
@@ -1292,7 +1307,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "runningRoomId": 125,           // 항상 값이 있다
       "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
-      "durationSeconds": 1800,
+      "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
       "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
     }
@@ -1307,7 +1322,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `caloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm`/`elevationChangeMeters` 등)
+- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `totalCaloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm`/`elevationChangeMeters` 등)
 - **`routePolyline`은 최상위가 아니라 `route` 안에 있다** — 상세 화면은 시작·종료 지점 마커까지 찍으므로 `route` 한 덩어리로 받는다. 목록(7-1)은 카드에 선만 그려서 최상위 필드로 둔다. 같은 값을 두 곳에 싣지 않는다
 - 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
@@ -1359,7 +1374,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "record": {                           // nullable — 러닝기록 템플릿 카드
     "runningRecordId": 501,
     "totalDistanceMeters": 5020,
-    "durationSeconds": 1800,
+    "totalDurationSeconds": 1800,
     "averagePaceSecondsPerKm": 359,
     "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline) — 카드 지도 미리보기. running_records.route_polyline
   },
@@ -1616,7 +1631,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "items": [
+  "uploads": [
     {
       "feedImageKey": "feeds/2026/07/....jpg",
       "uploadUrl": "https://..."
@@ -1948,15 +1963,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (403 Forbidden — 본인 아님)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
-}
-```
-
 - **인증**: 필요 (본인만)
 
 ### 11-2. `PATCH /api/v1/users/{userId}/profile-image` — 프로필 사진 반영
@@ -2001,15 +2007,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (403 Forbidden — 본인 아님)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
-}
-```
-
 - **인증**: 필요 (본인만)
 
 ### 11-3. `GET /api/v1/users/{userId}/profile-image` — 프로필 사진 URL 조회
@@ -2041,15 +2038,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **Request**: 본문 없음
 - **Response `204 No Content`**
-
-- **에러 (403 Forbidden — 본인 아님)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
-}
-```
 
 - **인증**: 필요 (본인만)
 
@@ -2102,15 +2090,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "code": "ONBOARDING_NOT_COMPLETED",
   "message": "온보딩을 먼저 완료해 주세요."
-}
-```
-
-- **에러 (403 Forbidden — 본인 아님)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
 }
 ```
 
@@ -2234,15 +2213,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 클라는 12-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
-
-- **에러 (403 Forbidden — 본인 아님)**
-
-```json
-{
-  "code": "ACCESS_DENIED",
-  "message": "본인만 요청할 수 있습니다."
-}
-```
 
 - **인증**: 필요 (본인만)
 

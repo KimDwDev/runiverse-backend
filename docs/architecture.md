@@ -29,6 +29,7 @@ application/
   <domain>/port/out/    아웃바운드 인터페이스 · 전용 입출력 모델
   <domain>/exception/   외부 확인이 필요한 실패
   common/exception/     BusinessException · ErrorCode (유스케이스용)
+  common/port/out/      도메인에 매이지 않는 공통 아웃바운드 포트
 
 infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config
 presentation/

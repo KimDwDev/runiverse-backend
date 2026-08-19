@@ -125,7 +125,7 @@
 |---|---|---|---|
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
-| leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수. 참가자는 매칭 과정에서 여러 방을 옮겨 다니고 **같은 방으로 돌아올 수도 있어** 2 이상이 된다(복합 PK라 row는 그대로 두고 이 값만 오른다). 배정 시 **이 값이 낮은 방을 우선 연결한다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
+| leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수. 참가자는 매칭 과정에서 여러 방을 옮겨 다니고 **같은 방으로 돌아올 수도 있어** 2 이상이 된다(복합 PK라 row는 그대로 두고 이 값만 오른다). 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
 | is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·자동 실패·이탈 후에는 모두 false다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 재배정·복귀로 갱신되는 테이블이다 |
 
@@ -148,8 +148,8 @@
 | total_calories | int | NOT NULL | 종료 시 서버가 확정 거리·시간과 사용자 체중으로 계산한 kcal |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·기기 GPS 고도를 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
 | route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드(6-2)·기록 목록(7-1)·기록 상세(7-2)·피드 카드가 전부 이 값을 쓴다. **다운샘플 시 구간 경계점을 반드시 보존한다** — `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리키므로 경계가 틀어지면 구간이 어긋난다 |
-| weather_code | int | nullable | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
-| temperature | numeric(3,1) | nullable | 섭씨. 영하 포함 |
+| weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
+| temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | 종료 메시지·타임아웃·탈퇴로 기록을 확정할 때 일괄 INSERT. 진행 중 PATCH 없음(write-once) |
 
