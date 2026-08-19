@@ -125,8 +125,8 @@
 |---|---|---|---|
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | 플레이어 삭제(탈퇴 시 앱이 삭제) 시 링크도 연쇄 삭제 |
-| leave_count | int | NOT NULL, default 0 | 이 방에서 나간 횟수 — 페널티 판정 근거 |
-| is_connected | boolean | NOT NULL, default false | 이 방에 남아 있는지 여부 — **WS 연결 상태가 아니다.** 나가면 false, 네트워크가 끊겨도 값은 그대로다 |
+| leave_count | int | NOT NULL, default 0 | 이 방에서 나간 누적 횟수 — 나갔다 다시 들어오면 또 쌓인다. 페널티 판정 근거 |
+| is_connected | boolean | NOT NULL, default false | 이 방에 남아 있는지 여부 — **WS 연결 상태가 아니다.** 나가면 false, 다시 들어오면 true. 네트워크가 끊긴 것만으로는 바뀌지 않는다. 재입장은 row를 새로 만들지 않고 이 값만 되살린다 |
 | created_at | timestamp | NOT NULL | |
 
 > **이름 혼동 주의**: 이 테이블은 API 미노출, 서버 내부 연결용이다. API의 러닝 세션 식별자는 `running_rooms.running_room_id`를 가리킨다.
