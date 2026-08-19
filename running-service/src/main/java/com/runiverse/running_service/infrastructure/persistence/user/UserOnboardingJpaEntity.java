@@ -94,6 +94,6 @@ public class UserOnboardingJpaEntity extends BaseTimeEntity {
             updatable = false,
             foreignKey = @ForeignKey(name = "fk_user_onboard_users")
     )
-    @OnDelete(action = OnDeleteAction.NO_ACTION)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private UserJpaEntity user;
 }
