@@ -11,9 +11,10 @@
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`).
 - **타임스탬프**: 시점을 담는 컬럼은 이름을 `*_at`으로 통일하고 타입은 전부 `timestamp`(시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정해 실행 환경과 무관하게 같은 기준을 쓴다(`TimeZoneConfig`). **예외로 달력 날짜**(대회 `event_date`·`registration_start_date`·`registration_end_date`, `user_onboardings.birthday`)만 `*_date` + `date` 타입(시각·시간대 없음, API `YYYY-MM-DD`).
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`).
-- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리(`total_distance`·`target_distance`·`distance`) = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_time`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`cadence`) = **spm**, 누적 상승 고도(`elevation_gain`) = **미터**, 기온(`temperature`) = **섭씨**, 날씨(`weather_code`) = **WMO 4677 코드**.
-- **좌표는 컬럼으로 두지 않는다**: 경로는 `route_polyline`(encoded polyline, precision 5), 원본 좌표는 S3의 GPS 트랙(`gps_track_key`)에만 있다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
-- **목표 vs 실적 네이밍**: 사용자가 정한 목표는 `target_*`(`running_players.target_distance`), 러닝 후 확정된 실적은 `total_*`(`running_records.total_distance`·`total_time`). 두 값은 다르다.
+- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리(`total_distance`·`target_distance`·`distance`) = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 고도(`total_elevation_gain`·`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**, 날씨(`weather_code`) = **WMO 4677 코드**.
+- **좌표는 컬럼으로 두지 않는다**: 경로는 `route_polyline`(encoded polyline, precision 5), 원본 좌표는 S3의 GPS 트랙(`gps_track_key`)에만 있다. 구간 경로는 polyline을 인덱스로 잘라 쓴다(`running_splits.route_start_index`/`route_end_index`). PostGIS 미사용(위치 기반 기능 도입 시 검토).
+- **측정값 접두사**: 사용자가 정한 목표는 `target_*`(`target_distance`), 합계는 `total_*`(`total_distance`·`total_duration`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`). 목표와 실적은 이름으로 갈린다 — `running_players.target_distance`(설정한 목표)와 `running_records.total_distance`(실제 이동 거리)는 다른 값이다.
+- **인원 컬럼**: 참가자 수는 `*_player_count`로 통일한다(`max_player_count`·`current_player_count`·`desired_player_count`) — 참조 테이블이 `running_players`라 `member`를 쓰지 않는다.
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **소프트 삭제**: `deleted_at`(nullable)이 있는 테이블(`feeds`·`comments`·`running_rooms`)은 소프트 삭제. `running_players.deleted_at`은 **삭제가 아니라 "신청 종료" 시각**이라 의미가 다르다(취소·거절·이탈 이력을 남기려고 row를 지우지 않는다). `delete_*` 테이블은 별도 용도([§5](#5-delete_-스냅샷이력-테이블)).
 - **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`follows`·`user_follow_stats`·`user_badges`·`user_running_contests`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`. `running_players`도 **논리 참조**지만 탈퇴 시 **앱이 명시적으로 DELETE**한다 — 이때 `running_room_sessions`은 `running_player_id` FK의 `ON DELETE CASCADE`로 연쇄 삭제된다.
@@ -93,13 +94,13 @@
 | close_at | timestamp | nullable | 모집 마감 시각(`start_at - 설정값`). **생성 시 고정** — 설정을 바꿔도 진행 중인 방의 마감이 움직이지 않는다. 스케줄러가 `type='MATCH' AND status='MATCHING' AND close_at <= now()`로 찾으므로 계산식이 아니라 컬럼이어야 인덱스를 탄다. 모집 단계가 없는 솔로는 null |
 | target_distance | int | nullable | 방의 목표 거리(미터). 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 갖는다 — 후보 방 조회가 단일 테이블에서 끝난다 |
 | avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, API 응답의 팀 평균 페이스로도 나간다 |
-| max_member | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
-| current_member | int | NOT NULL, default 1 | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_member < max_member`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
+| max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`. **생성 시 정해지고 갱신하지 않는다** |
+| current_player_count | int | NOT NULL, default 1 | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신. `current_player_count < max_player_count`면 들어갈 수 있다. 러닝 중에는 변하지 않으므로 `STARTED` 이후 값이 곧 출발 인원이다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
 
-> **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_member < max_member`인 방 중 `target_distance`·`start_at`이 맞고 `avg_pace`가 가까운 방을 고른다. 없으면 새 방을 만든다(1인 방).
-> **마감 판정**: `close_at` 도달 시 스케줄러가 `current_member >= 2`면 `MATCHED`, `1`이면 `CANCELLED`. `max_member` 도달 여부와 무관하다.
+> **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_player_count < max_player_count`인 방 중 `target_distance`·`start_at`이 맞고 `avg_pace`가 가까운 방을 고른다. 없으면 새 방을 만든다(1인 방).
+> **마감 판정**: `close_at` 도달 시 스케줄러가 `current_player_count >= 2`면 `MATCHED`, `1`이면 `CANCELLED`. `max_player_count` 도달 여부와 무관하다.
 
 ### running_players
 
@@ -111,7 +112,7 @@
 | avg_pace | int | NOT NULL | 매칭 희망 페이스(초/km, 서버가 유저 평균에서 세팅) |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`). **목표는 `target_*`, 실적은 `total_*`** — `running_records.total_distance`(실제 이동 거리)와 이름으로 갈린다 |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
-| desired_member | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
+| desired_player_count | int | nullable | **[MVP 제외]** 유저 희망 매칭 인원 — 서버가 2~4명으로 자동 편성 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·초대 거절·이탈 공통. 한 번 찍히면 바뀌지 않는다. 정상 완주(`COMPLETED`)에는 찍지 않는다 |
 
@@ -141,12 +142,12 @@
 | user_id | UUID | → users, NOT NULL | 논리 참조 |
 | avg_pace | int | NOT NULL | 초/km |
 | total_distance | int | NOT NULL | 미터 |
-| total_time | int | NOT NULL | 초 |
-| cadence | int | nullable | spm (선택) |
-| elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
+| total_duration | int | NOT NULL | 초 |
+| avg_cadence | int | nullable | spm (선택) |
+| total_elevation_gain | int | nullable | **누적 상승 고도**(미터, 선택). 오르막 구간의 상승분만 더한 값이라 항상 0 이상 — `running_splits.elevation_change`(순변화)의 합과 **일치하지 않는다** |
 | calories | int | nullable | kcal (선택) |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·고도를 담은 **원본 트랙**. **API 응답에는 쓰지 않는다** — 재계산·분석용(고도 소급 계산 등). 매칭·솔로 모두 서버가 업로드(Redis 버퍼→S3) |
-| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 목록·기록 상세·피드 카드가 전부 이 값을 쓴다. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성 |
+| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 목록·기록 상세·피드 카드가 전부 이 값을 쓴다. 조회 한 번에 딸려 나와 S3 왕복이 없다. 매칭·솔로 모두 서버가 Redis 버퍼로 생성. `running_splits`의 구간 경로도 이 값을 인덱스로 잘라 쓴다 |
 | weather_code | int | nullable | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | nullable | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
@@ -165,14 +166,17 @@
 | avg_pace | int | NOT NULL | 초/km |
 | distance | int | NOT NULL | 구간 거리(미터). 마지막 구간은 1000 미만일 수 있다 |
 | duration | int | NOT NULL | 구간 소요 시간(초) |
-| cadence | int | nullable | spm (선택) |
-| elevation_gain | int | nullable | 누적 상승 고도(미터, 선택) |
+| avg_cadence | int | nullable | spm (선택) |
+| elevation_change | int | nullable | **고도 순변화**(미터, 선택) — 구간 시작점과 끝점의 고도 차. 내리막 구간은 **음수**다. 누적 상승만 세는 `running_records.total_elevation_gain`과 기준이 달라 구간을 다 더해도 전체와 일치하지 않는다 |
 | calories | int | nullable | kcal (선택) |
-| route_polyline | text | NOT NULL | 구간 경로(encoded polyline, precision 5) |
+| route_start_index / route_end_index | int | NOT NULL | 구간 경로 — `running_records.route_polyline`을 디코딩한 좌표 배열의 인덱스 범위. 구간 경로를 따로 저장하지 않고 잘라 쓴다 |
 | start_at / end_at | timestamp | NOT NULL | |
 | created_at | timestamp | NOT NULL | |
 
 > UNIQUE (running_record_id, split_number) — 기록당 구간 번호 중복 방지.
+> **인덱스 기준**: `route_start_index`/`route_end_index`는 **`route_polyline`을 디코딩한 다운샘플 좌표 배열**의 인덱스다(S3 원본 트랙 기준이 아니다 — API가 내려주는 게 polyline뿐이라 클라이언트가 원본 인덱스를 쓸 수 없다).
+> **경계 규칙**: `route_end_index`는 **inclusive이고 다음 구간의 `route_start_index`와 겹친다**(구간 n의 끝점 = 구간 n+1의 시작점). 겹치지 않으면 구간을 이어 그릴 때 경계마다 선이 끊긴다. 따라서 구간 포인트 수의 합은 전체 포인트 수보다 (구간 수 - 1)만큼 많다.
+> **재생성 주의**: 인덱스는 `route_polyline`의 다운샘플 결과에 종속된다. 경로를 다시 만들면 저장된 인덱스가 조용히 다른 좌표를 가리키므로, **`route_polyline`과 인덱스는 항상 한 트랜잭션에서 같이 갱신**한다.
 
 ---
 

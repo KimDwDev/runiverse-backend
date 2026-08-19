@@ -45,9 +45,9 @@
 - 매칭 정보 입력 모달: 거리/시간 입력.
   - 모집 인원은 입력받지 않음 — 서버가 2~4명 범위에서 자동 편성. 친구 초대(친구 선택 모달)는 1차 미포함, 랜덤 매칭만.
   - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_at`에 저장. "거리"는 `running_players.target_distance`(플레이어별 목표 거리)에 저장.
-  - 요청과 동시에 방이 정해진다 — 조건이 맞는 모집 중인 방(`type='MATCH'`, `current_member < max_member`)이 있으면 합류하고, 없으면 **본인만 있는 1인 방을 새로 만든다**. 즉 대기 중에도 항상 방이 존재한다.
+  - 요청과 동시에 방이 정해진다 — 조건이 맞는 모집 중인 방(`type='MATCH'`, `current_player_count < max_player_count`)이 있으면 합류하고, 없으면 **본인만 있는 1인 방을 새로 만든다**. 즉 대기 중에도 항상 방이 존재한다.
 - 매칭 대기 화면: 매칭 진행 상태·남은 예상 시간·현재 참가자 확인.
-  - 확정/취소 판정: 판정 시각은 방 생성 시 `running_rooms.close_at`(= `start_at` - 서버 설정값)으로 **고정 저장**한다. 설정을 바꿔도 이미 만들어진 방의 마감은 움직이지 않는다. `close_at` 도달 시 `current_member >= 2`면 `status='MATCHED'` 자동 확정, `1`이면 `status='CANCELLED'` 자동 취소 — 자리 수(`max_member`) 충족 여부와 무관.
+  - 확정/취소 판정: 판정 시각은 방 생성 시 `running_rooms.close_at`(= `start_at` - 서버 설정값)으로 **고정 저장**한다. 설정을 바꿔도 이미 만들어진 방의 마감은 움직이지 않는다. `close_at` 도달 시 `current_player_count >= 2`면 `status='MATCHED'` 자동 확정, `1`이면 `status='CANCELLED'` 자동 취소 — 자리 수(`max_player_count`) 충족 여부와 무관.
 
 **매칭완료 대기방**
 
@@ -57,8 +57,8 @@
 - 시작 타이머: 러닝 시작까지 카운트다운 — 클라이언트 주도 시작.
   - 카운트다운은 각 클라이언트가 자체 시계 기준으로 표시하고, `start_at` 도달 시 스스로 러닝 화면으로 전환하며 WS `RUNNING_START`(C→S)로 시작을 알림.
   - 서버는 같은 시각에 내부 스케줄러로 `running_rooms.status='STARTED'` 전환 — 클라이언트가 호출하는 REST API 없음.
-- 나가기: 나간 사람만 `running_players.status`를 `MATCHED_LEFT_PENALTY`/`MATCHED_LEFT_NO_PENALTY`로 전환하고 `deleted_at`을 찍는다. 방은 유지되고 남은 참가자는 계속 대기(`current_member` 감소).
-- 확정(`MATCHED`) 이후 이탈 시 페널티 부여 — 페널티 여부는 이탈 시점에 서버가 판정해 `running_players.status`에 고정 저장한다(별도 페널티 테이블 없음). 이탈로 `current_member`가 2 미만이 되면 방 취소, 자동 재매칭(빈자리 채우기)은 하지 않음.
+- 나가기: 나간 사람만 `running_players.status`를 `MATCHED_LEFT_PENALTY`/`MATCHED_LEFT_NO_PENALTY`로 전환하고 `deleted_at`을 찍는다. 방은 유지되고 남은 참가자는 계속 대기(`current_player_count` 감소).
+- 확정(`MATCHED`) 이후 이탈 시 페널티 부여 — 페널티 여부는 이탈 시점에 서버가 판정해 `running_players.status`에 고정 저장한다(별도 페널티 테이블 없음). 이탈로 `current_player_count`가 2 미만이 되면 방 취소, 자동 재매칭(빈자리 채우기)은 하지 않음.
 
 ### 러닝
 
@@ -126,7 +126,7 @@
 
 - 프로필 요약: 사진, 닉네임, 총 누적고도, 마일리지, 소개글, 뱃지, 잔디, 팔로워/팔로잉 수 표시.
   - 마일리지: 별도 저장 테이블 없이 `running_records.total_distance` 합산 — 누적은 전체, 월별은 해당 월 기록 합산.
-  - 총 누적고도: `running_records.elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
+  - 총 누적고도: `running_records.total_elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
 - 내가 올린 피드 그리드: 프로필 하단에 본인 작성 피드를 썸네일 그리드로 표시.
 - 피드 작성 버튼: 누르면 피드 작성 페이지로 이동.
 - 피드 편집: 게시글 수정/삭제, 노출 범위 설정.
@@ -193,6 +193,8 @@
 - 러닝 중엔 Redis(`running_room_id + user_id` 키)에 좌표를 버퍼링하고, 종료 시 서버가 S3에 업로드한다. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보내며, 이 시점에 서버가 `running_records`·`running_splits`를 일괄 INSERT한다.
 - **솔로 러닝**(`type='SOLO'`, 혼자 뛰지만 방·플레이어 row는 만든다)도 같은 경로를 탄다 — 클라 presigned 업로드나 기록 저장 REST API를 쓰지 않는다. ⚠️ `api-spec.md` 7-3·7-4(솔로 전용 presigned URL·기록 저장)는 이 결정으로 무효가 되므로 정리가 필요하다.
 - **경로 데이터의 용도 분리**: `gps_track_key`(S3 원본)는 재계산·분석 전용으로 **API 응답에 쓰지 않는다**. 클라이언트에 내려주는 경로는 전부 `route_polyline`(encoded polyline, precision 5) 하나뿐이며, 조회 한 번에 딸려 나와 S3 왕복이 없다.
+- **구간 경로는 따로 저장하지 않는다**: `running_splits`는 경로를 복사해 갖지 않고 `route_start_index`/`route_end_index`로 `running_records.route_polyline`의 좌표 범위만 가리킨다. 경로의 정본이 하나라 전체와 구간이 어긋날 수 없다. 인덱스는 **inclusive이고 구간 경계에서 겹친다**(구간 n의 끝점 = 구간 n+1의 시작점) — 겹치지 않으면 구간을 이어 그릴 때 선이 끊긴다. 인덱스는 다운샘플 결과에 종속되므로 **경로와 항상 같이 갱신**한다.
+- **고도는 기록과 구간의 기준이 다르다**: `running_records.total_elevation_gain`은 오르막 상승분만 더한 **누적 상승**(0 이상), `running_splits.elevation_change`는 구간 시작·끝의 **고도 순변화**(내리막이면 음수). 구간을 다 더해도 전체와 일치하지 않으며, 이는 버그가 아니라 의도된 차이다.
 
 **피드-러닝 기록 연결**: `feeds.running_record_id`는 `running_records` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
 

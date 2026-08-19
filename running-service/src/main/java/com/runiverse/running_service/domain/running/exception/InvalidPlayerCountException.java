@@ -3,9 +3,9 @@ package com.runiverse.running_service.domain.running.exception;
 import com.runiverse.running_service.domain.common.exception.BusinessException;
 import com.runiverse.running_service.domain.common.exception.RunningRoomErrorCode;
 
-public class InvalidMemberCountException extends BusinessException {
+public class InvalidPlayerCountException extends BusinessException {
 
-    public InvalidMemberCountException() {
-        super(RunningRoomErrorCode.INVALID_MEMBER_COUNT);
+    public InvalidPlayerCountException() {
+        super(RunningRoomErrorCode.INVALID_PLAYER_COUNT);
     }
 }
