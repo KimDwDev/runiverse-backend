@@ -8,7 +8,7 @@ import com.runiverse.running_service.application.user.port.out.SaveOnboardingPor
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Nickname;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;

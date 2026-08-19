@@ -4,7 +4,7 @@ import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.exception.IntroductionTooLongException;
 import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
-import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.common.exception.InvalidUserIdFormatException;
 import com.runiverse.running_service.domain.user.exception.ProfileImageKeyRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProfileVisibilityRequiredException;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;

@@ -2,9 +2,9 @@ package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
+import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

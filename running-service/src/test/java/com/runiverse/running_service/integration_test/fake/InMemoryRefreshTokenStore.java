@@ -3,7 +3,7 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.auth.port.out.DeleteRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 
 import java.util.HashMap;
 import java.util.Map;

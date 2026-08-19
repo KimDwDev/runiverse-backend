@@ -1,10 +1,10 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
+import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.Getter;
 
 import java.util.Objects;

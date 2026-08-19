@@ -13,7 +13,7 @@ import com.runiverse.running_service.domain.user.exception.InvalidNicknameFormat
 import com.runiverse.running_service.domain.user.exception.InvalidNicknameLengthException;
 import com.runiverse.running_service.domain.user.exception.NicknameRequiredException;
 import com.runiverse.running_service.domain.user.vo.Nickname;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
