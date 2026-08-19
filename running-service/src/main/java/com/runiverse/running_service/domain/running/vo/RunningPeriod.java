@@ -15,5 +15,9 @@ public record RunningPeriod(LocalDateTime startAt, LocalDateTime endAt) {
             throw new InvalidRunningPeriodException();
         }
     }
-    
+
+    // 이 구간이 다른 구간을 품는가 — 경계가 같아도 안에 있는 것으로 본다
+    public boolean contains(RunningPeriod other) {
+        return !other.startAt().isBefore(startAt) && !other.endAt().isAfter(endAt);
+    }
 }

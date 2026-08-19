@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum RunningRecordErrorCode implements ErrorCode {
+    INVALID_RUNNING_RECORD_ID("INVALID_RUNNING_RECORD_ID", "러닝 기록 ID가 올바르지 않습니다."),
     INVALID_SPLIT_NUMBER("INVALID_SPLIT_NUMBER", "구간 번호는 1 이상이어야 합니다."),
     ROUTE_POLYLINE_REQUIRED("ROUTE_POLYLINE_REQUIRED", "경로 데이터는 필수입니다."),
     GPS_TRACK_KEY_REQUIRED("GPS_TRACK_KEY_REQUIRED", "GPS 트랙 키는 필수입니다."),
