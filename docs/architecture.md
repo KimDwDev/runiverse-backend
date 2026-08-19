@@ -71,5 +71,5 @@ AuthController ──▶ SignUpUsecase ──▶ SignUpHandler ──▶ SaveUse
 
 현재의 리팩터링 예외는 아래 범위에만 적용한다. 새 의존을 추가하거나 기존 예외 범위를 넓이는 근거로 삼지 않는다.
 
-- **security 직접 참조**: `SecurityConfig` → `JwtAuthenticationEntryPoint`, `JwtAuthenticationEntryPoint` → `BlockedTokenValidator`·`ExpiredTokenValidator`, `BlockedTokenValidator` → `AuthErrorCode`의 현재 import만 허용한다.
-- **`UserOnboarding` 별도 영속화**: `ExistsOnboardingPort`·`CheckOnboardingPort`의 별도 존재 확인, `CompleteOnboardingHandler` → `SaveOnboardingPort.saveOnboarding(UserOnboarding)` → `UserPersistenceAdapter`의 별도 저장, `UserPersistenceAdapter.toDomain(UserJpaEntity)`가 `UserOnboarding`을 복원하지 않는 현재 흐름만 허용한다.
+- **security 직접 참조**: `SecurityConfig` → `JwtAuthenticationEntryPoint`·`JwtAccessDeniedHandler`, `JwtAuthenticationEntryPoint` → `BlockedTokenValidator`·`ExpiredTokenValidator`, `BlockedTokenValidator` → `AuthErrorCode`의 현재 import만 허용한다.
+- **`UserOnboarding` 별도 영속화**: `ExistsOnboardingPort`의 별도 존재 확인, `CompleteOnboardingHandler` → `SaveOnboardingPort.saveOnboarding(UserOnboarding)` → `UserPersistenceAdapter`의 별도 저장, `UserPersistenceAdapter.toDomain(UserJpaEntity)`가 `UserOnboarding`을 복원하지 않는 현재 흐름만 허용한다.
