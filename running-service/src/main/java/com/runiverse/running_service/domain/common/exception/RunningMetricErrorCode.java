@@ -9,6 +9,7 @@ public enum RunningMetricErrorCode implements ErrorCode {
     DISTANCE_OUT_OF_RANGE("DISTANCE_OUT_OF_RANGE", "거리는 1m 이상 500km 이하여야 합니다."),
     PACE_OUT_OF_RANGE("PACE_OUT_OF_RANGE", "페이스는 1km당 120초 이상 3600초 이하여야 합니다."),
     ELAPSED_TIME_OUT_OF_RANGE("ELAPSED_TIME_OUT_OF_RANGE", "소요 시간은 1초 이상 24시간 이하여야 합니다."),
+    CALORIES_REQUIRED("CALORIES_REQUIRED", "칼로리는 필수입니다."),
     RUNNING_PERIOD_REQUIRED("RUNNING_PERIOD_REQUIRED", "시작·종료 시각은 필수입니다."),
     INVALID_RUNNING_PERIOD("INVALID_RUNNING_PERIOD", "종료 시각은 시작 시각보다 뒤여야 합니다."),
     CADENCE_OUT_OF_RANGE("CADENCE_OUT_OF_RANGE", "케이던스는 분당 1보 이상 300보 이하여야 합니다."),

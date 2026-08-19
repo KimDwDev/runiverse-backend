@@ -1,5 +1,6 @@
 package com.runiverse.running_service.domain.running.aggregate;
 
+import com.runiverse.running_service.domain.running.exception.CaloriesRequiredException;
 import com.runiverse.running_service.domain.running.vo.Cadence;
 import com.runiverse.running_service.domain.running.vo.Calories;
 import com.runiverse.running_service.domain.running.vo.Distance;
@@ -34,7 +35,7 @@ public class RunningSplit {
     private RunningSplit(int splitNumber, int avgPace, int distance, int duration,
                          int routeStartIndex, int routeEndIndex,
                          LocalDateTime startAt, LocalDateTime endAt,
-                         int calories,
+                         Integer calories, // calories만 0이 나올가능성이 가장 크다
                          Integer avgCadence, Integer elevationChange) {
         this.splitNumber = new SplitNumber(splitNumber);
         this.avgPace = new Pace(avgPace);
@@ -42,9 +43,12 @@ public class RunningSplit {
         this.duration = new ElapsedTime(duration);
         this.routeRange = new RouteRange(routeStartIndex, routeEndIndex);
         this.period = new RunningPeriod(startAt, endAt);
+        if (calories == null) {
+            throw new CaloriesRequiredException();
+        }
+        this.calories = new Calories(calories);
         this.avgCadence = avgCadence == null ? null : new Cadence(avgCadence);
         this.elevationChange = elevationChange == null ? null : new ElevationChange(elevationChange);
-        this.calories = new Calories(calories);
     }
 
     // cadence는 있을 수도 없을 수도
