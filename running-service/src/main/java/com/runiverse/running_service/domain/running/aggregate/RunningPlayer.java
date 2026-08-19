@@ -1,6 +1,7 @@
 package com.runiverse.running_service.domain.running.aggregate;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.exception.InvalidPlayerStatusTransitionException;
 import com.runiverse.running_service.domain.running.exception.PlayerAlreadyLeftException;
 import com.runiverse.running_service.domain.running.exception.StartAtRequiredException;
 import com.runiverse.running_service.domain.running.vo.DesiredPlayerCount;
@@ -55,6 +56,15 @@ public class RunningPlayer {
                 .targetDistance(targetDistance)
                 .startAt(startAt)
                 .build();
+    }
+
+    // 대기 취소 — 상태는 그대로 두고 신청만 끝낸다(이탈과 달리 방 이력을 남길 필요가 없다)
+    public void cancel(LocalDateTime canceledAt) {
+        ensureActive();
+        if (status != RunningPlayerStatus.JOINED && status != RunningPlayerStatus.INVITED) {
+            throw new InvalidPlayerStatusTransitionException();
+        }
+        this.deletedAt = canceledAt;
     }
 
     // 이탈 — 페널티 여부는 이 시점에 판정돼 상태로 굳는다(별도 페널티 테이블 없음)
