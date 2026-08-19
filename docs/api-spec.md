@@ -204,7 +204,7 @@
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 
 {
@@ -472,7 +472,7 @@
 ```json
 {
   "code": "INVALID_CREDENTIALS",
-  "message": "이메일 또는 비밀번호가 일치하지 않습니다."
+  "message": "이메일 또는 비밀번호가 올바르지 않습니다."
 }
 ```
 
@@ -517,7 +517,7 @@
 
 {
   "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
+  "message": "지원하지 않는 소셜 로그인입니다."
 }
 ```
 
@@ -568,7 +568,7 @@
 ```json
 {
   "code": "INVALID_REFRESH_TOKEN",
-  "message": "리프레시 토큰이 유효하지 않습니다. 다시 로그인해 주세요."
+  "message": "리프레시 토큰이 유효하지 않습니다."
 }
 ```
 
@@ -617,7 +617,7 @@
 
 {
   "code": "ALREADY_ONBOARDED",
-  "message": "이미 온보딩을 완료한 계정입니다."
+  "message": "이미 온보딩을 완료했습니다."
 }
 ```
 
@@ -736,7 +736,7 @@
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 ```
 
@@ -1547,7 +1547,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 
 {
@@ -1597,7 +1597,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 ```
 
@@ -1700,7 +1700,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 
 {
@@ -2102,7 +2102,7 @@ SELECT requester_id AS friend_id FROM friendships WHERE receiver_id  = :me AND s
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "입력값이 올바르지 않습니다."
+  "message": "요청 값이 올바르지 않습니다."
 }
 ```
 
