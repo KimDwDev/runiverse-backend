@@ -33,11 +33,6 @@ public class RoomSession {
         this.connected = true;
     }
 
-    // 방이 닫혀 배정이 끊김 — 본인이 나간 게 아니라 leaveCount는 올리지 않는다
-    void disconnect() {
-        this.connected = false;
-    }
-
     public boolean isSamePlayer(RunningPlayerId playerId) {
         return runningPlayerId.equals(playerId);
     }

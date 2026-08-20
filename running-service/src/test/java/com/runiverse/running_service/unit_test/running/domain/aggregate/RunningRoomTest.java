@@ -181,14 +181,12 @@ public class RunningRoomTest {
         @Test
         @DisplayName("모집이 끝난 방에는 합류하지 못한다")
         void rejectJoinAfterMatched() {
-            // given -> 2명이라 마감에 확정된다(1명이면 취소돼 다른 이유로 막힌다)
+            // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
             room.closeMatching();
 
-            // when & then -> 자리는 남았지만 모집 구간이 끝났다
-            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
-            assertThatThrownBy(() -> room.join(3L, new Pace(HOST_PACE)))
+            // when & then
+            assertThatThrownBy(() -> room.join(2L, new Pace(HOST_PACE)))
                     .isInstanceOf(RoomNotJoinableException.class);
         }
 
@@ -227,43 +225,18 @@ public class RunningRoomTest {
         }
 
         @Test
-        @DisplayName("마감 시 혼자면 매칭이 성사되지 않아 방이 취소된다")
-        void singlePlayerRoomIsCancelled() {
+        @DisplayName("1인만 남은 방도 마감 확정돼 혼자 뛴다")
+        void singlePlayerRoomIsStillMatched() {
             // given
             RunningRoom room = matchRoom();
 
-            // when -> 자리 수가 아니라 최소 인원(2명)에 미달한 것이다
+            // when -> 인원이 안 차도 취소하지 않는다
             room.closeMatching();
+            room.start();
 
-            // then -> 배정을 모두 끊고 인원을 비운다
-            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
-            assertThat(room.getPlayerCount().current()).isZero();
-            assertThat(sessionOf(room, HOST).isConnected()).isFalse();
-        }
-
-        @Test
-        @DisplayName("마감 실패는 이탈이 아니라 leaveCount를 올리지 않는다")
-        void closeFailureDoesNotCountAsLeave() {
-            // given
-            RunningRoom room = matchRoom();
-
-            // when -> 사용자가 나간 게 아니라 방이 닫힌 것이다
-            room.closeMatching();
-
-            // then -> 페널티 근거로 쓰이므로 올라가면 안 된다
-            assertThat(sessionOf(room, HOST).getLeaveCount().value()).isZero();
-        }
-
-        @Test
-        @DisplayName("취소된 방은 더 이상 상태가 바뀌지 않는다")
-        void cancelledRoomIsTerminal() {
-            // given
-            RunningRoom room = matchRoom();
-            room.closeMatching();
-
-            // when & then
-            assertThatThrownBy(room::start)
-                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
         }
 
         @Test
