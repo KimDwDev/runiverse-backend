@@ -22,7 +22,6 @@ import com.runiverse.running_service.application.user.query.nickname.CheckNickna
 import com.runiverse.running_service.application.user.query.nickname.CheckNicknameAvailabilityResult;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlResult;
-import com.runiverse.running_service.presentation.common.security.SelfOnly;
 import com.runiverse.running_service.presentation.user.request.NicknameAvailabilityRequest;
 import com.runiverse.running_service.presentation.user.request.NicknameUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
@@ -85,12 +84,12 @@ public class UserController {
                 .body(new OnboardingResponse(result.userId(), result.nickname()));
     }
 
-    @SelfOnly
-    @PostMapping("/{userId}/profile-image/presigned-url")
+    @PostMapping("/me/profile-image/presigned-url")
     public ResponseEntity<ProfileImageUploadUrlResponse> createProfileImageUploadUrl(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody ProfileImageUploadUrlRequest request
     ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
         CreateProfileImageUploadUrlResult result = createProfileImageUploadUrlUsecase.handle(
                 new CreateProfileImageUploadUrlCommand(userId, request.mimeType(), request.fileSizeBytes())
         );
@@ -98,12 +97,12 @@ public class UserController {
                 new ProfileImageUploadUrlResponse(result.profileImageKey(), result.uploadUrl()));
     }
 
-    @SelfOnly
-    @PatchMapping("/{userId}/profile-image")
+    @PatchMapping("/me/profile-image")
     public ResponseEntity<ProfileUpdateResponse> changeProfileImage(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody ProfileUpdateRequest request
     ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
         ChangeProfileImageResult result = changeProfileImageUsecase.handle(
                 new ChangeProfileImageCommand(userId, request.profileImageKey()));
         return ResponseEntity.ok(new ProfileUpdateResponse(result.profileImageKey()));
@@ -116,19 +115,19 @@ public class UserController {
         return ResponseEntity.ok(new ProfileImageUrlResponse(result.profileImageUrl()));
     }
 
-    @SelfOnly
-    @DeleteMapping("/{userId}/profile-image")
-    public ResponseEntity<Void> deleteProfileImage(@PathVariable UUID userId) {
+    @DeleteMapping("/me/profile-image")
+    public ResponseEntity<Void> deleteProfileImage(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
         deleteProfileImageUsecase.handle(new DeleteProfileImageCommand(userId));
         return ResponseEntity.noContent().build();
     }
 
-    @SelfOnly
-    @PatchMapping("/{userId}/nickname")
+    @PatchMapping("/me/nickname")
     public ResponseEntity<NicknameUpdateResponse> changeNickname(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody NicknameUpdateRequest request
     ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
         ChangeNicknameResult result = changeNicknameUsecase.handle(new ChangeNicknameCommand(userId,
                 request.nickname()));
         return ResponseEntity.ok(new NicknameUpdateResponse(result.userId(), result.nickname()));
@@ -144,12 +143,12 @@ public class UserController {
                 new NicknameAvailabilityResponse(result.nickname(), result.available()));
     }
 
-    @SelfOnly
-    @PatchMapping("/{userId}/password")
+    @PatchMapping("/me/password")
     public ResponseEntity<Void> changePassword(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody PasswordUpdateRequest request
     ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
         changePasswordUsecase.handle(new ChangePasswordCommand(
                 userId,
                 request.currentPassword(),
