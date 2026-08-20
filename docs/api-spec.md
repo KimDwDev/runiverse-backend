@@ -136,10 +136,9 @@
 | 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
 | 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
 | 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | PATCH | `/api/v1/users/me` | 소개글 변경 |
+| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
 | 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
 | 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
-| 54 | PATCH | `/api/v1/users/me/body` | 키·몸무게 변경 (온보딩 완료 후) |
 
 ### 12. 설정 페이지
 
@@ -151,7 +150,9 @@
 | 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+
+> 번호는 한 번 붙이면 바꾸지 않는다. 통합·삭제로 비는 번호(54)는 그대로 둔다 — 노션 명세와 문서 사이 상호 참조가 번호로 걸려 있다.
 
 ---
 
@@ -2079,34 +2080,85 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-5. `PATCH /api/v1/users/me` — 프로필 수정
+### 11-5. `PATCH /api/v1/users/me/profile` — 프로필 수정
 
-- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 11-6, 사진은 11-1~11-4, 키·몸무게는 11-8로 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버 자동 갱신)
+저장 버튼 하나로 끝나는 값들을 한 요청에 담는다. 사진(11-1~11-4)은 저장 버튼과 무관한 3단계 업로드라, 닉네임(11-6)은 중복 검사와 409가 붙어 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버가 러닝 기록으로 갱신).
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `introduction` | String | 선택. 100자 이하. 빈 문자열이면 소개글을 지운다 |
-
-- **필드를 생략하면 현재 소개글을 그대로 둔다.** 지우려면 빈 문자열(`""`)을 보낸다 — 값이 없다고 필드를 빼면 지워지지 않는다
-- **Response `200 OK`** — 갱신본
+- **Request** (부분 수정 — 보낸 필드만 바꾼다)
 
 ```json
 {
-  "introduction": "즐겁게 달려요"
+  "introduction": "즐겁게 달려요",
+  "gender": "MALE",
+  "birthday": "1998-12-16",
+  "weightKg": 70.5,
+  "heightCm": 175.0
 }
 ```
 
-- **바꾼 값만 돌려준다** — 사진 반영(11-2)·키·몸무게(11-8)와 같은 형태다. 소개글 한 줄을 고치는 데 프로필 전체를 다시 조립할 이유가 없다
+| 필드 | 타입 | 제약 | 저장 위치 |
+|---|---|---|---|
+| `introduction` | String | 선택. 100자 이하. 빈 문자열이면 소개글을 지운다 | `users` |
+| `gender` | String | 선택. `MALE` \| `FEMALE` | `user_onboardings` |
+| `birthday` | String | 선택. `YYYY-MM-DD`, 1900-01-01 이후이며 미래일 수 없다 | `user_onboardings` |
+| `weightKg` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 | `user_onboardings` |
+| `heightCm` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 | `user_onboardings` |
 
-- **에러 (400 Bad Request)**
+- **필드를 생략하면 현재 값을 그대로 둔다.** 소개글만 빈 문자열(`""`)로 지울 수 있고, 나머지 넷은 온보딩에서 필수라 지우는 개념이 없다
+- **화면 구성이 확정되기 전이라 편집 가능한 값을 한 엔드포인트에 모았다** — 저장 버튼이 하나로 묶이든 여러 화면으로 갈리든 클라이언트가 자기 필드만 보내면 된다. 화면이 정해지면 이 구성을 다시 본다
+- **`profileVisibility`는 여기 없다** — 프로필 편집이 아니라 설정 페이지 값이라 12-4가 담당한다
+
+- **Response `200 OK`** — 갱신본. 보낸 필드만 담아 돌려준다
+
+```json
+{
+  "introduction": "즐겁게 달려요",
+  "weightKg": 70.5
+}
+```
+
+- **바꾼 값만 돌려준다** — 사진 반영(11-2)·닉네임(11-6)과 같은 형태다. 한두 필드를 고치는 데 프로필 전체를 다시 조립할 이유가 없다
+
+- **에러 (400 Bad Request)** — 문구는 온보딩(1-9)과 같다
 
 ```json
 {
   "code": "INVALID_REQUEST",
   "message": "소개글은 100자 이하여야 합니다."
 }
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "성별은 MALE 또는 FEMALE이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "생년월일은 미래일 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "몸무게는 20kg 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "키는 300cm 이하여야 합니다."
+}
 ```
 
+- **에러 (409 Conflict — 온보딩 미완료)**
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- **`user_onboardings`에 저장하는 필드(`gender`·`birthday`·`weightKg`·`heightCm`)가 하나라도 있는데 온보딩을 마치지 않았으면 아무것도 바꾸지 않고 409로 답한다.** 소개글만 보냈다면 온보딩 전에도 성공한다
+- **정상 흐름에서는 발생하지 않는다** — 앱 진입이 `isOnboarded`로 갈리므로 온보딩 전에는 편집 화면에 닿지 못한다. 구버전 앱과 직접 호출 때문에 서버가 막는다
 - **인증**: 필요
 
 ### 11-6. `PATCH /api/v1/users/me/nickname` — 닉네임 변경
@@ -2222,68 +2274,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **인증**: 불필요
-
-### 11-8. `PATCH /api/v1/users/me/body` — 키·몸무게 변경
-
-키·몸무게는 `user_onboardings`에 있어 온보딩을 마쳐야 바꿀 수 있다. 러닝 기록의 칼로리 계산에 쓰는 값이라 프로필 요약(10-2)에는 나가지 않는다.
-
-- **Request** (부분 수정 — 보낸 값만 바꾼다)
-
-```json
-{
-  "weightKg": 70.5,
-  "heightCm": 175.0
-}
-```
-
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `weightKg` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
-| `heightCm` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
-
-- **Response `200 OK`** — 갱신본
-
-```json
-{
-  "weightKg": 70.5,
-  "heightCm": 175.0
-}
-```
-
-- **에러 (400 Bad Request)**
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "몸무게는 20kg 이상이어야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "몸무게는 300kg 이하여야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "키는 20cm 이상이어야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "키는 300cm 이하여야 합니다."
-}
-```
-
-- **에러 (409 Conflict — 온보딩 미완료)**
-
-```json
-{
-  "code": "ONBOARDING_NOT_COMPLETED",
-  "message": "온보딩을 먼저 완료해 주세요."
-}
-```
-
-- **인증**: 필요
 
 ## 12. 설정 페이지
 
