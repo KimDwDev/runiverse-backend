@@ -1907,11 +1907,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **못 얻은 색도 함께 내린다.** 컬렉션 화면은 "무엇을 더 모을 수 있는지"를 보여주는 것이 목적이라, 미획득 색과 그 조건(`unlockDescription`)이 있어야 화면이 성립한다
 - `totalCount`는 마스터 행 수다 — **총 개수를 명세에 박지 않으므로** 클라도 이 값을 그대로 쓴다
-- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 `403 PROFILE_PRIVATE`
+- **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 `403 PROFILE_NOT_VISIBLE`
 
 ```json
 {
-  "code": "PROFILE_PRIVATE",
+  "code": "PROFILE_NOT_VISIBLE",
   "message": "비공개 프로필입니다."
 }
 ```
