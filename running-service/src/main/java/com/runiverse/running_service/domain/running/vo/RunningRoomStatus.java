@@ -28,12 +28,17 @@ public enum RunningRoomStatus {
         return allowedNext().isEmpty();
     }
 
+    // 러닝 시작 전인지 — 빈 방을 닫을 수 있는 구간이다
+    public boolean isBeforeStart() {
+        return this == MATCHING || this == MATCHED;
+    }
+
     private Set<RunningRoomStatus> allowedNext() {
         return switch (this) {
             case MATCHING -> Set.of(MATCHED, CANCELLED);
             case MATCHED -> Set.of(STARTED, CANCELLED);
-            case STARTED -> Set.of(FINISHED, CANCELLED);
-            // 러닝이 시작 된 후에는 CANCELLED가 있을지 고민 중 현재는 있는 걸로 생각을 했습니다.
+            // 시작한 방은 취소하지 않는다 — 닫으면 FINISHED에 닿지 못해 기록이 사라진다
+            case STARTED -> Set.of(FINISHED);
             case FINISHED, CANCELLED -> Set.of();
         };
     }
