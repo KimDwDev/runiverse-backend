@@ -43,10 +43,12 @@
 - 매칭 버튼: 설정된 조건으로 러닝 매칭 시작.
 - 매칭 설정 버튼: 매칭 조건 설정 모달 오픈.
 - 매칭 정보 입력 모달: 거리/시간 입력.
-  - 모집 인원은 입력받지 않음 — 서버가 2~4명 범위에서 자동 편성. 친구 초대(친구 선택 모달)는 1차 미포함, 랜덤 매칭만.
-  - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_date`에 저장. "거리"는 `running_players.total_distance`(플레이어별 목표 거리)에 저장.
+  - 모집 인원은 입력받지 않음 — 방은 4자리로 열리고 `close_at`에 모인 만큼 확정된다(`running_players.desired_player_count`에는 기본값 4가 저장된다). 친구 초대(친구 선택 모달)는 1차 미포함, 랜덤 매칭만.
+  - `running_players` row 생성이 곧 매칭 요청 저장. "시간"은 목표 러닝 시간이 아니라 희망 시작 시각(예약 매칭) — `running_players.start_at`에 저장. "거리"는 `running_players.target_distance`(플레이어별 목표 거리)에 저장.
+  - 요청과 동시에 방이 정해진다 — 조건이 맞는 모집 중인 방(`type='MATCH'`, `status='MATCHING'`, `current_player_count < max_player_count`)이 있으면 합류하고, 없으면 **본인만 있는 1인 방을 새로 만든다**. 즉 대기 중에도 항상 방이 존재한다.
+  - **합류 조건**: `start_at`·`target_distance`는 **정확히 일치**해야 하고, `running_rooms.avg_pace`와 신청자 페이스 차가 **30초/km 이내**여야 한다. 조건을 만족하는 방이 여럿이면 **페이스 차가 가장 작은 방**을 고른다. 기준이 되는 방 페이스는 참가·이탈마다 갱신된 현재 평균이다 — 즉 방이 채워질수록 합류 기준선도 함께 움직인다.
 - 매칭 대기 화면: 매칭 진행 상태·남은 예상 시간·현재 참가자 확인.
-  - 확정/취소 판정: 판정 시각 confirm_deadline은 `start_date`의 X시간 전으로 계산하는 파생값(X는 서버 설정값, DB 컬럼 아님). 그 시점 참가자가 2명 이상이면 `status='MATCHED'` 자동 확정, 미만이면 `status='CANCELLED'` 자동 취소 — 목표 인원(`total_member`) 도달 여부와 무관.
+  - 확정 판정: 판정 시각은 방 생성 시 `running_rooms.close_at`(= `start_at` - 서버 설정값)으로 **고정 저장**한다. 설정을 바꿔도 이미 만들어진 방의 마감은 움직이지 않는다. `close_at` 도달 시 인원 수와 무관하게 `status='MATCHED'`로 자동 확정 — 자리 수(`max_player_count`) 충족 여부와도 무관. **1인이면 매칭 실패가 아니라 1인으로 확정돼 혼자 뛴다** — 인원 부족으로 인한 자동 취소는 없다.
 
 **매칭완료 대기방**
 
@@ -54,10 +56,10 @@
 - 매칭된 참가자 목록: 닉네임·페이스·소개글 표시 — 뱃지는 프로필 화면에서만 노출.
 - 이모티콘 주고받기: 대기방 참가자끼리 전송·수신 (WS `EMOJI_SEND`(C→S) / `EMOJI_RECEIVED`(S→C)).
 - 시작 타이머: 러닝 시작까지 카운트다운 — 클라이언트 주도 시작.
-  - 카운트다운은 각 클라이언트가 자체 시계 기준으로 표시하고, `start_date` 도달 시 스스로 러닝 화면으로 전환하며 WS `RUNNING_START`(C→S)로 시작을 알림.
+  - 카운트다운은 각 클라이언트가 자체 시계 기준으로 표시하고, `start_at` 도달 시 스스로 러닝 화면으로 전환하며 WS `RUNNING_START`(C→S)로 시작을 알림.
   - 서버는 같은 시각에 내부 스케줄러로 `running_rooms.status='STARTED'` 전환 — 클라이언트가 호출하는 REST API 없음.
-- 나가기: 나간 사람만 `running_players.status='LEFT'` 처리, 방은 유지되고 남은 참가자는 계속 대기.
-- 확정(`MATCHED`) 이후 이탈 시 페널티 부여(정의·저장 방식은 별도 설계). 이탈로 인원이 2명 미만이 되면 방 취소, 자동 재매칭(빈자리 채우기)은 하지 않음.
+- 나가기: 나간 사람만 `running_players.status`를 `MATCHED_LEFT_PENALTY`/`MATCHED_LEFT_NO_PENALTY`로 전환하고 `deleted_at`을 찍는다. 방은 유지되고 남은 참가자는 계속 대기(`current_player_count` 감소).
+- 확정(`MATCHED`) 이후 이탈 시 페널티 부여 — 페널티 여부는 이탈 시점에 서버가 판정해 `running_players.status`에 고정 저장한다(별도 페널티 테이블 없음). 이탈로 `current_player_count`가 1이 돼도 방은 유지되고 남은 1인이 혼자 뛴다(`0`이 되면 방 취소), 자동 재매칭(빈자리 채우기)은 하지 않음.
 
 ### 러닝
 
@@ -125,7 +127,7 @@
 
 - 프로필 요약: 사진, 닉네임, 총 누적고도, 마일리지, 소개글, 뱃지, 잔디, 팔로워/팔로잉 수 표시.
   - 마일리지: 별도 저장 테이블 없이 `running_records.total_distance` 합산 — 누적은 전체, 월별은 해당 월 기록 합산.
-  - 총 누적고도: `running_records.elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
+  - 총 누적고도: `running_records.total_elevation_gain` 전체 합산 — nullable 컬럼이라 null 기록은 합산 제외.
 - 내가 올린 피드 그리드: 프로필 하단에 본인 작성 피드를 썸네일 그리드로 표시.
 - 피드 작성 버튼: 누르면 피드 작성 페이지로 이동.
 - 피드 편집: 게시글 수정/삭제, 노출 범위 설정.
@@ -171,23 +173,29 @@
 
 > 전체 테이블·컬럼·타입·PK 규칙·enum·단위는 `erd.md`가 단일 출처. 여기서는 API 작성·구현에 필요한 도메인 제약과 설계 맥락만 남긴다.
 
-**API 리소스 네이밍**: DB 테이블명(`running_rooms`, `running_players` 등)은 그대로지만, API 엔드포인트/URL은 "room" 대신 "session" 용어로 통일한다(예: `/running-rooms/...` → `/running-sessions/...` 계열). `api-spec.md` 5~6번이 이 기준으로 작성되어 있다.
+**API 리소스 네이밍**: DB 테이블명과 API 용어를 "room"으로 통일한다 — 식별자는 `runningRoomId`(Long, = `running_rooms.running_room_id`), URL은 `/running-rooms/...` 계열. `api-spec.md` 5~6번이 아직 "session" 용어(`runningSessionId`, `/running-sessions/...`)로 작성되어 있어 정리가 필요하다.
+
+**방은 항상 존재한다**: 솔로 러닝도 1인 방(`running_rooms.type='SOLO'`)과 `running_players`·`running_room_sessions` row를 만든다. 방 참가자 조회·기록 저장 경로가 매칭과 솔로에서 완전히 같아지고, `running_records.running_room_id`가 NOT NULL이 된다.
 
 **매칭·러닝 설계**: 매칭은 REST가 아니라 WebSocket(`/ws/running-matches`)으로 처리한다.
 
-- 매칭 시작 = 대기 풀(`running_players`) 진입 — 혼자만 있는 방이 생기지 않음. 대기 상태·참가자·성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번).
+- 매칭 시작 = 방 배정 — 조건이 맞는 모집 중인 방에 합류하거나, 없으면 1인 방을 새로 만든다(`type='MATCH'`, `status='MATCHING'`). 대기 상태·참가자·성사/취소·시작·러닝 진행·종료까지 WS 메시지로 처리(전문은 `api-spec.md` 5번).
+- 방 `type`은 생성 시 고정된다 — 매칭 후보 스캔·대기 인원 집계가 `type='MATCH'`만 보므로 솔로 방·초대방이 후보에 섞이지 않는다.
 - 러닝 시작은 클라 주도(`RUNNING_START` C→S, 카운트다운은 클라 자체 시계). 메시지 네이밍 규칙: 클라 발신 현재형 / 서버 발신 과거형.
-- 러닝 중 다른 참가자 위치·진행상황 공유도 WS로 처리 — 러닝방 입장 시 연결, 위치를 주기적으로 발신/수신.
-- 매칭 성사 후에는 `runningSessionId`(Long, ≈`running_rooms.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음.
+- 러닝 중 다른 참가자 위치·진행상황 공유도 WS로 처리 — 러닝방 입장 시 연결, 위치를 주기적으로 발신/수신. `running_room_sessions.is_connected`·`leave_count`는 **WS 연결 상태가 아니라 방 잔류 여부·이탈 횟수**를 기록하며 페널티 판정 근거로 쓴다 — 네트워크가 끊긴 것과 방을 나간 것은 구분한다.
+- 매칭 성사 후에는 `runningRoomId`(Long, = `running_rooms.running_room_id`)로 REST 호출(결과 조회) — 그 외 REST 매칭 엔드포인트는 없음.
 
 **`user_devices.is_active`**: 로그인 시 디바이스 등록/갱신 API가 `is_active=true`로 전환(푸시 준비). 기기 단위 비활성화(로그아웃 시 false)는 deviceId 도입 시(2차) — 1차 로그아웃은 토큰 블랙리스트만(deviceId 안 받음).
 
 **이미지 업로드**(`feed_images`, `users.profile_image_key` 등 전체 공통): Presigned URL 방식 — 클라이언트가 업로드용 presigned URL 요청 → 서버가 S3 presigned URL 발급 → 클라이언트가 S3에 직접 업로드 → 반환받은 key를 본 API(피드 작성, 프로필 사진 변경 등) 요청에 포함해 전달.
 
-**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. 저장 주체는 러닝 종류에 따라 다름.
+**GPS 트랙**: 원본 트랙은 Postgres 테이블이 아님 — `running_records.gps_track_key`로 S3 객체를 참조. **매칭·솔로 모두 서버가 저장한다.**
 
-- **매칭 러닝**: 러닝 중엔 Redis(`session_id+user_id` 키)에 버퍼링, 종료 시 서버가 S3에 업로드. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보냄 — 이 시점에 서버가 `running_records` 저장.
-- **솔로 러닝**(매칭 없이 혼자, `running_players`/`running_rooms` 없이 `running_records`만 생성): 클라이언트가 로컬로 트랙을 추적하고 종료 후 presigned URL로 S3에 직접 업로드한 뒤 기록 저장 API를 호출 — api-spec 7-3·7-4.
+- 러닝 중엔 Redis(`running_room_id + user_id` 키)에 좌표를 버퍼링하고, 종료 시 서버가 S3에 업로드한다. 클라이언트는 업로드하지 않고 종료 신호(WS `RUNNING_FINISH`)만 보내며, 이 시점에 서버가 `running_records`·`running_splits`를 일괄 INSERT한다.
+- **솔로 러닝**(`type='SOLO'`, 혼자 뛰지만 방·플레이어 row는 만든다)도 같은 경로를 탄다 — 클라 presigned 업로드나 기록 저장 REST API를 쓰지 않는다. ⚠️ `api-spec.md` 7-3·7-4(솔로 전용 presigned URL·기록 저장)는 이 결정으로 무효가 되므로 정리가 필요하다.
+- **경로 데이터의 용도 분리**: `gps_track_key`(S3 원본)는 재계산·분석 전용으로 **API 응답에 쓰지 않는다**. 클라이언트에 내려주는 경로는 전부 `route_polyline`(encoded polyline, precision 5) 하나뿐이며, 조회 한 번에 딸려 나와 S3 왕복이 없다.
+- **구간 경로는 따로 저장하지 않는다**: `running_splits`는 경로를 복사해 갖지 않고 `route_start_index`/`route_end_index`로 `running_records.route_polyline`의 좌표 범위만 가리킨다. 경로의 정본이 하나라 전체와 구간이 어긋날 수 없다. 인덱스는 **inclusive이고 구간 경계에서 겹친다**(구간 n의 끝점 = 구간 n+1의 시작점) — 겹치지 않으면 구간을 이어 그릴 때 선이 끊긴다. 인덱스는 다운샘플 결과에 종속되므로 **경로와 항상 같이 갱신**한다.
+- **고도는 기록과 구간의 기준이 다르다**: `running_records.total_elevation_gain`은 오르막 상승분만 더한 **누적 상승**(0 이상), `running_splits.elevation_change`는 구간 시작·끝의 **고도 순변화**(내리막이면 음수). 구간을 다 더해도 전체와 일치하지 않으며, 이는 버그가 아니라 의도된 차이다.
 
 **피드-러닝 기록 연결**: `feeds.running_record_id`는 `running_records` 참조 — 피드 작성 시 "러닝 기록 템플릿 선택"에 대응. nullable — 러닝 기록 없이 글+사진만으로도 작성 가능.
 
@@ -197,19 +205,21 @@
 
 **날씨**: 홈 화면 날씨는 클라이언트가 키리스 무료 날씨 API(예: Open-Meteo)를 직접 호출 — 서버 API 없음. 유료 제공자·캐싱 필요 시점에 프록시 추가 재검토.
 
-**`running_rooms.status`**: MATCHING/MATCHED/STARTED/FINISHED/CANCELLED. 매칭 취소 시 `status='CANCELLED'`만 사용 — 취소 이력도 조회 가능해야 하므로 목록에서 제외하지 않음. `deleted_at`은 별도 용도(예: 관리자의 부정 방 숨김 처리)로 남겨두고 이번 명세에서는 다루지 않는다.
+**`running_rooms.status`**: MATCHING/MATCHED/STARTED/FINISHED/CANCELLED. 솔로 방은 `STARTED`로 생성돼 `MATCHING`·`MATCHED`를 거치지 않는다 — 상태 전이 규칙은 `type`과 함께 판정해야 한다. 매칭 취소 시 `status='CANCELLED'`만 사용 — 취소 이력도 조회 가능해야 하므로 목록에서 제외하지 않음. `deleted_at`은 별도 용도(예: 관리자의 부정 방 숨김 처리)로 남겨두고 이번 명세에서는 다루지 않는다.
 
-**`STARTED`→`FINISHED` 전환**: 둘 중 먼저 오는 시점에 자동 전환 — ① `CONFIRMED` 참가자 전원이 기록 제출 완료 시 즉시 `FINISHED`, ② 미제출자가 있어도 시작 후 서버 설정 시간 경과 시(타임아웃) 스케줄러가 `FINISHED` 처리. 타임아웃 값은 운영 정책.
+**`STARTED`→`FINISHED` 전환**: 둘 중 먼저 오는 시점에 자동 전환 — ① `RUNNING` 참가자 전원이 기록 제출 완료(`COMPLETED`) 시 즉시 `FINISHED`, ② 미제출자가 있어도 시작 후 서버 설정 시간 경과 시(타임아웃) 스케줄러가 `FINISHED` 처리. 타임아웃 값은 운영 정책.
 
-**`running_players.status`**: CONFIRMED(참가중)/LEFT(이탈)/INVITED(초대됨). `INVITED`는 친구 초대용 — 1차 미사용. 거절 시에는 별도 상태값 없이 row 자체를 DELETE(거절 이력 보관 안 함).
+**`running_players.status`**: 값 목록과 의미는 `erd.md` §6이 단일 출처. 요점만 — 페널티 여부는 이탈 시점에 서버가 판정해 `*_LEFT_PENALTY`/`*_LEFT_NO_PENALTY`로 고정 저장하므로 별도 페널티 테이블이 없다. 대기 취소·초대 거절은 별도 상태값 없이 `deleted_at`만 찍고 `running_room_sessions` 링크를 삭제한다(이탈과 달리 방 이력을 남기지 않음). `INVITED`는 친구 초대(`type='INVITE'`)용 — MVP 미사용.
 
-**목표 거리 vs 실제 거리**: `running_players.total_distance`는 매칭 시 설정한 목표 거리(플레이어별 저장), `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리 — 서로 다른 값, 혼동 주의.
+**목표 거리 vs 실제 거리**: 목표는 `target_*`, 실적은 `total_*`로 이름이 갈린다 — `running_players.target_distance`·`running_rooms.target_distance`는 설정한 목표 거리, `running_records.total_distance`는 러닝 종료 후 확정된 실제 이동 거리. 서로 다른 값이다.
+
+**날씨 기록**: `running_records.weather_code`(WMO 4677 원본값)·`temperature`만 저장하고 "악조건 여부" 같은 판정 결과는 저장하지 않는다 — 기준이 바뀌어도 과거 기록을 다시 계산할 수 있어야 하기 때문. 둘 다 **NOT NULL**이며 **클라이언트가 종료 신호(`RUNNING_FINISH`)에 실어 보낸다.** 서버가 종료 시점에 외부 날씨 API를 호출하지 않는 이유는, 그 API가 실패하면 한 시간짜리 러닝 기록 저장이 통째로 실패하기 때문이다. 클라이언트는 홈 화면에서 이미 같은 API를 쓰고 있어 추가 비용이 없다. ⚠️ `api-spec.md` 5-D의 `RUNNING_FINISH` 메시지에 날씨 필드를 추가해야 한다.
 
 **회원탈퇴 시 연관 데이터 처리** (테이블별):
 
 - **유지**: `feeds`, `comments`, `running_records`(+`running_splits`) — 같은 방 참가자의 대시보드 기록 비교가 서비스 핵심이라 탈퇴해도 기록은 유지. 해당 테이블들의 `user_id` FK는 하드delete 이후에도 값이 남아야 하므로 DB 레벨 CASCADE 걸지 않고 애플리케이션 레벨에서 처리. 작성자가 탈퇴한 경우 응답의 작성자 정보는 `{ userId, nickname: "탈퇴한 사용자", profileImageUrl: null, isDeleted: true }`로 대체(고정 문구 — 실제 닉네임은 스냅샷 안 하므로 조회하지 않음).
 - **유지 (카운트 재계산 안 함)**: `feed_likes`, `comment_likes` — 탈퇴자가 누른 좋아요는 남겨두고 `like_count` 그대로(인스타그램 방식).
-- **즉시 삭제**: `follows`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stats`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_badges`, `user_running_contests`, `running_players`(연결 테이블 `running_room_sessions`은 FK `ON DELETE CASCADE`로 연쇄)
+- **즉시 삭제**: `follows`(`ON DELETE CASCADE` — 팔로워/팔로잉 목록에서 탈퇴 유저 노출 방지), `user_follow_stats`(탈퇴자 본인 row), 개인 데이터 테이블 전부 — `user_onboardings`, `user_devices`, `oauth_users`, `user_badges`, `user_running_contests`. `running_players`는 `user_id`가 논리 참조라 DB CASCADE가 걸리지 않으므로 **앱이 탈퇴 트랜잭션에서 명시적으로 DELETE**한다(연결 테이블 `running_room_sessions`은 `running_player_id` FK `ON DELETE CASCADE`로 연쇄)
 - `follows` CASCADE 삭제로 어긋나는 상대방들의 `user_follow_stats` follower/following_count는 탈퇴 트랜잭션에서 즉시 재계산(감소 반영) — `follows`는 row가 삭제돼 목록과 수가 일치해야 하기 때문(`feed_likes`는 row 유지라 카운트 유지 — 기준이 다름).
 
 **삭제 처리 방식** (리소스별로 다름 — API 설계 시 각각 구분해서 반영):

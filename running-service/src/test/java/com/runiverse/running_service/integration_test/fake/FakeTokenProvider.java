@@ -3,7 +3,7 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.ParseRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 
 import java.util.Optional;
 import java.util.UUID;
