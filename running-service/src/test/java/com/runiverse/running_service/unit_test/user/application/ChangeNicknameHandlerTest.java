@@ -64,7 +64,6 @@ public class ChangeNicknameHandlerTest {
         ChangeNicknameResult result = handler.handle(new ChangeNicknameCommand(userId, NEW_NICKNAME));
 
         // then
-        assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.nickname()).isEqualTo(NEW_NICKNAME);
         verify(updateNicknamePort).updateNickname(new UserId(userId), new Nickname(NEW_NICKNAME));
     }

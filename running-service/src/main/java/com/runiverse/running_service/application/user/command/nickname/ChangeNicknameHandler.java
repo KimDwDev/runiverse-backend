@@ -33,7 +33,7 @@ public class ChangeNicknameHandler implements ChangeNicknameUsecase {
 
         // 3. 자기 자신의 닉네임과 같으면 그대로 반환 -> 변하는 거 없음
         if (current.equals(nickname)) {
-            return new ChangeNicknameResult(command.userId(), current.value());
+            return new ChangeNicknameResult(current.value());
         }
 
         // 4. 남이 닉네임을 쓰고 있으면 막는다
@@ -43,6 +43,6 @@ public class ChangeNicknameHandler implements ChangeNicknameUsecase {
 
         // 5. 갱신
         updateNicknamePort.updateNickname(userId, nickname);
-        return new ChangeNicknameResult(command.userId(), nickname.value());
+        return new ChangeNicknameResult(nickname.value());
     }
 }

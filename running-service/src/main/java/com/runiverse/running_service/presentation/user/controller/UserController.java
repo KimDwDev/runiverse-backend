@@ -130,7 +130,7 @@ public class UserController {
         UUID userId = UUID.fromString(jwt.getSubject());
         ChangeNicknameResult result = changeNicknameUsecase.handle(new ChangeNicknameCommand(userId,
                 request.nickname()));
-        return ResponseEntity.ok(new NicknameUpdateResponse(result.userId(), result.nickname()));
+        return ResponseEntity.ok(new NicknameUpdateResponse(result.nickname()));
     }
 
     @PostMapping("/nickname/availability")
