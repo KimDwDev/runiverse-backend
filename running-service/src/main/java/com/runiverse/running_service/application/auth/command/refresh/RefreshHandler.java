@@ -8,7 +8,7 @@ import com.runiverse.running_service.application.auth.port.out.LoadRefreshTokenP
 import com.runiverse.running_service.application.auth.port.out.ParseRefreshTokenPort;
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

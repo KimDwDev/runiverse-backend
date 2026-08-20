@@ -5,7 +5,7 @@ import com.runiverse.running_service.application.user.command.profileimage.Delet
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageHandler;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

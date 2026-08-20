@@ -1,7 +1,7 @@
-package com.runiverse.running_service.domain.user.vo;
+package com.runiverse.running_service.domain.common.vo;
 
-import com.runiverse.running_service.domain.user.exception.InvalidUserIdFormatException;
-import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
+import com.runiverse.running_service.domain.common.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 
 import java.util.UUID;
 

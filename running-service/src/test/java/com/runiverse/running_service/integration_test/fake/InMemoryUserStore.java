@@ -10,7 +10,7 @@ import com.runiverse.running_service.application.user.port.out.UpdatePasswordPor
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
