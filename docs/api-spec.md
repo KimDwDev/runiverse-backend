@@ -865,6 +865,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `closeAt`은 모집이 마감되는 시각(`running_rooms.close_at`) — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
+
+```json
+{
+  "code": "ALREADY_MATCHING",
+  "message": "이미 진행 중인 매칭이 있습니다."
+}
+```
+
 - **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 페널티 대상 이탈로 신청이 제한된 상태다. 응답에 해제 시각을 담는다
 
 ```json
@@ -1812,6 +1820,18 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
 - **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
 - **에러 (404 Not Found)**: 대상이 없다
+
+```json
+{
+  "code": "CANNOT_FRIEND_SELF",
+  "message": "자기 자신에게는 친구 요청을 보낼 수 없습니다."
+}
+
+{
+  "code": "FRIEND_REQUEST_ALREADY_EXISTS",
+  "message": "이미 요청했거나 이미 친구입니다."
+}
+```
 - **인증**: 필요
 
 ### 10-5. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
@@ -1888,6 +1908,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **못 얻은 색도 함께 내린다.** 컬렉션 화면은 "무엇을 더 모을 수 있는지"를 보여주는 것이 목적이라, 미획득 색과 그 조건(`unlockDescription`)이 있어야 화면이 성립한다
 - `totalCount`는 마스터 행 수다 — **총 개수를 명세에 박지 않으므로** 클라도 이 값을 그대로 쓴다
 - **지인 마스킹**: `profile_visibility=FRIENDS`인 사용자를 친구가 아닌 사람이 조회하면 `403 PROFILE_PRIVATE`
+
+```json
+{
+  "code": "PROFILE_PRIVATE",
+  "message": "비공개 프로필입니다."
+}
+```
+
 - **에러 (404 Not Found)**: 대상이 없다
 - **인증**: 필요
 
