@@ -1502,7 +1502,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (404 Not Found)**
+- **에러 (404 Not Found — feedId 피드 없음, 또는 parentCommentId 부모 댓글 없음)**
 
 ```json
 {
@@ -1981,6 +1981,20 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **에러 (400 Bad Request — 요청 검증)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "프로필 이미지 키는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "프로필 이미지 키는 255자 이하여야 합니다."
+}
+```
+
 - **에러 (400 Bad Request — 본인 키가 아니거나 형식이 어긋남)**
 
 ```json
@@ -2067,6 +2081,25 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 현재 닉네임과 같은 값을 보내면 아무것도 바꾸지 않고 그대로 반환한다(idempotent).
 
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "닉네임은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "닉네임은 2자 이상 16자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."
+}
+```
+
 - **에러 (409 Conflict — 남이 쓰고 있음)**
 
 ```json
@@ -2117,7 +2150,17 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
+  "message": "닉네임은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "닉네임은 2자 이상 16자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다."
 }
 ```
 
