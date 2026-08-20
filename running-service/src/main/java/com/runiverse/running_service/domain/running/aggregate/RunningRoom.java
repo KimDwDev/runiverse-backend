@@ -27,6 +27,7 @@ public class RunningRoom {
 
     private static final int SOLO_MAX_PLAYER = 1;
     private static final int MATCH_MAX_PLAYER = 4;
+    private static final int MIN_MATCHED_PLAYER = 2;   // 마감 시 이 인원에 못 미치면 매칭 실패
     private final RunningRoomId runningRoomId;   // 저장 전에는 null
     private final RunningRoomType type;          // 생성 후 바뀌지 않는다
     private final LocalDateTime startAt;
@@ -134,9 +135,22 @@ public class RunningRoom {
                 && avgPace.isCloseTo(pace);
     }
 
-    // close_at 도달 — 인원 수와 무관하게 확정된다(1인이면 1인으로 확정돼 혼자 뛴다)
+    // close_at 도달 — 2명 이상이면 확정하고, 혼자면 성사되지 않은 것이라 방을 닫는다
+    // 자리 수(max)를 채웠는지는 보지 않는다 — 마감 시점 인원이 곧 출발 인원이다
     public void closeMatching() {
+        if (playerCount.current() < MIN_MATCHED_PLAYER) {
+            failMatching();
+            return;
+        }
         this.status = status.transitionTo(RunningRoomStatus.MATCHED);
+    }
+
+    // 인원 부족으로 성사되지 않음 — 방을 닫고 배정을 모두 끊는다
+    // leave()와 달리 leaveCount를 올리지 않는다 — 사용자가 나간 게 아니라 방이 닫힌 것이라 페널티 근거가 아니다
+    private void failMatching() {
+        cancel();
+        this.sessions.forEach(RoomSession::disconnect);
+        this.playerCount = playerCount.empty();
     }
 
     // 나갔던 사람이 돌아옴 — 러닝 중에도 가능해서 join()의 모집 조건을 타지 않는다

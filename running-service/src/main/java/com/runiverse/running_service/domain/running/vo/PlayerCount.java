@@ -46,4 +46,9 @@ public record PlayerCount(int current, int max) {
         return new PlayerCount(current - 1, max);
     }
 
+    // 방이 닫혀 인원을 한 번에 비움 — 한 명씩 leave()를 부르는 것과 달리 이탈 이력이 아니다
+    public PlayerCount empty() {
+        return new PlayerCount(0, max);
+    }
+
 }
