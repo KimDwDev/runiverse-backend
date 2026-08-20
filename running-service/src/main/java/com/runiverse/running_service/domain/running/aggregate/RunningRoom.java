@@ -156,8 +156,8 @@ public class RunningRoom {
         RoomSession session = session(runningPlayerId);   // 참가자 확인이 먼저 — 아니면 인원만 줄고 예외가 난다
         this.playerCount = playerCount.leave();
         session.leave();
-        if (playerCount.current() == 0) {
-            cancel();   // 남은 사람이 없으면 방도 없다
+        if (playerCount.current() == 0 && status.isBeforeStart()) {
+            cancel();   // 시작 전 빈 방만 닫는다 — 시작 후엔 기록이 남아야 해서 FINISHED로 간다
         }
     }
 

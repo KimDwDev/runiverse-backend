@@ -15,7 +15,7 @@ public record ProfileImageUploadUrlRequest(
         String mimeType,
 
         // 서명에 그대로 들어가는 것으로 바이트 수를 올려야 한다.
-        @NotNull(message = "파일 크기는 필수 입니다.")
+        @NotNull(message = "파일 크기는 필수입니다.")
         @Min(value = 1, message = "파일 크기는 1바이트 이상이어야 합니다.")
         @Max(value = 10_485_760, message = "이미지는 10MB 이하만 업로드할 수 있습니다.")
         Long fileSizeBytes

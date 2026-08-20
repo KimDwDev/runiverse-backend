@@ -59,9 +59,9 @@ public class User {
         this(userId, email, passwordHash, alertConsent, null, ProfileVisibility.PUBLIC, "");
     }
 
-    // alertConsent, introduction이 없는 경우
+    // alertConsent, introduction이 없는 경우 — 알림은 기본 수신
     public User(UUID userId, String email, String passwordHash) {
-        this(userId, email, passwordHash, false, null, ProfileVisibility.PUBLIC, "");
+        this(userId, email, passwordHash, true, null, ProfileVisibility.PUBLIC, "");
     }
 
     // 로컬 로그인 비밀번호가 없는 계정인지 — OAuth 전용 계정은 빈 해시를 갖는다
@@ -83,7 +83,7 @@ public class User {
 
     // oauth로 회원가입 할때 사용하는 생성자
     public User(UUID userId, String email) {
-        this(userId, email, "", false, null, ProfileVisibility.PUBLIC, "");
+        this(userId, email, "", true, null, ProfileVisibility.PUBLIC, "");
     }
 
     public Optional<ProfileImageKey> getProfileImageKey() {

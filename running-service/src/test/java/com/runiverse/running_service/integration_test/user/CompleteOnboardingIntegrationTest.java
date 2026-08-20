@@ -6,7 +6,7 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpHandl
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingResult;
-import com.runiverse.running_service.application.user.exception.AlreadyOnboardingException;
+import com.runiverse.running_service.application.user.exception.AlreadyOnboardedException;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
@@ -102,14 +102,14 @@ public class CompleteOnboardingIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("이미 온보딩한 유저가 다시 시도하면 AlreadyOnboardingException이 발생한다")
+    @DisplayName("이미 온보딩한 유저가 다시 시도하면 AlreadyOnboardedException이 발생한다")
     void onboardingTwice() {
         // given
         UUID userId = signUp(EMAIL);
         completeOnboardingHandler.handle(command(userId, NICKNAME));
         // when & then
         assertThatThrownBy(() -> completeOnboardingHandler.handle(command(userId, "새러너")))
-                .isInstanceOf(AlreadyOnboardingException.class);
+                .isInstanceOf(AlreadyOnboardedException.class);
         // 기존 닉네임이 덮어써지지 않는다
         assertThat(onboardingStore.findByUserId(userId).orElseThrow().getNickname().value())
                 .isEqualTo(NICKNAME);

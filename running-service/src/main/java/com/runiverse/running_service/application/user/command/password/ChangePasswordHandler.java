@@ -29,7 +29,7 @@ public class ChangePasswordHandler implements ChangePasswordUsecase {
         User user = loadUserByIdPort.loadById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
-        // 2. 소설 전용 계정은 바꾸지 않는다
+        // 2. 소셜 전용 계정은 바꾸지 않는다
         if (user.isPasswordNotSet()) {
             throw new PasswordNotSetException();
         }

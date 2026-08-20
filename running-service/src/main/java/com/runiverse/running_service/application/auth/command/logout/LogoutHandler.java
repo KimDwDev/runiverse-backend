@@ -16,7 +16,6 @@ public class LogoutHandler implements LogoutUsecase {
 
     @Override
     public void handle(LogoutCommand command) {
-
         // 1. cache에서 데이터를 refresh token을 찾고 삭제 -> 검증 후 삭제
         deleteRefreshTokenPort.delete(new UserId(command.userId()));
 
