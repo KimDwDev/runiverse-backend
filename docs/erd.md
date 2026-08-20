@@ -94,7 +94,7 @@
 | target_distance | int | nullable | 방의 목표 거리(미터). 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 가져 후보 방 조회가 단일 테이블에서 끝난다 |
 | avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다 |
 | max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`, **[MVP 제외]** 초대 `4`. 생성 시 확정·불변 |
-| current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신하고 자동 실패 시 `0`으로 바꾼다. `current_player_count < max_player_count`면 들어갈 수 있다 |
+| current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신한다. `current_player_count < max_player_count`면 들어갈 수 있다. **`1`은 정상 상태다** — 마감 전이면 계속 모집하고 마감 후면 혼자 뛴다. `0`(전원 취소)이 되면 방을 `CANCELLED`로 닫는다. 이탈 페널티 면제 판정에도 쓴다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
 
@@ -110,12 +110,12 @@
 | avg_pace | int | NOT NULL | 신청 시점의 사용자 평균 페이스(초/km). **입력받지 않는다** — 매칭 조건에 페이스 항목이 없어(5-A) 서버가 `user_onboardings.avg_pace`에서 복사한다. 배정 시 방 평균과의 근접도 판정에 쓴다 |
 | desired_player_count | int | nullable | **[MVP 제외]** 향후 사용자가 선택할 희망 매칭 인원 |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·자동 실패·이탈 공통. 한 번 찍히면 바뀌지 않는다 |
+| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·이탈 공통. 한 번 찍히면 바뀌지 않는다 |
 
 > **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있어 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소·자동 실패 = `deleted_at` 기록 / 방 시작 = 남은 참가자를 `RUNNING`으로 전환 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED`, `deleted_at`은 null이다. 자동 실패 시 방은 `CANCELLED`, 배정 행은 `is_connected=false`, 방 인원은 `0`으로 바꾼다. 친구 초대 생명주기는 MVP에서 정의하지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 방 시작 = 남은 참가자를 `RUNNING`으로 전환 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED`, `deleted_at`은 null이다. 대기 취소 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 `CANCELLED`로 닫는다. 친구 초대 생명주기는 MVP에서 정의하지 않는다.
 > **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`.
 > **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·타임아웃·러닝 중 탈퇴에 같은 규칙을 적용하고 거리·시간·경로를 산출할 수 있는 트랙이 있으면 기록을 함께 생성한다. 산출할 수 없으면 실제 거리를 0으로 판정하고 기록은 만들지 않는다.
 
@@ -126,7 +126,7 @@
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
 | leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수. 참가자는 매칭 과정에서 여러 방을 옮겨 다니고 **같은 방으로 돌아올 수도 있어** 2 이상이 된다(복합 PK라 row는 그대로 두고 이 값만 오른다). 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
-| is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·자동 실패·이탈 후에는 모두 false다 |
+| is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈 후에는 모두 false다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 재배정·복귀로 갱신되는 테이블이다 |
 
 > **복합 PK가 참여 이력을 만든다** — 한 참가자가 새 방으로 옮기면 row가 하나 더 쌓이고, 이전 방 row는 `is_connected=false`로 남는다. 어느 방을 거쳤는지가 그대로 이력이다.
@@ -346,7 +346,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_devices.platform | IOS / ANDROID | |
 | running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / 확정 후 이탈(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
-| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정 / 시작 / 종료 / 마감 시 2명 미만이거나 참가자 전원이 취소 |
+| running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / 종료 / 마감 전 참가자 전원이 취소해 방이 빔 |
 | oauth_users.provider | GOOGLE / KAKAO | |
 
 ---
