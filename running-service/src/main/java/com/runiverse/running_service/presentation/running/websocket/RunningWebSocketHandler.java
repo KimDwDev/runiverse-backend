@@ -11,7 +11,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 @Slf4j
 @Component
-public class RunningWebsocketHandler extends TextWebSocketHandler {
+public class RunningWebSocketHandler extends TextWebSocketHandler {
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override

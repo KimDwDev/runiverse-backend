@@ -2,7 +2,7 @@ package com.runiverse.running_service.infrastructure.websocket;
 
 import com.runiverse.running_service.infrastructure.security.CorsProperties;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
-import com.runiverse.running_service.presentation.running.websocket.RunningWebsocketHandler;
+import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +16,7 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketConfigurer {
 
-    private final RunningWebsocketHandler runningWebsocketHandler;
+    private final RunningWebSocketHandler runningWebsocketHandler;
     private final CorsProperties corsProperties;
     private final WebSocketProperties webSocketProperties;
 
