@@ -20,6 +20,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
+// @PreAuthorize 사용처는 현재 없다. 지우면 나중에 애노테이션을 붙여도 조용히 무시돼
+// 인가가 걸린 것처럼 보이는 무증상 우회가 되므로 남겨둔다. (나중에 사용가능성 있음)
 @EnableMethodSecurity
 public class SecurityConfig {
 
