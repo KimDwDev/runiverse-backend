@@ -18,8 +18,11 @@ import com.runiverse.running_service.application.user.port.in.CompleteOnboarding
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
 import com.runiverse.running_service.application.user.port.in.DeleteProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.in.GetProfileImageUsecase;
+import com.runiverse.running_service.application.user.port.in.GetProfileUsecase;
 import com.runiverse.running_service.application.user.query.nickname.CheckNicknameAvailabilityQuery;
 import com.runiverse.running_service.application.user.query.nickname.CheckNicknameAvailabilityResult;
+import com.runiverse.running_service.application.user.query.profile.GetProfileQuery;
+import com.runiverse.running_service.application.user.query.profile.GetProfileResult;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlResult;
 import com.runiverse.running_service.presentation.user.request.NicknameAvailabilityRequest;
@@ -34,6 +37,7 @@ import com.runiverse.running_service.presentation.user.response.OnboardingRespon
 import com.runiverse.running_service.presentation.user.response.ProfileImageUpdateResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUploadUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUrlResponse;
+import com.runiverse.running_service.presentation.user.response.ProfileResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -57,6 +61,7 @@ import java.util.UUID;
 public class UserController {
 
     private final CompleteOnboardingUsecase completeOnboardingUsecase;
+    private final GetProfileUsecase getProfileUsecase;
     private final CreateProfileImageUploadUrlUsecase createProfileImageUploadUrlUsecase;
     private final ChangeProfileImageUsecase changeProfileImageUsecase;
     private final GetProfileImageUsecase getProfileImageUsecase;
@@ -82,6 +87,14 @@ public class UserController {
                 ));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new OnboardingResponse(result.userId(), result.nickname()));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ProfileResponse> getProfile(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        GetProfileResult result = getProfileUsecase.handle(new GetProfileQuery(userId));
+        return ResponseEntity.ok(
+                new ProfileResponse(result.userId(), result.nickname(), result.isOnboarded()));
     }
 
     @PostMapping("/me/profile-image/presigned-url")
