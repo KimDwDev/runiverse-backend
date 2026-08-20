@@ -37,7 +37,7 @@
 | alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-3/12-4) |
 | profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
-| introduction | varchar | nullable | 소개글 |
+| introduction | varchar(100) | nullable | 소개글. 비우면 null |
 | created_at / updated_at | timestamp | NOT NULL | |
 
 ### user_onboardings
