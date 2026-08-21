@@ -1,6 +1,8 @@
 package com.runiverse.running_service.presentation.user.controller;
 
 import com.runiverse.running_service.application.user.command.nickname.ChangeNicknameCommand;
+import com.runiverse.running_service.application.user.command.profile.ChangeProfileCommand;
+import com.runiverse.running_service.application.user.command.profile.ChangeProfileResult;
 import com.runiverse.running_service.application.user.command.nickname.ChangeNicknameResult;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingResult;
@@ -13,6 +15,7 @@ import com.runiverse.running_service.application.user.command.profileimage.Delet
 import com.runiverse.running_service.application.user.port.in.ChangeNicknameUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangePasswordUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangeProfileImageUsecase;
+import com.runiverse.running_service.application.user.port.in.ChangeProfileUsecase;
 import com.runiverse.running_service.application.user.port.in.CheckNicknameAvailabilityUsecase;
 import com.runiverse.running_service.application.user.port.in.CompleteOnboardingUsecase;
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
@@ -31,6 +34,7 @@ import com.runiverse.running_service.presentation.user.request.OnboardingRequest
 import com.runiverse.running_service.presentation.user.request.PasswordUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUploadUrlRequest;
+import com.runiverse.running_service.presentation.user.request.ProfileUpdateRequest;
 import com.runiverse.running_service.presentation.user.response.NicknameAvailabilityResponse;
 import com.runiverse.running_service.presentation.user.response.NicknameUpdateResponse;
 import com.runiverse.running_service.presentation.user.response.OnboardingResponse;
@@ -38,6 +42,7 @@ import com.runiverse.running_service.presentation.user.response.ProfileImageUpda
 import com.runiverse.running_service.presentation.user.response.ProfileImageUploadUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileResponse;
+import com.runiverse.running_service.presentation.user.response.ProfileUpdateResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -62,6 +67,7 @@ public class UserController {
 
     private final CompleteOnboardingUsecase completeOnboardingUsecase;
     private final GetProfileUsecase getProfileUsecase;
+    private final ChangeProfileUsecase changeProfileUsecase;
     private final CreateProfileImageUploadUrlUsecase createProfileImageUploadUrlUsecase;
     private final ChangeProfileImageUsecase changeProfileImageUsecase;
     private final GetProfileImageUsecase getProfileImageUsecase;
@@ -95,6 +101,29 @@ public class UserController {
         GetProfileResult result = getProfileUsecase.handle(new GetProfileQuery(userId));
         return ResponseEntity.ok(
                 new ProfileResponse(result.userId(), result.nickname(), result.isOnboarded()));
+    }
+
+    @PatchMapping("/me/profile")
+    public ResponseEntity<ProfileUpdateResponse> changeProfile(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ProfileUpdateRequest request
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        ChangeProfileResult result = changeProfileUsecase.handle(new ChangeProfileCommand(
+                userId,
+                request.introduction(),
+                request.gender(),
+                request.birthday(),
+                request.weightKg(),
+                request.heightCm()
+        ));
+        return ResponseEntity.ok(new ProfileUpdateResponse(
+                result.introduction(),
+                result.gender(),
+                result.birthday(),
+                result.weightKg(),
+                result.heightCm()
+        ));
     }
 
     @PostMapping("/me/profile-image/presigned-url")
