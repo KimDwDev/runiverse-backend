@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,7 +46,7 @@ import java.time.LocalDateTime;
         constraints = "(type = 'SOLO' and close_at is null)"
                 + " or (type <> 'SOLO' and close_at is not null and close_at < start_at)")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RunningRoomJpaEntity {
+public class RunningRoomJpaEntity extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

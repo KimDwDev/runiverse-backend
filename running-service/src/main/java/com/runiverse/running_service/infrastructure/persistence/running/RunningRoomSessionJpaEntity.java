@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
-import com.runiverse.running_service.infrastructure.persistence.common.BaseCreatedAtEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -33,7 +33,7 @@ import java.io.Serializable;
 @IdClass(RunningRoomSessionJpaEntity.Pk.class)
 @Check(name = "ck_room_session_leave_count", constraints = "leave_count >= 0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RunningRoomSessionJpaEntity extends BaseCreatedAtEntity {
+public class RunningRoomSessionJpaEntity extends BaseTimeEntity {
 
     @Id
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
