@@ -1,8 +1,9 @@
 package com.runiverse.running_service.application.running.port.out;
 
+
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 
-public interface SaveRunningRoomPort {
+public interface CreateRunningRoomPort {
 
-    RunningRoom save(RunningRoom room);
+    RunningRoom create(RunningRoom room);
 }
