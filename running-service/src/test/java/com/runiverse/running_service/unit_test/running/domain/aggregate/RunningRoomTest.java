@@ -1,16 +1,16 @@
 package com.runiverse.running_service.unit_test.running.domain.aggregate;
 
-import com.runiverse.running_service.domain.running.aggregate.RoomSession;
-import com.runiverse.running_service.domain.running.aggregate.RunningRoom;
-import com.runiverse.running_service.domain.running.exception.AlreadyRoomPlayerException;
-import com.runiverse.running_service.domain.running.exception.InvalidCloseAtException;
-import com.runiverse.running_service.domain.running.exception.InvalidRoomStatusTransitionException;
-import com.runiverse.running_service.domain.running.exception.NotRoomPlayerException;
-import com.runiverse.running_service.domain.running.exception.PlayerAlreadyLeftException;
-import com.runiverse.running_service.domain.running.exception.RoomNotJoinableException;
-import com.runiverse.running_service.domain.running.vo.Pace;
-import com.runiverse.running_service.domain.running.vo.RunningPlayerId;
-import com.runiverse.running_service.domain.running.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.RoomSession;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
+import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
+import com.runiverse.running_service.domain.running.room.exception.InvalidRoomStatusTransitionException;
+import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
+import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
+import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

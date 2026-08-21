@@ -1,14 +1,14 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.GpsTrackKeyRequiredException;
-import com.runiverse.running_service.domain.running.exception.GpsTrackKeyTooLongException;
-import com.runiverse.running_service.domain.running.exception.InvalidRouteRangeException;
-import com.runiverse.running_service.domain.running.exception.InvalidSplitNumberException;
-import com.runiverse.running_service.domain.running.exception.RoutePolylineRequiredException;
-import com.runiverse.running_service.domain.running.vo.GpsTrackKey;
-import com.runiverse.running_service.domain.running.vo.RoutePolyline;
-import com.runiverse.running_service.domain.running.vo.RouteRange;
-import com.runiverse.running_service.domain.running.vo.SplitNumber;
+import com.runiverse.running_service.domain.running.record.exception.GpsTrackKeyRequiredException;
+import com.runiverse.running_service.domain.running.record.exception.GpsTrackKeyTooLongException;
+import com.runiverse.running_service.domain.running.record.exception.InvalidRouteRangeException;
+import com.runiverse.running_service.domain.running.record.exception.InvalidSplitNumberException;
+import com.runiverse.running_service.domain.running.record.exception.RoutePolylineRequiredException;
+import com.runiverse.running_service.domain.running.record.vo.GpsTrackKey;
+import com.runiverse.running_service.domain.running.record.vo.RoutePolyline;
+import com.runiverse.running_service.domain.running.record.vo.RouteRange;
+import com.runiverse.running_service.domain.running.record.vo.SplitNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.InvalidRoomStatusTransitionException;
-import com.runiverse.running_service.domain.running.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.exception.InvalidRoomStatusTransitionException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;

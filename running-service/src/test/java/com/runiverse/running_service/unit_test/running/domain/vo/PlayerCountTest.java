@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.InvalidPlayerCountException;
-import com.runiverse.running_service.domain.running.exception.RoomIsEmptyException;
-import com.runiverse.running_service.domain.running.exception.RoomIsFullException;
-import com.runiverse.running_service.domain.running.vo.PlayerCount;
+import com.runiverse.running_service.domain.running.room.exception.InvalidPlayerCountException;
+import com.runiverse.running_service.domain.running.room.exception.RoomIsEmptyException;
+import com.runiverse.running_service.domain.running.room.exception.RoomIsFullException;
+import com.runiverse.running_service.domain.running.room.vo.PlayerCount;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

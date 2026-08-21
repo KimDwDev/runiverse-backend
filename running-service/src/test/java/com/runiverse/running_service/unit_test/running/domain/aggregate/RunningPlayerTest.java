@@ -1,12 +1,12 @@
 package com.runiverse.running_service.unit_test.running.domain.aggregate;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.domain.running.aggregate.RunningPlayer;
-import com.runiverse.running_service.domain.running.exception.InvalidDesiredPlayerCountException;
-import com.runiverse.running_service.domain.running.exception.InvalidPlayerStatusTransitionException;
-import com.runiverse.running_service.domain.running.exception.PlayerAlreadyLeftException;
-import com.runiverse.running_service.domain.running.exception.StartAtRequiredException;
-import com.runiverse.running_service.domain.running.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.player.RunningPlayer;
+import com.runiverse.running_service.domain.running.player.exception.InvalidDesiredPlayerCountException;
+import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
+import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
+import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

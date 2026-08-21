@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.InvalidLeaveCountException;
-import com.runiverse.running_service.domain.running.vo.LeaveCount;
+import com.runiverse.running_service.domain.running.room.exception.InvalidLeaveCountException;
+import com.runiverse.running_service.domain.running.room.vo.LeaveCount;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

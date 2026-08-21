@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.InvalidPlayerStatusTransitionException;
-import com.runiverse.running_service.domain.running.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

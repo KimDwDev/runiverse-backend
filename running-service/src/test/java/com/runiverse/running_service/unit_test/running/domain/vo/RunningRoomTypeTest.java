@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.RunningRoomTypeRequiredException;
-import com.runiverse.running_service.domain.running.exception.UnsupportedRunningRoomTypeException;
-import com.runiverse.running_service.domain.running.vo.RunningRoomType;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomTypeRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.UnsupportedRunningRoomTypeException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

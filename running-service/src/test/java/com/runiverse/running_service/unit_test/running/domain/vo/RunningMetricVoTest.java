@@ -1,14 +1,14 @@
 package com.runiverse.running_service.unit_test.running.domain.vo;
 
-import com.runiverse.running_service.domain.running.exception.DistanceOutOfRangeException;
-import com.runiverse.running_service.domain.running.exception.ElapsedTimeOutOfRangeException;
-import com.runiverse.running_service.domain.running.exception.InvalidRunningPeriodException;
-import com.runiverse.running_service.domain.running.exception.PaceOutOfRangeException;
-import com.runiverse.running_service.domain.running.exception.RunningPeriodRequiredException;
-import com.runiverse.running_service.domain.running.vo.Distance;
-import com.runiverse.running_service.domain.running.vo.ElapsedTime;
-import com.runiverse.running_service.domain.running.vo.Pace;
-import com.runiverse.running_service.domain.running.vo.RunningPeriod;
+import com.runiverse.running_service.domain.running.metric.exception.DistanceOutOfRangeException;
+import com.runiverse.running_service.domain.running.metric.exception.ElapsedTimeOutOfRangeException;
+import com.runiverse.running_service.domain.running.metric.exception.InvalidRunningPeriodException;
+import com.runiverse.running_service.domain.running.metric.exception.PaceOutOfRangeException;
+import com.runiverse.running_service.domain.running.metric.exception.RunningPeriodRequiredException;
+import com.runiverse.running_service.domain.running.metric.vo.Distance;
+import com.runiverse.running_service.domain.running.metric.vo.ElapsedTime;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.metric.vo.RunningPeriod;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
