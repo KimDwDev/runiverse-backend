@@ -3,6 +3,7 @@ package com.runiverse.running_service.presentation.common.exception;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -104,6 +105,7 @@ public class GlobalExceptionHandler {
         return switch (errorCode) {
             case UserErrorCode code -> toStatus(code);
             case AuthErrorCode code -> toStatus(code);
+            case RunningErrorCode code -> toStatus(code);
         };
     }
 
@@ -139,6 +141,13 @@ public class GlobalExceptionHandler {
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
             case EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+    }
+
+    private HttpStatus toStatus(RunningErrorCode code) {
+        return switch (code) {
+            // 한 플레이어 = 최대 한 방 — 진행 중인 신청이 있으면 새로 못 연다
+            case RUNNING_ALREADY_IN_PROGRESS -> HttpStatus.CONFLICT;
         };
     }
 }
