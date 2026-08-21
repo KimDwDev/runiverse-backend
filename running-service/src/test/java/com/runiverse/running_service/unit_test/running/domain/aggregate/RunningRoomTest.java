@@ -6,6 +6,7 @@ import com.runiverse.running_service.domain.running.exception.AlreadyRoomPlayerE
 import com.runiverse.running_service.domain.running.exception.InvalidCloseAtException;
 import com.runiverse.running_service.domain.running.exception.InvalidRoomStatusTransitionException;
 import com.runiverse.running_service.domain.running.exception.NotRoomPlayerException;
+import com.runiverse.running_service.domain.running.exception.PlayerAlreadyLeftException;
 import com.runiverse.running_service.domain.running.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.vo.Pace;
 import com.runiverse.running_service.domain.running.vo.RunningPlayerId;
@@ -394,6 +395,40 @@ public class RunningRoomTest {
             // then -> 페널티 판정 근거가 된다
             assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(2);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("이미 나간 사람이 또 이탈해도 남은 참가자의 방은 취소되지 않는다")
+        void leaveTwiceWithoutRejoinDoesNotCancelRoom() {
+            // given -> 2인 방에서 2L이 이미 나갔다
+            RunningRoom room = matchRoom();
+            room.join(2L, new Pace(HOST_PACE));
+            room.leave(2L);
+
+            // when & then -> WS 재연결·이벤트 중복으로 leave가 한 번 더 들어와도 막혀야 한다
+            assertThatThrownBy(() -> room.leave(2L))
+                    .isInstanceOf(PlayerAlreadyLeftException.class);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);   // HOST는 아직 방에 있다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
+            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("종료된 방의 이탈이 거절되면 인원·세션도 그대로다")
+        void rejectedLeaveOnFinishedRoomKeepsRoomIntact() {
+            // given -> 러닝이 끝난 뒤 마지막 참가자가 연결을 끊는다
+            RunningRoom room = matchRoom();
+            room.closeMatching();
+            room.start();
+            room.finish();
+
+            // when & then -> 취소로 못 가는 방이면 아무것도 바뀌지 않아야 한다
+            assertThatThrownBy(() -> room.leave(HOST))
+                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+            assertThat(sessionOf(room, HOST).isConnected()).isTrue();
+            assertThat(sessionOf(room, HOST).getLeaveCount().value()).isZero();
         }
 
         @Test
