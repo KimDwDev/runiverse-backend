@@ -4,8 +4,6 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
-import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
-import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
