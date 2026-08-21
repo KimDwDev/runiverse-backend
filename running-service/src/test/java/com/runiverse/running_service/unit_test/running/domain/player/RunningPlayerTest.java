@@ -116,6 +116,48 @@ public class RunningPlayerTest {
     }
 
     @Nested
+    @DisplayName("솔로 신청 테스트")
+    class RequestSoloTest {
+
+        private static RunningPlayer requestSolo() {
+            return RunningPlayer.requestSolo(UuidCreator.getTimeOrderedEpoch(), AVG_PACE, START);
+        }
+
+        @Test
+        @DisplayName("솔로 신청은 목표 거리를 입력받지 않는다")
+        void requestSoloHasNoTargetDistance() {
+            // when
+            RunningPlayer player = requestSolo();
+
+            // then -> 끝은 유저가 정한다. NOT NULL이라 값은 들어가되 도달 불가능한 상한이다
+            assertThat(player.getTargetDistance().isUnlimited()).isTrue();
+        }
+
+        @Test
+        @DisplayName("솔로도 매칭과 같은 신청 row를 만든다")
+        void requestSoloSharesRequestPath() {
+            // when
+            RunningPlayer player = requestSolo();
+
+            // then -> 솔로도 방·플레이어 row를 만들기 때문에 신청 상태는 매칭과 같다
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.JOINED);
+            assertThat(player.isActive()).isTrue();
+            assertThat(player.isNew()).isTrue();
+            assertThat(player.getAvgPace().secondsPerKm()).isEqualTo(AVG_PACE);
+            assertThat(player.getStartAt()).isEqualTo(START);
+        }
+
+        @Test
+        @DisplayName("솔로도 시작 시각 없이는 신청할 수 없다")
+        void requestSoloRequiresStartAt() {
+            // when & then -> 서버가 now()를 넣어주지만 애그리거트는 그걸 믿지 않는다
+            assertThatThrownBy(() -> RunningPlayer.requestSolo(
+                    UuidCreator.getTimeOrderedEpoch(), AVG_PACE, null))
+                    .isInstanceOf(PlayerStartAtRequiredException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("대기 취소 테스트")
     class CancelTest {
 

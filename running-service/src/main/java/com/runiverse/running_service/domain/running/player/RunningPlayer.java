@@ -47,13 +47,23 @@ public class RunningPlayer {
         this.deletedAt = deletedAt;
     }
 
-    // 매칭 신청 = 이 row가 생기는 것 (솔로도 같은 경로를 탄다)
+    // 매칭 신청 = 이 row가 생기는 것
     public static RunningPlayer request(UUID userId, int avgPace, int targetDistance,
                                         LocalDateTime startAt) {
         return builder()
                 .userId(userId)
                 .avgPace(avgPace)
                 .targetDistance(targetDistance)
+                .startAt(startAt)
+                .build();
+    }
+
+    // 솔로 — 목표 거리를 입력받지 않는다(유저가 끝내야 끝난다)
+    public static RunningPlayer requestSolo(UUID userId, int avgPace, LocalDateTime startAt) {
+        return builder()
+                .userId(userId)
+                .avgPace(avgPace)
+                .targetDistance(Distance.unlimited().meters())
                 .startAt(startAt)
                 .build();
     }

@@ -49,6 +49,23 @@ public class RunningMetricVoTest {
             // when & then
             assertThat(new Distance(5_000)).isEqualTo(new Distance(5_000));
         }
+
+        @Test
+        @DisplayName("목표 없는 솔로는 도달 불가능한 상한으로 표현한다")
+        void unlimitedIsUpperBound() {
+            // when & then -> running_players.target_distance가 NOT NULL이라 값은 넣어야 하는데,
+            //                끝은 유저가 정하므로 상한을 목표로 세운다
+            assertThat(Distance.unlimited().meters()).isEqualTo(500_000);
+            assertThat(Distance.unlimited().isUnlimited()).isTrue();
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {1, 5_000, 499_999})
+        @DisplayName("상한 미만은 목표가 정해진 거리다")
+        void boundedDistanceIsNotUnlimited(int meters) {
+            // when & then -> 500000을 "500km 목표"로 오해하지 않게 읽는 쪽이 구분한다
+            assertThat(new Distance(meters).isUnlimited()).isFalse();
+        }
     }
 
     @Nested

@@ -38,12 +38,13 @@ public class RunningRoom {
     private Pace avgPace;
     private final List<RoomSession> sessions;    // 방이 맺고 있는 관계들
 
+    //
     @Builder
     private RunningRoom(Long runningRoomId, RunningRoomType type, RunningRoomStatus status,
                         LocalDateTime startAt, LocalDateTime closeAt,
                         Integer targetDistance, int avgPace,
                         int currentPlayerCount, int maxPlayerCount,
-                        List<RoomSession> sessions) {
+                        List<SessionDraft> sessions) {
         this.runningRoomId = runningRoomId == null ? null : new RunningRoomId(runningRoomId);
         if (type == null) {
             throw new RunningRoomTypeRequiredException();
@@ -59,7 +60,11 @@ public class RunningRoom {
         this.targetDistance = targetDistance == null ? null : new Distance(targetDistance);
         this.avgPace = new Pace(avgPace);
         this.playerCount = new PlayerCount(currentPlayerCount, maxPlayerCount);
-        this.sessions = sessions == null ? new ArrayList<>() : new ArrayList<>(sessions);
+        // 세션은 방을 거쳐야만 만들어진다 — 밖에서는 SessionDraft까지만 채울 수 있다
+        this.sessions = new ArrayList<>();
+        if (sessions != null) {
+            sessions.forEach(draft -> this.sessions.add(RoomSession.from(draft)));
+        }
     }
 
 
