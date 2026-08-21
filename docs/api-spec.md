@@ -2101,10 +2101,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `introduction` | String | 선택. 100자 이하. 빈 문자열이면 소개글을 지운다 | `users` |
 | `gender` | String | 선택. `MALE` \| `FEMALE` | `user_onboardings` |
 | `birthday` | String | 선택. `YYYY-MM-DD`, 1900-01-01 이후이며 미래일 수 없다 | `user_onboardings` |
-| `weightKg` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 | `user_onboardings` |
-| `heightCm` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 | `user_onboardings` |
+| `weightKg` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
+| `heightCm` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
 
 - **필드를 생략하면 현재 값을 그대로 둔다.** 소개글만 빈 문자열(`""`)로 지울 수 있고, 나머지 넷은 온보딩에서 필수라 지우는 개념이 없다
+- **키·몸무게는 소수점 첫째 자리로 정규화한다.** `70.55`를 보내면 거부하지 않고 `70.6`으로 저장하며, 응답에도 정규화된 값이 나가 클라이언트가 저장된 값을 알 수 있다. 정상 범위의 값을 자릿수만으로 400으로 막지 않기 위해서다
 - **화면 구성이 확정되기 전이라 편집 가능한 값을 한 엔드포인트에 모았다** — 저장 버튼이 하나로 묶이든 여러 화면으로 갈리든 클라이언트가 자기 필드만 보내면 된다. 화면이 정해지면 이 구성을 다시 본다
 - **`profileVisibility`는 여기 없다** — 프로필 편집이 아니라 설정 페이지 값이라 12-4가 담당한다
 
