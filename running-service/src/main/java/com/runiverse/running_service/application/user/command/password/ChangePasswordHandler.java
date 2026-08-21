@@ -39,7 +39,7 @@ public class ChangePasswordHandler implements ChangePasswordUsecase {
             throw new InvalidCurrentPasswordException();
         }
 
-        // 4. 도메인에서 빈 해시 검증
+        // 4. 새 비밀번호를 해시해 도메인에 반영한다 — 빈 해시는 도메인이 막는다
         user.changePassword(passwordHashPort.hash(command.newPassword()));
 
         // 5. 갱신

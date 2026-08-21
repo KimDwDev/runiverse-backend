@@ -17,6 +17,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Check;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
@@ -38,6 +39,8 @@ import java.util.UUID;
 @Check(name = "ck_user_onboarding_avg_pace", constraints = "avg_pace between 120 and 1800")
 @Check(name = "ck_user_onboarding_weight", constraints = "weight between 20.0 and 300.0")
 @Check(name = "ck_user_onboarding_height", constraints = "height between 20.0 and 300.0")
+// 닉네임 변경과 프로필 수정이 이 행에 함께 쓴다. 전체 컬럼을 실으면 서로의 변경을 옛 값으로 덮는다
+@DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserOnboardingJpaEntity extends BaseTimeEntity {
 
@@ -84,6 +87,23 @@ public class UserOnboardingJpaEntity extends BaseTimeEntity {
     // 닉네임 변경
     public void changeNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    // 평균 페이스는 러닝 기록이 갱신하므로 변경 메서드를 두지 않는다
+    public void changeGender(Gender gender) {
+        this.gender = gender;
+    }
+
+    public void changeBirthday(LocalDate birthday) {
+        this.birthday = birthday;
+    }
+
+    public void changeWeight(BigDecimal weight) {
+        this.weight = weight;
+    }
+
+    public void changeHeight(BigDecimal height) {
+        this.height = height;
     }
 
     // FK 제약

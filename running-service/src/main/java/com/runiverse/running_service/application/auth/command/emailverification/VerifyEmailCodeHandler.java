@@ -31,7 +31,7 @@ public class VerifyEmailCodeHandler implements VerifyEmailCodeUsecase {
         // 1. Email vo 정규화
         String email = new Email(command.email()).value();
 
-        // 2. 시도 횟수 1 소비 -> 인증코드 확인 -> 상태 반환
+        // 2. 시도 횟수를 소비하고 저장된 코드 상태를 가져온다
         VerificationAttempt attempt = consumeVerificationAttemptPort.consume(email);
         switch (attempt.status()) {
             case NOT_FOUND -> throw new EmailVerificationNotFoundException();

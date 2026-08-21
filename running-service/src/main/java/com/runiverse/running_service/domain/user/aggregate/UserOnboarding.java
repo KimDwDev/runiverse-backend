@@ -1,12 +1,12 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Nickname;
-import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.vo.Weight;
 import lombok.Getter;
 

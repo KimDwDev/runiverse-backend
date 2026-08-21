@@ -38,7 +38,7 @@ public class CompleteOnboardingHandler implements CompleteOnboardingUsecase {
             throw new AlreadyOnboardedException();
         }
 
-        // 3. 닉네임 정규화 -> 중복 검사 확인
+        // 3. 닉네임 정규화
         Nickname nickname = new Nickname(command.nickname());
 
         // 4. 닉네임 중복 확인

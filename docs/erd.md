@@ -37,7 +37,7 @@
 | alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-3/12-4) |
 | profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
-| introduction | varchar | nullable | 소개글 |
+| introduction | varchar(100) | nullable | 소개글. 비우면 null |
 | created_at / updated_at | timestamp | NOT NULL | |
 
 ### user_onboardings
@@ -111,12 +111,12 @@
 | avg_pace | int | NOT NULL | 신청 시점의 사용자 평균 페이스(초/km). **입력받지 않는다** — 매칭 조건에 페이스 항목이 없어(5-A) 서버가 `user_onboardings.avg_pace`에서 복사한다. 배정 시 방 평균과의 근접도 판정에 쓴다 |
 | desired_player_count | int | nullable | **[MVP 제외]** 향후 사용자가 선택할 희망 매칭 인원 |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·이탈 공통. 한 번 찍히면 바뀌지 않는다 |
+| deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·이탈·완주 공통. 완주도 그 신청이 끝난 것이라 찍는다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다. 한 번 찍히면 바뀌지 않는다 |
 
 > **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있어 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 방 시작 = 남은 참가자를 `RUNNING`으로 전환 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED`, `deleted_at`은 null이다. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, **시작 전이라면** 그 결과 인원이 `0`일 때 방을 `CANCELLED`로 닫는다(시작 후에는 닫지 않고 `FINISHED`로 간다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 방 시작 = 남은 참가자를 `RUNNING`으로 전환 / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, **시작 전이라면** 그 결과 인원이 `0`일 때 방을 `CANCELLED`로 닫는다(시작 후에는 닫지 않고 `FINISHED`로 간다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
 > **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`.
 > **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·타임아웃·러닝 중 탈퇴에 같은 규칙을 적용하고 거리·시간·경로를 산출할 수 있는 트랙이 있으면 기록을 함께 생성한다. 산출할 수 없으면 실제 거리를 0으로 판정하고 기록은 만들지 않는다.
 

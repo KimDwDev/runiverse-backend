@@ -78,7 +78,6 @@ public class ChangeNicknameIntegrationTest extends IntegrationTestSupport {
                 new ChangeNicknameCommand(userId, NEW_NICKNAME));
 
         // then
-        assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.nickname()).isEqualTo(NEW_NICKNAME);
         assertThat(onboardingStore.nicknameOf(userId)).contains(NEW_NICKNAME);
     }

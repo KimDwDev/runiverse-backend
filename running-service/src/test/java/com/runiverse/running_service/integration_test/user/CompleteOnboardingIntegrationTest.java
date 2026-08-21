@@ -9,10 +9,10 @@ import com.runiverse.running_service.application.user.command.onboarding.Complet
 import com.runiverse.running_service.application.user.exception.AlreadyOnboardedException;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.exception.InvalidNicknameLengthException;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.integration_test.fake.InMemoryOnboardingStore.OnboardingRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,7 +70,7 @@ public class CompleteOnboardingIntegrationTest extends IntegrationTestSupport {
         assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.nickname()).isEqualTo(NICKNAME);
 
-        UserOnboarding saved = onboardingStore.findByUserId(userId).orElseThrow();
+        OnboardingRow saved = onboardingStore.findByUserId(userId).orElseThrow();
         assertThat(saved.getNickname().value()).isEqualTo(NICKNAME);
         assertThat(saved.getGender()).isEqualTo(Gender.MALE);
         assertThat(saved.getBirthday().value()).isEqualTo(BIRTHDAY);

@@ -13,16 +13,23 @@ import com.runiverse.running_service.application.user.port.out.ExistsOnboardingP
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
+import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.user.vo.Weight;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +43,7 @@ import java.util.Optional;
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
-        UpdatePasswordPort {
+        UpdatePasswordPort, UpdateIntroductionPort, UpdateOnboardingPort {
 
     private final EntityManager entityManager;
 
@@ -131,6 +138,16 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         entity.changePasswordHash(passwordHash.value());
     }
 
+    @Override
+    public void updateIntroduction(UserId userId, Introduction introduction) {
+        UserJpaEntity entity = entityManager.find(UserJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new UserNotFoundException();
+        }
+        // 빈 소개글은 컬럼을 비운다 — 가입 시 save()도 같은 방식이라 "없음"의 표현을 하나로 둔다
+        entity.changeIntroduction(emptyToNull(introduction.value()));
+    }
+
     private User toDomain(UserJpaEntity entity) {
         return new User(
                 entity.getUserId(),
@@ -200,6 +217,27 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 onboarding.getWeight().value(),
                 onboarding.getHeight().value()
         ));
+    }
+
+    @Override
+    public void updateOnboarding(UserId userId, Gender gender, Birthday birthday, Weight weight, Height height) {
+        UserOnboardingJpaEntity entity = entityManager.find(UserOnboardingJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new OnboardingNotCompletedException();
+        }
+        // 담겨 온 값만 바꾼다 — 나머지 컬럼은 건드리지 않는다
+        if (gender != null) {
+            entity.changeGender(gender);
+        }
+        if (birthday != null) {
+            entity.changeBirthday(birthday.value());
+        }
+        if (weight != null) {
+            entity.changeWeight(weight.value());
+        }
+        if (height != null) {
+            entity.changeHeight(height.value());
+        }
     }
 
     @Override

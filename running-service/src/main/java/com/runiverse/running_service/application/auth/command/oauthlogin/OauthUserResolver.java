@@ -50,7 +50,7 @@ public class OauthUserResolver {
             throw new EmailAlreadyExistsException();
         }
 
-        // 3.UUIDv7 발급
+        // 3. UUIDv7 발급
         UUID userId = generateUserIdPort.generate();
 
         // 4. 유저 생성 + 소셜 연결
