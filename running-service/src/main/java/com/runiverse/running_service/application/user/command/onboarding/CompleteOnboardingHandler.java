@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.user.command.onboarding;
 
-import com.runiverse.running_service.application.user.exception.AlreadyOnboardingException;
+import com.runiverse.running_service.application.user.exception.AlreadyOnboardedException;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.in.CompleteOnboardingUsecase;
@@ -35,7 +35,7 @@ public class CompleteOnboardingHandler implements CompleteOnboardingUsecase {
 
         // 2. 온보딩 되어 있으면 막는다
         if (existsOnboardingPort.existsByUserId(userId)) {
-            throw new AlreadyOnboardingException();
+            throw new AlreadyOnboardedException();
         }
 
         // 3. 닉네임 정규화 -> 중복 검사 확인

@@ -36,7 +36,6 @@ public class UserVoTest {
         @Test
         @DisplayName("UUIDv7으로 사용자 ID를 생성할 수 있다.")
         void createUserIdWithUuidV7Success() {
-
             // given
             UUID uuidV7 = UUID.fromString("0190a5b4-3c2d-7e1f-8a2b-123456789abc");
 
@@ -63,7 +62,6 @@ public class UserVoTest {
         @Test
         @DisplayName("UserId가 null이면 예외가 발생한다")
         void createUserIdWithNullFails() {
-
             assertThatThrownBy(() -> new UserId(null))
                     .isInstanceOf(UserIdRequiredException.class)
                     .hasMessage("사용자 ID는 필수입니다.");

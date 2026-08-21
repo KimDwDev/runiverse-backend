@@ -25,7 +25,6 @@ public class RefreshHandler implements RefreshUsecase {
 
     @Override
     public RefreshResult handle(RefreshCommand command) {
-
         // 1. refresh token 검증 후 소유자 확인 (서명, 만료, issuer, audience)
         UserId userId = parseRefreshTokenPort.parse(command.refreshToken())
                 .orElseThrow(InvalidRefreshTokenException::new);

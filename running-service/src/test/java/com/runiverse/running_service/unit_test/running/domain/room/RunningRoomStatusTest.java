@@ -28,7 +28,7 @@ public class RunningRoomStatusTest {
                     RunningRoomStatus.MATCHED,
                     EnumSet.of(RunningRoomStatus.STARTED, RunningRoomStatus.CANCELLED),
                     RunningRoomStatus.STARTED,
-                    EnumSet.of(RunningRoomStatus.FINISHED, RunningRoomStatus.CANCELLED),
+                    EnumSet.of(RunningRoomStatus.FINISHED),
                     RunningRoomStatus.FINISHED,
                     EnumSet.noneOf(RunningRoomStatus.class),
                     RunningRoomStatus.CANCELLED,
@@ -93,10 +93,20 @@ public class RunningRoomStatusTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RunningRoomStatus.class, names = {"MATCHING", "MATCHED", "STARTED"})
-    @DisplayName("종료 전 어느 단계에서든 취소할 수 있다")
-    void cancellableFromEveryOngoingStatus(RunningRoomStatus current) {
-        // when & then -> 솔로가 기록 없이 그만두는 경우와 전원 이탈을 담는 경로다
+    @EnumSource(value = RunningRoomStatus.class, names = {"MATCHING", "MATCHED"})
+    @DisplayName("시작 전이면 취소할 수 있다")
+    void cancellableBeforeStart(RunningRoomStatus current) {
+        // when & then -> 전원 이탈로 빈 방을 닫는 경로다
+        assertThat(current.isBeforeStart()).isTrue();
         assertThat(current.canTransitionTo(RunningRoomStatus.CANCELLED)).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"STARTED", "FINISHED", "CANCELLED"})
+    @DisplayName("시작한 뒤에는 취소할 수 없다")
+    void notCancellableAfterStart(RunningRoomStatus current) {
+        // when & then -> 취소하면 FINISHED에 닿지 못해 기록이 사라진다
+        assertThat(current.isBeforeStart()).isFalse();
+        assertThat(current.canTransitionTo(RunningRoomStatus.CANCELLED)).isFalse();
     }
 }

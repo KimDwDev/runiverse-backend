@@ -21,7 +21,6 @@ public class GetProfileImageUrlHandler implements GetProfileImageUsecase {
 
     @Override
     public GetProfileImageUrlResult handle(GetProfileImageUrlQuery query) {
-
         // 1. 대상 사용자 조회
         User user = loadUserByIdPort.loadById(new UserId(query.userId()))
                 .orElseThrow(ProfileNotFoundException::new);
