@@ -2,7 +2,7 @@ package com.runiverse.running_service.unit_test.running.domain.record;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
-import com.runiverse.running_service.domain.running.record.RunningSplit;
+import com.runiverse.running_service.domain.running.record.SplitDraft;
 import com.runiverse.running_service.domain.running.metric.exception.CaloriesRequiredException;
 import com.runiverse.running_service.domain.running.record.exception.SplitNumberNotSequentialException;
 import com.runiverse.running_service.domain.running.record.exception.SplitPeriodNotSequentialException;
@@ -49,26 +49,18 @@ public class RunningRecordTest {
                 .splits(validSplits());
     }
 
-    private static List<RunningSplit> validSplits() {
+    private static List<SplitDraft> validSplits() {
         return List.of(
                 split(1, 0, 120, START, START.plusMinutes(5)),
                 split(2, 120, 245, START.plusMinutes(5), START.plusMinutes(11)),
                 split(3, 245, 380, START.plusMinutes(11), START.plusMinutes(16)));
     }
 
-    private static RunningSplit split(int splitNumber, int routeStartIndex, int routeEndIndex,
-                                      LocalDateTime startAt, LocalDateTime endAt) {
-        return RunningSplit.builder()
-                .splitNumber(splitNumber)
-                .avgPace(330)
-                .distance(1_000)
-                .duration(330)
-                .routeStartIndex(routeStartIndex)
-                .routeEndIndex(routeEndIndex)
-                .startAt(startAt)
-                .endAt(endAt)
-                .calories(70)
-                .build();
+    // 구간은 기록을 거쳐야만 만들어진다 — 테스트도 원시 입력까지만 채운다
+    private static SplitDraft split(int splitNumber, int routeStartIndex, int routeEndIndex,
+                                    LocalDateTime startAt, LocalDateTime endAt) {
+        return SplitDraft.create(splitNumber, 330, 1_000, 330,
+                routeStartIndex, routeEndIndex, startAt, endAt, 70, null, null);
     }
 
     @Nested
@@ -170,12 +162,14 @@ public class RunningRecordTest {
         @Test
         @DisplayName("구간도 저장 전에는 ID가 없다")
         void newSplitHasNoId() {
-            // when
-            RunningSplit split = split(1, 0, 120, START, START.plusMinutes(5));
+            // when -> 구간은 기록을 거쳐야만 조립된다
+            RunningRecord record = validRecord().build();
 
-            // then
-            assertThat(split.isNew()).isTrue();
-            assertThat(split.getRunningSplitId()).isEmpty();
+            // then -> 원시 입력에 ID가 없으면 조립된 구간에도 없다
+            assertThat(record.getSplits()).allSatisfy(split -> {
+                assertThat(split.isNew()).isTrue();
+                assertThat(split.getRunningSplitId()).isEmpty();
+            });
         }
     }
 
@@ -226,7 +220,7 @@ public class RunningRecordTest {
         @DisplayName("구간 번호가 1부터 시작하지 않으면 예외가 발생한다")
         void splitNumberMustStartAtOne() {
             // given -> 2, 3으로 시작하는 구간 목록
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(2, 0, 120, START, START.plusMinutes(5)),
                     split(3, 120, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -239,7 +233,7 @@ public class RunningRecordTest {
         @DisplayName("구간 번호가 중간에 빠지면 예외가 발생한다")
         void splitNumberMustNotSkip() {
             // given -> 1, 3 (2번 누락)
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START, START.plusMinutes(5)),
                     split(3, 120, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -252,7 +246,7 @@ public class RunningRecordTest {
         @DisplayName("구간 번호가 목록 순서와 어긋나면 예외가 발생한다")
         void splitNumberMustMatchListOrder() {
             // given -> 2, 1 순으로 담긴 목록
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(2, 0, 120, START, START.plusMinutes(5)),
                     split(1, 120, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -270,7 +264,7 @@ public class RunningRecordTest {
         @DisplayName("첫 구간이 0번 좌표에서 시작하지 않으면 예외가 발생한다")
         void firstSplitMustStartAtOrigin() {
             // given -> 5번 좌표부터 시작
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 5, 120, START, START.plusMinutes(5)),
                     split(2, 120, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -283,7 +277,7 @@ public class RunningRecordTest {
         @DisplayName("구간 경로가 겹치지 않으면 예외가 발생한다")
         void splitRoutesMustShareBoundary() {
             // given -> 120에서 끝났는데 다음이 121에서 시작(한 칸 뜸)
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START, START.plusMinutes(5)),
                     split(2, 121, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -296,7 +290,7 @@ public class RunningRecordTest {
         @DisplayName("구간 경로가 뒤로 물러나면 예외가 발생한다")
         void splitRoutesMustNotGoBackward() {
             // given -> 120에서 끝났는데 다음이 100에서 시작
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START, START.plusMinutes(5)),
                     split(2, 100, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -314,7 +308,7 @@ public class RunningRecordTest {
         @DisplayName("구간이 기록 시작보다 앞서면 예외가 발생한다")
         void splitMustNotStartBeforeRecord() {
             // given
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START.minusMinutes(1), START.plusMinutes(5)),
                     split(2, 120, 245, START.plusMinutes(5), START.plusMinutes(11)));
 
@@ -327,7 +321,7 @@ public class RunningRecordTest {
         @DisplayName("구간이 기록 종료보다 뒤면 예외가 발생한다")
         void splitMustNotEndAfterRecord() {
             // given
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START, START.plusMinutes(5)),
                     split(2, 120, 245, START.plusMinutes(5), END.plusMinutes(1)));
 
@@ -353,7 +347,7 @@ public class RunningRecordTest {
         @DisplayName("구간 시각이 겹치면 예외가 발생한다")
         void splitPeriodsMustNotOverlap() {
             // given -> 구간1이 10분에 끝나는데 구간2가 8분에 시작
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START, START.plusMinutes(10)),
                     split(2, 120, 245, START.plusMinutes(8), START.plusMinutes(16)));
 
@@ -366,7 +360,7 @@ public class RunningRecordTest {
         @DisplayName("구간 시각이 역행하면 예외가 발생한다")
         void splitPeriodsMustNotGoBackward() {
             // given -> 경로는 이어지는데 시각만 거꾸로 간다
-            List<RunningSplit> splits = List.of(
+            List<SplitDraft> splits = List.of(
                     split(1, 0, 120, START.plusMinutes(20), START.plusMinutes(25)),
                     split(2, 120, 245, START.plusMinutes(5), START.plusMinutes(10)));
 
@@ -396,9 +390,11 @@ public class RunningRecordTest {
             // given
             RunningRecord record = validRecord().build();
 
-            // when & then -> 애그리거트 밖에서 구간을 끼워 넣지 못한다
-            assertThatThrownBy(() -> record.getSplits()
-                    .add(split(4, 380, 500, START.plusMinutes(16), START.plusMinutes(20))))
+            // when & then -> 밖에서는 구간을 만들 수조차 없고(SplitDraft까지만 채운다),
+            //                이미 조립된 목록도 손댈 수 없다
+            assertThatThrownBy(() -> record.getSplits().clear())
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> record.getSplits().remove(0))
                     .isInstanceOf(UnsupportedOperationException.class);
         }
 
@@ -406,7 +402,7 @@ public class RunningRecordTest {
         @DisplayName("생성에 넘긴 목록을 바꿔도 기록은 영향받지 않는다")
         void splitsAreDefensivelyCopied() {
             // given
-            List<RunningSplit> given = new ArrayList<>(validSplits());
+            List<SplitDraft> given = new ArrayList<>(validSplits());
             RunningRecord record = validRecord().splits(given).build();
 
             // when

@@ -2,26 +2,26 @@ package com.runiverse.running_service.domain.running.record;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.exception.CaloriesRequiredException;
-import com.runiverse.running_service.domain.running.record.exception.SplitNumberNotSequentialException;
-import com.runiverse.running_service.domain.running.record.exception.SplitPeriodNotSequentialException;
-import com.runiverse.running_service.domain.running.record.exception.SplitPeriodOutOfRecordException;
-import com.runiverse.running_service.domain.running.record.exception.SplitRouteNotConnectedException;
-import com.runiverse.running_service.domain.running.record.exception.SplitRouteNotStartingAtOriginException;
-import com.runiverse.running_service.domain.running.record.exception.SplitsRequiredException;
 import com.runiverse.running_service.domain.running.metric.exception.WeatherCodeRequiredException;
 import com.runiverse.running_service.domain.running.metric.vo.Cadence;
 import com.runiverse.running_service.domain.running.metric.vo.Calories;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.ElapsedTime;
 import com.runiverse.running_service.domain.running.metric.vo.ElevationGain;
-import com.runiverse.running_service.domain.running.record.vo.GpsTrackKey;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
-import com.runiverse.running_service.domain.running.record.vo.RoutePolyline;
 import com.runiverse.running_service.domain.running.metric.vo.RunningPeriod;
-import com.runiverse.running_service.domain.running.record.vo.RunningRecordId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.metric.vo.Temperature;
 import com.runiverse.running_service.domain.running.metric.vo.WeatherCode;
+import com.runiverse.running_service.domain.running.record.exception.SplitNumberNotSequentialException;
+import com.runiverse.running_service.domain.running.record.exception.SplitPeriodNotSequentialException;
+import com.runiverse.running_service.domain.running.record.exception.SplitPeriodOutOfRecordException;
+import com.runiverse.running_service.domain.running.record.exception.SplitRouteNotConnectedException;
+import com.runiverse.running_service.domain.running.record.exception.SplitRouteNotStartingAtOriginException;
+import com.runiverse.running_service.domain.running.record.exception.SplitsRequiredException;
+import com.runiverse.running_service.domain.running.record.vo.GpsTrackKey;
+import com.runiverse.running_service.domain.running.record.vo.RoutePolyline;
+import com.runiverse.running_service.domain.running.record.vo.RunningRecordId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -58,7 +58,7 @@ public class RunningRecord {
                           LocalDateTime startAt, LocalDateTime endAt,
                           Integer weatherCode, BigDecimal temperature,
                           Integer avgCadence, Integer totalElevationGain,
-                          List<RunningSplit> splits) {
+                          List<SplitDraft> splits) {
         this.runningRecordId = runningRecordId == null ? null : new RunningRecordId(runningRecordId);
         this.runningRoomId = new RunningRoomId(runningRoomId);
         this.userId = new UserId(userId);
@@ -80,8 +80,7 @@ public class RunningRecord {
         this.avgCadence = avgCadence == null ? null : new Cadence(avgCadence);
         this.totalElevationGain =
                 totalElevationGain == null ? null : new ElevationGain(totalElevationGain);
-        validateSplits(splits, this.period);
-        this.splits = List.copyOf(splits);   // 방어 복사 + 불변
+        this.splits = assembleSplits(splits, this.period);   // 방어 복사 + 불변
     }
 
     // ID 관련해서
@@ -143,5 +142,16 @@ public class RunningRecord {
                 throw new SplitPeriodNotSequentialException();
             }
         }
+    }
+
+    // 구간은 기록을 거쳐야만 만들어진다 — 조립하고 기록 전체 기준 검증까지 여기서 끝낸다
+    private static List<RunningSplit> assembleSplits(List<SplitDraft> drafts,
+                                                     RunningPeriod recordPeriod) {
+        if (drafts == null || drafts.isEmpty()) {
+            throw new SplitsRequiredException();
+        }
+        List<RunningSplit> splits = drafts.stream().map(RunningSplit::from).toList();   // 불변
+        validateSplits(splits, recordPeriod);
+        return splits;
     }
 }

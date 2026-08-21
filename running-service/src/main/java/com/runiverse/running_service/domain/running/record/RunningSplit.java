@@ -7,10 +7,11 @@ import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.ElapsedTime;
 import com.runiverse.running_service.domain.running.metric.vo.ElevationChange;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
-import com.runiverse.running_service.domain.running.record.vo.RouteRange;
 import com.runiverse.running_service.domain.running.metric.vo.RunningPeriod;
+import com.runiverse.running_service.domain.running.record.vo.RouteRange;
 import com.runiverse.running_service.domain.running.record.vo.RunningSplitId;
 import com.runiverse.running_service.domain.running.record.vo.SplitNumber;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -32,7 +33,7 @@ public class RunningSplit {
     private final Cadence avgCadence;
     private final ElevationChange elevationChange;
 
-    @Builder
+    @Builder(access = AccessLevel.PRIVATE)
     private RunningSplit(Long runningSplitId, int splitNumber, int avgPace, int distance, int duration,
                          int routeStartIndex, int routeEndIndex,
                          LocalDateTime startAt, LocalDateTime endAt,
@@ -51,6 +52,24 @@ public class RunningSplit {
         this.calories = new Calories(calories);
         this.avgCadence = avgCadence == null ? null : new Cadence(avgCadence);
         this.elevationChange = elevationChange == null ? null : new ElevationChange(elevationChange);
+    }
+
+    // 기록이 조립할 때만 쓰는 통로 — 밖에서는 SplitDraft까지만 만들 수 있다
+    static RunningSplit from(SplitDraft draft) {
+        return RunningSplit.builder()
+                .runningSplitId(draft.runningSplitId())
+                .splitNumber(draft.splitNumber())
+                .avgPace(draft.avgPace())
+                .distance(draft.distance())
+                .duration(draft.duration())
+                .routeStartIndex(draft.routeStartIndex())
+                .routeEndIndex(draft.routeEndIndex())
+                .startAt(draft.startAt())
+                .endAt(draft.endAt())
+                .calories(draft.calories())
+                .avgCadence(draft.avgCadence())
+                .elevationChange(draft.elevationChange())
+                .build();
     }
 
     // running_id가 null일 수 있음으로 처리해주어야 한다.
