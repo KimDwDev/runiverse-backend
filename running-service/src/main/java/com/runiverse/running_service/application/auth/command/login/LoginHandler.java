@@ -46,7 +46,7 @@ public class LoginHandler implements LoginUsecase {
         String accessToken = generateTokenPort.generateAccessToken(user.getUserId());
         String refreshToken = generateTokenPort.generateRefreshToken(user.getUserId());
 
-        // 4. refresh token 서명화
+        // 4. refresh token 해시화
         String hashedRefreshToken = refreshTokenHashPort.hash(refreshToken);
 
         // 5. refresh token redis 저장

@@ -6,9 +6,12 @@ import com.runiverse.running_service.application.auth.port.out.LoadUserByProvide
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
+import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.common.vo.UserId;
 
@@ -18,7 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort, LoadUserByEmailPort,
-        LoadUserByProviderPort, LoadUserByIdPort, UpdatePasswordPort {
+        LoadUserByProviderPort, LoadUserByIdPort, UpdatePasswordPort, UpdateIntroductionPort {
 
     private final Map<UUID, User> users = new LinkedHashMap<>();
     private final Map<UUID, PasswordHash> updatedPasswords = new LinkedHashMap<>();
@@ -64,6 +67,28 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
         }
         user.changePassword(passwordHash.value());
         updatedPasswords.put(userId.value(), passwordHash);
+    }
+
+    // User.introduction이 final이라 애그리거트를 갈아끼운다.
+    // 실제 어댑터는 users 컬럼만 바꾸므로 소셜 연결은 여기서 복원한다
+    @Override
+    public void updateIntroduction(UserId userId, Introduction introduction) {
+        User user = users.get(userId.value());
+        if (user == null) {
+            throw new UserNotFoundException();
+        }
+        User replaced = new User(
+                user.getUserId().value(),
+                user.getEmail().value(),
+                user.getPasswordHash().value(),
+                user.isAlertConsent(),
+                user.getProfileImageKey().map(ProfileImageKey::value).orElse(null),
+                user.getProfileVisibility(),
+                introduction.value()
+        );
+        user.getOauthUser().ifPresent(oauth ->
+                replaced.linkOauth(oauth.getProvider(), oauth.getProviderId().value()));
+        users.put(userId.value(), replaced);
     }
 
     // 검증 전용

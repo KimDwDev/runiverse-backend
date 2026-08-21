@@ -7,11 +7,17 @@ import com.runiverse.running_service.application.user.port.out.ExistsOnboardingP
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
+import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Nickname;
-import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.user.vo.Weight;
+import lombok.Getter;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -20,24 +26,41 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-// 실제 UserPersistenceAdapter와 같이 러닝의 평균 페이스 조회도 이 저장소가 겸한다
-// — 페이스 출처가 user_onboardings.avg_pace이기 때문이다
 public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         CheckNicknameDuplicatePort, SaveOnboardingPort, LoadNicknamePort, UpdateNicknamePort,
-        LoadUserAvgPacePort {
+        UpdateOnboardingPort, LoadUserAvgPacePort {
 
-    private final Map<UUID, UserOnboarding> onboardings = new LinkedHashMap<>();
-    // 실제 어댑터가 user_onboardings.nickname 컬럼만 갱신하므로 닉네임은 따로 들고 있는다.
-    // onboardings의 스냅샷이 아니라 이 맵이 현재 닉네임의 단일 출처다
-    private final Map<UUID, Nickname> nicknames = new LinkedHashMap<>();
+    // 실제 어댑터가 컬럼 단위로 갱신하므로 도메인 객체가 아니라 user_onboardings의 한 행을 들고 있는다
+    @Getter
+    public static class OnboardingRow {
+
+        private final UserId userId;
+        private final AvgPace avgPace;
+        private Nickname nickname;
+        private Gender gender;
+        private Birthday birthday;
+        private Weight weight;
+        private Height height;
+
+        private OnboardingRow(UserOnboarding onboarding) {
+            this.userId = onboarding.getUserId();
+            this.avgPace = onboarding.getAvgPace();
+            this.nickname = onboarding.getNickname();
+            this.gender = onboarding.getGender();
+            this.birthday = onboarding.getBirthday();
+            this.weight = onboarding.getWeight();
+            this.height = onboarding.getHeight();
+        }
+    }
+
+    private final Map<UUID, OnboardingRow> rows = new LinkedHashMap<>();
     // 온보딩 유즈케이스를 거치지 않고 상태만 심은 유저까지 포함한다
     private final Set<UUID> onboardedUserIds = new HashSet<>();
 
     @Override
     public void saveOnboarding(UserOnboarding onboarding) {
         UUID userId = onboarding.getUserId().value();
-        onboardings.put(userId, onboarding);
-        nicknames.put(userId, onboarding.getNickname());
+        rows.put(userId, new OnboardingRow(onboarding));
         onboardedUserIds.add(userId);
     }
 
@@ -48,28 +71,45 @@ public class InMemoryOnboardingStore implements ExistsOnboardingPort,
 
     @Override
     public boolean existsByNickname(Nickname nickname) {
-        return nicknames.containsValue(nickname);
+        return rows.values().stream().anyMatch(row -> row.nickname.equals(nickname));
     }
 
     @Override
     public Optional<Nickname> loadNickname(UserId userId) {
-        return Optional.ofNullable(nicknames.get(userId.value()));
+        return row(userId).map(OnboardingRow::getNickname);
     }
 
     // 실제 어댑터와 같이 온보딩 행이 없으면 막고, 유니크 위반은 DB가 아니라 여기서 흉내 낸다
     @Override
     public void updateNickname(UserId userId, Nickname nickname) {
-        if (!nicknames.containsKey(userId.value())) {
-            throw new OnboardingNotCompletedException();
-        }
-        nicknames.put(userId.value(), nickname);
+        row(userId).orElseThrow(OnboardingNotCompletedException::new).nickname = nickname;
     }
 
-    // 온보딩 행이 없으면 빈 Optional — 실제 어댑터와 같이 "온보딩 미완료"가 이걸로 판정된다
+    // 실제 어댑터와 같이 담겨 온 컬럼만 바꾼다
+    @Override
+    public void updateOnboarding(UserId userId, Gender gender, Birthday birthday, Weight weight, Height height) {
+        OnboardingRow row = row(userId).orElseThrow(OnboardingNotCompletedException::new);
+        if (gender != null) {
+            row.gender = gender;
+        }
+        if (birthday != null) {
+            row.birthday = birthday;
+        }
+        if (weight != null) {
+            row.weight = weight;
+        }
+        if (height != null) {
+            row.height = height;
+        }
+    }
+
+    // 실제 UserPersistenceAdapter와 같이 러닝의 평균 페이스 조회도 이 저장소가 겸한다
+    // — 페이스 출처가 user_onboardings.avg_pace이기 때문이다.
+    // 행이 없으면 빈 Optional이고, 그게 곧 "온보딩 미완료" 판정이 된다
     @Override
     public Optional<Pace> loadAvgPace(UserId userId) {
-        return Optional.ofNullable(onboardings.get(userId.value()))
-                .map(UserOnboarding::getAvgPace)
+        return row(userId)
+                .map(OnboardingRow::getAvgPace)
                 .map(AvgPace::secondPerKm)
                 .map(Pace::new);
     }
@@ -79,17 +119,21 @@ public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         onboardedUserIds.add(userId);
     }
 
-    // 검증 전용 — 닉네임은 갱신되지 않는 온보딩 시점 스냅샷이다. 현재 닉네임은 nicknameOf로 본다
-    public Optional<UserOnboarding> findByUserId(UUID userId) {
-        return Optional.ofNullable(onboardings.get(userId));
+    // 검증 전용 — 갱신까지 반영된 현재 행
+    public Optional<OnboardingRow> findByUserId(UUID userId) {
+        return Optional.ofNullable(rows.get(userId));
     }
 
     // 검증 전용 — 갱신까지 반영된 현재 닉네임
     public Optional<String> nicknameOf(UUID userId) {
-        return Optional.ofNullable(nicknames.get(userId)).map(Nickname::value);
+        return findByUserId(userId).map(row -> row.nickname.value());
     }
 
     public int size() {
-        return onboardings.size();
+        return rows.size();
+    }
+
+    private Optional<OnboardingRow> row(UserId userId) {
+        return Optional.ofNullable(rows.get(userId.value()));
     }
 }

@@ -23,7 +23,7 @@ public class ChangeProfileImageHandler implements ChangeProfileImageUsecase {
 
     @Override
     public ChangeProfileImageResult handle(ChangeProfileImageCommand command) {
-        // 1.유저가 보낸 티켓 검증
+        // 1. 유저가 보낸 티켓 검증
         String key = command.profileImageKey();
         if (!ProfileImageKeyPolicy.isOwnedBy(key, command.userId())) {
             throw new InvalidProfileImageException();

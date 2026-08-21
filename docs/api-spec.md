@@ -19,7 +19,7 @@
 | 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
-| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) — 사용 화면: 설정 페이지 |
+| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
 | 9 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
 ### 2. 공통 — 디바이스/푸시
@@ -136,10 +136,9 @@
 | 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
 | 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
 | 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | PATCH | `/api/v1/users/me` | 소개글 변경 |
+| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
 | 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
 | 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
-| 54 | PATCH | `/api/v1/users/me/body` | 키·몸무게 변경 (온보딩 완료 후) |
 
 ### 12. 설정 페이지
 
@@ -151,7 +150,9 @@
 | 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+
+> 번호는 한 번 붙이면 바꾸지 않는다. 통합·삭제로 비는 번호(54)는 그대로 둔다 — 노션 명세와 문서 사이 상호 참조가 번호로 걸려 있다.
 
 ---
 
@@ -571,7 +572,9 @@
 
 ### 1-8. `POST /api/v1/auth/logout` — 로그아웃
 
-- **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별. **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`)
+- **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별
+- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-7로 새 access 토큰을 받아 로그아웃이 무효가 된다
+- **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 화면 절 참고 (**[MVP 제외]**)
 - **Response**: `204 No Content`
 
 - **인증**: 필요
@@ -1127,7 +1130,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다
-- `RUNNING_LEFT_*`로 끝나면 종료 시각을 `deleted_at`에 기록하고 `COMPLETED`면 null을 유지한다
+- 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
 - 종료 신호나 타임아웃에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 거리·시간·경로를 산출할 수 있는 트랙이 있으면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 그렇지 않으면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
@@ -1744,9 +1747,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 10-1. `GET /api/v1/users/me` — 내 기본 정보
 
-- **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기, 로그인 직후 상세 조회, 편집 프리필)
-- **Response `200 OK`**: `{ "userId", "nickname", "profileImageUrl", "introduction", "isOnboarded" }`
-- **`email`은 내리지 않는다** — 이메일을 보여주는 화면은 설정 페이지의 계정 항목뿐이라 12-1이 담당한다. 이 응답은 앱을 열 때마다 타는 경로이므로 특정 화면에서만 쓰는 값을 싣지 않는다
+- **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기)
+- **Response `200 OK`**: `{ "userId", "nickname", "isOnboarded" }`
+- **표시 전용 값은 싣지 않는다** — 앱을 열 때마다 타는 경로라 특정 화면에서만 쓰는 값을 담지 않는다. 이메일은 12-1, 소개글과 프로필 통계는 10-2, 프로필 사진은 11-3이 각각 담당한다
+- **`profileImageUrl`을 내리지 않는 이유** — 11-3이 전용 조회를 제공하고, presigned URL은 TTL이 있어 표시 시점에 다시 받아야 한다. 앱 진입마다 발급하면 쓰이지 않을 URL에 S3 호출만 늘어난다
+- **`userId`는 남긴다** — `{userId}` 경로 API(10-2·10-4 등)에서 본인 여부를 가리는 데 쓴다. 액세스 토큰에도 들어 있지만 클라이언트가 토큰을 파싱하게 만들지 않는다
 - **인증**: 필요
 
 ### 10-2. `GET /api/v1/users/{userId}` — 프로필 요약
@@ -2077,11 +2082,86 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-5. `PATCH /api/v1/users/me` — 프로필 수정
+### 11-5. `PATCH /api/v1/users/me/profile` — 프로필 수정
 
-- **Request**: `{ "introduction"? }` (부분 수정). 닉네임은 11-6, 사진은 11-1~11-4, 키·몸무게는 11-8로 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버 자동 갱신)
-- **Response `200 OK`**: 10-1 형태 갱신본
+저장 버튼 하나로 끝나는 값들을 한 요청에 담는다. 사진(11-1~11-4)은 저장 버튼과 무관한 3단계 업로드라, 닉네임(11-6)은 중복 검사와 409가 붙어 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버가 러닝 기록으로 갱신).
 
+- **Request** (부분 수정 — 보낸 필드만 바꾼다)
+
+```json
+{
+  "introduction": "즐겁게 달려요",
+  "gender": "MALE",
+  "birthday": "1998-12-16",
+  "weightKg": 70.5,
+  "heightCm": 175.0
+}
+```
+
+| 필드 | 타입 | 제약 | 저장 위치 |
+|---|---|---|---|
+| `introduction` | String | 선택. 100자 이하. 빈 문자열이면 소개글을 지운다 | `users` |
+| `gender` | String | 선택. `MALE` \| `FEMALE` | `user_onboardings` |
+| `birthday` | String | 선택. `YYYY-MM-DD`, 1900-01-01 이후이며 미래일 수 없다 | `user_onboardings` |
+| `weightKg` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
+| `heightCm` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
+
+- **필드를 생략하면 현재 값을 그대로 둔다.** 소개글만 빈 문자열(`""`)로 지울 수 있고, 나머지 넷은 온보딩에서 필수라 지우는 개념이 없다
+- **키·몸무게는 소수점 첫째 자리로 정규화한다.** `70.55`를 보내면 거부하지 않고 `70.6`으로 저장하며, 응답에도 정규화된 값이 나가 클라이언트가 저장된 값을 알 수 있다. 정상 범위의 값을 자릿수만으로 400으로 막지 않기 위해서다
+- **화면 구성이 확정되기 전이라 편집 가능한 값을 한 엔드포인트에 모았다** — 저장 버튼이 하나로 묶이든 여러 화면으로 갈리든 클라이언트가 자기 필드만 보내면 된다. 화면이 정해지면 이 구성을 다시 본다
+- **`profileVisibility`는 여기 없다** — 프로필 편집이 아니라 설정 페이지 값이라 12-4가 담당한다
+
+- **Response `200 OK`** — 갱신본. 보낸 필드만 담아 돌려준다
+
+```json
+{
+  "introduction": "즐겁게 달려요",
+  "weightKg": 70.5
+}
+```
+
+- **바꾼 값만 돌려준다** — 사진 반영(11-2)·닉네임(11-6)과 같은 형태다. 한두 필드를 고치는 데 프로필 전체를 다시 조립할 이유가 없다
+
+- **에러 (400 Bad Request)** — 문구는 온보딩(1-9)과 같다
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "소개글은 100자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "성별은 MALE 또는 FEMALE이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "생년월일은 미래일 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "몸무게는 20kg 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "키는 300cm 이하여야 합니다."
+}
+```
+
+- **에러 (409 Conflict — 온보딩 미완료)**
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- **`user_onboardings`에 저장하는 필드(`gender`·`birthday`·`weightKg`·`heightCm`)가 하나라도 있는데 온보딩을 마치지 않았으면 아무것도 바꾸지 않고 409로 답한다.** 소개글만 보냈다면 온보딩 전에도 성공한다
+- **정상 흐름에서는 발생하지 않는다** — 앱 진입이 `isOnboarded`로 갈리므로 온보딩 전에는 편집 화면에 닿지 못한다. 구버전 앱과 직접 호출 때문에 서버가 막는다
 - **인증**: 필요
 
 ### 11-6. `PATCH /api/v1/users/me/nickname` — 닉네임 변경
@@ -2104,10 +2184,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-...-440001",
   "nickname": "완두콩"
 }
 ```
+
+- **바꾼 값만 돌려준다** — 본인 대상 수정이라 `userId`는 클라이언트가 이미 알고 있다(10-1·로그인 응답). 온보딩(1-9)은 `201 Created`로 리소스를 만들며 식별자를 돌려주지만, 수정은 그 자리가 아니다
+- **`userId` 제거는 `api-convention.md`의 "기존 필드를 제거하지 않는다"에 대한 예외다** — 클라이언트가 아직 이 필드를 쓰지 않는 것을 확인하고 걷어냈다
 
 현재 닉네임과 같은 값을 보내면 아무것도 바꾸지 않고 그대로 반환한다(idempotent).
 
@@ -2195,68 +2277,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **인증**: 불필요
-
-### 11-8. `PATCH /api/v1/users/me/body` — 키·몸무게 변경
-
-키·몸무게는 `user_onboardings`에 있어 온보딩을 마쳐야 바꿀 수 있다. 러닝 기록의 칼로리 계산에 쓰는 값이라 프로필 요약(10-2)에는 나가지 않는다.
-
-- **Request** (부분 수정 — 보낸 값만 바꾼다)
-
-```json
-{
-  "weightKg": 70.5,
-  "heightCm": 175.0
-}
-```
-
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `weightKg` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
-| `heightCm` | Number | 선택. 20 이상 300 이하, 소수점 첫째 자리까지 |
-
-- **Response `200 OK`** — 갱신본
-
-```json
-{
-  "weightKg": 70.5,
-  "heightCm": 175.0
-}
-```
-
-- **에러 (400 Bad Request)**
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "몸무게는 20kg 이상이어야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "몸무게는 300kg 이하여야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "키는 20cm 이상이어야 합니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "키는 300cm 이하여야 합니다."
-}
-```
-
-- **에러 (409 Conflict — 온보딩 미완료)**
-
-```json
-{
-  "code": "ONBOARDING_NOT_COMPLETED",
-  "message": "온보딩을 먼저 완료해 주세요."
-}
-```
-
-- **인증**: 필요
+- **인증을 요구하지 않는 이유는 확인이 필요하다.** 회원가입 폼에서 닉네임을 받던 설계(토큰 발급 전이라 공개가 필요했다)의 잔재로 보인다. 지금은 닉네임을 온보딩에서 받고 그 시점엔 토큰이 있어, 사용 화면인 온보딩·프로필 편집 어느 쪽도 공개를 필요로 하지 않는다
+- **공개로 두면 닉네임 존재 여부를 토큰 없이 무한히 조회할 수 있다.** 인증이 없어 `userId` 기준 호출 제한을 걸 축도 없다(이 서비스에 IP 기준 제한 장치는 없다). 정리하려면 `SecurityConfig`의 `PUBLIC_ENDPOINTS`에서 이 경로를 빼면 되고, 화면 흐름상 잃는 것은 없다
 
 ## 12. 설정 페이지
 
