@@ -19,7 +19,7 @@
 | 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
-| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) — 사용 화면: 설정 페이지 |
+| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
 | 9 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
 ### 2. 공통 — 디바이스/푸시
@@ -572,7 +572,9 @@
 
 ### 1-8. `POST /api/v1/auth/logout` — 로그아웃
 
-- **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별. **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`)
+- **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별
+- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-7로 새 access 토큰을 받아 로그아웃이 무효가 된다
+- **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 화면 절 참고 (**[MVP 제외]**)
 - **Response**: `204 No Content`
 
 - **인증**: 필요
