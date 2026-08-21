@@ -17,6 +17,7 @@ import com.runiverse.running_service.integration_test.fake.InMemoryAccessTokenBl
 import com.runiverse.running_service.integration_test.fake.InMemoryEmailVerificationStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryOnboardingStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRefreshTokenStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRunningStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryVerificationTicketStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ public abstract class IntegrationTestSupport {
     protected InMemoryUserStore userStore;
     protected InMemoryRefreshTokenStore refreshTokenStore;
     protected InMemoryOnboardingStore onboardingStore;
+    protected InMemoryRunningStore runningStore;
     protected InMemoryAccessTokenBlacklist accessTokenBlacklist;
     protected InMemoryVerificationTicketStore verificationTicketStore;
     protected InMemoryEmailVerificationStore emailVerificationStore;
@@ -48,6 +50,7 @@ public abstract class IntegrationTestSupport {
         userStore = new InMemoryUserStore();
         refreshTokenStore = new InMemoryRefreshTokenStore();
         onboardingStore = new InMemoryOnboardingStore();
+        runningStore = new InMemoryRunningStore();
         accessTokenBlacklist = new InMemoryAccessTokenBlacklist();
         verificationTicketStore = new InMemoryVerificationTicketStore();
         emailVerificationStore = new InMemoryEmailVerificationStore(MAX_ATTEMPTS, DAILY_LIMIT);
