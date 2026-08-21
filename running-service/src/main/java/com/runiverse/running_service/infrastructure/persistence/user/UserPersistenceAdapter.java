@@ -11,13 +11,17 @@ import com.runiverse.running_service.application.user.port.out.CheckNicknameDupl
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
+import com.runiverse.running_service.application.user.port.out.LoadOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
+import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
@@ -36,7 +40,7 @@ import java.util.Optional;
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
-        UpdatePasswordPort {
+        UpdatePasswordPort, UpdateIntroductionPort, LoadOnboardingPort, UpdateOnboardingPort {
 
     private final EntityManager entityManager;
 
@@ -131,6 +135,16 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         entity.changePasswordHash(passwordHash.value());
     }
 
+    @Override
+    public void updateIntroduction(UserId userId, Introduction introduction) {
+        UserJpaEntity entity = entityManager.find(UserJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new UserNotFoundException();
+        }
+        // 빈 소개글은 컬럼을 비운다 — 가입 시 save()도 같은 방식이라 "없음"의 표현을 하나로 둔다
+        entity.changeIntroduction(emptyToNull(introduction.value()));
+    }
+
     private User toDomain(UserJpaEntity entity) {
         return new User(
                 entity.getUserId(),
@@ -200,6 +214,35 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 onboarding.getWeight().value(),
                 onboarding.getHeight().value()
         ));
+    }
+
+    @Override
+    public Optional<UserOnboarding> loadOnboarding(UserId userId) {
+        return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
+                .map(entity -> new UserOnboarding(
+                        new UserId(entity.getUserId()),
+                        entity.getNickname(),
+                        entity.getGender().name(),
+                        entity.getBirthday(),
+                        entity.getAvgPace(),
+                        entity.getWeight(),
+                        entity.getHeight()
+                ));
+    }
+
+    @Override
+    public void updateOnboarding(UserOnboarding onboarding) {
+        UserOnboardingJpaEntity entity =
+                entityManager.find(UserOnboardingJpaEntity.class, onboarding.getUserId().value());
+        if (entity == null) {
+            throw new OnboardingNotCompletedException();
+        }
+        entity.changeProfile(
+                onboarding.getGender(),
+                onboarding.getBirthday().value(),
+                onboarding.getWeight().value(),
+                onboarding.getHeight().value()
+        );
     }
 
     @Override

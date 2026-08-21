@@ -86,6 +86,15 @@ public class UserOnboardingJpaEntity extends BaseTimeEntity {
         this.nickname = nickname;
     }
 
+    // 프로필 수정 — 애그리거트가 합쳐 준 갱신본을 그대로 반영한다.
+    // 닉네임은 changeNickname이, 평균 페이스는 러닝 기록이 갱신하므로 여기서 다루지 않는다
+    public void changeProfile(Gender gender, LocalDate birthday, BigDecimal weight, BigDecimal height) {
+        this.gender = gender;
+        this.birthday = birthday;
+        this.weight = weight;
+        this.height = height;
+    }
+
     // FK 제약
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(

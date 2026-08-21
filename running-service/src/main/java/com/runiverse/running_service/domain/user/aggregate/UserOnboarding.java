@@ -25,9 +25,9 @@ public class UserOnboarding {
     private final Weight weight;
     private final Height height;
 
-    // 온보딩 완료
-    UserOnboarding(UserId userId, String nickname, String gender, LocalDate birthday,
-                   int avgPace, BigDecimal weight, BigDecimal height) {
+    // 온보딩 완료 — 저장된 값을 다시 도메인으로 되살릴 때도 쓴다(User와 같은 방식)
+    public UserOnboarding(UserId userId, String nickname, String gender, LocalDate birthday,
+                          int avgPace, BigDecimal weight, BigDecimal height) {
         this(userId,
                 new Nickname(nickname),
                 Gender.from(gender),
@@ -52,9 +52,11 @@ public class UserOnboarding {
         this.height = height;
     }
 
-    // 프로필 수정
-    UserOnboarding change(String nickname, String gender, LocalDate birthday,
-                          Integer avgPace, BigDecimal weight, BigDecimal height) {
+    // 프로필 수정 — null인 값은 그대로 둔다.
+    // User를 거치지 않고 직접 부를 수 있다. 온보딩은 별도 테이블이고 조회·저장 포트도 따로라
+    // User가 반쪽만 복원되는 지금 구조에서는 User.updateOnboarding으로 닿을 수 없다
+    public UserOnboarding change(String nickname, String gender, LocalDate birthday,
+                                 Integer avgPace, BigDecimal weight, BigDecimal height) {
         return new UserOnboarding(
                 userId,
                 nickname != null ? new Nickname(nickname) : this.nickname,
