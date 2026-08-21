@@ -24,7 +24,7 @@ public class ChangeNicknameHandler implements ChangeNicknameUsecase {
     @Override
     public ChangeNicknameResult handle(ChangeNicknameCommand command) {
         UserId userId = new UserId(command.userId());
-        // 1. vo에서 userId에 대한 정규화 진행
+        // 1. 닉네임은 VO가 정규화한다
         Nickname nickname = new Nickname(command.nickname());
 
         // 2. 온보딩에 존재하는지 우선적으로 확인
