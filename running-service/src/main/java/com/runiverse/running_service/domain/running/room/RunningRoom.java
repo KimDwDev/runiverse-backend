@@ -164,7 +164,7 @@ public class RunningRoom {
             throw new AlreadyLeftRoomException();                // 2. 이미 나갔는가 — 중복 이탈 방어
         }
         PlayerCount left = playerCount.leave();                  // 3. 계산만 한다, 아직 반영 안 함
-        RunningRoomStatus nextStatus = left.current() == 0       // 4. 상태 전이 가능 여부까지 여기서 확인한다
+        RunningRoomStatus nextStatus = left.current() == 0 && status.isBeforeStart()
                 ? status.transitionTo(RunningRoomStatus.CANCELLED)
                 : status;
         this.playerCount = left;                                 // 5. 여기부터 확정 — 더는 예외가 나지 않는다
