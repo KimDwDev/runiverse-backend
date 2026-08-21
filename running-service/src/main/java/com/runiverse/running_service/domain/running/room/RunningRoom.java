@@ -64,7 +64,7 @@ public class RunningRoom {
 
 
     // 솔로 — 모집 단계 없이 STARTED로 태어난다
-    public static RunningRoom openSolo(Long runningPlayerId, int avgPace,
+    public static RunningRoom openSolo(RunningPlayerId runningPlayerId, int avgPace,
                                        Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
                 .type(RunningRoomType.SOLO)
@@ -79,7 +79,7 @@ public class RunningRoom {
     }
 
     // 매칭 — 항상 1인 방으로 태어나 close_at까지 모집한다
-    public static RunningRoom openMatch(Long runningPlayerId, int avgPace, Integer targetDistance,
+    public static RunningRoom openMatch(RunningPlayerId runningPlayerId, int avgPace, Integer targetDistance,
                                         LocalDateTime startAt, LocalDateTime closeAt) {
         RunningRoom room = builder()
                 .type(RunningRoomType.MATCH)
@@ -116,7 +116,7 @@ public class RunningRoom {
     }
 
     // 후보 스캔이 걸러도 애그리거트가 다시 지킨다 — 스캔과 합류 사이에 자리가 찰 수 있다
-    public void join(Long runningPlayerId, Pace pace) {
+    public void join(RunningPlayerId runningPlayerId, Pace pace) {
         if (!canJoin(pace)) {
             throw new RoomNotJoinableException();
         }
@@ -141,7 +141,7 @@ public class RunningRoom {
     }
 
     // 나갔던 사람이 돌아옴 — 러닝 중에도 가능해서 join()의 모집 조건을 타지 않는다
-    public void rejoin(Long runningPlayerId) {
+    public void rejoin(RunningPlayerId runningPlayerId) {
         if (status.isTerminal()) {
             throw new RoomNotJoinableException();   // 끝났거나 취소된 방엔 돌아올 수 없다
         }
@@ -153,7 +153,7 @@ public class RunningRoom {
         session.rejoin();
     }
 
-    public void leave(Long runningPlayerId) {
+    public void leave(RunningPlayerId runningPlayerId) {
         RoomSession session = session(runningPlayerId);          // 1. 이 방 참가자인가
         if (!session.isConnected()) {
             throw new AlreadyLeftRoomException();                // 2. 이미 나갔는가 — 중복 이탈 방어
@@ -187,13 +187,12 @@ public class RunningRoom {
         return Collections.unmodifiableList(sessions);
     }
 
-    private RoomSession session(Long runningPlayerId) {
+    private RoomSession session(RunningPlayerId runningPlayerId) {
         return findSession(runningPlayerId).orElseThrow(NotRoomPlayerException::new);
     }
 
-    private Optional<RoomSession> findSession(Long runningPlayerId) {
-        RunningPlayerId playerId = new RunningPlayerId(runningPlayerId);
-        return sessions.stream().filter(s -> s.isSamePlayer(playerId)).findFirst();
+    private Optional<RoomSession> findSession(RunningPlayerId runningPlayerId) {
+        return sessions.stream().filter(s -> s.isSamePlayer(runningPlayerId)).findFirst();
     }
 
     private static void validateCloseAt(RunningRoomType type, LocalDateTime startAt,

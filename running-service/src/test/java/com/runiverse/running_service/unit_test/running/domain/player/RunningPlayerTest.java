@@ -5,7 +5,7 @@ import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.exception.InvalidDesiredPlayerCountException;
 import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
 import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
-import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
+import com.runiverse.running_service.domain.running.player.exception.PlayerStartAtRequiredException;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -101,7 +101,7 @@ public class RunningPlayerTest {
             // when & then -> 예약 매칭이라 시작 시각이 곧 매칭 조건이다
             assertThatThrownBy(() ->
                     RunningPlayer.request(userId, AVG_PACE, TARGET_DISTANCE, null))
-                    .isInstanceOf(StartAtRequiredException.class);
+                    .isInstanceOf(PlayerStartAtRequiredException.class);
         }
 
         private RunningPlayer playerWithDesiredCount(int desiredPlayerCount) {

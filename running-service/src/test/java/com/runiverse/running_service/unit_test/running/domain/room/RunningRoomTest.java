@@ -27,7 +27,12 @@ public class RunningRoomTest {
     private static final LocalDateTime CLOSE = START.minusMinutes(10);
     private static final int HOST_PACE = 330;      // 5분 30초/km
     private static final int TARGET_DISTANCE = 5_000;
-    private static final long HOST = 1L;
+    private static final RunningPlayerId HOST = player(1L);
+
+    // 방 API가 원시 Long이 아니라 식별자 VO를 받는다 — 테스트도 같은 타입으로 부른다
+    private static RunningPlayerId player(long value) {
+        return new RunningPlayerId(value);
+    }
 
     // 5km / 5분30초 페이스로 모집 중인 매칭 방 — 각 테스트는 여기서 한 군데만 어긋뜨린다
     private static RunningRoom matchRoom() {
@@ -38,9 +43,9 @@ public class RunningRoomTest {
         return RunningRoom.openSolo(HOST, HOST_PACE, TARGET_DISTANCE, START);
     }
 
-    private static RoomSession sessionOf(RunningRoom room, long runningPlayerId) {
+    private static RoomSession sessionOf(RunningRoom room, RunningPlayerId runningPlayerId) {
         return room.getSessions().stream()
-                .filter(s -> s.isSamePlayer(new RunningPlayerId(runningPlayerId)))
+                .filter(s -> s.isSamePlayer(runningPlayerId))
                 .findFirst()
                 .orElseThrow();
     }
@@ -119,13 +124,13 @@ public class RunningRoomTest {
             RunningRoom room = matchRoom();
 
             // when
-            room.join(2L, new Pace(340));
+            room.join(player(2L), new Pace(340));
 
             // then
             assertThat(room.getPlayerCount().current()).isEqualTo(2);
             assertThat(room.getSessions()).hasSize(2);
-            assertThat(sessionOf(room, 2L).isConnected()).isTrue();
-            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isZero();
+            assertThat(sessionOf(room, player(2L)).isConnected()).isTrue();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isZero();
         }
 
         @Test
@@ -135,8 +140,8 @@ public class RunningRoomTest {
             RunningRoom room = matchRoom();
 
             // when -> 경계값은 허용한다
-            room.join(2L, new Pace(HOST_PACE + 30));
-            room.join(3L, new Pace(HOST_PACE - 30));
+            room.join(player(2L), new Pace(HOST_PACE + 30));
+            room.join(player(3L), new Pace(HOST_PACE - 30));
 
             // then
             assertThat(room.getPlayerCount().current()).isEqualTo(3);
@@ -149,7 +154,7 @@ public class RunningRoomTest {
             RunningRoom room = matchRoom();
 
             // when & then
-            assertThatThrownBy(() -> room.join(2L, new Pace(HOST_PACE + 31)))
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE + 31)))
                     .isInstanceOf(RoomNotJoinableException.class);
         }
 
@@ -158,13 +163,13 @@ public class RunningRoomTest {
         void rejectJoinWhenFull() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
-            room.join(3L, new Pace(HOST_PACE));
-            room.join(4L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.join(player(3L), new Pace(HOST_PACE));
+            room.join(player(4L), new Pace(HOST_PACE));
 
             // when & then -> 자리는 4개뿐이다
             assertThat(room.getPlayerCount().isFull()).isTrue();
-            assertThatThrownBy(() -> room.join(5L, new Pace(HOST_PACE)))
+            assertThatThrownBy(() -> room.join(player(5L), new Pace(HOST_PACE)))
                     .isInstanceOf(RoomNotJoinableException.class);
         }
 
@@ -187,7 +192,7 @@ public class RunningRoomTest {
             room.closeMatching();
 
             // when & then
-            assertThatThrownBy(() -> room.join(2L, new Pace(HOST_PACE)))
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE)))
                     .isInstanceOf(RoomNotJoinableException.class);
         }
 
@@ -198,7 +203,7 @@ public class RunningRoomTest {
             RunningRoom room = soloRoom();
 
             // when & then -> 솔로 방은 STARTED라 후보가 되지 않는다
-            assertThatThrownBy(() -> room.join(2L, new Pace(HOST_PACE)))
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE)))
                     .isInstanceOf(RoomNotJoinableException.class);
         }
     }
@@ -212,7 +217,7 @@ public class RunningRoomTest {
         void matchedThenStartedThenFinished() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
 
             // when
             room.closeMatching();
@@ -273,16 +278,16 @@ public class RunningRoomTest {
         void leaveKeepsSession() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
 
             // when
-            room.leave(2L);
+            room.leave(player(2L));
 
             // then -> 어느 방에서 나갔는지가 페널티 근거라 관계는 지우지 않는다
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
             assertThat(room.getSessions()).hasSize(2);
-            assertThat(sessionOf(room, 2L).isConnected()).isFalse();
-            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(1);
+            assertThat(sessionOf(room, player(2L)).isConnected()).isFalse();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
         }
 
         @Test
@@ -304,11 +309,11 @@ public class RunningRoomTest {
         void roomSurvivesWithSinglePlayer() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
             room.closeMatching();
 
             // when -> 1인이 돼도 혼자 뛴다
-            room.leave(2L);
+            room.leave(player(2L));
 
             // then
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
@@ -320,17 +325,17 @@ public class RunningRoomTest {
         void rejoinRestoresSession() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
-            room.leave(2L);
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.leave(player(2L));
 
             // when
-            room.rejoin(2L);
+            room.rejoin(player(2L));
 
             // then -> 관계는 하나뿐이고 나간 이력은 남는다
             assertThat(room.getPlayerCount().current()).isEqualTo(2);
             assertThat(room.getSessions()).hasSize(2);
-            assertThat(sessionOf(room, 2L).isConnected()).isTrue();
-            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(1);
+            assertThat(sessionOf(room, player(2L)).isConnected()).isTrue();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
         }
 
         @Test
@@ -338,13 +343,13 @@ public class RunningRoomTest {
         void rejoinAfterStarted() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
             room.closeMatching();
             room.start();
-            room.leave(2L);
+            room.leave(player(2L));
 
             // when -> 재입장은 모집 조건을 타지 않는다
-            room.rejoin(2L);
+            room.rejoin(player(2L));
 
             // then
             assertThat(room.getPlayerCount().current()).isEqualTo(2);
@@ -356,15 +361,15 @@ public class RunningRoomTest {
         void leaveCountAccumulates() {
             // given
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
+            room.join(player(2L), new Pace(HOST_PACE));
 
             // when
-            room.leave(2L);
-            room.rejoin(2L);
-            room.leave(2L);
+            room.leave(player(2L));
+            room.rejoin(player(2L));
+            room.leave(player(2L));
 
             // then -> 페널티 판정 근거가 된다
-            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(2);
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(2);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
         }
 
@@ -373,15 +378,15 @@ public class RunningRoomTest {
         void leaveTwiceWithoutRejoinDoesNotCancelRoom() {
             // given -> 2인 방에서 2L이 이미 나갔다
             RunningRoom room = matchRoom();
-            room.join(2L, new Pace(HOST_PACE));
-            room.leave(2L);
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.leave(player(2L));
 
             // when & then -> WS 재연결·이벤트 중복으로 leave가 한 번 더 들어와도 막혀야 한다
-            assertThatThrownBy(() -> room.leave(2L))
+            assertThatThrownBy(() -> room.leave(player(2L)))
                     .isInstanceOf(AlreadyLeftRoomException.class);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);   // HOST는 아직 방에 있다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
-            assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(1);
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
         }
 
         @Test
@@ -432,7 +437,7 @@ public class RunningRoomTest {
             RunningRoom room = matchRoom();
 
             // when & then -> 처음 들어오는 건 join()이 받는다
-            assertThatThrownBy(() -> room.rejoin(99L))
+            assertThatThrownBy(() -> room.rejoin(player(99L)))
                     .isInstanceOf(NotRoomPlayerException.class);
         }
 
@@ -443,7 +448,7 @@ public class RunningRoomTest {
             RunningRoom room = matchRoom();
 
             // when & then -> 예외가 나면 방은 아무것도 바뀌지 않아야 한다
-            assertThatThrownBy(() -> room.leave(99L))
+            assertThatThrownBy(() -> room.leave(player(99L)))
                     .isInstanceOf(NotRoomPlayerException.class);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
