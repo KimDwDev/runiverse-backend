@@ -6,6 +6,7 @@
     "sessionUrl": false
   },
   "permissions": {
+    "defaultMode": "default",
     "allow": [
       "Bash(./gradlew build:*)",
       "Bash(./gradlew test:*)",
