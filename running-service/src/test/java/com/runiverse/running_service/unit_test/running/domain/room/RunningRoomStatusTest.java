@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.running.domain.room;
 import com.runiverse.running_service.domain.running.room.exception.InvalidRoomStatusTransitionException;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -28,7 +29,7 @@ public class RunningRoomStatusTest {
                     RunningRoomStatus.MATCHED,
                     EnumSet.of(RunningRoomStatus.STARTED, RunningRoomStatus.CANCELLED),
                     RunningRoomStatus.STARTED,
-                    EnumSet.of(RunningRoomStatus.FINISHED),
+                    EnumSet.of(RunningRoomStatus.FINISHED, RunningRoomStatus.CANCELLED),
                     RunningRoomStatus.FINISHED,
                     EnumSet.noneOf(RunningRoomStatus.class),
                     RunningRoomStatus.CANCELLED,
@@ -103,10 +104,25 @@ public class RunningRoomStatusTest {
 
     @ParameterizedTest
     @EnumSource(value = RunningRoomStatus.class, names = {"STARTED", "FINISHED", "CANCELLED"})
-    @DisplayName("시작한 뒤에는 취소할 수 없다")
-    void notCancellableAfterStart(RunningRoomStatus current) {
-        // when & then -> 취소하면 FINISHED에 닿지 못해 기록이 사라진다
+    @DisplayName("시작한 뒤는 시작 전 구간이 아니다")
+    void notBeforeStartAfterStart(RunningRoomStatus current) {
+        // when & then -> isBeforeStart는 모집·확정 구간만 가리킨다
         assertThat(current.isBeforeStart()).isFalse();
+    }
+
+    @Test
+    @DisplayName("시작한 방도 취소할 수 있다")
+    void startedRoomIsCancellable() {
+        // when & then -> 러닝 중 전원 이탈처럼 방을 닫아야 하는 경우가 있다
+        assertThat(RunningRoomStatus.STARTED.isBeforeStart()).isFalse();
+        assertThat(RunningRoomStatus.STARTED.canTransitionTo(RunningRoomStatus.CANCELLED)).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"FINISHED", "CANCELLED"})
+    @DisplayName("종착 상태는 취소로도 갈 수 없다")
+    void terminalStatusIsNotCancellable(RunningRoomStatus current) {
+        // when & then -> 이미 끝난 방은 어떤 상태로도 움직이지 않는다
         assertThat(current.canTransitionTo(RunningRoomStatus.CANCELLED)).isFalse();
     }
 }

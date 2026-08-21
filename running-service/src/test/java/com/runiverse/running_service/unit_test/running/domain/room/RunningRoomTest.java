@@ -257,13 +257,17 @@ public class RunningRoomTest {
         }
 
         @Test
-        @DisplayName("시작한 방은 취소할 수 없다")
-        void startedRoomCannotBeCancelled() {
+        @DisplayName("시작한 방도 취소할 수 있다")
+        void startedRoomCanBeCancelled() {
             // given
             RunningRoom room = soloRoom();   // 솔로는 STARTED로 태어난다
 
-            // when & then -> 취소하면 FINISHED에 닿지 못해 기록이 사라진다
-            assertThatThrownBy(room::cancel)
+            // when
+            room.cancel();
+
+            // then -> 취소는 종착 상태라 이후로는 종료로도 갈 수 없다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThatThrownBy(room::finish)
                     .isInstanceOf(InvalidRoomStatusTransitionException.class);
         }
 
@@ -302,21 +306,21 @@ public class RunningRoomTest {
         }
 
         @Test
-        @DisplayName("러닝이 시작된 뒤에는 마지막 참가자가 빠져도 방을 닫지 않는다")
-        void startedRoomIsNotCancelledWhenEmptied() {
+        @DisplayName("러닝이 시작된 뒤에도 마지막 참가자가 빠지면 방이 닫힌다")
+        void startedRoomIsCancelledWhenEmptied() {
             // given -> 1인으로 확정돼 혼자 뛰는 방
             RunningRoom room = matchRoom();
             room.closeMatching();
             room.start();
 
-            // when -> 혼자 뛰던 사람이 조기 종료한다
+            // when -> 혼자 뛰던 사람이 나간다
             room.leave(HOST);
 
-            // then -> 닫으면 FINISHED에 닿지 못해 기록이 사라진다
+            // then -> 남은 사람이 없으면 시작 여부와 무관하게 방도 없다
             assertThat(room.getPlayerCount().current()).isZero();
-            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-            room.finish();
-            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(sessionOf(room, HOST).isConnected()).isFalse();
+            assertThat(sessionOf(room, HOST).getLeaveCount().value()).isEqualTo(1);
         }
 
         @Test
