@@ -1,12 +1,12 @@
 package com.runiverse.running_service.domain.running.player;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
-import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
-import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
-import com.runiverse.running_service.domain.running.player.vo.DesiredPlayerCount;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
+import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
+import com.runiverse.running_service.domain.running.player.exception.PlayerStartAtRequiredException;
+import com.runiverse.running_service.domain.running.player.vo.DesiredPlayerCount;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import lombok.Builder;
@@ -41,7 +41,7 @@ public class RunningPlayer {
                 new DesiredPlayerCount(desiredPlayerCount);
 
         if (startAt == null) {
-            throw new StartAtRequiredException();
+            throw new PlayerStartAtRequiredException();
         }
         this.startAt = startAt;
         this.deletedAt = deletedAt;
