@@ -11,7 +11,6 @@ import com.runiverse.running_service.application.user.port.out.CheckNicknameDupl
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
-import com.runiverse.running_service.application.user.port.out.LoadOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
@@ -19,14 +18,18 @@ import com.runiverse.running_service.application.user.port.out.UpdateNicknamePor
 import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.user.vo.Weight;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +43,7 @@ import java.util.Optional;
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
-        UpdatePasswordPort, UpdateIntroductionPort, LoadOnboardingPort, UpdateOnboardingPort {
+        UpdatePasswordPort, UpdateIntroductionPort, UpdateOnboardingPort {
 
     private final EntityManager entityManager;
 
@@ -217,32 +220,24 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     }
 
     @Override
-    public Optional<UserOnboarding> loadOnboarding(UserId userId) {
-        return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
-                .map(entity -> new UserOnboarding(
-                        new UserId(entity.getUserId()),
-                        entity.getNickname(),
-                        entity.getGender().name(),
-                        entity.getBirthday(),
-                        entity.getAvgPace(),
-                        entity.getWeight(),
-                        entity.getHeight()
-                ));
-    }
-
-    @Override
-    public void updateOnboarding(UserOnboarding onboarding) {
-        UserOnboardingJpaEntity entity =
-                entityManager.find(UserOnboardingJpaEntity.class, onboarding.getUserId().value());
+    public void updateOnboarding(UserId userId, Gender gender, Birthday birthday, Weight weight, Height height) {
+        UserOnboardingJpaEntity entity = entityManager.find(UserOnboardingJpaEntity.class, userId.value());
         if (entity == null) {
             throw new OnboardingNotCompletedException();
         }
-        entity.changeProfile(
-                onboarding.getGender(),
-                onboarding.getBirthday().value(),
-                onboarding.getWeight().value(),
-                onboarding.getHeight().value()
-        );
+        // 담겨 온 값만 바꾼다 — 나머지 컬럼은 건드리지 않는다
+        if (gender != null) {
+            entity.changeGender(gender);
+        }
+        if (birthday != null) {
+            entity.changeBirthday(birthday.value());
+        }
+        if (weight != null) {
+            entity.changeWeight(weight.value());
+        }
+        if (height != null) {
+            entity.changeHeight(height.value());
+        }
     }
 
     @Override
