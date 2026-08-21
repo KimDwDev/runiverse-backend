@@ -1130,7 +1130,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다
-- `RUNNING_LEFT_*`로 끝나면 종료 시각을 `deleted_at`에 기록하고 `COMPLETED`면 null을 유지한다
+- 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
 - 종료 신호나 타임아웃에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 거리·시간·경로를 산출할 수 있는 트랙이 있으면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 그렇지 않으면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
