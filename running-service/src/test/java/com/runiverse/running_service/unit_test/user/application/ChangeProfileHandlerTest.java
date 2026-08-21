@@ -6,19 +6,21 @@ import com.runiverse.running_service.application.user.command.profile.ChangeProf
 import com.runiverse.running_service.application.user.command.profile.ChangeProfileResult;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.application.user.port.out.LoadOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
+import com.runiverse.running_service.domain.user.vo.Weight;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,7 +43,6 @@ public class ChangeProfileHandlerTest {
     // PasswordHash VO가 Argon2id 형식만 허용하므로 형식에 맞는 값을 쓴다
     private static final String PASSWORD_HASH =
             "$argon2id$v=19$m=16384,t=2,p=1$c29tZXNhbHQ$aGFzaHZhbHVl";
-    private static final String NICKNAME = "러너킴";
     private static final String INTRODUCTION = "즐겁게 달려요";
     private static final LocalDate BIRTHDAY = LocalDate.of(1998, 12, 16);
     private static final BigDecimal WEIGHT = new BigDecimal("70.5");
@@ -54,7 +55,7 @@ public class ChangeProfileHandlerTest {
     private UpdateIntroductionPort updateIntroductionPort;
 
     @Mock
-    private LoadOnboardingPort loadOnboardingPort;
+    private ExistsOnboardingPort existsOnboardingPort;
 
     @Mock
     private UpdateOnboardingPort updateOnboardingPort;
@@ -67,18 +68,12 @@ public class ChangeProfileHandlerTest {
                 null, ProfileVisibility.PUBLIC, "");
     }
 
-    private static UserOnboarding onboardingOf(UUID userId) {
-        return new UserOnboarding(new UserId(userId), NICKNAME, "MALE", BIRTHDAY,
-                330, WEIGHT, HEIGHT);
-    }
-
     private void givenUser(UUID userId) {
         when(loadUserByIdPort.loadById(new UserId(userId))).thenReturn(Optional.of(userOf(userId)));
     }
 
     private void givenOnboarded(UUID userId) {
-        when(loadOnboardingPort.loadOnboarding(new UserId(userId)))
-                .thenReturn(Optional.of(onboardingOf(userId)));
+        when(existsOnboardingPort.existsByUserId(new UserId(userId))).thenReturn(true);
     }
 
     @Test
@@ -92,12 +87,12 @@ public class ChangeProfileHandlerTest {
         ChangeProfileResult result = handler.handle(
                 new ChangeProfileCommand(userId, INTRODUCTION, null, null, null, null));
 
-        // then -> 소개글은 users에 있어 온보딩 조회 자체가 필요 없다
+        // then -> 소개글은 users에 있어 온보딩 완료 여부를 볼 필요가 없다
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
         assertThat(result.weightKg()).isNull();
         verify(updateIntroductionPort)
                 .updateIntroduction(new UserId(userId), new Introduction(INTRODUCTION));
-        verifyNoInteractions(loadOnboardingPort, updateOnboardingPort);
+        verifyNoInteractions(existsOnboardingPort, updateOnboardingPort);
     }
 
     @Test
@@ -117,8 +112,8 @@ public class ChangeProfileHandlerTest {
     }
 
     @Test
-    @DisplayName("보낸 온보딩 값만 바꾸고 나머지는 그대로 둔다")
-    void changesOnlyGivenOnboardingFields() {
+    @DisplayName("보낸 온보딩 값만 VO로 넘기고 나머지 자리는 null로 둔다")
+    void passesOnlyGivenOnboardingFields() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         givenUser(userId);
@@ -128,20 +123,32 @@ public class ChangeProfileHandlerTest {
         // when
         handler.handle(new ChangeProfileCommand(userId, null, null, null, newWeight, null));
 
-        // then -> 안 보낸 성별·생일·키는 기존 값이 유지된 채 저장된다
-        ArgumentCaptor<UserOnboarding> captor = ArgumentCaptor.forClass(UserOnboarding.class);
-        verify(updateOnboardingPort).updateOnboarding(captor.capture());
-        UserOnboarding saved = captor.getValue();
-        assertThat(saved.getWeight().value()).isEqualByComparingTo(newWeight);
-        assertThat(saved.getHeight().value()).isEqualByComparingTo(HEIGHT);
-        assertThat(saved.getBirthday().value()).isEqualTo(BIRTHDAY);
-        assertThat(saved.getNickname().value()).isEqualTo(NICKNAME);
+        // then -> 안 보낸 자리를 null로 넘겨야 어댑터가 해당 컬럼을 건드리지 않는다
+        verify(updateOnboardingPort).updateOnboarding(
+                new UserId(userId), null, null, new Weight(newWeight), null);
+    }
+
+    @Test
+    @DisplayName("온보딩 값을 모두 보내면 전부 VO로 넘긴다")
+    void passesAllOnboardingFields() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        givenUser(userId);
+        givenOnboarded(userId);
+
+        // when
+        handler.handle(new ChangeProfileCommand(userId, null, "male", BIRTHDAY, WEIGHT, HEIGHT));
+
+        // then -> 성별은 대소문자를 가리지 않고 VO가 정규화한다
+        verify(updateOnboardingPort).updateOnboarding(
+                new UserId(userId), Gender.MALE, new Birthday(BIRTHDAY),
+                new Weight(WEIGHT), new Height(HEIGHT));
     }
 
     @Test
     @DisplayName("응답에는 보낸 필드만 담고 나머지는 null로 둔다")
     void returnsOnlyRequestedFields() {
-        // given -> 안 보낸 값도 갱신본에는 들어 있어 그대로 꺼내면 함께 나간다
+        // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         givenUser(userId);
         givenOnboarded(userId);
@@ -160,12 +167,26 @@ public class ChangeProfileHandlerTest {
     }
 
     @Test
+    @DisplayName("값 규칙을 어기면 아무것도 바꾸지 않고 막는다")
+    void rejectsInvalidValueBeforeAnyUpdate() {
+        // given -> 소개글은 통과하지만 몸무게가 범위를 벗어난 요청이다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        givenUser(userId);
+
+        // when & then -> VO를 먼저 다 만들어야 절반만 저장되지 않는다
+        assertThatThrownBy(() -> handler.handle(new ChangeProfileCommand(
+                userId, INTRODUCTION, null, null, new BigDecimal("500.0"), null)))
+                .isInstanceOf(RuntimeException.class);
+        verifyNoInteractions(updateIntroductionPort, updateOnboardingPort);
+    }
+
+    @Test
     @DisplayName("온보딩 전에 온보딩 값을 보내면 소개글도 바꾸지 않고 막는다")
     void rejectsOnboardingFieldsBeforeOnboarding() {
         // given -> 소개글만 반영하고 나머지를 무시하면 절반만 저장된 것을 클라이언트가 모른다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         givenUser(userId);
-        when(loadOnboardingPort.loadOnboarding(new UserId(userId))).thenReturn(Optional.empty());
+        when(existsOnboardingPort.existsByUserId(new UserId(userId))).thenReturn(false);
 
         // when & then
         assertThatThrownBy(() -> handler.handle(
@@ -187,7 +208,7 @@ public class ChangeProfileHandlerTest {
 
         // then -> 소개글은 users에 있어 온보딩과 무관하다
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
-        verifyNoInteractions(loadOnboardingPort);
+        verifyNoInteractions(existsOnboardingPort);
     }
 
     @Test
@@ -201,6 +222,6 @@ public class ChangeProfileHandlerTest {
         assertThatThrownBy(() -> handler.handle(
                 new ChangeProfileCommand(unknownUserId, INTRODUCTION, null, null, null, null)))
                 .isInstanceOf(UserNotFoundException.class);
-        verifyNoInteractions(updateIntroductionPort, loadOnboardingPort, updateOnboardingPort);
+        verifyNoInteractions(updateIntroductionPort, existsOnboardingPort, updateOnboardingPort);
     }
 }
