@@ -1,15 +1,16 @@
 package com.runiverse.running_service.domain.running.room;
 
+import com.runiverse.running_service.domain.running.metric.vo.Distance;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyLeftRoomException;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
 import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomTypeRequiredException;
 import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
-import com.runiverse.running_service.domain.running.metric.vo.Distance;
-import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.room.vo.PlayerCount;
-import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
@@ -153,12 +154,17 @@ public class RunningRoom {
     }
 
     public void leave(Long runningPlayerId) {
-        RoomSession session = session(runningPlayerId);   // 참가자 확인이 먼저 — 아니면 인원만 줄고 예외가 난다
-        this.playerCount = playerCount.leave();
-        session.leave();
-        if (playerCount.current() == 0) {
-            cancel();   // 남은 사람이 없으면 방도 없다
+        RoomSession session = session(runningPlayerId);          // 1. 이 방 참가자인가
+        if (!session.isConnected()) {
+            throw new AlreadyLeftRoomException();                // 2. 이미 나갔는가 — 중복 이탈 방어
         }
+        PlayerCount left = playerCount.leave();                  // 3. 계산만 한다, 아직 반영 안 함
+        RunningRoomStatus nextStatus = left.current() == 0       // 4. 상태 전이 가능 여부까지 여기서 확인한다
+                ? status.transitionTo(RunningRoomStatus.CANCELLED)
+                : status;
+        this.playerCount = left;                                 // 5. 여기부터 확정 — 더는 예외가 나지 않는다
+        this.status = nextStatus;
+        session.leave();
     }
 
     public boolean isNew() {

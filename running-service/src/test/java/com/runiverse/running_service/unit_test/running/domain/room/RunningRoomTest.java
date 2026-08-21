@@ -1,12 +1,12 @@
-package com.runiverse.running_service.unit_test.running.domain.aggregate;
+package com.runiverse.running_service.unit_test.running.domain.room;
 
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyLeftRoomException;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidRoomStatusTransitionException;
 import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
-import com.runiverse.running_service.domain.running.player.exception.PlayerAlreadyLeftException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
@@ -378,7 +378,7 @@ public class RunningRoomTest {
 
             // when & then -> WS 재연결·이벤트 중복으로 leave가 한 번 더 들어와도 막혀야 한다
             assertThatThrownBy(() -> room.leave(2L))
-                    .isInstanceOf(PlayerAlreadyLeftException.class);
+                    .isInstanceOf(AlreadyLeftRoomException.class);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);   // HOST는 아직 방에 있다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
             assertThat(sessionOf(room, 2L).getLeaveCount().value()).isEqualTo(1);

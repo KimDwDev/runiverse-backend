@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.running.domain.aggregate;
+package com.runiverse.running_service.unit_test.running.domain.player;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;

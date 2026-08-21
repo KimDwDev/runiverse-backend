@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.running.domain.vo;
+package com.runiverse.running_service.unit_test.running.domain.metric;
 
 import com.runiverse.running_service.domain.running.metric.exception.CadenceOutOfRangeException;
 import com.runiverse.running_service.domain.running.metric.exception.CaloriesOutOfRangeException;

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.running.domain.vo;
+package com.runiverse.running_service.unit_test.running.domain;
 
 import com.runiverse.running_service.domain.running.player.exception.InvalidRunningPlayerIdException;
 import com.runiverse.running_service.domain.running.record.exception.InvalidRunningRecordIdException;

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.running.domain.vo;
+package com.runiverse.running_service.unit_test.running.domain.room;
 
 import com.runiverse.running_service.domain.running.room.exception.InvalidPlayerCountException;
 import com.runiverse.running_service.domain.running.room.exception.RoomIsEmptyException;

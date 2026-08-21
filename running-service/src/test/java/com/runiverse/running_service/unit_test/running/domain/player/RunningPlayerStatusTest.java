@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.running.domain.vo;
+package com.runiverse.running_service.unit_test.running.domain.player;
 
 import com.runiverse.running_service.domain.running.player.exception.InvalidPlayerStatusTransitionException;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
@@ -64,7 +64,7 @@ public class RunningPlayerStatusTest {
     class TransitionTest {
 
         @ParameterizedTest(name = "{0} -> {1}")
-        @MethodSource("com.runiverse.running_service.unit_test.running.domain.vo."
+        @MethodSource("com.runiverse.running_service.unit_test.running.domain.player."
                 + "RunningPlayerStatusTest#allowedPairs")
         @DisplayName("전이표에 있는 조합은 다음 상태를 돌려준다")
         void transitionToAllowedStatusSuccess(RunningPlayerStatus current, RunningPlayerStatus next) {
@@ -73,7 +73,7 @@ public class RunningPlayerStatusTest {
         }
 
         @ParameterizedTest(name = "{0} -> {1}")
-        @MethodSource("com.runiverse.running_service.unit_test.running.domain.vo."
+        @MethodSource("com.runiverse.running_service.unit_test.running.domain.player."
                 + "RunningPlayerStatusTest#deniedPairs")
         @DisplayName("전이표에 없는 조합은 예외가 발생한다")
         void transitionToDeniedStatusFails(RunningPlayerStatus current, RunningPlayerStatus next) {
