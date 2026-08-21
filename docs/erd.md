@@ -123,13 +123,14 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
+| running_room_id | bigint | PK1, FK → running_rooms, ON DELETE CASCADE | 배정된 방. 방이 지워지면 링크도 연쇄 삭제 — 세션은 방 없이 의미가 없다 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | 플레이어 삭제(탈퇴 시 앱이 삭제) 시 링크도 연쇄 삭제 |
 | leave_count | int | NOT NULL, default 0 | 이 방에서 나간 누적 횟수 — 나갔다 다시 들어오면 또 쌓인다. 페널티 판정 근거 |
 | is_connected | boolean | NOT NULL, default false | 이 방에 남아 있는지 여부 — **WS 연결 상태가 아니다.** 나가면 false, 다시 들어오면 true. 네트워크가 끊긴 것만으로는 바뀌지 않는다. 재입장은 row를 새로 만들지 않고 이 값만 되살린다 |
 | created_at | timestamp | NOT NULL | |
 
 > **이름 혼동 주의**: 이 테이블은 API 미노출, 서버 내부 연결용이다. API의 러닝 세션 식별자는 `running_rooms.running_room_id`를 가리킨다.
+> **양쪽 FK 모두 `ON DELETE CASCADE`**: 링크는 방·플레이어 어느 쪽이 사라져도 홀로 남을 이유가 없다. 다만 **기록이 생긴 방은 여전히 삭제되지 않는다** — `running_records.running_room_id`가 NOT NULL FK이고 거기엔 CASCADE를 걸지 않기 때문이다(기록은 탈퇴·정리와 무관하게 유지한다 — [feature-spec.md](feature-spec.md) "회원탈퇴 시 연관 데이터 처리"). 실질 정책은 "기록이 남기 전의 방은 링크까지 함께 정리 가능, 기록이 생긴 방은 삭제 불가"다.
 > **"한 플레이어 = 최대 한 방"은 DB가 강제하지 않는다** — 복합 PK의 선두가 `running_room_id`라 `running_player_id` 단독 유일성은 보장되지 않는다. 중복 링크 차단은 앱 레벨(신청 시 `deleted_at IS NULL`인 기존 player 존재 검사)이다.
 > **row 트리거**: 생성 = 방 배정 시(솔로는 방 생성과 동시) / 삭제 = 대기 취소·초대 거절 시(`running_players`는 `deleted_at`만 찍고 유지) / 확정 후 이탈 = 링크 유지 + `running_players.status`를 `*_LEFT_*`로 전환(어느 방에서 나갔는지 = 페널티 근거) / 방 자동 취소 = 전원 유지(방 status만 `CANCELLED`).
 
