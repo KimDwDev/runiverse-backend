@@ -1,6 +1,6 @@
 # Runiverse ERD (러너버스 데이터 모델)
 
-> 테이블·컬럼명은 PostgreSQL 표준 소문자 `snake_case`. API 표면은 `camelCase`로 매핑(백엔드 담당). 테이블명은 복수형(`users`·`feeds`·`comments` …). 자바 엔티티 클래스는 한 행을 표현하므로 단수(`UserJpaEntity`).
+> 테이블·컬럼명은 PostgreSQL 표준 소문자 `snake_case`. API 표면은 `camelCase`로 매핑(백엔드 담당). 테이블명은 복수형(`users`·`feeds`·`comments` …), FK 컬럼은 참조 테이블의 단수 PK명 그대로 유지(`user_id`·`feed_id`). 자바 엔티티 클래스는 한 행을 표현하므로 단수(`UserJpaEntity`).
 
 ---
 
@@ -83,6 +83,8 @@
 
 ## 2. 도메인 B — 매칭 · 러닝
 
+> **방은 항상 존재한다**: 솔로 러닝도 1인 방(`type='SOLO'`)을 만든다. 덕분에 `running_records.running_room_id`가 NOT NULL이고, 참가자 조회·기록 저장 경로가 매칭과 솔로에서 동일하다.
+
 ### running_rooms
 
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -98,6 +100,9 @@
 | current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신한다. `current_player_count < max_player_count`면 들어갈 수 있다. **`1`은 정상 상태다** — 마감 전이면 계속 모집하고 마감 후면 혼자 뛴다. **시작 전에** `0`이 되면 방을 `CANCELLED`로 닫는다(빈 방이 후보로 남지 않게). 시작 후에는 닫지 않는다 — 기록이 남아야 하므로 `FINISHED`로 간다. 이탈 페널티 면제 판정에도 쓴다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
+
+> **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_player_count < max_player_count`인 방 중 `target_distance`·`start_at`이 맞고 `avg_pace`가 가까운 방을 고른다. 없으면 새 방을 만든다(1인 방).
+> **마감 판정**: `close_at` 도달 시 스케줄러가 `current_player_count >= 2`면 `MATCHED`, `1`이면 `CANCELLED`. `max_player_count` 도달 여부와 무관하다.
 
 ### running_players
 
@@ -349,6 +354,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / 종료 / **시작 전에** 참가자가 모두 빠져 방이 빔. 시작 후에는 마지막 1인이 종료해도 `FINISHED`다 |
 | oauth_users.provider | GOOGLE / KAKAO | |
+| (API 전용) emojiType | HI / CHEER / FIGHTING / FIRE / LAUGH | WS 이모티콘 — DB 컬럼 없음(비영속). 인사/응원/파이팅/준비 완료/웃음, 추가는 하위 호환 |
 
 ---
 

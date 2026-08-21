@@ -1,6 +1,7 @@
 package com.runiverse.running_service.presentation.common.exception;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import org.springframework.http.HttpStatus;
@@ -37,7 +38,8 @@ public final class ErrorExposurePolicy {
             AuthErrorCode.INVALID_VERIFICATION_CODE.getCode(),
             AuthErrorCode.TOO_MANY_VERIFICATION_ATTEMPTS.getCode(),
             AuthErrorCode.EMAIL_NOT_VERIFIED.getCode(),
-            AuthErrorCode.EMAIL_SEND_FAILED.getCode()
+            AuthErrorCode.EMAIL_SEND_FAILED.getCode(),
+            RunningErrorCode.RUNNING_ALREADY_IN_PROGRESS.getCode()
     );
 
     private ErrorExposurePolicy() {

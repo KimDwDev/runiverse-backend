@@ -1,0 +1,521 @@
+package com.runiverse.running_service.unit_test.running.domain.room;
+
+import com.runiverse.running_service.domain.running.room.RoomSession;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyLeftRoomException;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
+import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
+import com.runiverse.running_service.domain.running.room.exception.InvalidRoomStatusTransitionException;
+import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
+import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+public class RunningRoomTest {
+
+    private static final LocalDateTime START = LocalDateTime.of(2026, 8, 20, 6, 0);
+    private static final LocalDateTime CLOSE = START.minusMinutes(10);
+    private static final int HOST_PACE = 330;      // 5분 30초/km
+    private static final int TARGET_DISTANCE = 5_000;
+    private static final RunningPlayerId HOST = player(1L);
+
+    // 방 API가 원시 Long이 아니라 식별자 VO를 받는다 — 테스트도 같은 타입으로 부른다
+    private static RunningPlayerId player(long value) {
+        return new RunningPlayerId(value);
+    }
+
+    // 5km / 5분30초 페이스로 모집 중인 매칭 방 — 각 테스트는 여기서 한 군데만 어긋뜨린다
+    private static RunningRoom matchRoom() {
+        return RunningRoom.openMatch(HOST, HOST_PACE, TARGET_DISTANCE, START, CLOSE);
+    }
+
+    private static RunningRoom soloRoom() {
+        return RunningRoom.openSolo(HOST, HOST_PACE, TARGET_DISTANCE, START);
+    }
+
+    private static RoomSession sessionOf(RunningRoom room, RunningPlayerId runningPlayerId) {
+        return room.getSessions().stream()
+                .filter(s -> s.isSamePlayer(runningPlayerId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @Nested
+    @DisplayName("방 생성 테스트")
+    class OpenTest {
+
+        @Test
+        @DisplayName("솔로 방은 모집 없이 STARTED로 태어난다")
+        void openSoloStartsImmediately() {
+            // when
+            RunningRoom room = soloRoom();
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+            assertThat(room.getCloseAt()).isEmpty();   // 솔로는 모집 단계가 없다
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getPlayerCount().max()).isEqualTo(1);
+            assertThat(room.getSessions()).hasSize(1);
+            assertThat(sessionOf(room, HOST).isConnected()).isTrue();
+        }
+
+        @Test
+        @DisplayName("매칭 방은 1인 4자리 MATCHING 상태로 태어난다")
+        void openMatchStartsRecruiting() {
+            // when
+            RunningRoom room = matchRoom();
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
+            assertThat(room.getCloseAt()).contains(CLOSE);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getPlayerCount().max()).isEqualTo(4);
+            assertThat(room.getSessions()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("저장 전 방은 식별자가 없다")
+        void newRoomHasNoId() {
+            // when
+            RunningRoom room = matchRoom();
+
+            // then
+            assertThat(room.isNew()).isTrue();
+            assertThat(room.getRunningRoomId()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("매칭 방의 모집 마감은 시작 시각보다 앞서야 한다")
+        void closeAtMustBeBeforeStartAt() {
+            // when & then -> 마감이 시작과 같거나 뒤면 모집 단계가 성립하지 않는다
+            assertThatThrownBy(() ->
+                    RunningRoom.openMatch(HOST, HOST_PACE, TARGET_DISTANCE, START, START))
+                    .isInstanceOf(InvalidCloseAtException.class);
+        }
+
+        @Test
+        @DisplayName("매칭 방은 모집 마감 없이 만들 수 없다")
+        void matchRoomRequiresCloseAt() {
+            // when & then
+            assertThatThrownBy(() ->
+                    RunningRoom.openMatch(HOST, HOST_PACE, TARGET_DISTANCE, START, null))
+                    .isInstanceOf(InvalidCloseAtException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("합류 테스트")
+    class JoinTest {
+
+        @Test
+        @DisplayName("페이스가 가까우면 모집 중인 방에 합류한다")
+        void joinMatchingRoom() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when
+            room.join(player(2L), new Pace(340));
+
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(2);
+            assertThat(room.getSessions()).hasSize(2);
+            assertThat(sessionOf(room, player(2L)).isConnected()).isTrue();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isZero();
+        }
+
+        @Test
+        @DisplayName("페이스 차가 30초/km까지는 합류할 수 있다")
+        void joinAtPaceTolerance() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when -> 경계값은 허용한다
+            room.join(player(2L), new Pace(HOST_PACE + 30));
+            room.join(player(3L), new Pace(HOST_PACE - 30));
+
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("페이스 차가 30초/km를 넘으면 합류하지 못한다")
+        void rejectTooDistantPace() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE + 31)))
+                    .isInstanceOf(RoomNotJoinableException.class);
+        }
+
+        @Test
+        @DisplayName("정원이 찬 방에는 합류하지 못한다")
+        void rejectJoinWhenFull() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.join(player(3L), new Pace(HOST_PACE));
+            room.join(player(4L), new Pace(HOST_PACE));
+
+            // when & then -> 자리는 4개뿐이다
+            assertThat(room.getPlayerCount().isFull()).isTrue();
+            assertThatThrownBy(() -> room.join(player(5L), new Pace(HOST_PACE)))
+                    .isInstanceOf(RoomNotJoinableException.class);
+        }
+
+        @Test
+        @DisplayName("이미 이 방의 참가자면 다시 합류하지 못한다")
+        void rejectDuplicatePlayer() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then -> 한 플레이어는 최대 한 방
+            assertThatThrownBy(() -> room.join(HOST, new Pace(HOST_PACE)))
+                    .isInstanceOf(AlreadyRoomPlayerException.class);
+        }
+
+        @Test
+        @DisplayName("모집이 끝난 방에는 합류하지 못한다")
+        void rejectJoinAfterMatched() {
+            // given
+            RunningRoom room = matchRoom();
+            room.closeMatching();
+
+            // when & then
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE)))
+                    .isInstanceOf(RoomNotJoinableException.class);
+        }
+
+        @Test
+        @DisplayName("솔로 방에는 합류하지 못한다")
+        void rejectJoinSoloRoom() {
+            // given
+            RunningRoom room = soloRoom();
+
+            // when & then -> 솔로 방은 STARTED라 후보가 되지 않는다
+            assertThatThrownBy(() -> room.join(player(2L), new Pace(HOST_PACE)))
+                    .isInstanceOf(RoomNotJoinableException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("상태 전이 테스트")
+    class StatusTest {
+
+        @Test
+        @DisplayName("모집 마감 후 시작하고 종료한다")
+        void matchedThenStartedThenFinished() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+
+            // when
+            room.closeMatching();
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+            room.start();
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+            room.finish();
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        }
+
+        @Test
+        @DisplayName("1인만 남은 방도 마감 확정돼 혼자 뛴다")
+        void singlePlayerRoomIsStillMatched() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when -> 인원이 안 차도 취소하지 않는다
+            room.closeMatching();
+            room.start();
+
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+        }
+
+        @Test
+        @DisplayName("모집 중인 방은 마감 없이 시작하지 못한다")
+        void cannotStartWhileMatching() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then
+            assertThatThrownBy(room::start)
+                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("시작한 방도 취소할 수 있다")
+        void startedRoomCanBeCancelled() {
+            // given
+            RunningRoom room = soloRoom();   // 솔로는 STARTED로 태어난다
+
+            // when
+            room.cancel();
+
+            // then -> 취소는 종착 상태라 이후로는 종료로도 갈 수 없다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThatThrownBy(room::finish)
+                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("종료된 방은 더 이상 상태가 바뀌지 않는다")
+        void finishedRoomIsTerminal() {
+            // given
+            RunningRoom room = soloRoom();
+            room.finish();
+
+            // when & then
+            assertThatThrownBy(room::cancel)
+                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("이탈·연결 테스트")
+    class SessionTest {
+
+        @Test
+        @DisplayName("이탈하면 인원이 줄고 관계는 남는다")
+        void leaveKeepsSession() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+
+            // when
+            room.leave(player(2L));
+
+            // then -> 어느 방에서 나갔는지가 페널티 근거라 관계는 지우지 않는다
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getSessions()).hasSize(2);
+            assertThat(sessionOf(room, player(2L)).isConnected()).isFalse();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("러닝이 시작된 뒤에도 마지막 참가자가 빠지면 방이 닫힌다")
+        void startedRoomIsCancelledWhenEmptied() {
+            // given -> 1인으로 확정돼 혼자 뛰는 방
+            RunningRoom room = matchRoom();
+            room.closeMatching();
+            room.start();
+
+            // when -> 혼자 뛰던 사람이 나간다
+            room.leave(HOST);
+
+            // then -> 남은 사람이 없으면 시작 여부와 무관하게 방도 없다
+            assertThat(room.getPlayerCount().current()).isZero();
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(sessionOf(room, HOST).isConnected()).isFalse();
+            assertThat(sessionOf(room, HOST).getLeaveCount().value()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("마지막 참가자가 이탈하면 방이 취소된다")
+        void lastLeaveCancelsRoom() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when
+            room.leave(HOST);
+
+            // then -> 남은 사람이 없으면 방도 없다
+            assertThat(room.getPlayerCount().current()).isZero();
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+        }
+
+        @Test
+        @DisplayName("1명이 남으면 방은 유지된다")
+        void roomSurvivesWithSinglePlayer() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.closeMatching();
+
+            // when -> 1인이 돼도 혼자 뛴다
+            room.leave(player(2L));
+
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+        }
+
+        @Test
+        @DisplayName("다시 들어오면 세션을 새로 만들지 않고 되살린다")
+        void rejoinRestoresSession() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.leave(player(2L));
+
+            // when
+            room.rejoin(player(2L));
+
+            // then -> 관계는 하나뿐이고 나간 이력은 남는다
+            assertThat(room.getPlayerCount().current()).isEqualTo(2);
+            assertThat(room.getSessions()).hasSize(2);
+            assertThat(sessionOf(room, player(2L)).isConnected()).isTrue();
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("러닝이 시작된 뒤에도 다시 들어올 수 있다")
+        void rejoinAfterStarted() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.closeMatching();
+            room.start();
+            room.leave(player(2L));
+
+            // when -> 재입장은 모집 조건을 타지 않는다
+            room.rejoin(player(2L));
+
+            // then
+            assertThat(room.getPlayerCount().current()).isEqualTo(2);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+        }
+
+        @Test
+        @DisplayName("나갔다 들어오기를 반복하면 이탈 횟수가 쌓인다")
+        void leaveCountAccumulates() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+
+            // when
+            room.leave(player(2L));
+            room.rejoin(player(2L));
+            room.leave(player(2L));
+
+            // then -> 페널티 판정 근거가 된다
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(2);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("이미 나간 사람이 또 이탈해도 남은 참가자의 방은 취소되지 않는다")
+        void leaveTwiceWithoutRejoinDoesNotCancelRoom() {
+            // given -> 2인 방에서 2L이 이미 나갔다
+            RunningRoom room = matchRoom();
+            room.join(player(2L), new Pace(HOST_PACE));
+            room.leave(player(2L));
+
+            // when & then -> WS 재연결·이벤트 중복으로 leave가 한 번 더 들어와도 막혀야 한다
+            assertThatThrownBy(() -> room.leave(player(2L)))
+                    .isInstanceOf(AlreadyLeftRoomException.class);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);   // HOST는 아직 방에 있다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
+            assertThat(sessionOf(room, player(2L)).getLeaveCount().value()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("종료된 방의 이탈이 거절되면 인원·세션도 그대로다")
+        void rejectedLeaveOnFinishedRoomKeepsRoomIntact() {
+            // given -> 러닝이 끝난 뒤 마지막 참가자가 연결을 끊는다
+            RunningRoom room = matchRoom();
+            room.closeMatching();
+            room.start();
+            room.finish();
+
+            // when & then -> 취소로 못 가는 방이면 아무것도 바뀌지 않아야 한다
+            assertThatThrownBy(() -> room.leave(HOST))
+                    .isInstanceOf(InvalidRoomStatusTransitionException.class);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+            assertThat(sessionOf(room, HOST).isConnected()).isTrue();
+            assertThat(sessionOf(room, HOST).getLeaveCount().value()).isZero();
+        }
+
+        @Test
+        @DisplayName("이미 방에 있는 사람은 다시 들어오지 못한다")
+        void rejectRejoinWhenAlreadyIn() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then
+            assertThatThrownBy(() -> room.rejoin(HOST))
+                    .isInstanceOf(AlreadyRoomPlayerException.class);
+        }
+
+        @Test
+        @DisplayName("취소된 방에는 다시 들어오지 못한다")
+        void rejectRejoinToCancelledRoom() {
+            // given
+            RunningRoom room = matchRoom();
+            room.leave(HOST);   // 마지막 1인이 나가 방이 취소된다
+
+            // when & then
+            assertThatThrownBy(() -> room.rejoin(HOST))
+                    .isInstanceOf(RoomNotJoinableException.class);
+        }
+
+        @Test
+        @DisplayName("이 방의 참가자가 아니면 다시 들어오지 못한다")
+        void rejectRejoinUnknownPlayer() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then -> 처음 들어오는 건 join()이 받는다
+            assertThatThrownBy(() -> room.rejoin(player(99L)))
+                    .isInstanceOf(NotRoomPlayerException.class);
+        }
+
+        @Test
+        @DisplayName("이 방의 참가자가 아니면 이탈시켜도 인원이 줄지 않는다")
+        void unknownPlayerLeaveDoesNotChangeRoom() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when & then -> 예외가 나면 방은 아무것도 바뀌지 않아야 한다
+            assertThatThrownBy(() -> room.leave(player(99L)))
+                    .isInstanceOf(NotRoomPlayerException.class);
+            assertThat(room.getPlayerCount().current()).isEqualTo(1);
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
+        }
+    }
+
+    @Nested
+    @DisplayName("평균 페이스 테스트")
+    class AvgPaceTest {
+
+        @Test
+        @DisplayName("참가자 페이스로 방 평균을 다시 계산한다")
+        void recalculateAvgPace() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when
+            room.recalculateAvgPace(List.of(new Pace(300), new Pace(360)));
+
+            // then
+            assertThat(room.getAvgPace().secondsPerKm()).isEqualTo(330);
+        }
+
+        @Test
+        @DisplayName("참가자가 없으면 기존 평균을 유지한다")
+        void keepAvgPaceWhenNoPlayers() {
+            // given
+            RunningRoom room = matchRoom();
+
+            // when
+            room.recalculateAvgPace(List.of());
+
+            // then
+            assertThat(room.getAvgPace().secondsPerKm()).isEqualTo(HOST_PACE);
+        }
+    }
+}

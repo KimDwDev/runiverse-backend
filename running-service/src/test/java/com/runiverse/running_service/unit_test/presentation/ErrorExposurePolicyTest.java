@@ -1,6 +1,8 @@
 package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.RunningErrorCode;
+import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
 import com.runiverse.running_service.presentation.common.exception.SecurityErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +38,24 @@ public class ErrorExposurePolicyTest {
         // 노출 목록에서 빠지면 아무 경고 없이 500으로 바뀌어 클라가 원인을 알 수 없다
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.FORBIDDEN, SecurityErrorCode.ACCESS_DENIED.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("진행 중인 러닝 충돌은 409 그대로 노출한다")
+    void alreadyRunningIsExposed() {
+        // 노출 목록에서 빠지면 500으로 바뀌어, 클라가 "이미 뛰고 있음"을 알 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                RunningErrorCode.RUNNING_ALREADY_IN_PROGRESS.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("온보딩 미완료는 409 그대로 노출한다")
+    void onboardingNotCompletedIsExposed() {
+        // 러닝 시작·닉네임 변경이 공통으로 쓰는 코드 — 클라가 온보딩 화면으로 보내야 한다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                UserErrorCode.ONBOARDING_NOT_COMPLETED.getCode())).isTrue();
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplica
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
@@ -19,6 +20,7 @@ import com.runiverse.running_service.application.user.port.out.UpdateOnboardingP
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Birthday;
@@ -43,7 +45,7 @@ import java.util.Optional;
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
-        UpdatePasswordPort, UpdateIntroductionPort, UpdateOnboardingPort {
+        UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort {
 
     private final EntityManager entityManager;
 
@@ -148,6 +150,29 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         entity.changeIntroduction(emptyToNull(introduction.value()));
     }
 
+    @Override
+    public void updateOnboarding(UserId userId, Gender gender, Birthday birthday,
+                                 Weight weight, Height height) {
+        UserOnboardingJpaEntity entity =
+                entityManager.find(UserOnboardingJpaEntity.class, userId.value());
+        if (entity == null) {
+            throw new OnboardingNotCompletedException();
+        }
+        // 담겨 온 값만 바꾼다 — 나머지 컬럼은 건드리지 않는다
+        if (gender != null) {
+            entity.changeGender(gender);
+        }
+        if (birthday != null) {
+            entity.changeBirthday(birthday.value());
+        }
+        if (weight != null) {
+            entity.changeWeight(weight.value());
+        }
+        if (height != null) {
+            entity.changeHeight(height.value());
+        }
+    }
+
     private User toDomain(UserJpaEntity entity) {
         return new User(
                 entity.getUserId(),
@@ -220,27 +245,6 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     }
 
     @Override
-    public void updateOnboarding(UserId userId, Gender gender, Birthday birthday, Weight weight, Height height) {
-        UserOnboardingJpaEntity entity = entityManager.find(UserOnboardingJpaEntity.class, userId.value());
-        if (entity == null) {
-            throw new OnboardingNotCompletedException();
-        }
-        // 담겨 온 값만 바꾼다 — 나머지 컬럼은 건드리지 않는다
-        if (gender != null) {
-            entity.changeGender(gender);
-        }
-        if (birthday != null) {
-            entity.changeBirthday(birthday.value());
-        }
-        if (weight != null) {
-            entity.changeWeight(weight.value());
-        }
-        if (height != null) {
-            entity.changeHeight(height.value());
-        }
-    }
-
-    @Override
     public Optional<Nickname> loadNickname(UserId userId) {
         return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
                 .map(UserOnboardingJpaEntity::getNickname)
@@ -260,5 +264,22 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         } catch (PersistenceException e) {
             throw new NicknameAlreadyExistsException();
         }
+    }
+
+    @Override
+    public Optional<Pace> loadAvgPace(UserId userId) {
+        // 온보딩 완료 = user_onboardings row 존재 (erd.md §user_onboardings).
+        // row가 없으면 빈 Optional — 핸들러가 ONBOARDING_NOT_COMPLETED로 바꾼다
+        return entityManager.createQuery(
+                        """
+                                SELECT o.avgPace
+                                FROM UserOnboardingJpaEntity o
+                                WHERE o.userId = :userId
+                                """, Integer.class
+                )
+                .setParameter("userId", userId.value())
+                .getResultStream()
+                .findFirst()
+                .map(Pace::new);
     }
 }

@@ -1,5 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
+import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
@@ -8,6 +9,7 @@ import com.runiverse.running_service.application.user.port.out.SaveOnboardingPor
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
 import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
@@ -26,7 +28,7 @@ import java.util.UUID;
 
 public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         CheckNicknameDuplicatePort, SaveOnboardingPort, LoadNicknamePort, UpdateNicknamePort,
-        UpdateOnboardingPort {
+        UpdateOnboardingPort, LoadUserAvgPacePort {
 
     // 실제 어댑터가 컬럼 단위로 갱신하므로 도메인 객체가 아니라 user_onboardings의 한 행을 들고 있는다
     @Getter
@@ -99,6 +101,17 @@ public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         if (height != null) {
             row.height = height;
         }
+    }
+
+    // 실제 UserPersistenceAdapter와 같이 러닝의 평균 페이스 조회도 이 저장소가 겸한다
+    // — 페이스 출처가 user_onboardings.avg_pace이기 때문이다.
+    // 행이 없으면 빈 Optional이고, 그게 곧 "온보딩 미완료" 판정이 된다
+    @Override
+    public Optional<Pace> loadAvgPace(UserId userId) {
+        return row(userId)
+                .map(OnboardingRow::getAvgPace)
+                .map(AvgPace::secondPerKm)
+                .map(Pace::new);
     }
 
     // 테스트 준비

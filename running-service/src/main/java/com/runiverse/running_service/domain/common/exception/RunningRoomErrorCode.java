@@ -18,7 +18,8 @@ public enum RunningRoomErrorCode implements ErrorCode {
     ROOM_IS_FULL("ROOM_IS_FULL", "방에 빈자리가 없습니다."),
     ROOM_IS_EMPTY("ROOM_IS_EMPTY", "남은 참가자가 없습니다."),
     ROOM_NOT_JOINABLE("ROOM_NOT_JOINABLE", "지금은 합류할 수 없는 방입니다."),
-    ALREADY_ROOM_PLAYER("ALREADY_ROOM_PLAYER", "이미 이 방의 참가자입니다.");
+    ALREADY_ROOM_PLAYER("ALREADY_ROOM_PLAYER", "이미 이 방의 참가자입니다."),
+    ALREADY_LEFT_ROOM("ALREADY_LEFT_ROOM", "이미 이 방에서 나간 참가자입니다.");
     private final String code;
     private final String message;
 }
