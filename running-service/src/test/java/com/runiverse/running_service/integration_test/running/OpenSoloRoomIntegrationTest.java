@@ -2,9 +2,9 @@ package com.runiverse.running_service.integration_test.running;
 
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningCommand;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningHandler;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningResult;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomResult;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("솔로 러닝 시작 통합 테스트")
-public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
+public class OpenSoloRoomIntegrationTest extends IntegrationTestSupport {
 
     private static final String PASSWORD = "Password123!";
     private static final String EMAIL = "runner@runiverse.com";
@@ -37,7 +37,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
-    private StartSoloRunningHandler startSoloRunningHandler;
+    private OpenSoloRoomHandler handler;
 
     @BeforeEach
     void setUp() {
@@ -48,7 +48,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,  // CheckNicknameDuplicatePort
                 onboardingStore   // SaveOnboardingPort
         );
-        startSoloRunningHandler = new StartSoloRunningHandler(
+        handler = new OpenSoloRoomHandler(
                 runningStore,     // ExistsActiveRunningPlayerPort
                 onboardingStore,  // LoadUserAvgPacePort — 페이스 출처가 user_onboardings다
                 runningStore,     // CreateRunningPlayerPort
@@ -76,8 +76,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
         UUID userId = onboardedUser();
 
         // when
-        StartSoloRunningResult result =
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId));
+        OpenSoloRoomResult result =
+                handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         assertThat(result.runningRoomId()).isNotNull();
@@ -92,8 +92,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
         UUID userId = onboardedUser();
 
         // when
-        StartSoloRunningResult result =
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId));
+        OpenSoloRoomResult result =
+                handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         assertThat(runningStore.playerCount()).isEqualTo(1);
@@ -113,8 +113,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
         UUID userId = onboardedUser();
 
         // when
-        StartSoloRunningResult result =
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId));
+        OpenSoloRoomResult result =
+                handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         RunningRoom room = runningStore.findRoom(result.runningRoomId()).orElseThrow();
@@ -132,8 +132,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
         UUID userId = onboardedUser();
 
         // when
-        StartSoloRunningResult result =
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId));
+        OpenSoloRoomResult result =
+                handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         RunningRoom room = runningStore.findRoom(result.runningRoomId()).orElseThrow();
@@ -151,11 +151,11 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
     void cannotStartTwice() {
         // given -> 첫 러닝이 아직 끝나지 않았다(deleted_at IS NULL)
         UUID userId = onboardedUser();
-        startSoloRunningHandler.handle(new StartSoloRunningCommand(userId));
+        handler.handle(new OpenSoloRoomCommand(userId));
 
         // when & then
         assertThatThrownBy(() ->
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId)))
+                handler.handle(new OpenSoloRoomCommand(userId)))
                 .isInstanceOf(AlreadyRunningException.class);
 
         // 두 번째 호출은 아무것도 남기지 않는다
@@ -171,7 +171,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
 
         // when & then -> 평균 페이스 출처가 user_onboardings라 시작할 수 없다
         assertThatThrownBy(() ->
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(userId)))
+                handler.handle(new OpenSoloRoomCommand(userId)))
                 .isInstanceOf(OnboardingNotCompletedException.class);
 
         assertThat(runningStore.playerCount()).isZero();
@@ -183,7 +183,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
     void otherUsersRunningDoesNotBlock() {
         // given -> 중복 검사는 유저 단위다
         UUID other = onboardedUser();
-        startSoloRunningHandler.handle(new StartSoloRunningCommand(other));
+        handler.handle(new OpenSoloRoomCommand(other));
 
         UUID me = signUp("other@runiverse.com");
         completeOnboardingHandler.handle(new CompleteOnboardingCommand(
@@ -191,8 +191,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
                 400, new BigDecimal("55.0"), new BigDecimal("165.0")));
 
         // when
-        StartSoloRunningResult result =
-                startSoloRunningHandler.handle(new StartSoloRunningCommand(me));
+        OpenSoloRoomResult result =
+                handler.handle(new OpenSoloRoomCommand(me));
 
         // then
         assertThat(result.runningRoomId()).isNotNull();

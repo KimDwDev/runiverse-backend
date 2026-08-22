@@ -1,7 +1,7 @@
 package com.runiverse.running_service.application.running.command.solo;
 
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.in.StartSoloRunningUsecase;
+import com.runiverse.running_service.application.running.port.in.OpenSoloRoomUsecase;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class StartSoloRunningHandler implements StartSoloRunningUsecase {
+public class OpenSoloRoomHandler implements OpenSoloRoomUsecase {
 
     private final ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
     private final LoadUserAvgPacePort loadUserAvgPacePort;
@@ -29,7 +29,7 @@ public class StartSoloRunningHandler implements StartSoloRunningUsecase {
     private final CreateRunningRoomPort createRunningRoomPort;
 
     @Override
-    public StartSoloRunningResult handle(StartSoloRunningCommand command) {
+    public OpenSoloRoomResult handle(OpenSoloRoomCommand command) {
         UserId userId = new UserId(command.userId());
         // 1. "한 플레이어 = 최대 한 방"은 DB가 강제하지 않는다 — 앱이 막는다
         if (existsActiveRunningPlayerPort.existsActive(userId)) {
@@ -50,7 +50,7 @@ public class StartSoloRunningHandler implements StartSoloRunningUsecase {
         //    (player 쪽은 NOT NULL이라 Distance.unlimited()가 들어간다)
         RunningRoom room = createRunningRoomPort.create(
                 RunningRoom.openSolo(playerId, avgPace.secondsPerKm(), null, startAt));
-        return new StartSoloRunningResult(
+        return new OpenSoloRoomResult(
                 room.getRunningRoomId().orElseThrow().value(), startAt);
     }
 }

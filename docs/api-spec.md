@@ -52,7 +52,7 @@
 | 13 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 16 | POST | `/api/v1/running-rooms` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -753,11 +753,11 @@
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 구간 (5-C·5-D) | **WebSocket** `/ws/running-rooms` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
-### `POST /api/v1/running-rooms` — 솔로 러닝 개시
+### `POST /api/v1/running-rooms/solo` — 솔로 러닝 개시
 
-- **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다
+- **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 그래도 경로에 `/solo`를 박아 종류를 드러낸다 — 나중에 초대 방이 붙어도 `type`을 본문으로 받지 않고 경로로 가른다
 - **Request**
 
 ```json
@@ -888,7 +888,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 솔로 러닝(`POST /running-rooms`)은 이 제한을 받지 않는다
+- 솔로 러닝(`POST /running-rooms/solo`)은 이 제한을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
@@ -1062,7 +1062,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **WS 연결 후 클라가 보내는 첫 메시지다.** 채널 등록·재입장·방 시작·참가자 시작을 이 하나가 다 한다 — 클라는 최초 진입인지 재연결인지 재입장인지 구분하지 않고 언제나 같은 메시지를 보낸다
-- `runningRoomId`는 이미 손에 있다 — 솔로는 `POST /running-rooms`의 201 응답, 매칭은 SSE `RoomInfo`에서 받는다
+- `runningRoomId`는 이미 손에 있다 — 솔로는 `POST /running-rooms/solo`의 201 응답, 매칭은 SSE `RoomInfo`에서 받는다
 - **서버 처리 순서**
 
   | | 하는 일 | 이미 그 상태면 |
