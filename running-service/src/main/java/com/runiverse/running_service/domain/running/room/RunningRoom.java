@@ -35,14 +35,14 @@ public class RunningRoom {
     private final Distance targetDistance;       // 정해진 뒤 바뀌지 않는다
     private RunningRoomStatus status;
     private PlayerCount playerCount;
-    private Pace avgPace;
+    private Pace avgPace;       // 참가자가 없으면 null — 평균 낼 대상이 없다
     private final List<RoomSession> sessions;    // 방이 맺고 있는 관계들
 
     //
     @Builder
     private RunningRoom(Long runningRoomId, RunningRoomType type, RunningRoomStatus status,
                         LocalDateTime startAt, LocalDateTime closeAt,
-                        Integer targetDistance, int avgPace,
+                        Integer targetDistance, Integer avgPace,
                         int currentPlayerCount, int maxPlayerCount,
                         List<SessionDraft> sessions) {
         this.runningRoomId = runningRoomId == null ? null : new RunningRoomId(runningRoomId);
@@ -58,7 +58,7 @@ public class RunningRoom {
         validateCloseAt(this.status, closeAt);
         this.closeAt = closeAt;
         this.targetDistance = targetDistance == null ? null : new Distance(targetDistance);
-        this.avgPace = new Pace(avgPace);
+        this.avgPace = avgPace == null ? null : new Pace(avgPace);
         this.playerCount = new PlayerCount(currentPlayerCount, maxPlayerCount);
         // 세션은 방을 거쳐야만 만들어진다 — 밖에서는 SessionDraft까지만 채울 수 있다
         this.sessions = new ArrayList<>();
@@ -116,6 +116,7 @@ public class RunningRoom {
     // 참가자 페이스는 다른 애그리거트라 application이 읽어 넘긴다
     public void recalculateAvgPace(List<Pace> paces) {
         if (paces.isEmpty()) {
+            this.avgPace = null;
             return;
         }
         int sum = paces.stream().mapToInt(Pace::secondsPerKm).sum();
@@ -139,6 +140,7 @@ public class RunningRoom {
     public boolean canJoin(Pace pace) {
         return status == RunningRoomStatus.MATCHING
                 && playerCount.canJoin()
+                && avgPace != null                 // 평균이 없는 방엔 붙일 기준이 없다
                 && avgPace.isCloseTo(pace);
     }
 
@@ -192,6 +194,10 @@ public class RunningRoom {
 
     public Optional<LocalDateTime> getCloseAt() {
         return Optional.ofNullable(closeAt);
+    }
+
+    public Optional<Pace> getAvgPace() {
+        return Optional.ofNullable(avgPace);
     }
 
     public List<RoomSession> getSessions() {

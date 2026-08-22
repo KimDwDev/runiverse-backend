@@ -560,20 +560,39 @@ public class RunningRoomTest {
             room.recalculateAvgPace(List.of(new Pace(300), new Pace(360)));
 
             // then
-            assertThat(room.getAvgPace().secondsPerKm()).isEqualTo(330);
+            assertThat(room.getAvgPace()).map(Pace::secondsPerKm).contains(330);
         }
 
         @Test
-        @DisplayName("참가자가 없으면 기존 평균을 유지한다")
-        void keepAvgPaceWhenNoPlayers() {
+        @DisplayName("참가자가 없으면 평균도 사라진다")
+        void clearAvgPaceWhenNoPlayers() {
             // given
             RunningRoom room = matchRoom();
 
-            // when
+            // when -> 마지막 값을 남기면 나간 사람 기준이 유령으로 떠돈다
             room.recalculateAvgPace(List.of());
 
             // then
-            assertThat(room.getAvgPace().secondsPerKm()).isEqualTo(HOST_PACE);
+            assertThat(room.getAvgPace()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("갓 태어난 방은 개설자의 페이스를 갖는다")
+        void newRoomHasOpenerPace() {
+            // when & then -> 1인 방이라 개설자 페이스가 곧 평균이다
+            assertThat(matchRoom().getAvgPace()).map(Pace::secondsPerKm).contains(HOST_PACE);
+            assertThat(soloRoom().getAvgPace()).map(Pace::secondsPerKm).contains(HOST_PACE);
+        }
+
+        @Test
+        @DisplayName("평균이 없는 방에는 합류하지 못한다")
+        void cannotJoinRoomWithoutAvgPace() {
+            // given -> 전원이 빠져 평균이 사라진 방
+            RunningRoom room = matchRoom();
+            room.recalculateAvgPace(List.of());
+
+            // when & then -> 페이스 근접을 판정할 기준이 없다
+            assertThat(room.canJoin(new Pace(HOST_PACE))).isFalse();
         }
     }
 }

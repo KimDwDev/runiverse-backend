@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.running.port.out.CreateRunningR
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
@@ -62,7 +63,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .startAt(room.getStartAt())
                 .closeAt(room.getCloseAt().orElse(null))
                 .targetDistance(room.getTargetDistance().map(Distance::meters).orElse(null))
-                .avgPace(room.getAvgPace().secondsPerKm())
+                .avgPace(room.getAvgPace().map(Pace::secondsPerKm).orElse(null))
                 .currentPlayerCount(room.getPlayerCount().current())
                 .maxPlayerCount(room.getPlayerCount().max())
                 .sessions(sessions)

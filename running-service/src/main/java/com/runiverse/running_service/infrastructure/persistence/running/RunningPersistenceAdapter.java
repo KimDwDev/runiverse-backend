@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.running.port.out.UpdateRunningP
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
@@ -60,7 +61,7 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 room.getStatus(),
                 room.getStartAt(),
                 room.getTargetDistance().map(Distance::meters).orElse(null),
-                room.getAvgPace().secondsPerKm(),
+                room.getAvgPace().map(Pace::secondsPerKm).orElse(null),
                 room.getPlayerCount().current(),
                 room.getPlayerCount().max()
         );
@@ -137,7 +138,7 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         RunningRoomJpaEntity entity = entityManager.find(RunningRoomJpaEntity.class, roomId);
         entity.changeStatus(room.getStatus());
         entity.changeCloseAt(room.getCloseAt().orElse(null));
-        entity.changeAvgPace(room.getAvgPace().secondsPerKm());
+        entity.changeAvgPace(room.getAvgPace().map(Pace::secondsPerKm).orElse(null));
         entity.changeCurrentPlayerCount(room.getPlayerCount().current());
         // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다
         Map<Long, RunningRoomSessionJpaEntity> stored = loadSessions(entity).stream()
