@@ -775,13 +775,12 @@
 ```
 
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
-  - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만든다
-  - **[미정] 솔로 방을 `MATCHED`→`STARTED`로 올리는 주체.** 매칭은 `start_at`에 스케줄러가 올리는데 솔로에 그대로 적용할지, 채널 입장 시 서버가 올릴지 정해지지 않았다. `RUNNING_START`는 트리거가 아니라는 규칙(5-C)은 유지한다
+  - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로 전용 스케줄러는 두지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
-**솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결하고, 방이 `STARTED`가 되면 `RUNNING_START`를 보내 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서다.
+**솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서이며, 보내는 메시지도 똑같다.
 
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
@@ -1024,7 +1023,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
-  - ack의 `data`는 비움
+  - ack의 `data`는 비운다. **예외는 `RUNNING_STARTED`** — 진입·재연결 화면 복구에 쓰는 스냅샷을 싣는다(5-C)
 - **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
 
 ```json
@@ -1040,7 +1039,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **code**: `INVALID_REQUEST`(요청 검증 실패) / `ROOM_NOT_FOUND`(방 없음) / `NOT_ROOM_PLAYER`(참가자 아님) / `INVALID_ROOM_STATE`(현재 상태에서 불가한 요청)
 
-#### `RUNNING_START` (C→S) — 참가자 러닝 시작 알림
+#### `RUNNING_START` (C→S) — 러닝 준비 일괄 처리
 
 ```json
 {
@@ -1048,9 +1047,24 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 매칭은 `MATCH_ROOM_UPDATED.status='STARTED'`를 받은 뒤 발신한다. 솔로 방은 생성 시 이미 `STARTED`이므로 WS 연결 뒤 바로 발신한다. 방 상태 전환의 트리거가 아니며, `STARTED` 전 요청은 `INVALID_ROOM_STATE`로 거부한다
-- **ack**: `RUNNING_STARTED`
-- 중복 `RUNNING_START`에는 상태를 다시 바꾸지 않고 `RUNNING_STARTED`를 재전송한다
+- **WS 연결 후 클라가 보내는 첫 메시지다.** 채널 등록·재입장·방 시작·참가자 시작을 이 하나가 다 한다 — 클라는 최초 진입인지 재연결인지 재입장인지 구분하지 않고 언제나 같은 메시지를 보낸다
+- `runningRoomId`는 이미 손에 있다 — 솔로는 `POST /running-rooms`의 201 응답, 매칭은 SSE `RoomInfo`에서 받는다
+- **서버 처리 순서**
+
+  | | 하는 일 | 이미 그 상태면 |
+  |---|---|---|
+  | 1 | 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` |
+  | 2 | 배정 세션이 끊겨 있으면 되살린다(`is_connected=true`, 인원 복구) | 통과 |
+  | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
+  | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
+  | 5 | WS 세션을 방에 등록한다(브로드캐스트 대상) | 덮어쓴다 |
+  | 6 | ack 전송 | — |
+
+- **3번에 `type` 분기가 없다.** 매칭은 `start_at`에 스케줄러가 이미 올려놨으니 통과하고, 솔로는 `start_at`이 개시 시각(과거)이라 여기서 올라간다. 같은 코드가 두 종류를 다 덮는다
+- **전 단계가 멱등하다.** 중복 `RUNNING_START`는 아무 상태도 다시 바꾸지 않고 ack만 재전송한다
+- **거부**: `start_at`이 아직 안 됐으면 `INVALID_ROOM_STATE`(매칭에서 미리 쏘는 것 차단). 방이 `FINISHED`·`CANCELLED`여도 같은 코드
+- **ack**: `RUNNING_STARTED` — **`data`에 방 상태·참가자 스냅샷을 싣는다**(ack 규칙의 예외). 재연결마다 REST를 다시 때리지 않고 이 응답만으로 화면을 복구하기 위해서다
+  - **[미정]** 스냅샷 payload 형태. `RoomInfo`를 재사용할지 별도로 둘지 정하지 않았다
 
 ### 5-D. 러닝 중
 
