@@ -128,7 +128,7 @@ public class StartSoloRunningHandlerTest {
     }
 
     @Test
-    @DisplayName("방은 모집 없이 STARTED로 열리고 목표 거리를 갖지 않는다")
+    @DisplayName("방은 모집 없이 MATCHED로 열리고 목표 거리를 갖지 않는다")
     void opensSoloRoomWithoutRecruiting() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
@@ -147,8 +147,9 @@ public class StartSoloRunningHandlerTest {
         RunningRoom opened = captor.getValue();
 
         assertThat(opened.getType()).isEqualTo(RunningRoomType.SOLO);
-        assertThat(opened.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-        assertThat(opened.getCloseAt()).isEmpty();          // 모집 단계가 없다
+        // STARTED·RUNNING 전이는 WS 채널 입장 뒤 RUNNING_START가 맡는다 — 매칭과 같은 경로다
+        assertThat(opened.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+        assertThat(opened.getCloseAt()).isEmpty();          // 방금 열린 방은 닫히지 않았다
         assertThat(opened.getTargetDistance()).isEmpty();   // 방 쪽은 nullable — null이 "목표 없음"의 정본
         assertThat(opened.getPlayerCount().current()).isEqualTo(1);
         assertThat(opened.getPlayerCount().max()).isEqualTo(1);

@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.running.domain.room;
 
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomTypeRequiredException;
 import com.runiverse.running_service.domain.running.room.exception.UnsupportedRunningRoomTypeException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -61,6 +62,29 @@ public class RunningRoomTypeTest {
             // when & then -> 클라이언트 오타가 조용히 다른 종류로 저장되지 않게 한다
             assertThatThrownBy(() -> RunningRoomType.from(value))
                     .isInstanceOf(UnsupportedRunningRoomTypeException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("초기 상태 테스트")
+    class InitialStatusTest {
+
+        @Test
+        @DisplayName("솔로는 모집 단계 없이 확정 상태로 태어난다")
+        void soloStartsMatched() {
+            // when & then -> 태어나는 지점만 다르고 채널 입장 이후 흐름은 매칭과 같다
+            assertThat(RunningRoomType.SOLO.initialStatus())
+                    .isEqualTo(RunningRoomStatus.MATCHED);
+        }
+
+        @Test
+        @DisplayName("매칭·초대는 모집 중으로 태어난다")
+        void othersStartMatching() {
+            // when & then
+            assertThat(RunningRoomType.MATCH.initialStatus())
+                    .isEqualTo(RunningRoomStatus.MATCHING);
+            assertThat(RunningRoomType.INVITE.initialStatus())
+                    .isEqualTo(RunningRoomStatus.MATCHING);
         }
     }
 

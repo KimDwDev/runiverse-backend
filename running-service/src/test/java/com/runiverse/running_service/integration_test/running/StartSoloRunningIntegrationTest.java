@@ -107,8 +107,8 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("솔로 방은 모집 없이 STARTED로 열리고 목표 거리를 갖지 않는다")
-    void soloRoomStartsImmediately() {
+    @DisplayName("솔로 방은 모집 없이 MATCHED로 열리고 목표 거리를 갖지 않는다")
+    void soloRoomOpensMatched() {
         // given
         UUID userId = onboardedUser();
 
@@ -119,7 +119,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
         // then
         RunningRoom room = runningStore.findRoom(result.runningRoomId()).orElseThrow();
         assertThat(room.getType()).isEqualTo(RunningRoomType.SOLO);
-        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
         assertThat(room.getCloseAt()).isEmpty();
         assertThat(room.getTargetDistance()).isEmpty();
         assertThat(room.getPlayerCount().max()).isEqualTo(1);

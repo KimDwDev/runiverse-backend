@@ -68,7 +68,7 @@ public class RunningRoom {
     }
 
 
-    // 솔로 — 모집 단계 없이 STARTED로 태어난다
+    // 솔로 — 모집 단계 없이 확정(MATCHED)된 채로 태어난다
     public static RunningRoom openSolo(RunningPlayerId runningPlayerId, int avgPace,
                                        Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
@@ -108,8 +108,9 @@ public class RunningRoom {
         this.closeAt = closeAt;
     }
 
-    public void cancel() {
+    public void cancel(LocalDateTime closeAt) {
         this.status = status.transitionTo(RunningRoomStatus.CANCELLED);
+        this.closeAt = closeAt;
     }
 
     // 참가자 페이스는 다른 애그리거트라 application이 읽어 넘긴다
