@@ -85,4 +85,12 @@ public class RunningRoomSessionJpaEntity extends BaseTimeEntity {
         private Long room;
         private Long player;
     }
+
+    public void changeLeaveCount(int leaveCount) {
+        this.leaveCount = leaveCount;
+    }
+
+    public void changeConnected(boolean connected) {
+        this.connected = connected;
+    }
 }

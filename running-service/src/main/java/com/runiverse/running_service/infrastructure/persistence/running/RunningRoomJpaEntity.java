@@ -98,4 +98,21 @@ public class RunningRoomJpaEntity extends BaseTimeEntity {
         return new RunningRoomJpaEntity(type, status, startAt,
                 targetDistance, avgPace, currentPlayerCount, maxPlayerCount);
     }
+
+    // 방 애그리거트가 바꾸는 값만 연다 — type·start_at·target_distance·max_player_count는 생성 후 불변이다
+    public void changeStatus(RunningRoomStatus status) {
+        this.status = status;
+    }
+
+    public void changeCloseAt(LocalDateTime closeAt) {
+        this.closeAt = closeAt;
+    }
+
+    public void changeAvgPace(Integer avgPace) {
+        this.avgPace = avgPace;
+    }
+
+    public void changeCurrentPlayerCount(int currentPlayerCount) {
+        this.currentPlayerCount = currentPlayerCount;
+    }
 }
