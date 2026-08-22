@@ -1,10 +1,15 @@
 package com.runiverse.running_service.presentation.running.websocket;
 
+import com.runiverse.running_service.application.common.exception.BusinessException;
+import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
+import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
 import com.runiverse.running_service.presentation.running.websocket.message.ErrorPayload;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
+import com.runiverse.running_service.presentation.running.websocket.message.RunningStartRequest;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningWebSocketErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,11 +28,16 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class RunningWebSocketHandler extends TextWebSocketHandler {
 
+    // 마지막 연결이 이긴다 — 이 코드를 받은 클라는 재연결하지 않는다(api-spec 5-C)
+    private static final CloseStatus SUPERSEDED = new CloseStatus(4001, "다른 연결이 이어받았습니다.");
     private final JsonMapper jsonMapper;
+    private final StartRunningUsecase startRunningUsecase;
+    private final RunningSessionRegistry sessionRegistry;
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+        // 연결만으로는 아무것도 등록하지 않는다 — 어느 방인지는 RUNNING_START가 정한다
         log.info("러닝 WebSocket 연결 — userId={}, sessionId={}", userId(session), session.getId());
     }
 
@@ -42,11 +52,10 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             sendError(session, RunningWebSocketErrorCode.MALFORMED_MESSAGE, null);
             return;
         }
-        // 봉투({type,data}) 파싱·디스패치는 다음 단계 — 지금은 수신 확인만 한다.
         // 위치 좌표가 실려 오므로 payload는 개인정보다. INFO로 남기지 않는다.
         log.debug("러닝 WebSocket 수신 — userId={}, payload={}", userId(session), message.getPayload());
         String event = envelope.event();
-// from()은 null에도 empty를 돌려줘 UNSUPPORTED와 구분이 안 된다 — 여기서 먼저 가른다
+        // from()은 null에도 empty를 돌려줘 UNSUPPORTED와 구분이 안 된다 — 여기서 먼저 가른다
         if (event == null || event.isBlank()) {
             sendError(session, RunningWebSocketErrorCode.MISSING_MESSAGE_TYPE, null);
             return;
@@ -58,14 +67,60 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         }
         switch (type) {
             case HEALTH_CHECK -> send(session, RunningMessageType.HEALTH_CHECKED.message());
-            // HEALTH_CHECKED·ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
+            case RUNNING_START -> handleRunningStart(session, envelope);
+            // HEALTH_CHECKED·RUNNING_STARTED·ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
             default -> sendError(session, RunningWebSocketErrorCode.UNSUPPORTED_MESSAGE_TYPE, event);
+        }
+    }
+
+    // 채널 등록·재입장·방 시작·참가자 시작을 한 번에 처리한다
+    private void handleRunningStart(WebSocketSession session, WebSocketEnvelope envelope)
+            throws IOException {
+        RunningStartRequest request;
+        try {
+            request = jsonMapper.convertValue(envelope.data(), RunningStartRequest.class);
+        } catch (JacksonException | IllegalArgumentException e) {
+            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+            return;
+        }
+        if (request == null || !request.isValid()) {
+            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+            return;
+        }
+        UserId userId = userId(session);
+        try {
+            startRunningUsecase.handle(
+                    new StartRunningCommand(userId.value(), request.runningRoomId()));
+        } catch (BusinessException e) {
+            // 유스케이스가 튕겨낸 것만 코드로 내보낸다.
+            // 도메인 예외가 여기까지 오면 핸들러의 선검사가 샌 것이라 잡지 않는다
+            sendError(session, e.getErrorCode(), envelope.event());
+            return;
+        }
+        // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
+        sessionRegistry.register(userId, session).ifPresent(this::closeSuperseded);
+        send(session, RunningMessageType.RUNNING_STARTED.message());
+    }
+
+    private void closeSuperseded(WebSocketSession superseded) {
+        try {
+            superseded.close(SUPERSEDED);
+        } catch (IOException e) {
+            log.warn("밀려난 러닝 WebSocket 종료 실패 — sessionId={}", superseded.getId(), e);
         }
     }
 
     private void sendError(
             WebSocketSession session,
             RunningWebSocketErrorCode errorCode,
+            String sourceType
+    ) throws IOException {
+        send(session, RunningMessageType.ERROR.message(ErrorPayload.of(errorCode, sourceType)));
+    }
+
+    private void sendError(
+            WebSocketSession session,
+            ErrorCode errorCode,
             String sourceType
     ) throws IOException {
         send(session, RunningMessageType.ERROR.message(ErrorPayload.of(errorCode, sourceType)));
@@ -85,6 +140,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         // 연결 끊김 ≠ 방 나가기 — running_room_sessions.is_connected는 여기서 건드리지 않는다.
+        // 레지스트리는 접속 여부라 여기서 지운다
+        sessionRegistry.remove(userId(session), session);
         log.info("러닝 WebSocket 종료 — userId={}, status={}", userId(session), status);
     }
 
