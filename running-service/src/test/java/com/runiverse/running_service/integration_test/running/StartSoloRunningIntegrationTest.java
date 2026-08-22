@@ -81,7 +81,7 @@ public class StartSoloRunningIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(result.runningRoomId()).isNotNull();
-        assertThat(result.startedAt()).isNotNull();
+        assertThat(result.startAt()).isNotNull();
         assertThat(runningStore.findRoom(result.runningRoomId())).isPresent();
     }
 

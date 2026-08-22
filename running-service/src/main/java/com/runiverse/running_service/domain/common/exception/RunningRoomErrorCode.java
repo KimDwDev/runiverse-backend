@@ -13,7 +13,7 @@ public enum RunningRoomErrorCode implements ErrorCode {
     INVALID_PLAYER_COUNT("INVALID_PLAYER_COUNT", "방 인원 구성이 올바르지 않습니다."),
     INVALID_LEAVE_COUNT("INVALID_LEAVE_COUNT", "이탈 횟수는 0 이상이어야 합니다."),
     START_AT_REQUIRED("START_AT_REQUIRED", "시작 시각은 필수입니다."),
-    INVALID_CLOSE_AT("INVALID_CLOSE_AT", "모집 마감 시각이 올바르지 않습니다."),
+    INVALID_CLOSE_AT("INVALID_CLOSE_AT", "방 상태와 닫힌 시각이 일치하지 않습니다."),
     NOT_ROOM_PLAYER("NOT_ROOM_PLAYER", "이 방의 참가자가 아닙니다."),
     ROOM_IS_FULL("ROOM_IS_FULL", "방에 빈자리가 없습니다."),
     ROOM_IS_EMPTY("ROOM_IS_EMPTY", "남은 참가자가 없습니다."),

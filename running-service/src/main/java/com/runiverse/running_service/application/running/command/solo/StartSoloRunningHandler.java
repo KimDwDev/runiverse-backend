@@ -44,7 +44,8 @@ public class StartSoloRunningHandler implements StartSoloRunningUsecase {
         RunningPlayer player = createRunningPlayerPort.create(
                 RunningPlayer.requestSolo(command.userId(), avgPace.secondsPerKm(), startAt));
         RunningPlayerId playerId = player.getRunningPlayerId().orElseThrow();
-        // 4. 방은 모집 없이 STARTED로 태어나고 세션 링크도 openSolo가 같이 만든다.
+        // 4. 방은 모집 없이 MATCHED로 태어나고 세션 링크도 openSolo가 같이 만든다.
+        //    STARTED·RUNNING 전이는 이 API가 만들지 않는다 — 채널 입장 이후 구간이다.
         //    방의 target_distance는 nullable이라 목표 없는 솔로는 null이 정본이다
         //    (player 쪽은 NOT NULL이라 Distance.unlimited()가 들어간다)
         RunningRoom room = createRunningRoomPort.create(

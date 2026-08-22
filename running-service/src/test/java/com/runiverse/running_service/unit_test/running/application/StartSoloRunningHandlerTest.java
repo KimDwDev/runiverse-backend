@@ -97,7 +97,7 @@ public class StartSoloRunningHandlerTest {
 
         // then -> 클라이언트는 이 ID로 WebSocket에 접속한다
         assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
-        assertThat(result.startedAt()).isNotNull();
+        assertThat(result.startAt()).isNotNull();
     }
 
     @Test
