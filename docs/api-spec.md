@@ -1016,10 +1016,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "type": "...",
+  "event": "...",
   "data": { ... }
 }
 ```
+
+- 봉투 키는 `event`다. 아래 각 메시지 절이 보여주는 JSON은 이 봉투의 `data`에 들어가는 부분이다
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
@@ -1028,7 +1030,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "type": "ERROR",
+  "event": "ERROR",
   "data": {
     "code": "ROOM_NOT_FOUND",
     "message": "러닝 정보를 찾을 수 없습니다.",
@@ -1037,7 +1039,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **code**: `INVALID_REQUEST`(요청 검증 실패) / `ROOM_NOT_FOUND`(방 없음) / `NOT_ROOM_PLAYER`(참가자 아님) / `INVALID_ROOM_STATE`(현재 상태에서 불가한 요청)
+- **code** — 봉투 단계와 처리 단계로 나뉜다. 앞의 셋은 `data`를 읽기도 전에 나가므로 `sourceType`이 null일 수 있다
+
+  | code | 언제 |
+  |---|---|
+  | `MALFORMED_MESSAGE` | 봉투 JSON을 파싱하지 못함 |
+  | `MISSING_MESSAGE_TYPE` | `event`가 비어 있음 |
+  | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
+  | `INVALID_REQUEST` | `data` 검증 실패 |
+  | `ROOM_NOT_FOUND` | 방 없음 |
+  | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
+  | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
+
+- **`ERROR`로는 연결을 끊지 않는다.** 잘못된 메시지 하나 때문에 러닝 전체가 끊기면 안 되므로, 오류를 돌려주고 연결은 유지한다
 
 #### `RUNNING_START` (C→S) — 러닝 준비 일괄 처리
 

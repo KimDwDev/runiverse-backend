@@ -12,7 +12,7 @@ public enum RunningMessageType {
 
     // S -> C
     HEALTH_CHECKED,
-    SERVER_ERROR;
+    ERROR;
 
     // 모르는 타입은 예외가 아니라 빈 값이다 — 연결을 끊지 않고 ERROR로 돌려주기 위해서다.
     public static Optional<RunningMessageType> from(String raw) {

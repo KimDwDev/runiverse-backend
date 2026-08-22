@@ -58,7 +58,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         }
         switch (type) {
             case HEALTH_CHECK -> send(session, RunningMessageType.HEALTH_CHECKED.message());
-            // HEALTH_CHECKED·SERVER_ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
+            // HEALTH_CHECKED·ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
             default -> sendError(session, RunningWebSocketErrorCode.UNSUPPORTED_MESSAGE_TYPE, event);
         }
     }
@@ -68,7 +68,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             RunningWebSocketErrorCode errorCode,
             String sourceType
     ) throws IOException {
-        send(session, RunningMessageType.SERVER_ERROR.message(ErrorPayload.of(errorCode, sourceType)));
+        send(session, RunningMessageType.ERROR.message(ErrorPayload.of(errorCode, sourceType)));
     }
 
     private void send(WebSocketSession session, WebSocketEnvelope envelope) throws IOException {

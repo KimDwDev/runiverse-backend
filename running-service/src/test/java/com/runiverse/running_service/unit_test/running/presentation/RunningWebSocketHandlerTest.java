@@ -156,7 +156,7 @@ class RunningWebSocketHandlerTest {
     }
 
     private void assertThatError(WebSocketEnvelope sent, String code, String sourceType) {
-        assertThat(sent.event()).isEqualTo("SERVER_ERROR");
+        assertThat(sent.event()).isEqualTo("ERROR");
         Map<?, ?> data = (Map<?, ?>) sent.data();
         assertThat(data.get("code")).isEqualTo(code);
         assertThat(data.get("sourceType")).isEqualTo(sourceType);
