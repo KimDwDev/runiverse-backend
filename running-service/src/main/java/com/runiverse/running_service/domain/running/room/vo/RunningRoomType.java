@@ -26,9 +26,10 @@ public enum RunningRoomType {
         }
     }
 
-    // 솔로는 모집 단계가 없어 STARTED로 태어난다 — 방 생성이 이 규칙을 여기서만 읽는다
+    // 솔로는 모집 단계가 없어 확정(MATCHED)된 채로 태어난다 —
+    // 태어나는 지점만 다르고 채널 입장 이후 흐름은 매칭과 같은 길을 탄다
     public RunningRoomStatus initialStatus() {
-        return this == SOLO ? RunningRoomStatus.STARTED : RunningRoomStatus.MATCHING;
+        return this == SOLO ? RunningRoomStatus.MATCHED : RunningRoomStatus.MATCHING;
     }
 
     // 모집 마감(close_at)·후보 스캔 대상인지

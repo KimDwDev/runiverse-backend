@@ -50,7 +50,6 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 room.getType(),
                 room.getStatus(),
                 room.getStartAt(),
-                room.getCloseAt().orElse(null),
                 room.getTargetDistance().map(Distance::meters).orElse(null),
                 room.getAvgPace().secondsPerKm(),
                 room.getPlayerCount().current(),
