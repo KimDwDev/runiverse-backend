@@ -1,9 +1,14 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
+import com.runiverse.running_service.application.running.command.start.StartRunningResult;
+import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
+import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
+import com.runiverse.running_service.presentation.running.websocket.RunningSessionRegistry;
 import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,12 +28,14 @@ import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 // 로그가 userId를 항상 읽지만 분기마다 호출 횟수가 달라 stubbing 검사는 끈다
@@ -36,19 +43,43 @@ import static org.mockito.Mockito.verify;
 @DisplayName("러닝 WebSocket 핸들러 단위 테스트")
 class RunningWebSocketHandlerTest {
 
+    private static final UUID USER_ID = UuidCreator.getTimeOrderedEpoch();
+    private static final long ROOM_ID = 125L;
+
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     @Mock
     private WebSocketSession session;
 
+    // 같은 유저의 두 번째 기기 — 중복 연결 테스트에서만 쓴다
+    @Mock
+    private WebSocketSession other;
+
+    @Mock
+    private StartRunningUsecase startRunningUsecase;
+
+    private RunningSessionRegistry sessionRegistry;
     private RunningWebSocketHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new RunningWebSocketHandler(jsonMapper);
-        given(session.getAttributes()).willReturn(Map.of(
-                JwtHandshakeInterceptor.USER_ID, new UserId(UuidCreator.getTimeOrderedEpoch())
-        ));
+        // 레지스트리는 상태만 들고 있는 POJO라 실제 구현을 쓴다 — 중복 연결 판정이 진짜로 도는지 봐야 한다
+        sessionRegistry = new RunningSessionRegistry();
+        handler = new RunningWebSocketHandler(jsonMapper, startRunningUsecase, sessionRegistry);
+        given(session.getId()).willReturn("session-1");
+        given(session.getAttributes()).willReturn(authenticated());
+        given(other.getId()).willReturn("session-2");
+        given(other.getAttributes()).willReturn(authenticated());
+    }
+
+    // 핸드셰이크 인터셉터가 채워 넣는 값
+    private static Map<String, Object> authenticated() {
+        return Map.of(JwtHandshakeInterceptor.USER_ID, new UserId(USER_ID));
+    }
+
+    private static TextMessage runningStart(String data) {
+        return new TextMessage("""
+                {"event":"RUNNING_START","data":%s}""".formatted(data));
     }
 
     @Test
@@ -119,6 +150,101 @@ class RunningWebSocketHandlerTest {
         assertThatError(captureSent(), "UNSUPPORTED_MESSAGE_TYPE", "HEALTH_CHECKED");
     }
 
+    @Test
+    @DisplayName("RUNNING_START를 보내면 유스케이스를 태우고 RUNNING_STARTED로 응답한다")
+    void respondsRunningStarted() throws Exception {
+        // given
+        given(startRunningUsecase.handle(new StartRunningCommand(USER_ID, ROOM_ID)))
+                .willReturn(new StartRunningResult(ROOM_ID));
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then
+        WebSocketEnvelope sent = captureSent();
+        assertThat(sent.event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("runningRoomId가 없으면 유스케이스를 태우지 않고 INVALID_REQUEST로 응답한다")
+    void respondsInvalidRequestWithoutRoomId() throws Exception {
+        // when -> WS에는 @Valid 파이프라인이 없어 핸들러가 직접 걸러야 한다
+        handler.handleMessage(session, runningStart("{}"));
+
+        // then
+        assertThatError(captureSent(), "INVALID_REQUEST", "RUNNING_START");
+        verifyNoInteractions(startRunningUsecase);
+    }
+
+    @Test
+    @DisplayName("유스케이스가 튕겨내면 그 에러 코드를 ERROR로 돌려준다")
+    void respondsUsecaseErrorCode() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willThrow(new RunningRoomNotFoundException());
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then -> 코드·문구의 정본은 application ErrorCode다
+        assertThatError(captureSent(), "ROOM_NOT_FOUND", "RUNNING_START");
+    }
+
+    @Test
+    @DisplayName("같은 유저가 다른 기기로 들어오면 이전 연결을 4001로 닫는다")
+    void closesSupersededSession() throws Exception {
+        // given -> 첫 기기가 이미 붙어 있다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when -> 기기를 바꿔 다시 들어온다
+        handler.handleMessage(other, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then -> 마지막 것이 이긴다. 두 소켓이 살아 있으면 좌표 트랙이 섞인다
+        ArgumentCaptor<CloseStatus> captor = ArgumentCaptor.forClass(CloseStatus.class);
+        verify(session).close(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo(4001);
+        assertThat(captureSent(other).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("유스케이스가 실패하면 기존 연결을 끊지 않는다")
+    void keepsPreviousSessionWhenUsecaseFails() throws Exception {
+        // given -> 첫 기기는 성공, 두 번째 요청은 유스케이스가 튕겨낸다
+        given(startRunningUsecase.handle(any()))
+                .willReturn(new StartRunningResult(ROOM_ID))
+                .willThrow(new RunningRoomNotFoundException());
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(other, runningStart("""
+                {"runningRoomId":999}"""));
+
+        // then -> 잘못된 요청 하나가 멀쩡히 뛰는 기기를 끊어서는 안 된다
+        verify(session, never()).close(any(CloseStatus.class));
+        assertThatError(captureSent(other), "ROOM_NOT_FOUND", "RUNNING_START");
+    }
+
+    @Test
+    @DisplayName("같은 소켓이 RUNNING_START를 두 번 보내도 자기 자신을 끊지 않는다")
+    void doesNotCloseItselfOnResend() throws Exception {
+        // given -> 재연결 뒤 클라가 같은 메시지를 다시 보내는 정상 경로
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then
+        verify(session, never()).close(any(CloseStatus.class));
+    }
+
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다
     @ParameterizedTest(name = "{0}")
     @EnumSource(RunningMessageType.class)
@@ -150,8 +276,12 @@ class RunningWebSocketHandlerTest {
     }
 
     private WebSocketEnvelope captureSent() throws Exception {
+        return captureSent(session);
+    }
+
+    private WebSocketEnvelope captureSent(WebSocketSession target) throws Exception {
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
-        verify(session).sendMessage(captor.capture());
+        verify(target).sendMessage(captor.capture());
         return jsonMapper.readValue(captor.getValue().getPayload(), WebSocketEnvelope.class);
     }
 
