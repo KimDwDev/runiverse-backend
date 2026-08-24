@@ -273,7 +273,7 @@
 - **`running-match`와 `running-room`은 API 단계 이름이다.** 전자는 매칭 신청·대기, 후자는 방 단위 동작을 가리킨다.
 - 신청 즉시 방이 생기므로 `runningRoomId`는 매칭 단계에서도 존재한다. 다만 **경로 체계는 단계로 갈린다** — 매칭 단계는 방 ID를 URL에 쓰지 않고(`GET /users/me/running-match`), 방 단계는 반드시 쓴다(`GET /running-rooms/{runningRoomId}/results`).
 
-**매칭·러닝 설계**: 구간마다 통신 방식이 다르다 — **매칭은 REST + SSE**, **러닝 구간은 WebSocket**(`/ws/running-rooms`)이다.
+**매칭·러닝 설계**: 구간마다 통신 방식이 다르다 — **매칭은 REST + SSE**, **러닝 구간은 WebSocket**(`/api/v1/ws/running`)이다.
 
 - 매칭 구간은 클라가 보내는 것이 신청·취소 둘뿐이라 양방향 채널이 필요 없다 — REST로 보내고 현황은 SSE 스트림(`/running-matches/stream`)으로 받는다. 러닝 구간은 위치를 주기 발신하는 고빈도 양방향 구간이라 WebSocket을 쓴다.
 - 대기 인원·성사·취소는 SSE 이벤트로 전달된다(`api-spec.md` 5번).

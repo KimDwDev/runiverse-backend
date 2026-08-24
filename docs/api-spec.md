@@ -62,7 +62,7 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 취소·러닝 시작 포함 |
 
-**러닝 WebSocket** — `/ws/running-rooms`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
@@ -751,7 +751,7 @@
 | 구간 | 방식 | 이유 |
 |---|---|---|
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
-| 러닝 구간 (5-C·5-D) | **WebSocket** `/ws/running-rooms` | 위치를 주기 발신하는 고빈도 양방향 구간 |
+| 러닝 구간 (5-C·5-D) | **WebSocket** `/api/v1/ws/running` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
 **솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
@@ -997,9 +997,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 3. 서버가 `scheduledStartAt`에 방을 `STARTED`, 남아 있는 참가자를 `RUNNING`으로 바꾸고 `MATCH_ROOM_UPDATED`를 보낸다. 클라는 이를 받은 뒤 러닝 화면으로 전환해 `RUNNING_START`를 보낸다
 4. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
-#### WebSocket 연결 — `/ws/running-rooms`
+#### WebSocket 연결 — `/api/v1/ws/running`
 
-- **연결**: `wss://.../ws/running-rooms` + `Authorization: Bearer {accessToken}`
+- **연결**: `wss://.../api/v1/ws/running` + `Authorization: Bearer {accessToken}`
 - **인증 실패**: 업그레이드를 거부하고 **HTTP 401**로 응답한다 — 연결이 서기 전이라 `ERROR` 프레임을 쓸 수 없다. 본문은 REST 에러 포맷과 같다. 클라는 `POST /auth/refresh` 후 재연결하고, 다시 실패하면 재로그인으로 보낸다. 같은 이유로 아래 `ERROR`의 code 목록에는 인증 코드가 없다
 - **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길 수 있어 중간에 끊으면 트랙이 갈린다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
 - **중복 연결은 마지막 것만 남긴다** — 같은 사용자의 새 연결이 들어오면 서버가 기존 연결을 close code `4001`로 닫는다. 기기 전환·앱 재시작 때 이전 소켓이 남아 있을 수 있는데 둘 다 살려두면 같은 `(runningRoomId, userId, sequence)`에 서로 다른 트랙이 섞인다. `4001`을 받은 클라는 재연결하지 않는다 — 다른 기기가 이어받은 것이다
