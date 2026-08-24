@@ -24,11 +24,9 @@ import java.time.LocalDateTime;
 @Table(
         name = "running_rooms",
         indexes = {
-                // 스케줄러 모집 마감 판정 — type='MATCH' AND status='MATCHING' AND close_at <= now()
-                // close_at이 범위 조건이라 마지막에 둔다
-                @Index(name = "idx_running_room_close",
-                        columnList = "deleted_at, type, status, close_at"),
-                // 매칭 후보 방 스캔 — 앞 4개는 등가 조건, avg_pace는 범위(±30초/km) 조건이라 마지막
+                // 매칭 후보 방 스캔 — 앞 4개는 등가 조건, avg_pace는 범위(±30초/km) 조건이라 마지막.
+                // 마감 스케줄러(type='MATCH' AND status='MATCHING' AND start_at <= now() + 오프셋)도
+                // 앞 4개 컬럼을 그대로 탄다
                 @Index(name = "idx_running_room_candidate",
                         columnList = "deleted_at, type, status, start_at, target_distance, avg_pace")
         }
@@ -43,8 +41,8 @@ import java.time.LocalDateTime;
 @Check(name = "ck_running_room_target_distance",
         constraints = "target_distance between 1 and 500000")
 @Check(name = "ck_running_room_close_at",
-        constraints = "(type = 'SOLO' and close_at is null)"
-                + " or (type <> 'SOLO' and close_at is not null and close_at < start_at)")
+        constraints = "(status in ('FINISHED', 'CANCELLED') and close_at is not null)"
+                + " or (status not in ('FINISHED', 'CANCELLED') and close_at is null)")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RunningRoomJpaEntity extends BaseTimeEntity {
 
@@ -61,7 +59,7 @@ public class RunningRoomJpaEntity extends BaseTimeEntity {
     private RunningRoomStatus status;
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
-    // 모집 마감 시각(start_at - 설정값). 생성 시 고정 — 모집 단계가 없는 솔로는 null
+    // 방이 닫힌 시각 — FINISHED·CANCELLED 때 찍힌다. 열려 있는 동안은 null
     @Column(name = "close_at")
     private LocalDateTime closeAt;
     // 방의 목표 거리(미터). 매칭 조건이라 정해진 뒤에는 바뀌지 않는다 — 목표 없는 솔로는 null
@@ -81,13 +79,12 @@ public class RunningRoomJpaEntity extends BaseTimeEntity {
     private LocalDateTime deletedAt;
 
     private RunningRoomJpaEntity(RunningRoomType type, RunningRoomStatus status,
-                                 LocalDateTime startAt, LocalDateTime closeAt,
-                                 Integer targetDistance, Integer avgPace,
+                                 LocalDateTime startAt, Integer targetDistance, Integer avgPace,
                                  int currentPlayerCount, int maxPlayerCount) {
         this.type = type;
         this.status = status;
         this.startAt = startAt;
-        this.closeAt = closeAt;
+
         this.targetDistance = targetDistance;
         this.avgPace = avgPace;
         this.currentPlayerCount = currentPlayerCount;
@@ -96,10 +93,26 @@ public class RunningRoomJpaEntity extends BaseTimeEntity {
 
     // 방은 언제나 살아 있는 채로 태어난다 — 숨김은 관리자 기능이 생길 때 별도 메서드로 붙인다
     public static RunningRoomJpaEntity create(RunningRoomType type, RunningRoomStatus status,
-                                              LocalDateTime startAt, LocalDateTime closeAt,
-                                              Integer targetDistance, Integer avgPace,
+                                              LocalDateTime startAt, Integer targetDistance, Integer avgPace,
                                               int currentPlayerCount, int maxPlayerCount) {
-        return new RunningRoomJpaEntity(type, status, startAt, closeAt,
+        return new RunningRoomJpaEntity(type, status, startAt,
                 targetDistance, avgPace, currentPlayerCount, maxPlayerCount);
+    }
+
+    // 방 애그리거트가 바꾸는 값만 연다 — type·start_at·target_distance·max_player_count는 생성 후 불변이다
+    public void changeStatus(RunningRoomStatus status) {
+        this.status = status;
+    }
+
+    public void changeCloseAt(LocalDateTime closeAt) {
+        this.closeAt = closeAt;
+    }
+
+    public void changeAvgPace(Integer avgPace) {
+        this.avgPace = avgPace;
+    }
+
+    public void changeCurrentPlayerCount(int currentPlayerCount) {
+        this.currentPlayerCount = currentPlayerCount;
     }
 }

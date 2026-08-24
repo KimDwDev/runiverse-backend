@@ -3,11 +3,17 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,7 +23,8 @@ import java.util.Optional;
 
 // RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다
 public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunningRoomPort,
-        ExistsActiveRunningPlayerPort {
+        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
+        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();
@@ -31,16 +38,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
             throw new IllegalStateException("이미 저장된 신청이다 — 종료·상태 변경은 별도 포트로 처리한다");
         }
         long id = nextPlayerId++;
-        RunningPlayer saved = RunningPlayer.builder()
-                .runningPlayerId(id)
-                .userId(player.getUserId().value())
-                .status(player.getStatus())
-                .avgPace(player.getAvgPace().secondsPerKm())
-                .targetDistance(player.getTargetDistance().meters())
-                .desiredPlayerCount(player.getDesiredPlayerCount().value())
-                .startAt(player.getStartAt())
-                .deletedAt(player.getDeletedAt().orElse(null))
-                .build();
+        RunningPlayer saved = copyWithId(player, id);
         players.put(id, saved);
         return saved;
     }
@@ -51,22 +49,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
             throw new IllegalStateException("이미 저장된 방이다 — 상태 변경은 별도 포트로 처리한다");
         }
         long id = nextRoomId++;
-        List<SessionDraft> sessions = new ArrayList<>();
-        room.getSessions().forEach(session -> sessions.add(new SessionDraft(
-                session.getRunningPlayerId(), session.getLeaveCount().value(), session.isConnected())));
-
-        RunningRoom saved = RunningRoom.builder()
-                .runningRoomId(id)
-                .type(room.getType())
-                .status(room.getStatus())
-                .startAt(room.getStartAt())
-                .closeAt(room.getCloseAt().orElse(null))
-                .targetDistance(room.getTargetDistance().map(Distance::meters).orElse(null))
-                .avgPace(room.getAvgPace().secondsPerKm())
-                .currentPlayerCount(room.getPlayerCount().current())
-                .maxPlayerCount(room.getPlayerCount().max())
-                .sessions(sessions)
-                .build();
+        RunningRoom saved = copyWithId(room, id);
         rooms.put(id, saved);
         return saved;
     }
@@ -76,6 +59,75 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     public boolean existsActive(UserId userId) {
         return players.values().stream()
                 .anyMatch(player -> player.getUserId().equals(userId) && player.isActive());
+    }
+
+    // 어댑터의 toDomain처럼 분리된 객체를 돌려준다 —
+    // 저장본을 그대로 주면 update()를 빼먹어도 변경이 반영돼 테스트가 거짓으로 통과한다
+    @Override
+    public Optional<RunningRoom> loadById(RunningRoomId runningRoomId) {
+        return Optional.ofNullable(rooms.get(runningRoomId.value()))
+                .map(room -> copyWithId(room, runningRoomId.value()));
+    }
+
+    @Override
+    public Optional<RunningPlayer> loadActive(UserId userId) {
+        return players.values().stream()
+                .filter(player -> player.getUserId().equals(userId) && player.isActive())
+                .findFirst()
+                .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()));
+    }
+
+    @Override
+    public void update(RunningRoom room) {
+        long id = room.getRunningRoomId()
+                .orElseThrow(() -> new IllegalStateException("저장되지 않은 방은 갱신할 수 없다"))
+                .value();
+        if (!rooms.containsKey(id)) {
+            throw new IllegalStateException("없는 방은 갱신할 수 없다");
+        }
+        rooms.put(id, copyWithId(room, id));
+    }
+
+    @Override
+    public void update(RunningPlayer player) {
+        long id = player.getRunningPlayerId()
+                .orElseThrow(() -> new IllegalStateException("저장되지 않은 신청은 갱신할 수 없다"))
+                .value();
+        if (!players.containsKey(id)) {
+            throw new IllegalStateException("없는 신청은 갱신할 수 없다");
+        }
+        players.put(id, copyWithId(player, id));
+    }
+
+    private RunningPlayer copyWithId(RunningPlayer player, long id) {
+        return RunningPlayer.builder()
+                .runningPlayerId(id)
+                .userId(player.getUserId().value())
+                .status(player.getStatus())
+                .avgPace(player.getAvgPace().secondsPerKm())
+                .targetDistance(player.getTargetDistance().meters())
+                .desiredPlayerCount(player.getDesiredPlayerCount().value())
+                .startAt(player.getStartAt())
+                .deletedAt(player.getDeletedAt().orElse(null))
+                .build();
+    }
+
+    private RunningRoom copyWithId(RunningRoom room, long id) {
+        List<SessionDraft> sessions = new ArrayList<>();
+        room.getSessions().forEach(session -> sessions.add(new SessionDraft(
+                session.getRunningPlayerId(), session.getLeaveCount().value(), session.isConnected())));
+        return RunningRoom.builder()
+                .runningRoomId(id)
+                .type(room.getType())
+                .status(room.getStatus())
+                .startAt(room.getStartAt())
+                .closeAt(room.getCloseAt().orElse(null))
+                .targetDistance(room.getTargetDistance().map(Distance::meters).orElse(null))
+                .avgPace(room.getAvgPace().map(Pace::secondsPerKm).orElse(null))
+                .currentPlayerCount(room.getPlayerCount().current())
+                .maxPlayerCount(room.getPlayerCount().max())
+                .sessions(sessions)
+                .build();
     }
 
     // 검증 전용

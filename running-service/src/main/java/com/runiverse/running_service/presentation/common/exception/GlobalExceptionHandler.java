@@ -146,6 +146,11 @@ public class GlobalExceptionHandler {
         return switch (code) {
             // 한 플레이어 = 최대 한 방 — 진행 중인 신청이 있으면 새로 못 연다
             case RUNNING_ALREADY_IN_PROGRESS -> HttpStatus.CONFLICT;
+            // 셋 다 WS 전용이라 이 경로로 나갈 일이 없다.
+            // 스위치를 비워둘 수 없어 의미에 맞는 상태만 적어둔다
+            case ROOM_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case NOT_ROOM_PLAYER -> HttpStatus.FORBIDDEN;
+            case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
         };
     }
 }

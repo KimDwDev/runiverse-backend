@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningCommand;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningHandler;
-import com.runiverse.running_service.application.running.command.solo.StartSoloRunningResult;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
+import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomResult;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("솔로 러닝 시작 단위 테스트")
-public class StartSoloRunningHandlerTest {
+public class OpenSoloRoomHandlerTest {
 
     private static final int AVG_PACE = 330;          // 5분 30초/km
     private static final long PLAYER_ID = 42L;
@@ -57,7 +57,7 @@ public class StartSoloRunningHandlerTest {
     private CreateRunningRoomPort createRunningRoomPort;
 
     @InjectMocks
-    private StartSoloRunningHandler handler;
+    private OpenSoloRoomHandler handler;
 
     // 어댑터가 ID를 채워 돌려주는 상황을 흉내 낸다
     private static RunningPlayer savedPlayer(UUID userId) {
@@ -93,11 +93,11 @@ public class StartSoloRunningHandlerTest {
         given(createRunningRoomPort.create(any())).willReturn(savedRoom());
 
         // when
-        StartSoloRunningResult result = handler.handle(new StartSoloRunningCommand(userId));
+        OpenSoloRoomResult result = handler.handle(new OpenSoloRoomCommand(userId));
 
         // then -> 클라이언트는 이 ID로 WebSocket에 접속한다
         assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
-        assertThat(result.startedAt()).isNotNull();
+        assertThat(result.startAt()).isNotNull();
     }
 
     @Test
@@ -112,7 +112,7 @@ public class StartSoloRunningHandlerTest {
         given(createRunningRoomPort.create(any())).willReturn(savedRoom());
 
         // when
-        handler.handle(new StartSoloRunningCommand(userId));
+        handler.handle(new OpenSoloRoomCommand(userId));
 
         // then -> 페이스는 입력받지 않고 서버가 세팅하고,
         //         목표 거리는 유저가 끝낼 때까지라 도달 불가능한 상한이 들어간다
@@ -128,7 +128,7 @@ public class StartSoloRunningHandlerTest {
     }
 
     @Test
-    @DisplayName("방은 모집 없이 STARTED로 열리고 목표 거리를 갖지 않는다")
+    @DisplayName("방은 모집 없이 MATCHED로 열리고 목표 거리를 갖지 않는다")
     void opensSoloRoomWithoutRecruiting() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
@@ -139,7 +139,7 @@ public class StartSoloRunningHandlerTest {
         given(createRunningRoomPort.create(any())).willReturn(savedRoom());
 
         // when
-        handler.handle(new StartSoloRunningCommand(userId));
+        handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         ArgumentCaptor<RunningRoom> captor = ArgumentCaptor.forClass(RunningRoom.class);
@@ -147,8 +147,9 @@ public class StartSoloRunningHandlerTest {
         RunningRoom opened = captor.getValue();
 
         assertThat(opened.getType()).isEqualTo(RunningRoomType.SOLO);
-        assertThat(opened.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-        assertThat(opened.getCloseAt()).isEmpty();          // 모집 단계가 없다
+        // STARTED·RUNNING 전이는 WS 채널 입장 뒤 RUNNING_START가 맡는다 — 매칭과 같은 경로다
+        assertThat(opened.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+        assertThat(opened.getCloseAt()).isEmpty();          // 방금 열린 방은 닫히지 않았다
         assertThat(opened.getTargetDistance()).isEmpty();   // 방 쪽은 nullable — null이 "목표 없음"의 정본
         assertThat(opened.getPlayerCount().current()).isEqualTo(1);
         assertThat(opened.getPlayerCount().max()).isEqualTo(1);
@@ -166,7 +167,7 @@ public class StartSoloRunningHandlerTest {
         given(createRunningRoomPort.create(any())).willReturn(savedRoom());
 
         // when
-        handler.handle(new StartSoloRunningCommand(userId));
+        handler.handle(new OpenSoloRoomCommand(userId));
 
         // then
         ArgumentCaptor<RunningRoom> captor = ArgumentCaptor.forClass(RunningRoom.class);
@@ -186,7 +187,7 @@ public class StartSoloRunningHandlerTest {
         given(existsActiveRunningPlayerPort.existsActive(new UserId(userId))).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> handler.handle(new StartSoloRunningCommand(userId)))
+        assertThatThrownBy(() -> handler.handle(new OpenSoloRoomCommand(userId)))
                 .isInstanceOf(AlreadyRunningException.class);
 
         // 중복 검사에서 걸리면 페이스 조회도 저장도 하지 않는다
@@ -202,7 +203,7 @@ public class StartSoloRunningHandlerTest {
         given(loadUserAvgPacePort.loadAvgPace(new UserId(userId))).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> handler.handle(new StartSoloRunningCommand(userId)))
+        assertThatThrownBy(() -> handler.handle(new OpenSoloRoomCommand(userId)))
                 .isInstanceOf(OnboardingNotCompletedException.class);
 
         // 아무것도 저장되지 않아야 한다 — 신청만 남으면 유저가 영영 다시 못 뛴다

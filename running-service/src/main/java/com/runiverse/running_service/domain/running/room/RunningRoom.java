@@ -31,18 +31,18 @@ public class RunningRoom {
     private final RunningRoomId runningRoomId;   // 저장 전에는 null
     private final RunningRoomType type;          // 생성 후 바뀌지 않는다
     private final LocalDateTime startAt;
-    private final LocalDateTime closeAt;         // 솔로는 null
+    private LocalDateTime closeAt;         // 방이 실제로 닫힌 시각 — 열려 있는 동안 null
     private final Distance targetDistance;       // 정해진 뒤 바뀌지 않는다
     private RunningRoomStatus status;
     private PlayerCount playerCount;
-    private Pace avgPace;
+    private Pace avgPace;       // 참가자가 없으면 null — 평균 낼 대상이 없다
     private final List<RoomSession> sessions;    // 방이 맺고 있는 관계들
 
     //
     @Builder
     private RunningRoom(Long runningRoomId, RunningRoomType type, RunningRoomStatus status,
                         LocalDateTime startAt, LocalDateTime closeAt,
-                        Integer targetDistance, int avgPace,
+                        Integer targetDistance, Integer avgPace,
                         int currentPlayerCount, int maxPlayerCount,
                         List<SessionDraft> sessions) {
         this.runningRoomId = runningRoomId == null ? null : new RunningRoomId(runningRoomId);
@@ -55,10 +55,10 @@ public class RunningRoom {
             throw new StartAtRequiredException();
         }
         this.startAt = startAt;
-        validateCloseAt(type, startAt, closeAt);
+        validateCloseAt(this.status, closeAt);
         this.closeAt = closeAt;
         this.targetDistance = targetDistance == null ? null : new Distance(targetDistance);
-        this.avgPace = new Pace(avgPace);
+        this.avgPace = avgPace == null ? null : new Pace(avgPace);
         this.playerCount = new PlayerCount(currentPlayerCount, maxPlayerCount);
         // 세션은 방을 거쳐야만 만들어진다 — 밖에서는 SessionDraft까지만 채울 수 있다
         this.sessions = new ArrayList<>();
@@ -68,7 +68,7 @@ public class RunningRoom {
     }
 
 
-    // 솔로 — 모집 단계 없이 STARTED로 태어난다
+    // 솔로 — 모집 단계 없이 확정(MATCHED)된 채로 태어난다
     public static RunningRoom openSolo(RunningPlayerId runningPlayerId, int avgPace,
                                        Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
@@ -83,13 +83,12 @@ public class RunningRoom {
         return room;
     }
 
-    // 매칭 — 항상 1인 방으로 태어나 close_at까지 모집한다
-    public static RunningRoom openMatch(RunningPlayerId runningPlayerId, int avgPace, Integer targetDistance,
-                                        LocalDateTime startAt, LocalDateTime closeAt) {
+    // 매칭 — 항상 1인 방으로 태어나 start_at - 모집마감오프셋까지 모집한다
+    public static RunningRoom openMatch(RunningPlayerId runningPlayerId, int avgPace,
+                                        Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
                 .type(RunningRoomType.MATCH)
                 .startAt(startAt)
-                .closeAt(closeAt)
                 .targetDistance(targetDistance)
                 .avgPace(avgPace)
                 .currentPlayerCount(1)
@@ -103,17 +102,21 @@ public class RunningRoom {
         this.status = status.transitionTo(RunningRoomStatus.STARTED);
     }
 
-    public void finish() {
+    // 종료 — 상태와 닫힌 시각이 한 번에 확정된다(둘이 갈라지면 조회가 거짓말을 한다)
+    public void finish(LocalDateTime closeAt) {
         this.status = status.transitionTo(RunningRoomStatus.FINISHED);
+        this.closeAt = closeAt;
     }
 
-    public void cancel() {
+    public void cancel(LocalDateTime closeAt) {
         this.status = status.transitionTo(RunningRoomStatus.CANCELLED);
+        this.closeAt = closeAt;
     }
 
     // 참가자 페이스는 다른 애그리거트라 application이 읽어 넘긴다
     public void recalculateAvgPace(List<Pace> paces) {
         if (paces.isEmpty()) {
+            this.avgPace = null;
             return;
         }
         int sum = paces.stream().mapToInt(Pace::secondsPerKm).sum();
@@ -137,10 +140,11 @@ public class RunningRoom {
     public boolean canJoin(Pace pace) {
         return status == RunningRoomStatus.MATCHING
                 && playerCount.canJoin()
+                && avgPace != null                 // 평균이 없는 방엔 붙일 기준이 없다
                 && avgPace.isCloseTo(pace);
     }
 
-    // close_at 도달 — 인원 수와 무관하게 확정된다(1인이면 1인으로 확정돼 혼자 뛴다)
+    // 모집 마감(start_at - 오프셋) 도달 — 인원 수와 무관하게 확정된다(1인이면 1인으로 확정돼 혼자 뛴다)
     public void closeMatching() {
         this.status = status.transitionTo(RunningRoomStatus.MATCHED);
     }
@@ -158,17 +162,21 @@ public class RunningRoom {
         session.rejoin();
     }
 
-    public void leave(RunningPlayerId runningPlayerId) {
+    public void leave(RunningPlayerId runningPlayerId, LocalDateTime leftAt) {
         RoomSession session = session(runningPlayerId);          // 1. 이 방 참가자인가
         if (!session.isConnected()) {
             throw new AlreadyLeftRoomException();                // 2. 이미 나갔는가 — 중복 이탈 방어
         }
         PlayerCount left = playerCount.leave();                  // 3. 계산만 한다, 아직 반영 안 함
-        RunningRoomStatus nextStatus = left.current() == 0       // 4. 상태 전이 가능 여부까지 여기서 확인한다
+        boolean lastOne = left.current() == 0;
+        RunningRoomStatus nextStatus = lastOne                   // 4. 상태 전이 가능 여부까지 여기서 확인한다
                 ? status.transitionTo(RunningRoomStatus.CANCELLED)
                 : status;
         this.playerCount = left;                                 // 5. 여기부터 확정 — 더는 예외가 나지 않는다
         this.status = nextStatus;
+        if (lastOne) {
+            this.closeAt = leftAt;
+        }
         session.leave();
     }
 
@@ -188,6 +196,10 @@ public class RunningRoom {
         return Optional.ofNullable(closeAt);
     }
 
+    public Optional<Pace> getAvgPace() {
+        return Optional.ofNullable(avgPace);
+    }
+
     public List<RoomSession> getSessions() {
         return Collections.unmodifiableList(sessions);
     }
@@ -200,15 +212,9 @@ public class RunningRoom {
         return sessions.stream().filter(s -> s.isSamePlayer(runningPlayerId)).findFirst();
     }
 
-    private static void validateCloseAt(RunningRoomType type, LocalDateTime startAt,
-                                        LocalDateTime closeAt) {
-        if (type == RunningRoomType.SOLO) {
-            if (closeAt != null) {
-                throw new InvalidCloseAtException();   // 솔로는 모집 단계가 없다
-            }
-            return;
-        }
-        if (closeAt == null || !closeAt.isBefore(startAt)) {
+    // 닫힌 시각은 종료 상태와 짝이다 — DB에서 복원할 때 어긋난 행을 여기서 잡는다
+    private static void validateCloseAt(RunningRoomStatus status, LocalDateTime closeAt) {
+        if (status.isTerminal() != (closeAt != null)) {
             throw new InvalidCloseAtException();
         }
     }

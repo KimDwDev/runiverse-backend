@@ -52,7 +52,7 @@
 | 13 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 16 | POST | `/api/v1/running-rooms` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -753,11 +753,11 @@
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 구간 (5-C·5-D) | **WebSocket** `/ws/running-rooms` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
-**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
+**솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
-### `POST /api/v1/running-rooms` — 솔로 러닝 개시
+### `POST /api/v1/running-rooms/solo` — 솔로 러닝 개시
 
-- **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다
+- **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 그래도 경로에 `/solo`를 박아 종류를 드러낸다 — 나중에 초대 방이 붙어도 `type`을 본문으로 받지 않고 경로로 가른다
 - **Request**
 
 ```json
@@ -774,12 +774,13 @@
 }
 ```
 
-- **동작**: `running_rooms` 행을 `type='SOLO'`, `status='STARTED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='RUNNING')`와 배정 세션을 함께 만든다
+- **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
+  - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로 전용 스케줄러는 두지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
-**솔로는 SSE를 사용하지 않는다.** POST 응답으로 `STARTED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다.
+**솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서이며, 보내는 메시지도 똑같다.
 
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
@@ -865,7 +866,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `closeAt`은 모집이 마감되는 시각(`running_rooms.close_at`) — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
+- `closeAt`은 모집이 마감되는 시각 — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
+  - **저장값이 아니라 서버가 `start_at - 운영 설정 오프셋`으로 계산해 내려주는 값이다.** `running_rooms.close_at`은 방이 닫힌 시각이라 이것과 다르다 — 이름이 겹치므로 주의
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
 - **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
 
@@ -886,14 +888,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 솔로 러닝(`POST /running-rooms`)은 이 제한을 받지 않는다
+- 솔로 러닝(`POST /running-rooms/solo`)은 이 제한을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
   - 대기 중(`MATCHING`) = 대기 취소(`deleted_at` 소프트 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
-  - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 `close_at` + 유예, 그리고 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 유예가 지났어도 면제다. 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
+  - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 모집 마감(`start_at - 오프셋`) + 유예, 그리고 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 유예가 지났어도 면제다. 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
   - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
 - **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고 늦은 이탈은 쿨다운으로 다룬다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
@@ -923,7 +925,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `MATCHED` | 방이 `MATCHED` — **인원 무관, 1인 확정도 여기 해당한다** |
 
 - **`FAILED` 상태는 없다** — 마감은 인원과 무관하게 항상 `MATCHED`로 끝나므로 신청이 저절로 실패하는 경로가 없다. 취소는 사용자가 직접 한 행동이라 그 즉시 `NONE`으로 돌아간다
-- `close_at`이 지났지만 스케줄러가 아직 닫지 않은 `MATCHING` 방은 `MATCHED`로 판정한다 — 확정은 마감 시각에 일어난 사실이고 스케줄러는 반영이 늦을 뿐이다
+- 모집 마감이 지났지만 스케줄러가 아직 닫지 않은 `MATCHING` 방은 `MATCHED`로 판정한다 — 확정은 마감 시각에 일어난 사실이고 스케줄러는 반영이 늦을 뿐이다
 - `room`은 `WAITING`·`MATCHED`일 때 `RoomInfo`로 채우고 `NONE`이면 null이다
 - 클라이언트는 `MATCHED`에서 `players`가 1건인 경우를 **혼자 확정된 상태**로 그린다. 이때 나가기는 페널티가 없다(5-B)
 - **인증**: 필요
@@ -946,7 +948,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED면 클라는 홈으로
   "scheduledStartAt": "2026-07-25T19:00:00",
-  "closeAt": "2026-07-25T18:45:00",  // 모집 마감 시각
+  "closeAt": "2026-07-25T18:45:00",  // 모집 마감 시각 — start_at - 오프셋 계산값
   "targetDistanceMeters": 5000,
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
@@ -973,7 +975,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
-- **발화 시점은 모집 마감(`close_at`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
+- **발화 시점은 모집 마감(`start_at - 오프셋`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
 
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
@@ -983,7 +985,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 확정된 방에서 나가기도 **`DELETE /users/me/running-match`** 사용 (5-A 참고 — 서버가 방 상태로 분기)
 - 나간 사람만 `MATCHED_LEFT_*` 처리, 방은 유지되고 그대로 러닝을 진행한다
-- **확정 후 이탈에는 페널티가 붙는다** — `close_at` + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다(`409 MATCH_COOLDOWN`). 쿨다운 만료는 `deleted_at`으로 잰다(`feature-spec.md` 페널티 절)
+- **확정 후 이탈에는 페널티가 붙는다** — 모집 마감(`start_at - 오프셋`) + 유예 이후에 나가면 일정 시간 매칭 신청이 제한된다(`409 MATCH_COOLDOWN`). 쿨다운 만료는 `deleted_at`으로 잰다(`feature-spec.md` 페널티 절)
 - **혼자 남은 방은 예외다** — 이탈 시점 `current_player_count`가 `1`이면 면제(`MATCHED_LEFT_NO_PENALTY`)다. 1인으로 확정된 방과 이탈로 혼자 남은 방 모두 해당하며, 나가면 활성 신청이 끝나 곧바로 재신청할 수 있다
 
 #### 대기방 참가자 목록 — 별도 조회 없음
@@ -1014,19 +1016,21 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "type": "...",
+  "event": "...",
   "data": { ... }
 }
 ```
 
+- 봉투 키는 `event`다. 아래 각 메시지 절이 보여주는 JSON은 이 봉투의 `data`에 들어가는 부분이다
+
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
-  - ack의 `data`는 비움
+  - ack의 `data`는 비운다. **예외는 `RUNNING_STARTED`** — 진입·재연결 화면 복구에 쓰는 스냅샷을 싣는다(5-C)
 - **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
 
 ```json
 {
-  "type": "ERROR",
+  "event": "ERROR",
   "data": {
     "code": "ROOM_NOT_FOUND",
     "message": "러닝 정보를 찾을 수 없습니다.",
@@ -1035,9 +1039,21 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **code**: `INVALID_REQUEST`(요청 검증 실패) / `ROOM_NOT_FOUND`(방 없음) / `NOT_ROOM_PLAYER`(참가자 아님) / `INVALID_ROOM_STATE`(현재 상태에서 불가한 요청)
+- **code** — 봉투 단계와 처리 단계로 나뉜다. 앞의 셋은 `data`를 읽기도 전에 나가므로 `sourceType`이 null일 수 있다
 
-#### `RUNNING_START` (C→S) — 참가자 러닝 시작 알림
+  | code | 언제 |
+  |---|---|
+  | `MALFORMED_MESSAGE` | 봉투 JSON을 파싱하지 못함 |
+  | `MISSING_MESSAGE_TYPE` | `event`가 비어 있음 |
+  | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
+  | `INVALID_REQUEST` | `data` 검증 실패 |
+  | `ROOM_NOT_FOUND` | 방 없음 |
+  | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
+  | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
+
+- **`ERROR`로는 연결을 끊지 않는다.** 잘못된 메시지 하나 때문에 러닝 전체가 끊기면 안 되므로, 오류를 돌려주고 연결은 유지한다
+
+#### `RUNNING_START` (C→S) — 러닝 준비 일괄 처리
 
 ```json
 {
@@ -1045,9 +1061,24 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 매칭은 `MATCH_ROOM_UPDATED.status='STARTED'`를 받은 뒤 발신한다. 솔로 방은 생성 시 이미 `STARTED`이므로 WS 연결 뒤 바로 발신한다. 방 상태 전환의 트리거가 아니며, `STARTED` 전 요청은 `INVALID_ROOM_STATE`로 거부한다
-- **ack**: `RUNNING_STARTED`
-- 중복 `RUNNING_START`에는 상태를 다시 바꾸지 않고 `RUNNING_STARTED`를 재전송한다
+- **WS 연결 후 클라가 보내는 첫 메시지다.** 채널 등록·재입장·방 시작·참가자 시작을 이 하나가 다 한다 — 클라는 최초 진입인지 재연결인지 재입장인지 구분하지 않고 언제나 같은 메시지를 보낸다
+- `runningRoomId`는 이미 손에 있다 — 솔로는 `POST /running-rooms/solo`의 201 응답, 매칭은 SSE `RoomInfo`에서 받는다
+- **서버 처리 순서**
+
+  | | 하는 일 | 이미 그 상태면 |
+  |---|---|---|
+  | 1 | 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` |
+  | 2 | 배정 세션이 끊겨 있으면 되살린다(`is_connected=true`, 인원 복구) | 통과 |
+  | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
+  | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
+  | 5 | WS 세션을 방에 등록한다(브로드캐스트 대상) | 덮어쓴다 |
+  | 6 | ack 전송 | — |
+
+- **3번에 `type` 분기가 없다.** 매칭은 `start_at`에 스케줄러가 이미 올려놨으니 통과하고, 솔로는 `start_at`이 개시 시각(과거)이라 여기서 올라간다. 같은 코드가 두 종류를 다 덮는다
+- **전 단계가 멱등하다.** 중복 `RUNNING_START`는 아무 상태도 다시 바꾸지 않고 ack만 재전송한다
+- **거부**: `start_at`이 아직 안 됐으면 `INVALID_ROOM_STATE`(매칭에서 미리 쏘는 것 차단). 방이 `FINISHED`·`CANCELLED`여도 같은 코드
+- **ack**: `RUNNING_STARTED` — **`data`에 방 상태·참가자 스냅샷을 싣는다**(ack 규칙의 예외). 재연결마다 REST를 다시 때리지 않고 이 응답만으로 화면을 복구하기 위해서다
+  - **[미정]** 스냅샷 payload 형태. `RoomInfo`를 재사용할지 별도로 둘지 정하지 않았다
 
 ### 5-D. 러닝 중
 

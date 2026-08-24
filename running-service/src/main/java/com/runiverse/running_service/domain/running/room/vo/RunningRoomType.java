@@ -10,7 +10,7 @@ public enum RunningRoomType {
     MATCH, // 매칭 러닝
     INVITE; // 초대 러닝
 
-    // 솔로는 모집 단계가 없어 STARTED로 태어난다 - 방 생성이 이 규칙을 여기서만 읽는다
+    // 문자열 → 종류. 클라이언트 오타가 조용히 다른 종류로 저장되지 않게 막는다
     public static RunningRoomType from(String value) {
         if (value == null) {
             throw new RunningRoomTypeRequiredException();
@@ -26,12 +26,13 @@ public enum RunningRoomType {
         }
     }
 
-    // 솔로는 모집 단계가 없어 STARTED로 태어난다 — 방 생성이 이 규칙을 여기서만 읽는다
+    // 솔로는 모집 단계가 없어 확정(MATCHED)된 채로 태어난다 —
+    // 태어나는 지점만 다르고 채널 입장 이후 흐름은 매칭과 같은 길을 탄다
     public RunningRoomStatus initialStatus() {
-        return this == SOLO ? RunningRoomStatus.STARTED : RunningRoomStatus.MATCHING;
+        return this == SOLO ? RunningRoomStatus.MATCHED : RunningRoomStatus.MATCHING;
     }
 
-    // 모집 마감(close_at)·후보 스캔 대상인지
+    // 모집 마감(start_at - 오프셋)·후보 스캔 대상인지
     public boolean isMatchable() {
         return this == MATCH;
     }

@@ -1,7 +1,7 @@
 package com.runiverse.running_service.application.running.command.solo;
 
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.in.StartSoloRunningUsecase;
+import com.runiverse.running_service.application.running.port.in.OpenSoloRoomUsecase;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class StartSoloRunningHandler implements StartSoloRunningUsecase {
+public class OpenSoloRoomHandler implements OpenSoloRoomUsecase {
 
     private final ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
     private final LoadUserAvgPacePort loadUserAvgPacePort;
@@ -29,7 +29,7 @@ public class StartSoloRunningHandler implements StartSoloRunningUsecase {
     private final CreateRunningRoomPort createRunningRoomPort;
 
     @Override
-    public StartSoloRunningResult handle(StartSoloRunningCommand command) {
+    public OpenSoloRoomResult handle(OpenSoloRoomCommand command) {
         UserId userId = new UserId(command.userId());
         // 1. "한 플레이어 = 최대 한 방"은 DB가 강제하지 않는다 — 앱이 막는다
         if (existsActiveRunningPlayerPort.existsActive(userId)) {
@@ -44,12 +44,13 @@ public class StartSoloRunningHandler implements StartSoloRunningUsecase {
         RunningPlayer player = createRunningPlayerPort.create(
                 RunningPlayer.requestSolo(command.userId(), avgPace.secondsPerKm(), startAt));
         RunningPlayerId playerId = player.getRunningPlayerId().orElseThrow();
-        // 4. 방은 모집 없이 STARTED로 태어나고 세션 링크도 openSolo가 같이 만든다.
+        // 4. 방은 모집 없이 MATCHED로 태어나고 세션 링크도 openSolo가 같이 만든다.
+        //    STARTED·RUNNING 전이는 이 API가 만들지 않는다 — 채널 입장 이후 구간이다.
         //    방의 target_distance는 nullable이라 목표 없는 솔로는 null이 정본이다
         //    (player 쪽은 NOT NULL이라 Distance.unlimited()가 들어간다)
         RunningRoom room = createRunningRoomPort.create(
                 RunningRoom.openSolo(playerId, avgPace.secondsPerKm(), null, startAt));
-        return new StartSoloRunningResult(
+        return new OpenSoloRoomResult(
                 room.getRunningRoomId().orElseThrow().value(), startAt);
     }
 }

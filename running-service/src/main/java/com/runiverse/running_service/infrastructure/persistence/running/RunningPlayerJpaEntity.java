@@ -85,4 +85,12 @@ public class RunningPlayerJpaEntity extends BaseTimeEntity {
         return new RunningPlayerJpaEntity(userId, status, avgPace, targetDistance,
                 desiredPlayerCount, startAt);
     }
+
+    public void changeStatus(RunningPlayerStatus status) {
+        this.status = status;
+    }
+
+    public void changeDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }
