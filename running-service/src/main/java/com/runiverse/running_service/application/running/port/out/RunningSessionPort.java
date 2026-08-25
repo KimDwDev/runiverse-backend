@@ -9,7 +9,7 @@ public interface RunningSessionPort {
     // 등록하고, 밀려난 이전 연결은 돌려준다.
     Optional<RunningConnection> register(UserId userId, RunningConnection connection);
 
-    void remove(UserId userId, RunningConnection connection);
+    boolean remove(UserId userId, RunningConnection connection);
 
     // 인스턴스가 들고 있는 그 유저의 연결 - 다른 서버에 있으면 비어있다.
     Optional<RunningConnection> find(UserId userId);

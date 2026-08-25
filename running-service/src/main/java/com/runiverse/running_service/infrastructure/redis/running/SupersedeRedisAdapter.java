@@ -16,10 +16,10 @@ public class SupersedeRedisAdapter implements PublishSupersedePort {
     private final JsonMapper jsonMapper;
 
     @Override
-    public void publish(UUID userId, String winnerSessionId) {
+    public void publish(UUID userId, Long runningRoomId, String winnerSessionId) {
+        RunningRoomMessage envelope = new RunningRoomMessage(
+                RunningRoomMessageType.SUPERSEDE, new SupersedeMessage(userId, winnerSessionId));
         redisTemplate.convertAndSend(
-                RunningChannel.SUPERSEDE,
-                jsonMapper.writeValueAsString(new SupersedeMessage(userId, winnerSessionId))
-        );
+                RunningChannel.room(runningRoomId), jsonMapper.writeValueAsString(envelope));
     }
 }

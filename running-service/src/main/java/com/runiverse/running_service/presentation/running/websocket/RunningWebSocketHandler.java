@@ -101,8 +101,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
-        registerRunningSessionUsecase.handle(
-                new RegisterRunningSessionCommand(userId.value(), new WebSocketRunningConnection(session)));
+        registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
+                userId.value(), request.runningRoomId(), new WebSocketRunningConnection(session)));
         send(session, RunningMessageType.RUNNING_STARTED.message());
     }
 

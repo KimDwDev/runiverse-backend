@@ -4,6 +4,6 @@ import com.runiverse.running_service.application.running.port.out.RunningConnect
 
 import java.util.UUID;
 
-public record RegisterRunningSessionCommand(UUID userId, RunningConnection connection) {
+public record RegisterRunningSessionCommand(UUID userId, Long runningRoomId, RunningConnection connection) {
 
 }

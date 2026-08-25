@@ -13,20 +13,30 @@ import tools.jackson.databind.json.JsonMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SupersedeListener implements MessageListener {
+public class RunningRoomListener implements MessageListener {
 
     private final JsonMapper jsonMapper;
     private final CloseSupersededSessionUsecase closeSupersededSessionUsecase;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        SupersedeMessage payload;
+        RunningRoomMessage envelope;
         try {
-            payload = jsonMapper.readValue(message.getBody(), SupersedeMessage.class);
+            envelope = jsonMapper.readValue(message.getBody(), RunningRoomMessage.class);
         } catch (JacksonException e) {
-            log.warn("밀어내기 메시지 파싱 실패");
+            // 깨진 메시지 한 건 때문에 이후 수신이 막히면 안 된다
+            log.warn("방 채널 메시지 파싱 실패");
             return;
         }
+        switch (envelope.type()) {
+            case SUPERSEDE -> handleSupersede(envelope.data());
+            // D단계에서 채운다
+            case PROGRESS -> log.debug("진행 상황 수신");
+        }
+    }
+
+    private void handleSupersede(Object data) {
+        SupersedeMessage payload = jsonMapper.convertValue(data, SupersedeMessage.class);
         closeSupersededSessionUsecase.handle(
                 new CloseSupersededSessionCommand(payload.userId(), payload.winnerSessionId()));
     }
