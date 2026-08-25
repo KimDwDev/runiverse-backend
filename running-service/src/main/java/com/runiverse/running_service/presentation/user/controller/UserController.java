@@ -22,10 +22,13 @@ import com.runiverse.running_service.application.user.port.in.CreateProfileImage
 import com.runiverse.running_service.application.user.port.in.DeleteProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.in.GetProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.in.GetMyBasicInfoUsecase;
+import com.runiverse.running_service.application.user.port.in.GetMyProfileUsecase;
 import com.runiverse.running_service.application.user.query.nickname.CheckNicknameAvailabilityQuery;
 import com.runiverse.running_service.application.user.query.nickname.CheckNicknameAvailabilityResult;
 import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoQuery;
 import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoResult;
+import com.runiverse.running_service.application.user.query.profile.GetMyProfileQuery;
+import com.runiverse.running_service.application.user.query.profile.GetMyProfileResult;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlResult;
 import com.runiverse.running_service.presentation.user.request.NicknameAvailabilityRequest;
@@ -42,6 +45,7 @@ import com.runiverse.running_service.presentation.user.response.ProfileImageUpda
 import com.runiverse.running_service.presentation.user.response.ProfileImageUploadUrlResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileImageUrlResponse;
 import com.runiverse.running_service.presentation.user.response.MyBasicInfoResponse;
+import com.runiverse.running_service.presentation.user.response.MyProfileResponse;
 import com.runiverse.running_service.presentation.user.response.ProfileUpdateResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +71,7 @@ public class UserController {
 
     private final CompleteOnboardingUsecase completeOnboardingUsecase;
     private final GetMyBasicInfoUsecase getMyBasicInfoUsecase;
+    private final GetMyProfileUsecase getMyProfileUsecase;
     private final ChangeMyProfileUsecase changeMyProfileUsecase;
     private final CreateProfileImageUploadUrlUsecase createProfileImageUploadUrlUsecase;
     private final ChangeProfileImageUsecase changeProfileImageUsecase;
@@ -101,6 +106,19 @@ public class UserController {
         GetMyBasicInfoResult result = getMyBasicInfoUsecase.handle(new GetMyBasicInfoQuery(userId));
         return ResponseEntity.ok(
                 new MyBasicInfoResponse(result.userId(), result.nickname(), result.isOnboarded()));
+    }
+
+    @GetMapping("/me/profile")
+    public ResponseEntity<MyProfileResponse> getMyProfile(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        GetMyProfileResult result = getMyProfileUsecase.handle(new GetMyProfileQuery(userId));
+        return ResponseEntity.ok(new MyProfileResponse(
+                result.introduction(),
+                result.gender(),
+                result.birthday(),
+                result.weightKg(),
+                result.heightCm()
+        ));
     }
 
     @PatchMapping("/me/profile")
