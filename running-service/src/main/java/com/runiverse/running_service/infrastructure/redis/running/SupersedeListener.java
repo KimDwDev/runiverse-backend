@@ -1,5 +1,7 @@
 package com.runiverse.running_service.infrastructure.redis.running;
 
+import com.runiverse.running_service.application.running.command.session.CloseSupersededSessionCommand;
+import com.runiverse.running_service.application.running.port.in.CloseSupersededSessionUsecase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
@@ -14,6 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class SupersedeListener implements MessageListener {
 
     private final JsonMapper jsonMapper;
+    private final CloseSupersededSessionUsecase closeSupersededSessionUsecase;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -24,6 +27,7 @@ public class SupersedeListener implements MessageListener {
             log.warn("밀어내기 메시지 파싱 실패");
             return;
         }
-        log.info("밀어내기 수신 - userId={}, winner={}", payload.userId(), payload.winnerSessionId());
+        closeSupersededSessionUsecase.handle(
+                new CloseSupersededSessionCommand(payload.userId(), payload.winnerSessionId()));
     }
 }
