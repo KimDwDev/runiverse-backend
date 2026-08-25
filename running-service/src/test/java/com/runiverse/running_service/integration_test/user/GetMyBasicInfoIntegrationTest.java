@@ -8,9 +8,9 @@ import com.runiverse.running_service.application.user.command.nickname.ChangeNic
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.application.user.query.profile.GetProfileHandler;
-import com.runiverse.running_service.application.user.query.profile.GetProfileQuery;
-import com.runiverse.running_service.application.user.query.profile.GetProfileResult;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoHandler;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoQuery;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoResult;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("내 기본 정보 조회 통합 테스트")
-public class GetProfileIntegrationTest extends IntegrationTestSupport {
+public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
 
     private static final String EMAIL = "runner@runiverse.com";
     private static final String OTHER_EMAIL = "other@runiverse.com";
@@ -35,7 +35,7 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
     private ChangeNicknameHandler changeNicknameHandler;
-    private GetProfileHandler getProfileHandler;
+    private GetMyBasicInfoHandler getMyBasicInfoHandler;
 
     @BeforeEach
     void setUp() {
@@ -51,7 +51,7 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,  // CheckNicknameDuplicatePort
                 onboardingStore   // UpdateNicknamePort
         );
-        getProfileHandler = new GetProfileHandler(
+        getMyBasicInfoHandler = new GetMyBasicInfoHandler(
                 userStore,       // LoadUserByIdPort
                 onboardingStore  // LoadNicknamePort
         );
@@ -67,8 +67,8 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
                 330, new BigDecimal("70.5"), new BigDecimal("175.0")));
     }
 
-    private GetProfileResult profileOf(UUID userId) {
-        return getProfileHandler.handle(new GetProfileQuery(userId));
+    private GetMyBasicInfoResult basicInfoOf(UUID userId) {
+        return getMyBasicInfoHandler.handle(new GetMyBasicInfoQuery(userId));
     }
 
     @Test
@@ -78,7 +78,7 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
         UUID userId = signUp(EMAIL);
 
         // when
-        GetProfileResult result = profileOf(userId);
+        GetMyBasicInfoResult result = basicInfoOf(userId);
 
         // then -> 앱은 이 값을 보고 홈이 아니라 온보딩 화면으로 보낸다
         assertThat(result.userId()).isEqualTo(userId);
@@ -91,13 +91,13 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
     void reportsOnboardedAfterOnboarding() {
         // given
         UUID userId = signUp(EMAIL);
-        assertThat(profileOf(userId).isOnboarded()).isFalse();
+        assertThat(basicInfoOf(userId).isOnboarded()).isFalse();
 
         // when
         completeOnboarding(userId, NICKNAME);
 
         // then -> 온보딩 완료 판정의 유일한 경로가 이 API다
-        GetProfileResult result = profileOf(userId);
+        GetMyBasicInfoResult result = basicInfoOf(userId);
         assertThat(result.isOnboarded()).isTrue();
         assertThat(result.nickname()).isEqualTo(NICKNAME);
     }
@@ -113,7 +113,7 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
         changeNicknameHandler.handle(new ChangeNicknameCommand(userId, NEW_NICKNAME));
 
         // then -> 온보딩 시점 스냅샷이 아니라 현재 닉네임을 읽어야 한다
-        assertThat(profileOf(userId).nickname()).isEqualTo(NEW_NICKNAME);
+        assertThat(basicInfoOf(userId).nickname()).isEqualTo(NEW_NICKNAME);
     }
 
     @Test
@@ -125,15 +125,15 @@ public class GetProfileIntegrationTest extends IntegrationTestSupport {
         completeOnboarding(otherUserId, NICKNAME);
 
         // when & then
-        assertThat(profileOf(userId).isOnboarded()).isFalse();
-        assertThat(profileOf(otherUserId).isOnboarded()).isTrue();
+        assertThat(basicInfoOf(userId).isOnboarded()).isFalse();
+        assertThat(basicInfoOf(otherUserId).isOnboarded()).isTrue();
     }
 
     @Test
     @DisplayName("가입한 적 없는 사용자는 조회할 수 없다")
     void throwsForUnknownUser() {
         // when & then -> 토큰은 유효하지만 계정이 없는 경우다
-        assertThatThrownBy(() -> profileOf(UuidCreator.getTimeOrderedEpoch()))
+        assertThatThrownBy(() -> basicInfoOf(UuidCreator.getTimeOrderedEpoch()))
                 .isInstanceOf(UserNotFoundException.class);
     }
 }

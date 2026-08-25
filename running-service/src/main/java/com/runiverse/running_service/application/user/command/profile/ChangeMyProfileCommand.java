@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 // 부분 수정 — null인 필드는 그대로 둔다. 소개글만 빈 문자열로 지울 수 있다
-public record ChangeProfileCommand(
+public record ChangeMyProfileCommand(
         UUID userId,
         String introduction,
         String gender,

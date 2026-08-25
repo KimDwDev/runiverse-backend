@@ -5,13 +5,13 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileCommand;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileHandler;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileResult;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileCommand;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileHandler;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileResult;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.application.user.query.profile.GetProfileHandler;
-import com.runiverse.running_service.application.user.query.profile.GetProfileQuery;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoHandler;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoQuery;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("프로필 수정 통합 테스트")
-public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
+public class ChangeMyProfileIntegrationTest extends IntegrationTestSupport {
 
     private static final String EMAIL = "runner@runiverse.com";
     private static final String OTHER_EMAIL = "other@runiverse.com";
@@ -41,8 +41,8 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
-    private ChangeProfileHandler changeProfileHandler;
-    private GetProfileHandler getProfileHandler;
+    private ChangeMyProfileHandler changeMyProfileHandler;
+    private GetMyBasicInfoHandler getMyBasicInfoHandler;
 
     @BeforeEach
     void setUp() {
@@ -53,13 +53,13 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,  // CheckNicknameDuplicatePort
                 onboardingStore   // SaveOnboardingPort
         );
-        changeProfileHandler = new ChangeProfileHandler(
+        changeMyProfileHandler = new ChangeMyProfileHandler(
                 userStore,        // LoadUserByIdPort
                 userStore,        // UpdateIntroductionPort
                 onboardingStore,  // LoadOnboardingPort
                 onboardingStore   // UpdateOnboardingPort
         );
-        getProfileHandler = new GetProfileHandler(
+        getMyBasicInfoHandler = new GetMyBasicInfoHandler(
                 userStore,       // LoadUserByIdPort
                 onboardingStore  // LoadNicknamePort
         );
@@ -76,9 +76,9 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         return userId;
     }
 
-    private ChangeProfileResult changeIntroduction(UUID userId, String introduction) {
-        return changeProfileHandler.handle(
-                new ChangeProfileCommand(userId, introduction, null, null, null, null));
+    private ChangeMyProfileResult changeIntroduction(UUID userId, String introduction) {
+        return changeMyProfileHandler.handle(
+                new ChangeMyProfileCommand(userId, introduction, null, null, null, null));
     }
 
     @Test
@@ -88,7 +88,7 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         UUID userId = onboardedUser(EMAIL, NICKNAME);
 
         // when
-        ChangeProfileResult result = changeIntroduction(userId, INTRODUCTION);
+        ChangeMyProfileResult result = changeIntroduction(userId, INTRODUCTION);
 
         // then
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
@@ -119,11 +119,11 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         UUID userId = signUp(EMAIL);
 
         // when
-        ChangeProfileResult result = changeIntroduction(userId, INTRODUCTION);
+        ChangeMyProfileResult result = changeIntroduction(userId, INTRODUCTION);
 
         // then
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
-        assertThat(getProfileHandler.handle(new GetProfileQuery(userId)).isOnboarded()).isFalse();
+        assertThat(getMyBasicInfoHandler.handle(new GetMyBasicInfoQuery(userId)).isOnboarded()).isFalse();
     }
 
     @Test
@@ -134,8 +134,8 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         BigDecimal newWeight = new BigDecimal("68.0");
 
         // when
-        changeProfileHandler.handle(
-                new ChangeProfileCommand(userId, null, null, null, newWeight, null));
+        changeMyProfileHandler.handle(
+                new ChangeMyProfileCommand(userId, null, null, null, newWeight, null));
 
         // then -> 닉네임과 평균 페이스는 이 API가 다루지 않는다
         assertThat(onboardingStore.findByUserId(userId)).hasValueSatisfying(onboarding -> {
@@ -155,7 +155,7 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         LocalDate newBirthday = LocalDate.of(1998, 12, 16);
 
         // when
-        ChangeProfileResult result = changeProfileHandler.handle(new ChangeProfileCommand(
+        ChangeMyProfileResult result = changeMyProfileHandler.handle(new ChangeMyProfileCommand(
                 userId, CHANGED_INTRODUCTION, "FEMALE", newBirthday, null, null));
 
         // then -> users와 user_onboardings를 한 트랜잭션으로 바꾼다
@@ -173,7 +173,7 @@ public class ChangeProfileIntegrationTest extends IntegrationTestSupport {
         UUID userId = signUp(EMAIL);
 
         // when & then
-        assertThatThrownBy(() -> changeProfileHandler.handle(new ChangeProfileCommand(
+        assertThatThrownBy(() -> changeMyProfileHandler.handle(new ChangeMyProfileCommand(
                 userId, INTRODUCTION, null, null, WEIGHT, null)))
                 .isInstanceOf(OnboardingNotCompletedException.class);
         assertThat(userStore.findById(userId))

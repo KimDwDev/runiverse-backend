@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.user.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileCommand;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileHandler;
-import com.runiverse.running_service.application.user.command.profile.ChangeProfileResult;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileCommand;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileHandler;
+import com.runiverse.running_service.application.user.command.profile.ChangeMyProfileResult;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("프로필 수정 단위 테스트")
-public class ChangeProfileHandlerTest {
+public class ChangeMyProfileHandlerTest {
 
     // PasswordHash VO가 Argon2id 형식만 허용하므로 형식에 맞는 값을 쓴다
     private static final String PASSWORD_HASH =
@@ -61,7 +61,7 @@ public class ChangeProfileHandlerTest {
     private UpdateOnboardingPort updateOnboardingPort;
 
     @InjectMocks
-    private ChangeProfileHandler handler;
+    private ChangeMyProfileHandler handler;
 
     private static User userOf(UUID userId) {
         return new User(userId, "runner@runiverse.com", PASSWORD_HASH, true,
@@ -84,8 +84,8 @@ public class ChangeProfileHandlerTest {
         givenUser(userId);
 
         // when
-        ChangeProfileResult result = handler.handle(
-                new ChangeProfileCommand(userId, INTRODUCTION, null, null, null, null));
+        ChangeMyProfileResult result = handler.handle(
+                new ChangeMyProfileCommand(userId, INTRODUCTION, null, null, null, null));
 
         // then -> 소개글은 users에 있어 온보딩 완료 여부를 볼 필요가 없다
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
@@ -103,8 +103,8 @@ public class ChangeProfileHandlerTest {
         givenUser(userId);
 
         // when
-        ChangeProfileResult result = handler.handle(
-                new ChangeProfileCommand(userId, "", null, null, null, null));
+        ChangeMyProfileResult result = handler.handle(
+                new ChangeMyProfileCommand(userId, "", null, null, null, null));
 
         // then -> 지우는 것도 값을 바꾸는 것이라 갱신이 일어나야 한다
         assertThat(result.introduction()).isEmpty();
@@ -121,7 +121,7 @@ public class ChangeProfileHandlerTest {
         BigDecimal newWeight = new BigDecimal("68.0");
 
         // when
-        handler.handle(new ChangeProfileCommand(userId, null, null, null, newWeight, null));
+        handler.handle(new ChangeMyProfileCommand(userId, null, null, null, newWeight, null));
 
         // then -> 안 보낸 자리를 null로 넘겨야 어댑터가 해당 컬럼을 건드리지 않는다
         verify(updateOnboardingPort).updateOnboarding(
@@ -137,7 +137,7 @@ public class ChangeProfileHandlerTest {
         givenOnboarded(userId);
 
         // when
-        handler.handle(new ChangeProfileCommand(userId, null, "male", BIRTHDAY, WEIGHT, HEIGHT));
+        handler.handle(new ChangeMyProfileCommand(userId, null, "male", BIRTHDAY, WEIGHT, HEIGHT));
 
         // then -> 성별은 대소문자를 가리지 않고 VO가 정규화한다
         verify(updateOnboardingPort).updateOnboarding(
@@ -155,8 +155,8 @@ public class ChangeProfileHandlerTest {
         BigDecimal newWeight = new BigDecimal("68.0");
 
         // when
-        ChangeProfileResult result = handler.handle(
-                new ChangeProfileCommand(userId, null, null, null, newWeight, null));
+        ChangeMyProfileResult result = handler.handle(
+                new ChangeMyProfileCommand(userId, null, null, null, newWeight, null));
 
         // then
         assertThat(result.weightKg()).isEqualByComparingTo(newWeight);
@@ -174,7 +174,7 @@ public class ChangeProfileHandlerTest {
         givenUser(userId);
 
         // when & then -> VO를 먼저 다 만들어야 절반만 저장되지 않는다
-        assertThatThrownBy(() -> handler.handle(new ChangeProfileCommand(
+        assertThatThrownBy(() -> handler.handle(new ChangeMyProfileCommand(
                 userId, INTRODUCTION, null, null, new BigDecimal("500.0"), null)))
                 .isInstanceOf(RuntimeException.class);
         verifyNoInteractions(updateIntroductionPort, updateOnboardingPort);
@@ -190,7 +190,7 @@ public class ChangeProfileHandlerTest {
 
         // when & then
         assertThatThrownBy(() -> handler.handle(
-                new ChangeProfileCommand(userId, INTRODUCTION, null, null, WEIGHT, null)))
+                new ChangeMyProfileCommand(userId, INTRODUCTION, null, null, WEIGHT, null)))
                 .isInstanceOf(OnboardingNotCompletedException.class);
         verifyNoInteractions(updateIntroductionPort, updateOnboardingPort);
     }
@@ -203,8 +203,8 @@ public class ChangeProfileHandlerTest {
         givenUser(userId);
 
         // when
-        ChangeProfileResult result = handler.handle(
-                new ChangeProfileCommand(userId, INTRODUCTION, null, null, null, null));
+        ChangeMyProfileResult result = handler.handle(
+                new ChangeMyProfileCommand(userId, INTRODUCTION, null, null, null, null));
 
         // then -> 소개글은 users에 있어 온보딩과 무관하다
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
@@ -220,7 +220,7 @@ public class ChangeProfileHandlerTest {
 
         // when & then
         assertThatThrownBy(() -> handler.handle(
-                new ChangeProfileCommand(unknownUserId, INTRODUCTION, null, null, null, null)))
+                new ChangeMyProfileCommand(unknownUserId, INTRODUCTION, null, null, null, null)))
                 .isInstanceOf(UserNotFoundException.class);
         verifyNoInteractions(updateIntroductionPort, existsOnboardingPort, updateOnboardingPort);
     }
