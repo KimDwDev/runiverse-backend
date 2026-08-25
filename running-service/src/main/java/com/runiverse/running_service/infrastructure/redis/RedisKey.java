@@ -1,7 +1,8 @@
 package com.runiverse.running_service.infrastructure.redis;
 
 public enum RedisKey {
-    USER("user");
+    USER("user"),
+    RUNNING_TRACK("running:track");
 
     private static final String DELIMITER = ":";
     private final String prefix;
