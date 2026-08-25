@@ -10,6 +10,7 @@ public enum RunningMessageType {
     // C -> S
     HEALTH_CHECK,
     RUNNING_START,
+    RUNNING_LOCATION_UPDATE,
 
     // S -> C
     HEALTH_CHECKED,

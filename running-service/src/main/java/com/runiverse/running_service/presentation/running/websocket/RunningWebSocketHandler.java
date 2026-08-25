@@ -2,16 +2,20 @@ package com.runiverse.running_service.presentation.running.websocket;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.port.in.RegisterRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.RemoveRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
+import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
+import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
 import com.runiverse.running_service.presentation.running.websocket.message.ErrorPayload;
+import com.runiverse.running_service.presentation.running.websocket.message.RunningLocationUpdateRequest;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningStartRequest;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningWebSocketErrorCode;
@@ -26,6 +30,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -36,6 +41,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final StartRunningUsecase startRunningUsecase;
     private final RegisterRunningSessionUsecase registerRunningSessionUsecase;
     private final RemoveRunningSessionUsecase removeRunningSessionUsecase;
+    private final UpdateRunningLocationUsecase updateRunningLocationUsecase;
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override
@@ -71,6 +77,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         switch (type) {
             case HEALTH_CHECK -> send(session, RunningMessageType.HEALTH_CHECKED.message());
             case RUNNING_START -> handleRunningStart(session, envelope);
+            case RUNNING_LOCATION_UPDATE -> handleLocationUpdate(session, envelope);
             // HEALTH_CHECKED·RUNNING_STARTED·ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
             default -> sendError(session, RunningWebSocketErrorCode.UNSUPPORTED_MESSAGE_TYPE, event);
         }
@@ -104,6 +111,45 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
                 userId.value(), request.runningRoomId(), new WebSocketRunningConnection(session)));
         send(session, RunningMessageType.RUNNING_STARTED.message());
+    }
+
+    // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다(api-spec 5-D)
+    private void handleLocationUpdate(WebSocketSession session, WebSocketEnvelope envelope)
+            throws IOException {
+        RunningLocationUpdateRequest request;
+        try {
+            request = jsonMapper.convertValue(envelope.data(), RunningLocationUpdateRequest.class);
+        } catch (JacksonException | IllegalArgumentException e) {
+            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+            return;
+        }
+        if (request == null || !request.isValid()) {
+            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+            return;
+        }
+        try {
+            updateRunningLocationUsecase.handle(new UpdateRunningLocationCommand(
+                    userId(session).value(), request.runningRoomId(), toTrackPoints(request)));
+        } catch (BusinessException e) {
+            // 유스케이스가 튕겨낸 것만 코드로 내보낸다
+            sendError(session, e.getErrorCode(), envelope.event());
+        }
+    }
+
+    private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
+        return request.locations().stream()
+                .map(location -> new TrackPoint(
+                        location.sequence(),
+                        location.latitude(),
+                        location.longitude(),
+                        location.altitudeMeters(),
+                        location.accuracyMeters(),
+                        location.speedMetersPerSecond(),
+                        location.headingDegrees(),
+                        location.cadenceSpm(),
+                        location.currentPaceSecondsPerKm(),
+                        location.recordedAt()))
+                .toList();
     }
 
     private void sendError(

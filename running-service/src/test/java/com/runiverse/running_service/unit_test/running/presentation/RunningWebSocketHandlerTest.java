@@ -1,12 +1,14 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
+import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
 import com.runiverse.running_service.application.running.port.out.RunningSessionPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -70,6 +72,10 @@ class RunningWebSocketHandlerTest {
     @Mock
     private RunningRoomMembershipPort runningRoomMembershipPort;
 
+    // 좌표 적재도 Redis로 나가는 일이라 가짜로 둔다
+    @Mock
+    private AppendRunningTrackPort appendRunningTrackPort;
+
     private RunningWebSocketHandler handler;
 
     @BeforeEach
@@ -81,7 +87,8 @@ class RunningWebSocketHandlerTest {
                 jsonMapper,
                 startRunningUsecase,
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
-                new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort));
+                new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
+                new UpdateRunningLocationHandler(appendRunningTrackPort));
         given(session.getId()).willReturn("session-1");
         given(session.getAttributes()).willReturn(authenticated());
         given(other.getId()).willReturn("session-2");
