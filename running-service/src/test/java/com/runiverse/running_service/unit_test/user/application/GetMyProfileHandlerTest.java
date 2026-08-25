@@ -118,8 +118,8 @@ public class GetMyProfileHandlerTest {
         // when
         GetMyProfileResult result = handler.handle(new GetMyProfileQuery(userId));
 
-        // then -> 소개글은 null이 아니라 빈 문자열로 나간다
-        assertThat(result.introduction()).isEmpty();
+        // then -> 조회 응답의 "값 없음"은 다른 필드와 같이 null이다
+        assertThat(result.introduction()).isNull();
     }
 
     @Test

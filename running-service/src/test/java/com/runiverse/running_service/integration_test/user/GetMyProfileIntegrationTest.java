@@ -88,7 +88,7 @@ public class GetMyProfileIntegrationTest extends IntegrationTestSupport {
         GetMyProfileResult result = profileOf(userId);
 
         // then -> 온보딩 전에도 편집 화면이 열리므로 막지 않는다
-        assertThat(result.introduction()).isEmpty();
+        assertThat(result.introduction()).isNull();
         assertThat(result.gender()).isNull();
         assertThat(result.birthday()).isNull();
         assertThat(result.weightKg()).isNull();
@@ -157,7 +157,7 @@ public class GetMyProfileIntegrationTest extends IntegrationTestSupport {
                 otherUserId, INTRODUCTION, null, null, null, null));
 
         // when & then
-        assertThat(profileOf(userId).introduction()).isEmpty();
+        assertThat(profileOf(userId).introduction()).isNull();
         assertThat(profileOf(userId).gender()).isNull();
         assertThat(profileOf(otherUserId).introduction()).isEqualTo(INTRODUCTION);
         assertThat(profileOf(otherUserId).gender()).isEqualTo("MALE");

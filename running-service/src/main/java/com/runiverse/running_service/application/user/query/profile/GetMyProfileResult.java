@@ -5,7 +5,7 @@ import java.time.LocalDate;
 
 // 온보딩 전이면 아래 네 값이 함께 null이다
 public record GetMyProfileResult(
-        String introduction,   // 없으면 ""
+        String introduction,   // 없으면 null
         String gender,
         LocalDate birthday,
         BigDecimal weightKg,
