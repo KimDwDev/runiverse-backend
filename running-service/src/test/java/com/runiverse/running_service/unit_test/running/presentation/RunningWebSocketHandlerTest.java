@@ -8,7 +8,6 @@ import com.runiverse.running_service.application.running.port.in.StartRunningUse
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
-import com.runiverse.running_service.presentation.running.websocket.RunningSessionRegistry;
 import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import org.junit.jupiter.api.BeforeEach;

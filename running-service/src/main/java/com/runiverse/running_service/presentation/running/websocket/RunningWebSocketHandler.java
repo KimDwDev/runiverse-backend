@@ -2,7 +2,11 @@ package com.runiverse.running_service.presentation.running.websocket;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionCommand;
+import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
+import com.runiverse.running_service.application.running.port.in.RegisterRunningSessionUsecase;
+import com.runiverse.running_service.application.running.port.in.RemoveRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
@@ -28,11 +32,10 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class RunningWebSocketHandler extends TextWebSocketHandler {
 
-    // 마지막 연결이 이긴다 — 이 코드를 받은 클라는 재연결하지 않는다(api-spec 5-C)
-    private static final CloseStatus SUPERSEDED = new CloseStatus(4001, "다른 연결이 이어받았습니다.");
     private final JsonMapper jsonMapper;
     private final StartRunningUsecase startRunningUsecase;
-    private final RunningSessionRegistry sessionRegistry;
+    private final RegisterRunningSessionUsecase registerRunningSessionUsecase;
+    private final RemoveRunningSessionUsecase removeRunningSessionUsecase;
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override
@@ -98,16 +101,9 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
-        sessionRegistry.register(userId, session).ifPresent(this::closeSuperseded);
+        registerRunningSessionUsecase.handle(
+                new RegisterRunningSessionCommand(userId.value(), new WebSocketRunningConnection(session)));
         send(session, RunningMessageType.RUNNING_STARTED.message());
-    }
-
-    private void closeSuperseded(WebSocketSession superseded) {
-        try {
-            superseded.close(SUPERSEDED);
-        } catch (IOException e) {
-            log.warn("밀려난 러닝 WebSocket 종료 실패 — sessionId={}", superseded.getId(), e);
-        }
     }
 
     private void sendError(
@@ -139,9 +135,11 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     // 연결이 끊겼을때 처리
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        UserId userId = userId(session);
         // 연결 끊김 ≠ 방 나가기 — running_room_sessions.is_connected는 여기서 건드리지 않는다.
-        // 레지스트리는 접속 여부라 여기서 지운다
-        sessionRegistry.remove(userId(session), session);
+        // 명부는 접속 여부라 여기서 지운다
+        removeRunningSessionUsecase.handle(
+                new RemoveRunningSessionCommand(userId.value(), new WebSocketRunningConnection(session)));
         log.info("러닝 WebSocket 종료 — userId={}, status={}", userId(session), status);
     }
 
