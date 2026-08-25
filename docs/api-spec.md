@@ -117,7 +117,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
+| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
 | 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
 | 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
 | 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
@@ -1792,16 +1792,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // friendships에서 COUNT (status=ACCEPTED)
-  "friendStatus": "ACCEPTED",          // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
-  "mileageTotalMeters": 320500,        // 누적 마일리지 — SUM(total_distance)
-  "mileageMonthlyMeters": 42200,       // 이번 달 마일리지
-  "bestPaceSecondsPerKm": 312,         // 최고 페이스 — MIN(avg_pace). 기록이 없으면 null
-  "runningCount": 78                   // 러닝 횟수 — COUNT(*)
+  "friendStatus": "ACCEPTED"           // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
 }
 ```
 
-- **위 네 필드 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
-- **유효 러닝만 집계한다** — 최소 거리·최소 시간(운영 설정)에 미달하는 기록은 네 필드에서 제외한다. 기록 자체는 저장되고 본인 기록 목록·대시보드에는 보인다(`feature-spec.md` 유효 러닝 판정)
+- **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `friendStatus`로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 
 - **에러 (404 Not Found — 탈퇴 포함)**
