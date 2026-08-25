@@ -1352,7 +1352,48 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `totalCaloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm`/`elevationChangeMeters` 등)
+- **Response `200 OK`**
+
+```json
+{
+  "runningRecordId": 501,
+  "runningRoomId": 125,
+  "startedAt": "2026-07-25T19:00:30",
+  "finishedAt": "2026-07-25T19:30:30",
+  "totalDistanceMeters": 5020,
+  "totalDurationSeconds": 1800,
+  "averagePaceSecondsPerKm": 359,
+  "averageCadenceSpm": 165,
+  "totalCaloriesKcal": 352,
+  "totalElevationGainMeters": 42,
+  "route": {
+    "startLocation": {
+      "latitude": 35.1795543,
+      "longitude": 129.0756416
+    },
+    "endLocation": {
+      "latitude": 35.1842012,
+      "longitude": 129.0831421
+    },
+    "routePolyline": "u{~vFvyys@fS]pT_@..."
+  },
+  "splits": [
+    {
+      "splitNumber": 1,
+      "distanceMeters": 1000,
+      "durationSeconds": 345,
+      "averagePaceSecondsPerKm": 345,
+      "averageCadenceSpm": 162,
+      "caloriesKcal": 68,
+      "elevationChangeMeters": 12
+    }
+  ]
+}
+```
+
+- `averageCadenceSpm`·`totalElevationGainMeters`와 각 구간의 `averageCadenceSpm`·`elevationChangeMeters`는 유효 표본이 부족하면 null이다
+- 마지막 구간의 `distanceMeters`는 기본 구간 거리인 1000m보다 짧을 수 있다
+- 최상위 `totalElevationGainMeters`는 누적 상승 고도이고 구간의 `elevationChangeMeters`는 순고도차이므로 구간값의 합과 일치하지 않을 수 있다
 - **`routePolyline`은 최상위가 아니라 `route` 안에 있다** — 상세 화면은 시작·종료 지점 마커까지 찍으므로 `route` 한 덩어리로 받는다. 목록(7-1)은 카드에 선만 그려서 최상위 필드로 둔다. 같은 값을 두 곳에 싣지 않는다
 - 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
