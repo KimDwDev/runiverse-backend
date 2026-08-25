@@ -2125,12 +2125,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 사진이 등록돼 있지 않으면 `profileImageUrl`은 `null`이다.
 
-- **에러 (400 Bad Request — 대상 사용자 없음)**
+- **에러 (404 Not Found — 대상 사용자 없음)**
 
 ```json
 {
-  "code": "PROFILE_NOT_FOUND",
-  "message": "사용자를 찾을 수 없습니다."
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
 }
 ```
 
