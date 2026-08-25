@@ -118,7 +118,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·이탈·완주 공통. 완주도 그 신청이 끝난 것이라 찍는다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다. 한 번 찍히면 바뀌지 않는다 |
 
-> **방과의 연결은 `running_room_sessions`가 갖는다** — 신청과 방의 배정 관계를 별도 테이블로 두고, 현재 속한 방은 `is_connected`로 가린다.
+> **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있는 설계라(방 이동은 향후 매칭 알고리즘 몫) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
 > **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, **시작 전이라면** 그 결과 인원이 `0`일 때 방을 `CANCELLED`로 닫는다(시작 후에는 닫지 않고 `FINISHED`로 간다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
@@ -131,11 +131,13 @@
 |---|---|---|---|
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
-| leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 횟수. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
+| leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
 | is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈 후에는 모두 false다 |
-| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 이탈이 `is_connected`를 갱신하는 테이블이다 |
+| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 이탈, 그리고 향후 재배정·복귀로 갱신되는 테이블이다 |
 
-> **배정은 신청당 한 번이다** — 신청 하나가 방 하나에만 배정되고, 나가면 그 행이 `is_connected=false`로 남는다. 방을 옮기거나 되돌아오는 흐름은 없다(자동 재매칭 없음, 의도적 이탈은 복귀 불가).
+> **지금은 배정이 신청당 한 번이다** — 신청하면 방 하나에 배정되고, 현재 구현·명세에는 배정을 바꾸는 흐름이 없다. 나가면 그 행이 `is_connected=false`로 남는다.
+> **스키마는 방 이동을 담을 수 있게 미리 설계돼 있다** — 매칭 알고리즘이 고도화되면 서버가 활성 신청을 더 맞는 방으로 옮겨 다니게 한다. 그때 신청이 방을 옮기면 row가 쌓여 참여 이력이 되고, 거쳐 간 방으로 돌아오면 복합 PK가 같으므로 기존 행의 `is_connected`를 되살리고 `leave_count`만 누적한다(그래서 2 이상이 될 수 있다). 이동 시 두 방의 `current_player_count`는 한 트랜잭션에서 같이 갱신한다.
+> **취소 후 재신청은 별개다** — 이전에 나갔던 방도 후보에서 막지 않는다. `leave_count`가 방 순위를 낮춰 되도록 피할 뿐이다. 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
 
 ### running_records
 
