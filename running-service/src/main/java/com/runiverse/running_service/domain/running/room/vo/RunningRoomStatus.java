@@ -37,7 +37,7 @@ public enum RunningRoomStatus {
         return switch (this) {
             case MATCHING -> Set.of(MATCHED, CANCELLED);
             case MATCHED -> Set.of(STARTED, CANCELLED);
-            // 시작한 방은 취소하지 않는다 — 닫으면 FINISHED에 닿지 못해 기록이 사라진다
+            // 시작한 방은 유효 기록이 있으면 FINISHED, 하나도 없으면 CANCELLED로 닫힌다
             case STARTED -> Set.of(FINISHED, CANCELLED);
             case FINISHED, CANCELLED -> Set.of();
         };
