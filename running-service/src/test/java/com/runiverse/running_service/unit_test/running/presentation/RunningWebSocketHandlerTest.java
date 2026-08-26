@@ -34,6 +34,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -95,9 +96,12 @@ class RunningWebSocketHandlerTest {
         given(other.getAttributes()).willReturn(authenticated());
     }
 
-    // 핸드셰이크 인터셉터가 채워 넣는 값
+    // 핸드셰이크 인터셉터가 채워 넣는 값.
+    // 핸들러가 RUNNING_START에서 runningRoomId를 더 넣으므로 실제 세션처럼 가변이어야 한다
     private static Map<String, Object> authenticated() {
-        return Map.of(JwtHandshakeInterceptor.USER_ID, new UserId(USER_ID));
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put(JwtHandshakeInterceptor.USER_ID, new UserId(USER_ID));
+        return attributes;
     }
 
     private static TextMessage runningStart(String data) {

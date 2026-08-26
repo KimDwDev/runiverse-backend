@@ -6,7 +6,8 @@ import java.util.List;
 public record RunningLocationUpdateRequest(Long runningRoomId, List<Location> locations) {
 
     public boolean isValid() {
-        return locations != null
+        return runningRoomId != null
+                && locations != null
                 && !locations.isEmpty()
                 && locations.stream().allMatch(Location::isValid);
     }
