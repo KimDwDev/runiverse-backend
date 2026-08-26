@@ -67,18 +67,23 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort {
     private String compact(TrackPoint point) {
         return String.format(
                 Locale.ROOT,
-                "[%d,%.5f,%.5f,%s,%.1f,%.2f,%.1f,%d,%d,%d]",
+                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d]",
                 point.sequence(),
                 point.latitude(),
                 point.longitude(),
-                point.altitudeMeters() == null
-                        ? "null" : String.format(Locale.ROOT, "%.1f", point.altitudeMeters()),
+                nullable(point.altitudeMeters(), "%.1f"),
                 point.accuracyMeters(),
-                point.speedMetersPerSecond(),
-                point.headingDegrees(),
-                point.cadenceSpm(),
-                point.currentPaceSecondsPerKm(),
+                nullable(point.speedMetersPerSecond(), "%.2f"),
+                nullable(point.headingDegrees(), "%.1f"),
+                nullable(point.cadenceSpm(), "%d"),
+                nullable(point.currentPaceSecondsPerKm(), "%d"),
                 point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond());
+    }
+
+    // 못 잰 값은 JSON null로 적어 자리를 지킨다 — 배열이라 칸을 비우면 뒤가 밀린다.
+    // %.2f에 null을 넘기면 "null"이 정밀도에 잘려 "nu"가 되므로 %s로 받는다
+    private static String nullable(Number value, String format) {
+        return value == null ? "null" : String.format(Locale.ROOT, format, value);
     }
 
     private String trackKey(Long runningRoomId, UserId userId) {

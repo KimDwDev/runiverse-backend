@@ -3,7 +3,7 @@ package com.runiverse.running_service.presentation.running.websocket.message;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record RunningLocationUpdateRequest(Long runningRoomId, List<Location> locations) {
+public record RunningLocationUpdateRequest(List<Location> locations) {
 
     public boolean isValid() {
         return locations != null

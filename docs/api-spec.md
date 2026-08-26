@@ -1094,10 +1094,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "longitude": 129.0756416,          // -180~180
       "altitudeMeters": 18.4,            // 단말 GPS 측정 고도(m), nullable
       "accuracyMeters": 6.2,             // GPS 수평 오차 반경 m
-      "speedMetersPerSecond": 2.8,
-      "headingDegrees": 85.3,            // 0~360
-      "cadenceSpm": 165,
-      "currentPaceSecondsPerKm": 345,
+      "speedMetersPerSecond": 2.8,       // nullable
+      "headingDegrees": 85.3,            // 0~360, nullable
+      "cadenceSpm": 165,                 // nullable
+      "currentPaceSecondsPerKm": 345,    // nullable
       "recordedAt": "2026-07-25T19:10:30"   // 측정 시각
     }
   ]
@@ -1106,6 +1106,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **`runningRoomId`를 싣지 않는다.** 방은 `RUNNING_START`가 참가자 검증을 마치고 정한 뒤 서버가 WS 세션에 들고 있다. 10초마다 반복되는 메시지에 매번 실으면 클라가 참가하지 않은 방을 지정할 수 있게 된다
   - `RUNNING_START` 없이 이 메시지를 보내면 서버에 정해진 방이 없어 `RUNNING_NOT_STARTED`로 거부한다. 클라는 `RUNNING_START`부터 다시 보낸다
+- **필수는 `sequence`·`latitude`·`longitude`·`accuracyMeters`·`recordedAt` 다섯뿐이다.** 나머지는 단말이 못 잴 수 있어 `null`로 보내도 되고, 서버는 그 좌표를 버리지 않고 값이 비었다는 사실만 남긴다 — 배치 하나가 통째로 거절되면 그 10초가 통으로 빈다. 케이던스는 보수 센서가, 속도·방위는 GPS 픽스가 있어야 온다
+  - 비어 있으면 해당 지표를 표본에서 제외한다. 유효 표본이 없으면 지표 자체가 null이다(`running_records.avg_cadence`, erd.md)
 - **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
 - 페이스·거리·케이던스·진행 시간은 러닝 중 표시용으로 클라이언트가 계산한다. 칼로리는 러닝 중 표시·전송하지 않고 종료 시 서버가 계산한다
 - 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`) — `runningRoomId`는 세션이 들고 있는 값이다

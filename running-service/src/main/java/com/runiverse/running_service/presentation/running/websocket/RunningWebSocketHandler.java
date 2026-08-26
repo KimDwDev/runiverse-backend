@@ -154,8 +154,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                         location.sequence(),
                         location.latitude(),
                         location.longitude(),
-                        location.altitudeMeters(),
-                        location.accuracyMeters(),
+                        location.accuracyMeters(),          // ← 4번: 필수 그룹
+                        location.altitudeMeters(),          // ← 5번: 선택 그룹
                         location.speedMetersPerSecond(),
                         location.headingDegrees(),
                         location.cadenceSpm(),

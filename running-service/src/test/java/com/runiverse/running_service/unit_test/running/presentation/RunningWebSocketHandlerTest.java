@@ -119,6 +119,14 @@ class RunningWebSocketHandlerTest {
                 {"event":"RUNNING_LOCATION_UPDATE","data":%s}""".formatted(data));
     }
 
+    // 단말이 못 잰 값을 뺀 좌표 — Location.isValid()가 요구하는 것만 담았다.
+    // 케이던스는 보수 센서가, 속도·방위는 GPS 픽스가 있어야 온다
+    private static String pointWithoutOptionalFields(int sequence) {
+        return """
+                {"sequence":%d,"latitude":35.1795543,"longitude":129.0756416,\
+                "accuracyMeters":6.2,"recordedAt":"2026-07-25T19:10:30"}""".formatted(sequence);
+    }
+
     // api-spec 5-D의 좌표 한 개 — 단말이 모두 측정한 정상 배치
     private static String point(int sequence) {
         return """
@@ -367,6 +375,23 @@ class RunningWebSocketHandlerTest {
         ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
         verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), captor.capture());
         assertThat(captor.getValue()).extracting(TrackPoint::sequence).containsExactly(0L, 1L);
+    }
+
+    @Test
+    @DisplayName("단말이 못 잰 선택 필드가 비어 있어도 좌표를 적재한다")
+    void appendsLocationWithMissingOptionalFields() throws Exception {
+        // given -> Location.isValid()는 거리 계산에 필요한 값만 막는다.
+        // 속도·방위·케이던스·페이스가 없는 배치도 서버가 받아들여야 한다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(pointWithoutOptionalFields(0))));
+
+        // then -> 배치 하나가 통째로 사라지면 그 10초가 빈다(api-spec 5-D)
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), anyList());
     }
 
     @Test
