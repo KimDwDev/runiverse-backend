@@ -7,9 +7,9 @@ public record TrackPoint(
         long sequence,
         double latitude,
         double longitude,
-        double accuracyMeters,
         // 단말이 못 잴 수 있다 — 배치를 통째로 버리지 않으려고 null을 그대로 받는다
         Double altitudeMeters,
+        double accuracyMeters,
         Double speedMetersPerSecond,
         Double headingDegrees,
         Integer cadenceSpm,
