@@ -98,23 +98,13 @@ public class RunningRoomStatusTest {
     @DisplayName("시작 전이면 취소할 수 있다")
     void cancellableBeforeStart(RunningRoomStatus current) {
         // when & then -> 전원 이탈로 빈 방을 닫는 경로다
-        assertThat(current.isBeforeStart()).isTrue();
         assertThat(current.canTransitionTo(RunningRoomStatus.CANCELLED)).isTrue();
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = RunningRoomStatus.class, names = {"STARTED", "FINISHED", "CANCELLED"})
-    @DisplayName("시작한 뒤는 시작 전 구간이 아니다")
-    void notBeforeStartAfterStart(RunningRoomStatus current) {
-        // when & then -> isBeforeStart는 모집·확정 구간만 가리킨다
-        assertThat(current.isBeforeStart()).isFalse();
     }
 
     @Test
     @DisplayName("시작한 방도 취소할 수 있다")
     void startedRoomIsCancellable() {
-        // when & then -> 러닝 중 전원 이탈처럼 방을 닫아야 하는 경우가 있다
-        assertThat(RunningRoomStatus.STARTED.isBeforeStart()).isFalse();
+        // when & then -> 러닝 중 전원 이탈에 남길 기록이 없으면 방을 닫는다
         assertThat(RunningRoomStatus.STARTED.canTransitionTo(RunningRoomStatus.CANCELLED)).isTrue();
     }
 

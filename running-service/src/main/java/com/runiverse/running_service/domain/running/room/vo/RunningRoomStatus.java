@@ -28,11 +28,6 @@ public enum RunningRoomStatus {
         return allowedNext().isEmpty();
     }
 
-    // 러닝 시작 전인지 — 빈 방을 닫을 수 있는 구간이다
-    public boolean isBeforeStart() {
-        return this == MATCHING || this == MATCHED;
-    }
-
     private Set<RunningRoomStatus> allowedNext() {
         return switch (this) {
             case MATCHING -> Set.of(MATCHED, CANCELLED);
