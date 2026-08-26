@@ -1047,6 +1047,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `MISSING_MESSAGE_TYPE` | `event`가 비어 있음 |
   | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
   | `INVALID_REQUEST` | `data` 검증 실패 |
+  | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
@@ -1071,7 +1072,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | 2 | 배정 세션이 끊겨 있으면 되살린다(`is_connected=true`, 인원 복구) | 통과 |
   | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
   | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
-  | 5 | WS 세션을 방에 등록한다(브로드캐스트 대상) | 덮어쓴다 |
+  | 5 | WS 세션을 방에 등록하고 세션이 `runningRoomId`를 기억한다(브로드캐스트 대상·이후 메시지의 방) | 덮어쓴다 |
   | 6 | ack 전송 | — |
 
 - **3번에 `type` 분기가 없다.** 매칭은 `start_at`에 스케줄러가 이미 올려놨으니 통과하고, 솔로는 `start_at`이 개시 시각(과거)이라 여기서 올라간다. 같은 코드가 두 종류를 다 덮는다
@@ -1086,7 +1087,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningRoomId": 125,
   "locations": [
     {
       "sequence": 15,                    // Long, 러닝 내 좌표 순번
@@ -1104,11 +1104,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **`runningRoomId`를 싣지 않는다.** 방은 `RUNNING_START`가 참가자 검증을 마치고 정한 뒤 서버가 WS 세션에 들고 있다. 10초마다 반복되는 메시지에 매번 실으면 클라가 참가하지 않은 방을 지정할 수 있게 된다
+  - `RUNNING_START` 없이 이 메시지를 보내면 서버에 정해진 방이 없어 `RUNNING_NOT_STARTED`로 거부한다. 클라는 `RUNNING_START`부터 다시 보낸다
 - **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
 - 페이스·거리·케이던스·진행 시간은 러닝 중 표시용으로 클라이언트가 계산한다. 칼로리는 러닝 중 표시·전송하지 않고 종료 시 서버가 계산한다
-- 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`)
+- 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`) — `runningRoomId`는 세션이 들고 있는 값이다
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
-- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다. ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED` ack 뒤 삭제한다
+- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED` ack 뒤 삭제한다
 
 #### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
 

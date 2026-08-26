@@ -135,8 +135,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         }
         Long startedRoomId = (Long) session.getAttributes().get(RUNNING_ROOM_ID);
         // RUNNING_START 없이 온 좌표는 검증된 방이 없다(api-spec 5-C: START가 첫 메시지)
-        if (startedRoomId == null || !startedRoomId.equals(request.runningRoomId())) {
-            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+        if (startedRoomId == null) {
+            sendError(session, RunningWebSocketErrorCode.RUNNING_NOT_STARTED, envelope.event());
             return;
         }
         try {
