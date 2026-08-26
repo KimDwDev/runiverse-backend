@@ -780,7 +780,7 @@
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
   - 취소·나가기 요청 시 서버가 방 상태로 분기한다(5-A 참고). 어느 쪽이든 배정 행은 `is_connected=false`로 남아 이력이 된다
-  - **러닝 시작 전에** 참가자가 모두 빠져 `current_player_count`가 `0`이 되면 방을 `CANCELLED`로 닫는다. 각 참가자 row는 유지하되 취소·이탈 시각을 `deleted_at`에 기록하고 배정 행은 `is_connected=false`로 남긴다. 시작 후에는 닫지 않는다 — 마지막 1인이 조기 종료해도 `FINISHED`이며 기록은 저장된다
+  - 참가자가 모두 빠져 `current_player_count`가 `0`이 되면 방을 닫는다 — **시작 전이면 항상 `CANCELLED`**, **시작 후면 유효 기록이 하나라도 저장됐을 때만 `FINISHED`**이고 없으면 `CANCELLED`다. 각 참가자 row는 유지하되 취소·이탈 시각을 `deleted_at`에 기록하고 배정 행은 `is_connected=false`로 남긴다
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
@@ -930,7 +930,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `data`는 `status='MATCHING'`인 `RoomInfo` 전체다. 현재 인원은 `players.length`로 계산한다.
 
 - `runningRoomId`는 **항상 값이 있다**(신청 즉시 방에 배정된다). 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_STARTED` 수신, `MATCH_ROOM_UPDATED.status`, 또는 `GET /users/me/running-match`의 `state`로 판단한다
-- 방 취소(시작 전 참가자 전원 이탈) 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달
+- 방 취소(참가자 전원 이탈) 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 이 SSE는 매칭 단계 채널이라 실제로는 시작 전 취소만 여기로 나간다
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
 
