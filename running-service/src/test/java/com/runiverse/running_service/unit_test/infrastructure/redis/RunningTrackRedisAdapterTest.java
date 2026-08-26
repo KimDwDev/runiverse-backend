@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
@@ -12,7 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.invocation.Invocation;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -20,6 +23,10 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mockingDetails;
 
 @ExtendWith(MockitoExtension.class)
@@ -134,6 +141,20 @@ class RunningTrackRedisAdapterTest {
         // then
         Object[] args = scriptArgs();
         assertThat(List.of(args[1], args[3], args[5])).containsExactly("0", "1", "2");
+    }
+
+    @Test
+    @DisplayName("Redis가 닿지 않으면 유스케이스가 다룰 수 있는 예외로 갈아끼워 던진다")
+    void translatesRedisFailure() {
+        // given -> execute의 가변 인자는 매처로 잡기 까다로워 개수를 맞춘다.
+        // 좌표 한 개면 [TTL, 순번, 좌표] 세 개다
+        given(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+                .willThrow(new RedisConnectionFailureException("redis down"));
+
+        // when & then -> 인프라 예외가 그대로 새면 presentation이 Redis를 알아야 하고,
+        // BusinessException이 아니라 ERROR 통지도 못 나간다(api-spec 5-D)
+        assertThatThrownBy(() -> adapter.append(ROOM_ID, userId, List.of(point(0))))
+                .isInstanceOf(RunningTrackUnavailableException.class);
     }
 
     @Test

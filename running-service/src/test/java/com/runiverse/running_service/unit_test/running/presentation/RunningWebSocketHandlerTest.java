@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.running.command.session.RemoveR
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
+import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
@@ -43,6 +44,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atLeastOnce;
@@ -392,6 +394,27 @@ class RunningWebSocketHandlerTest {
 
         // then -> 배치 하나가 통째로 사라지면 그 10초가 빈다(api-spec 5-D)
         verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), anyList());
+    }
+
+    @Test
+    @DisplayName("좌표 저장에 실패하면 코드로 알리되 러닝을 끊지 않는다")
+    void respondsTrackUnavailableWithoutClosing() throws Exception {
+        // given -> 원본은 클라 로컬 트랙에 남아 있어 재연결로 복구된다(api-spec 5-D).
+        // 저장소 장애 하나로 달리는 사람을 끊어서는 안 된다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+        given(appendRunningTrackPort.append(anyLong(), any(), anyList()))
+                .willThrow(new RunningTrackUnavailableException());
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(0))));
+
+        // then
+        assertThatError(
+                captureLastSent(session), "RUNNING_TRACK_UNAVAILABLE", "RUNNING_LOCATION_UPDATE");
+        verify(session, never()).close(any(CloseStatus.class));
     }
 
     @Test

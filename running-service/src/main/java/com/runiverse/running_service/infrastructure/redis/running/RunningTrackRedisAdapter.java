@@ -1,10 +1,12 @@
 package com.runiverse.running_service.infrastructure.redis.running;
 
+import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RunningTrackRedisAdapter implements AppendRunningTrackPort {
@@ -54,11 +57,18 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort {
                     args.add(String.valueOf(point.sequence()));
                     args.add(compact(point));
                 });
-        Long appended = redisTemplate.execute(
-                APPEND,
-                List.of(trackKey(runningRoomId, userId), sequenceKey(runningRoomId, userId)),
-                args.toArray());
-        return appended == null ? 0 : appended.intValue();
+        try {
+            Long appended = redisTemplate.execute(
+                    APPEND,
+                    List.of(trackKey(runningRoomId, userId), sequenceKey(runningRoomId, userId)),
+                    args.toArray());
+            return appended == null ? 0 : appended.intValue();
+        } catch (RuntimeException e) {
+            // 이 배치는 못 담았지만 원본은 클라 로컬 트랙에 남아 있다(api-spec 5-D).
+            // 재연결하면 처음 sequence부터 다시 오므로 러닝을 끊지 않고 통지만 한다
+            log.warn("러닝 트랙 저장 실패 — roomId={}, userId={}", runningRoomId, userId, e);
+            throw new RunningTrackUnavailableException();
+        }
     }
 
     // 필드명을 빼고 배열로 적는다 - 좌표 하나가 230B에서 60B가 된다.
