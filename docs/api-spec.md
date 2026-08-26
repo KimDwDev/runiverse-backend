@@ -1122,29 +1122,23 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningRoomId": 125,
-  "players": [
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
-      "profileImageUrl": "https://...",
-      "distanceMeters": 1520,               // 현재까지 이동 거리
-      "targetDistanceMeters": 5000,         // 목표 거리(m)
-      "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km)
-      "paused": false                       // 일시정지 중이면 true
-    },
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440013",
-      "profileImageUrl": "https://...",
-      "distanceMeters": 1360,
-      "targetDistanceMeters": 5000,
-      "currentPaceSecondsPerKm": 372,
-      "paused": true
-    }
-  ]
+  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "distanceMeters": 1520,               // 현재까지 이동 거리(서버가 좌표로 누적)
+  "targetDistanceMeters": 5000,         // 목표 거리(m)
+  "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km), nullable
+  "paused": false                       // 일시정지 중이면 true
 }
 ```
 
+- **갱신된 참가자 한 명만 싣는다.** 좌표 배치를 받아 진행이 바뀐 사람만 알리면 되고, 전원 스냅샷을 매번 보내면 인원수만큼 payload가 커진다
+  - 클라는 참가자별 최신값을 로컬에 들고 이 메시지로 덮는다. 초기 상태와 재연결 복구는 `RUNNING_STARTED` ack의 참가자 스냅샷(5-C)이 맡는다
+  - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
+  - `profileImageUrl`을 싣지 않는다 — 고빈도 메시지마다 presigned URL을 만들면 비싸다. 프로필은 `RUNNING_STARTED` 스냅샷에서 받는다
+- **본인에게는 보내지 않는다.** 본인 진행은 클라가 이미 계산해 화면에 띄우고 있다
+- `distanceMeters`는 **서버가 수신한 좌표로 누적한 값**이다. 클라 표시용 거리(5-D)와 미세하게 다를 수 있으나 다른 참가자 화면에 쓰는 값이라 서버 기준으로 통일한다
+- `currentPaceSecondsPerKm`는 마지막 좌표의 값을 그대로 옮긴다 — 단말이 못 재면 `null`이다
 - `paused`가 없으면 상대가 멈춘 것과 느려진 것을 구분할 수 없다 — 화면에서 갑자기 뒤처진 것처럼 보인다
+  - **[미정]** `RUNNING_PAUSE`/`RUNNING_RESUME` 구현 전까지 항상 `false`로 나간다
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
