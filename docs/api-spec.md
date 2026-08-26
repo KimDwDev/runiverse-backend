@@ -47,7 +47,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `ALREADY_MATCHING` |
+| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `RUNNING_ALREADY_IN_PROGRESS` |
 | 12 | DELETE | `/api/v1/users/me/running-match` | 대기 취소 + 확정 후 나가기 겸용 (서버가 방 상태로 분기) |
 | 13 | GET | `/api/v1/users/me/running-match` | 현재 매칭 상태 — 홈 진입·앱 재시작 시 파생 상태 조회 |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
@@ -62,7 +62,7 @@
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 취소·러닝 시작 포함 |
 
-**러닝 WebSocket** — `/ws/running-rooms`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)이 있다.
+**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
@@ -117,7 +117,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
-| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (마일리지·최고 페이스·러닝 횟수·친구 수) |
+| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
 | 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
 | 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
 | 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
@@ -136,9 +136,10 @@
 | 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
 | 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
 | 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 51 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
@@ -150,9 +151,9 @@
 | 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종)**
+**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
 
-> 번호는 한 번 붙이면 바꾸지 않는다. 통합·삭제로 비는 번호(54)는 그대로 둔다 — 노션 명세와 문서 사이 상호 참조가 번호로 걸려 있다.
+> 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
 ---
 
@@ -574,7 +575,7 @@
 
 - **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별
 - **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-7로 새 access 토큰을 받아 로그아웃이 무효가 된다
-- **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 화면 절 참고 (**[MVP 제외]**)
+- **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 페이지 절 참고 (**[MVP 제외]**)
 - **Response**: `204 No Content`
 
 - **인증**: 필요
@@ -594,6 +595,7 @@
 }
 ```
 
+- **키·몸무게는 소수점 첫째 자리로 정규화한다** — 둘째 자리 이하는 반올림해 저장하며 범위는 20 이상 300 이하다(11-6과 같다)
 - **약관 동의**: 별도 요청 필드 없음 — **가입 흐름 첫 화면**에서 받고 가입 자체를 동의로 갈음한다(근거는 `feature-spec.md` 약관 동의 화면 절)
 
 - **Response `201 Created`**
@@ -751,21 +753,14 @@
 | 구간 | 방식 | 이유 |
 |---|---|---|
 | 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
-| 러닝 구간 (5-C·5-D) | **WebSocket** `/ws/running-rooms` | 위치를 주기 발신하는 고빈도 양방향 구간 |
+| 러닝 구간 (5-C·5-D) | **WebSocket** `/api/v1/ws/running` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
 **솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
 ### `POST /api/v1/running-rooms/solo` — 솔로 러닝 개시
 
 - **클라가 만들 수 있는 방은 솔로뿐이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 그래도 경로에 `/solo`를 박아 종류를 드러낸다 — 나중에 초대 방이 붙어도 `type`을 본문으로 받지 않고 경로로 가른다
-- **Request**
-
-```json
-{
-  "targetDistanceMeters": 5000
-}
-```
-
+- **Request 본문이 없다.** 목표 거리도 받지 않는다 — 솔로는 사용자가 끝내야 끝나므로 방의 `target_distance`는 null이다. 페이스는 온보딩 값을 쓴다
 - **Response `201 Created`**
 
 ```json
@@ -777,7 +772,7 @@
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
   - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로 전용 스케줄러는 두지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
-- **에러 (409 Conflict)**: `ALREADY_MATCHING` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+- **에러 (409 Conflict)**: `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
 - **인증**: 필요
 
 **솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서이며, 보내는 메시지도 똑같다.
@@ -785,7 +780,7 @@
 - **DB row 트리거** — `running_room_sessions`가 신청과 방을 잇는다(신청 즉시 방이 생기므로 배정 row도 항상 있다). 현재 속한 방은 `is_connected=true`인 행이다
   - row 생성 = 매칭 신청·솔로 개시 시. 새 방을 만들거나 기존 모집 중인 방에 배정된다
   - 취소·나가기 요청 시 서버가 방 상태로 분기한다(5-A 참고). 어느 쪽이든 배정 행은 `is_connected=false`로 남아 이력이 된다
-  - **러닝 시작 전에** 참가자가 모두 빠져 `current_player_count`가 `0`이 되면 방을 `CANCELLED`로 닫는다. 각 참가자 row는 유지하되 취소·이탈 시각을 `deleted_at`에 기록하고 배정 행은 `is_connected=false`로 남긴다. 시작 후에는 닫지 않는다 — 마지막 1인이 조기 종료해도 `FINISHED`이며 기록은 저장된다
+  - 참가자가 모두 빠져 `current_player_count`가 `0`이 되면 방을 닫는다 — **시작 전이면 항상 `CANCELLED`**, **시작 후면 유효 기록이 하나라도 저장됐을 때만 `FINISHED`**이고 없으면 `CANCELLED`다. 각 참가자 row는 유지하되 취소·이탈 시각을 `deleted_at`에 기록하고 배정 행은 `is_connected=false`로 남긴다
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
@@ -852,7 +847,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
 
-- **활성 신청은 1개** — 이미 있으면 `409 ALREADY_MATCHING`. 마감이 지난 `MATCHING` 방은 먼저 `MATCHED`로 확정 처리하며, 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
+- **활성 신청은 1개** — 이미 있으면 `409 RUNNING_ALREADY_IN_PROGRESS`. 마감이 지난 `MATCHING` 방은 먼저 `MATCHED`로 확정 처리하며, 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredPlayerCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생긴다. 같은 조건에 모집 중인 방이 있으면 거기 배정되고, 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`)이 새로 생긴다
@@ -869,11 +864,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `closeAt`은 모집이 마감되는 시각 — 대기 배너의 "마감까지 남은 시간" 표시에 쓴다. 이 시각이 지나면 새 참가자가 들어올 수 없고 확정 판정이 돈다
   - **저장값이 아니라 서버가 `start_at - 운영 설정 오프셋`으로 계산해 내려주는 값이다.** `running_rooms.close_at`은 방이 닫힌 시각이라 이것과 다르다 — 이름이 겹치므로 주의
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
-- **에러 (409 Conflict)**: `ALREADY_MATCHING` — 이미 활성 신청이나 확정된 방이 있다
+- **에러 (409 Conflict)**: `RUNNING_ALREADY_IN_PROGRESS` — 이미 활성 신청이나 확정된 방이 있다
 
 ```json
 {
-  "code": "ALREADY_MATCHING",
+  "code": "RUNNING_ALREADY_IN_PROGRESS",
   "message": "이미 진행 중인 매칭이 있습니다."
 }
 ```
@@ -935,7 +930,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `data`는 `status='MATCHING'`인 `RoomInfo` 전체다. 현재 인원은 `players.length`로 계산한다.
 
 - `runningRoomId`는 **항상 값이 있다**(신청 즉시 방에 배정된다). 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_STARTED` 수신, `MATCH_ROOM_UPDATED.status`, 또는 `GET /users/me/running-match`의 `state`로 판단한다
-- 방 취소(시작 전 참가자 전원 이탈) 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달
+- 방 취소(참가자 전원 이탈) 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 이 SSE는 매칭 단계 채널이라 실제로는 시작 전 취소만 여기로 나간다
 
 ### 5-B. 매칭 방 (매칭완료 대기방)
 
@@ -1004,13 +999,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 3. 서버가 `scheduledStartAt`에 방을 `STARTED`, 남아 있는 참가자를 `RUNNING`으로 바꾸고 `MATCH_ROOM_UPDATED`를 보낸다. 클라는 이를 받은 뒤 러닝 화면으로 전환해 `RUNNING_START`를 보낸다
 4. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
-#### WebSocket 연결 — `/ws/running-rooms`
+#### WebSocket 연결 — `/api/v1/ws/running`
 
-- **연결**: `wss://.../ws/running-rooms` + `Authorization: Bearer {accessToken}`
+- **연결**: `wss://.../api/v1/ws/running` + `Authorization: Bearer {accessToken}`
 - **인증 실패**: 업그레이드를 거부하고 **HTTP 401**로 응답한다 — 연결이 서기 전이라 `ERROR` 프레임을 쓸 수 없다. 본문은 REST 에러 포맷과 같다. 클라는 `POST /auth/refresh` 후 재연결하고, 다시 실패하면 재로그인으로 보낸다. 같은 이유로 아래 `ERROR`의 code 목록에는 인증 코드가 없다
 - **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길 수 있어 중간에 끊으면 트랙이 갈린다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
 - **중복 연결은 마지막 것만 남긴다** — 같은 사용자의 새 연결이 들어오면 서버가 기존 연결을 close code `4001`로 닫는다. 기기 전환·앱 재시작 때 이전 소켓이 남아 있을 수 있는데 둘 다 살려두면 같은 `(runningRoomId, userId, sequence)`에 서로 다른 트랙이 섞인다. `4001`을 받은 클라는 재연결하지 않는다 — 다른 기기가 이어받은 것이다
-- **keep-alive**: 서버가 주기적으로 ping 프레임을 보내고 클라는 pong으로 응답한다. 주기와 허용 미응답 횟수는 운영값. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
+- **keep-alive**: 클라가 주기적으로 `HEALTH_CHECK`(C→S)를 보내고 서버가 `HEALTH_CHECKED`(S→C)로 응답한다. 둘 다 `data`는 비운다. **유휴 상태가 서버 설정 시간(운영값)을 넘으면 서버가 연결을 닫는다** — 좌표를 계속 보내는 러닝 중에는 별도 신호가 필요 없고, 시작 전 대기 구간에서 의미가 있다. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
 - **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 5-D의 종료 타임아웃은 **마지막 좌표 수신 시각** 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
 - **메시지 공통 형식**
 
@@ -1025,7 +1020,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
-  - ack의 `data`는 비운다. **예외는 `RUNNING_STARTED`** — 진입·재연결 화면 복구에 쓰는 스냅샷을 싣는다(5-C)
+  - ack의 `data`는 비운다. `RUNNING_STARTED`에 진입·재연결 화면 복구용 스냅샷을 싣는 예외를 둘 예정이지만 아직 구현 전이다(5-C)
 - **`ERROR` (S→C)** — WS 요청 실패 통지. REST 에러 포맷과 동일 계열
 
 ```json
@@ -1061,23 +1056,24 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **WS 연결 후 클라가 보내는 첫 메시지다.** 채널 등록·재입장·방 시작·참가자 시작을 이 하나가 다 한다 — 클라는 최초 진입인지 재연결인지 재입장인지 구분하지 않고 언제나 같은 메시지를 보낸다
+- **WS 연결 후 클라가 보내는 첫 메시지다.** 채널 등록·방 시작·참가자 시작을 이 하나가 다 한다 — 클라는 최초 진입인지 재연결인지 구분하지 않고 언제나 같은 메시지를 보낸다
+  - **의도적으로 나간 사람은 돌아오지 못한다.** 나가기는 활성 신청을 닫으므로(`running_players.deleted_at`) 이후 `RUNNING_START`는 참가자 확인 단계에서 `NOT_ROOM_PLAYER`로 거부된다. 반면 네트워크가 끊긴 것뿐이면 신청도 배정도 그대로라 이어 뛴다 — 서버는 끊긴 원인을 추측하지 않고 나가기 요청이 있었는지만 본다
 - `runningRoomId`는 이미 손에 있다 — 솔로는 `POST /running-rooms/solo`의 201 응답, 매칭은 SSE `RoomInfo`에서 받는다
 - **서버 처리 순서**
 
   | | 하는 일 | 이미 그 상태면 |
   |---|---|---|
-  | 1 | 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` |
-  | 2 | 배정 세션이 끊겨 있으면 되살린다(`is_connected=true`, 인원 복구) | 통과 |
+  | 1 | 활성 신청이 있고 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` — **나간 사람은 신청이 닫혀 여기서 걸린다** |
+  | 2 | 배정(`is_connected`)이 끊겨 있으면 거부한다 | `INVALID_ROOM_STATE` — 1번을 통과한 뒤 남는 방어선이다 |
   | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
   | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
-  | 5 | WS 세션을 방에 등록한다(브로드캐스트 대상) | 덮어쓴다 |
+  | 5 | WS 세션을 사용자 기준으로 등록한다(중복 연결 정리용) | 덮어쓴다 |
   | 6 | ack 전송 | — |
 
 - **3번에 `type` 분기가 없다.** 매칭은 `start_at`에 스케줄러가 이미 올려놨으니 통과하고, 솔로는 `start_at`이 개시 시각(과거)이라 여기서 올라간다. 같은 코드가 두 종류를 다 덮는다
 - **전 단계가 멱등하다.** 중복 `RUNNING_START`는 아무 상태도 다시 바꾸지 않고 ack만 재전송한다
 - **거부**: `start_at`이 아직 안 됐으면 `INVALID_ROOM_STATE`(매칭에서 미리 쏘는 것 차단). 방이 `FINISHED`·`CANCELLED`여도 같은 코드
-- **ack**: `RUNNING_STARTED` — **`data`에 방 상태·참가자 스냅샷을 싣는다**(ack 규칙의 예외). 재연결마다 REST를 다시 때리지 않고 이 응답만으로 화면을 복구하기 위해서다
+- **ack**: `RUNNING_STARTED` — **현재 `data`는 비어 있다(`{}`).** 재연결마다 REST를 다시 때리지 않도록 방 상태·참가자 스냅샷을 싣는 것이 목표지만 아직 넣지 않았다. 그때까지 클라는 재연결 후 방 정보를 REST로 다시 읽는다
   - **[미정]** 스냅샷 payload 형태. `RoomInfo`를 재사용할지 별도로 둘지 정하지 않았다
 
 ### 5-D. 러닝 중
@@ -1358,7 +1354,48 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
 
 - **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**: 7-1 필드(`routePolyline` 제외) + `finishedAt`, `averageCadenceSpm`, `totalCaloriesKcal`, `totalElevationGainMeters`, `route`(6-2와 동일 구조 — 본인 경로), `splits`(본인 구간 기록: `splitNumber`/`distanceMeters`/`durationSeconds`/`averagePaceSecondsPerKm`/`elevationChangeMeters` 등)
+- **Response `200 OK`**
+
+```json
+{
+  "runningRecordId": 501,
+  "runningRoomId": 125,
+  "startedAt": "2026-07-25T19:00:30",
+  "finishedAt": "2026-07-25T19:30:30",
+  "totalDistanceMeters": 5020,
+  "totalDurationSeconds": 1800,
+  "averagePaceSecondsPerKm": 359,
+  "averageCadenceSpm": 165,
+  "totalCaloriesKcal": 352,
+  "totalElevationGainMeters": 42,
+  "route": {
+    "startLocation": {
+      "latitude": 35.1795543,
+      "longitude": 129.0756416
+    },
+    "endLocation": {
+      "latitude": 35.1842012,
+      "longitude": 129.0831421
+    },
+    "routePolyline": "u{~vFvyys@fS]pT_@..."
+  },
+  "splits": [
+    {
+      "splitNumber": 1,
+      "distanceMeters": 1000,
+      "durationSeconds": 345,
+      "averagePaceSecondsPerKm": 345,
+      "averageCadenceSpm": 162,
+      "caloriesKcal": 68,
+      "elevationChangeMeters": 12
+    }
+  ]
+}
+```
+
+- `averageCadenceSpm`·`totalElevationGainMeters`와 각 구간의 `averageCadenceSpm`·`elevationChangeMeters`는 유효 표본이 부족하면 null이다
+- 마지막 구간의 `distanceMeters`는 기본 구간 거리인 1000m보다 짧을 수 있다
+- 최상위 `totalElevationGainMeters`는 누적 상승 고도이고 구간의 `elevationChangeMeters`는 순고도차이므로 구간값의 합과 일치하지 않을 수 있다
 - **`routePolyline`은 최상위가 아니라 `route` 안에 있다** — 상세 화면은 시작·종료 지점 마커까지 찍으므로 `route` 한 덩어리로 받는다. 목록(7-1)은 카드에 선만 그려서 최상위 필드로 둔다. 같은 값을 두 곳에 싣지 않는다
 - 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
 
@@ -1780,7 +1817,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기)
 - **Response `200 OK`**: `{ "userId", "nickname", "isOnboarded" }`
-- **표시 전용 값은 싣지 않는다** — 앱을 열 때마다 타는 경로라 특정 화면에서만 쓰는 값을 담지 않는다. 이메일은 12-1, 소개글과 프로필 통계는 10-2, 프로필 사진은 11-3이 각각 담당한다
+- **표시 전용 값은 싣지 않는다** — 앱을 열 때마다 타는 경로라 특정 화면에서만 쓰는 값을 담지 않는다. 이메일은 12-1, 소개글은 10-2, 프로필 사진은 11-3이 각각 담당한다
 - **`profileImageUrl`을 내리지 않는 이유** — 11-3이 전용 조회를 제공하고, presigned URL은 TTL이 있어 표시 시점에 다시 받아야 한다. 앱 진입마다 발급하면 쓰이지 않을 URL에 S3 호출만 늘어난다
 - **`userId`는 남긴다** — `{userId}` 경로 API(10-2·10-4 등)에서 본인 여부를 가리는 데 쓴다. 액세스 토큰에도 들어 있지만 클라이언트가 토큰을 파싱하게 만들지 않는다
 - **인증**: 필요
@@ -1798,16 +1835,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // friendships에서 COUNT (status=ACCEPTED)
-  "friendStatus": "ACCEPTED",          // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
-  "mileageTotalMeters": 320500,        // 누적 마일리지 — SUM(total_distance)
-  "mileageMonthlyMeters": 42200,       // 이번 달 마일리지
-  "bestPaceSecondsPerKm": 312,         // 최고 페이스 — MIN(avg_pace). 기록이 없으면 null
-  "runningCount": 78                   // 러닝 횟수 — COUNT(*)
+  "friendStatus": "ACCEPTED"           // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
 }
 ```
 
-- **위 네 필드 모두 `running_records`에서 바로 계산한다** — 집계 테이블을 두지 않는다. `bestPaceSecondsPerKm`는 값이 작을수록 빠르므로 `MIN`이다
-- **유효 러닝만 집계한다** — 최소 거리·최소 시간(운영 설정)에 미달하는 기록은 네 필드에서 제외한다. 기록 자체는 저장되고 본인 기록 목록·대시보드에는 보인다(`feature-spec.md` 유효 러닝 판정)
+- **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `friendStatus`로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 
 - **에러 (404 Not Found — 탈퇴 포함)**
@@ -2113,9 +2145,38 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-5. `PATCH /api/v1/users/me/profile` — 프로필 수정
+### 11-5. `GET /api/v1/users/me/profile` — 프로필 편집용 조회
 
-저장 버튼 하나로 끝나는 값들을 한 요청에 담는다. 사진(11-1~11-4)은 저장 버튼과 무관한 3단계 업로드라, 닉네임(11-6)은 중복 검사와 409가 붙어 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버가 러닝 기록으로 갱신).
+- **화면**: 프로필 편집 (진입 시 입력 칸을 현재 값으로 채운다)
+- **11-6 `PATCH`와 같은 필드 집합이다** — 고치기 전에 읽는 자리라 둘이 짝이다
+- **Response `200 OK`**
+
+```json
+{
+  "introduction": "즐겁게 달려요",
+  "gender": "MALE",
+  "birthday": "1998-12-16",
+  "weightKg": 70.5,
+  "heightCm": 175.0
+}
+```
+
+| 필드 | 타입 | 설명 | 출처 |
+|---|---|---|---|
+| `introduction` | String | 소개글. 없으면 `""` | `users` |
+| `gender` | String | `MALE` \| `FEMALE`. 온보딩 전이면 `null` | `user_onboardings` |
+| `birthday` | String | `YYYY-MM-DD`. 온보딩 전이면 `null` | `user_onboardings` |
+| `weightKg` | Number | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` | `user_onboardings` |
+| `heightCm` | Number | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` | `user_onboardings` |
+
+- **닉네임·사진은 여기 없다** — 편집 화면에 함께 있지만 저장 흐름이 달라 엔드포인트가 갈린다(11-7·11-3)
+- **온보딩 전에도 `200`이다** — `user_onboardings`에 행이 없으면 그 출처의 네 필드가 `null`로 나가고 소개글만 채워진다. 11-6이 소개글만 보내는 요청을 온보딩 전에도 받아주므로 여기서도 막지 않는다
+- **키·몸무게는 이 API로만 나간다** — 프로필 화면(10-2)에는 싣지 않는다
+- **인증**: 필요
+
+### 11-6. `PATCH /api/v1/users/me/profile` — 프로필 수정
+
+저장 버튼 하나로 끝나는 값들을 한 요청에 담는다. 사진(11-1~11-4)은 저장 버튼과 무관한 3단계 업로드라, 닉네임(11-7)은 중복 검사와 409가 붙어 각각 전용 엔드포인트를 쓴다. 평균 페이스는 수정 불가(서버가 러닝 기록으로 갱신).
 
 - **Request** (부분 수정 — 보낸 필드만 바꾼다)
 
@@ -2151,7 +2212,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **바꾼 값만 돌려준다** — 사진 반영(11-2)·닉네임(11-6)과 같은 형태다. 한두 필드를 고치는 데 프로필 전체를 다시 조립할 이유가 없다
+- **바꾼 값만 돌려준다** — 사진 반영(11-2)·닉네임(11-7)과 같은 형태다
+- **11-5 `GET`의 `null`과 뜻이 다르다** — 여기서 빠진 필드는 "안 보냈다", 11-5의 `null`은 "아직 값이 없다"다
 
 - **에러 (400 Bad Request)** — 문구는 온보딩(1-9)과 같다
 
@@ -2195,7 +2257,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **정상 흐름에서는 발생하지 않는다** — 앱 진입이 `isOnboarded`로 갈리므로 온보딩 전에는 편집 화면에 닿지 못한다. 구버전 앱과 직접 호출 때문에 서버가 막는다
 - **인증**: 필요
 
-### 11-6. `PATCH /api/v1/users/me/nickname` — 닉네임 변경
+### 11-7. `PATCH /api/v1/users/me/nickname` — 닉네임 변경
 
 닉네임은 `user_onboardings.nickname`에 있어 온보딩을 마쳐야 바꿀 수 있다. 서비스 전반의 표시명이 이 값이다.
 
@@ -2263,9 +2325,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 11-7. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
+### 11-8. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
 
-저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-6·1-9의 409다. 사용 화면은 프로필 편집·온보딩이다.
+저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-7·1-9의 409다. 사용 화면은 프로필 편집·온보딩이다.
 
 - **Request**
 
@@ -2326,7 +2388,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
-- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 `409`로 거부하므로(1-5/1-6) 단일 값으로 표현된다
+- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 `409`로 거부하므로(1-5/1-7) 단일 값으로 표현된다
 - **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
 - **인증**: 필요
 

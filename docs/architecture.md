@@ -36,7 +36,7 @@ presentation/
   <domain>/             controller · request · response
   common/exception/     GlobalExceptionHandler · *ErrorCode · ErrorExposurePolicy
   common/response/      ErrorResponse
-  common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler · SelfOnly
+  common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler
 ```
 
 ## 요청 흐름
