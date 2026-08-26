@@ -133,9 +133,15 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
             return;
         }
+        Long startedRoomId = (Long) session.getAttributes().get(RUNNING_ROOM_ID);
+        // RUNNING_START 없이 온 좌표는 검증된 방이 없다(api-spec 5-C: START가 첫 메시지)
+        if (startedRoomId == null || !startedRoomId.equals(request.runningRoomId())) {
+            sendError(session, RunningWebSocketErrorCode.INVALID_REQUEST, envelope.event());
+            return;
+        }
         try {
             updateRunningLocationUsecase.handle(new UpdateRunningLocationCommand(
-                    userId(session).value(), request.runningRoomId(), toTrackPoints(request)));
+                    userId(session).value(), startedRoomId, toTrackPoints(request)));
         } catch (BusinessException e) {
             // 유스케이스가 튕겨낸 것만 코드로 내보낸다
             sendError(session, e.getErrorCode(), envelope.event());
