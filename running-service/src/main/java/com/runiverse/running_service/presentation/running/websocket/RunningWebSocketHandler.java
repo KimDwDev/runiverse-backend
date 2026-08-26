@@ -42,6 +42,9 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final RegisterRunningSessionUsecase registerRunningSessionUsecase;
     private final RemoveRunningSessionUsecase removeRunningSessionUsecase;
     private final UpdateRunningLocationUsecase updateRunningLocationUsecase;
+    // attribute에 저장할 runningRoomId
+    public static final String RUNNING_ROOM_ID = "runningRoomId";
+
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override
@@ -101,15 +104,18 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         try {
             startRunningUsecase.handle(
                     new StartRunningCommand(userId.value(), request.runningRoomId()));
+            // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
+            registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
+                    userId.value(), request.runningRoomId(), new WebSocketRunningConnection(session)));
+
         } catch (BusinessException e) {
             // 유스케이스가 튕겨낸 것만 코드로 내보낸다.
             // 도메인 예외가 여기까지 오면 핸들러의 선검사가 샌 것이라 잡지 않는다
             sendError(session, e.getErrorCode(), envelope.event());
             return;
         }
-        // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
-        registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
-                userId.value(), request.runningRoomId(), new WebSocketRunningConnection(session)));
+        // 검증을 통과한 방만 세션에 새긴다 — 이후 메시지는 클라가 보낸 값 대신 이것을 믿는다
+        session.getAttributes().put(RUNNING_ROOM_ID, request.runningRoomId());
         send(session, RunningMessageType.RUNNING_STARTED.message());
     }
 
