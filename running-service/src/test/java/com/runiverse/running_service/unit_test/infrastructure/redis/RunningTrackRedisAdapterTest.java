@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
+import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
@@ -14,19 +15,25 @@ import org.mockito.Mock;
 import org.mockito.invocation.Invocation;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.StreamOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 
 @ExtendWith(MockitoExtension.class)
@@ -154,6 +161,102 @@ class RunningTrackRedisAdapterTest {
         // when & then -> 인프라 예외가 그대로 새면 presentation이 Redis를 알아야 하고,
         // BusinessException이 아니라 ERROR 통지도 못 나간다(api-spec 5-D)
         assertThatThrownBy(() -> adapter.append(ROOM_ID, userId, List.of(point(0))))
+                .isInstanceOf(RunningTrackUnavailableException.class);
+    }
+
+    // 스트림에 배치가 이렇게 쌓여 있다고 둔다 — 배치 하나가 XADD 항목 하나다
+    private void givenStoredBatches(String... batches) {
+        List<MapRecord<String, Object, Object>> records = Arrays.stream(batches)
+                .map(batch -> MapRecord.create(
+                        "stream", Map.<Object, Object>of("points", batch)))
+                .toList();
+        StreamOperations<String, Object, Object> streamOperations = mock(StreamOperations.class);
+        given(redisTemplate.<Object, Object>opsForStream()).willReturn(streamOperations);
+        given(streamOperations.range(anyString(), any())).willReturn(records);
+    }
+
+    // append가 실제로 만든 압축 문자열 — 테스트가 포맷을 따로 흉내 내지 않게 한다
+    private String compacted(TrackPoint point) {
+        adapter.append(ROOM_ID, userId, List.of(point));
+        return (String) scriptArgs()[2];
+    }
+
+    @Test
+    @DisplayName("저장한 좌표를 값 그대로 되읽는다")
+    void roundTripsPoint() {
+        // given -> compact()가 쓴 문자열을 parse()로 되돌린다.
+        // 자리 순서가 어긋나면 고도와 정확도가 바뀌어 여기서 걸린다
+        TrackPoint original = point(7);
+        givenStoredBatches("[" + compacted(original) + "]");
+
+        // when
+        RunningTrack track = adapter.load(ROOM_ID, userId);
+
+        // then
+        assertThat(track.points()).containsExactly(original);
+        assertThat(track.isEmpty()).isFalse();
+    }
+
+    @Test
+    @DisplayName("배치를 쉼표로 이어 하나의 배열로 만든다")
+    void joinsBatchesIntoSingleArray() {
+        // given -> 10초마다 한 배치씩 쌓이므로 원본은 여러 항목에 나뉘어 있다
+        adapter.append(ROOM_ID, userId, List.of(point(0), point(1), point(2)));
+        Object[] args = scriptArgs();
+        String first = (String) args[2];
+        String second = (String) args[4];
+        String third = (String) args[6];
+        givenStoredBatches("[" + first + "," + second + "]", "[" + third + "]");
+
+        // when
+        RunningTrack track = adapter.load(ROOM_ID, userId);
+
+        // then -> 배치 사이에 쉼표가 빠지면 S3에 깨진 JSON이 올라간다
+        assertThat(track.raw()).isEqualTo("[" + first + "," + second + "," + third + "]");
+        assertThat(track.points()).containsExactly(point(0), point(1), point(2));
+    }
+
+    @Test
+    @DisplayName("단말이 못 잰 값은 null로 되살린다")
+    void restoresMissingValuesAsNull() {
+        // given
+        TrackPoint original = pointWithoutOptionalFields(0);
+        givenStoredBatches("[" + compacted(original) + "]");
+
+        // when
+        TrackPoint restored = adapter.load(ROOM_ID, userId).points().getFirst();
+
+        // then -> 0으로 되살리면 평균 계산에서 없던 표본이 생긴다(erd.md avg_cadence)
+        assertThat(restored).isEqualTo(original);
+        assertThat(restored.altitudeMeters()).isNull();
+        assertThat(restored.cadenceSpm()).isNull();
+    }
+
+    @Test
+    @DisplayName("좌표를 한 번도 못 받았으면 빈 트랙을 돌려준다")
+    void returnsEmptyTrackWhenNothingStored() {
+        // given -> 시작하자마자 끊긴 러닝. 기록 없이 상태만 확정한다(api-spec 5-D)
+        givenStoredBatches();
+
+        // when
+        RunningTrack track = adapter.load(ROOM_ID, userId);
+
+        // then
+        assertThat(track.isEmpty()).isTrue();
+        assertThat(track.raw()).isEqualTo("[]");
+    }
+
+    @Test
+    @DisplayName("조회 중 Redis가 닿지 않으면 유스케이스가 다룰 수 있는 예외로 갈아끼운다")
+    void translatesRedisFailureOnLoad() {
+        // given
+        StreamOperations<String, Object, Object> streamOperations = mock(StreamOperations.class);
+        given(redisTemplate.<Object, Object>opsForStream()).willReturn(streamOperations);
+        given(streamOperations.range(anyString(), any()))
+                .willThrow(new RedisConnectionFailureException("redis down"));
+
+        // when & then
+        assertThatThrownBy(() -> adapter.load(ROOM_ID, userId))
                 .isInstanceOf(RunningTrackUnavailableException.class);
     }
 
