@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.running.port.in.StartRunningUse
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
 import com.runiverse.running_service.application.running.port.out.RunningSessionPort;
+import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.application.running.port.out.RunningRoomMembershipPort;
 import com.runiverse.running_service.infrastructure.websocket.RunningSessionRegistryAdapter;
@@ -35,12 +36,16 @@ import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -107,6 +112,20 @@ class RunningWebSocketHandlerTest {
     private static TextMessage runningStart(String data) {
         return new TextMessage("""
                 {"event":"RUNNING_START","data":%s}""".formatted(data));
+    }
+
+    private static TextMessage locationUpdate(String data) {
+        return new TextMessage("""
+                {"event":"RUNNING_LOCATION_UPDATE","data":%s}""".formatted(data));
+    }
+
+    // api-spec 5-D의 좌표 한 개 — 단말이 모두 측정한 정상 배치
+    private static String point(int sequence) {
+        return """
+                {"sequence":%d,"latitude":35.1795543,"longitude":129.0756416,\
+                "altitudeMeters":18.4,"accuracyMeters":6.2,"speedMetersPerSecond":2.8,\
+                "headingDegrees":85.3,"cadenceSpm":165,"currentPaceSecondsPerKm":345,\
+                "recordedAt":"2026-07-25T19:10:30"}""".formatted(sequence);
     }
 
     @Test
@@ -286,6 +305,104 @@ class RunningWebSocketHandlerTest {
         verify(session, never()).close(any(CloseStatus.class));
     }
 
+    @Test
+    @DisplayName("RUNNING_START 없이 좌표를 보내면 RUNNING_NOT_STARTED로 응답하고 적재하지 않는다")
+    void rejectsLocationBeforeStart() throws Exception {
+        // when -> 방은 RUNNING_START가 정한다(api-spec 5-D). 세션에 방이 없으면 쓸 곳을 모른다
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(0))));
+
+        // then -> 형식이 아니라 순서 문제라 INVALID_REQUEST와 가른다
+        assertThatError(captureSent(), "RUNNING_NOT_STARTED", "RUNNING_LOCATION_UPDATE");
+        verifyNoInteractions(appendRunningTrackPort);
+    }
+
+    @Test
+    @DisplayName("RUNNING_START를 마친 뒤 좌표를 보내면 세션이 기억한 방으로 적재한다")
+    void appendsLocationToStartedRoom() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(0))));
+
+        // then
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), anyList());
+    }
+
+    @Test
+    @DisplayName("클라가 runningRoomId를 실어 보내도 무시하고 세션이 기억한 방에 적재한다")
+    void ignoresClientSuppliedRoomId() throws Exception {
+        // given -> 참가하지 않은 방을 클라가 지정할 수 있으면 남의 방에 트랙이 쌓인다.
+        // 필드를 빼도 구버전 앱이 계속 보낼 수 있으므로 무시되는지까지 못 박는다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"runningRoomId":999999,"locations":[%s]}""".formatted(point(0))));
+
+        // then
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), anyList());
+    }
+
+    @Test
+    @DisplayName("보낸 좌표는 순번 그대로 트랙 포인트로 옮겨진다")
+    void mapsLocationsToTrackPoints() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when -> 클라는 1~2초 간격으로 모아 10초마다 배치로 보낸다
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s,%s]}""".formatted(point(0), point(1))));
+
+        // then
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), captor.capture());
+        assertThat(captor.getValue()).extracting(TrackPoint::sequence).containsExactly(0L, 1L);
+    }
+
+    @Test
+    @DisplayName("locations가 비어 있으면 INVALID_REQUEST로 응답하고 적재하지 않는다")
+    void rejectsEmptyLocations() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[]}"""));
+
+        // then -> 방이 정해져 있어도 형식이 틀린 건 INVALID_REQUEST다
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_LOCATION_UPDATE");
+        verifyNoInteractions(appendRunningTrackPort);
+    }
+
+    @Test
+    @DisplayName("RUNNING_START가 실패하면 방을 기억하지 않아 이어진 좌표도 거부한다")
+    void doesNotRememberRoomWhenStartFails() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willThrow(new RunningRoomNotFoundException());
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(0))));
+
+        // then -> 실패한 요청이 방을 남기면 참가자가 아닌 방에 좌표가 쌓인다
+        assertThatError(captureLastSent(session), "RUNNING_NOT_STARTED", "RUNNING_LOCATION_UPDATE");
+        verifyNoInteractions(appendRunningTrackPort);
+    }
+
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다
     @ParameterizedTest(name = "{0}")
     @EnumSource(RunningMessageType.class)
@@ -324,6 +441,14 @@ class RunningWebSocketHandlerTest {
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
         verify(target).sendMessage(captor.capture());
         return jsonMapper.readValue(captor.getValue().getPayload(), WebSocketEnvelope.class);
+    }
+
+    // RUNNING_START ack가 먼저 나간 뒤의 응답을 보려면 마지막 것을 집어야 한다
+    private WebSocketEnvelope captureLastSent(WebSocketSession target) throws Exception {
+        ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(target, atLeastOnce()).sendMessage(captor.capture());
+        List<TextMessage> sent = captor.getAllValues();
+        return jsonMapper.readValue(sent.get(sent.size() - 1).getPayload(), WebSocketEnvelope.class);
     }
 
     private void assertThatError(WebSocketEnvelope sent, String code, String sourceType) {
