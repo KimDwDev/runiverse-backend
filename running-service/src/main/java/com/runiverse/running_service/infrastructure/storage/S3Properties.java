@@ -11,7 +11,8 @@ import java.time.Duration;
 @Validated
 public record S3Properties(
         @NotBlank String region,
-        @NotBlank String bucket,
+        @NotBlank String userAssetBucket,   // 프로필·피드 이미지 (presigned, 클라 직접 접근)
+        @NotBlank String gpsTrackBucket,    // GPS 원본 트랙 (서버 전용)
         @NotNull Duration presignedUrlTtl,
         @NotNull Duration viewUrlTtl,
         String accessKeyId,

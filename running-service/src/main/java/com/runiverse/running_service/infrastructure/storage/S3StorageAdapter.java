@@ -30,7 +30,7 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
     public String generate(String key, String contentType, long sizeBytes) {
         // contentType을 서명에 포함해 클라가 다른 타입으로 올리지 못하게 막음
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(properties.bucket())
+                .bucket(properties.userAssetBucket())
                 .key(key)
                 .contentType(contentType)
                 .contentLength(sizeBytes)
@@ -46,7 +46,7 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
     public Optional<UploadedImage> load(String key) {
         try {
             HeadObjectResponse head = s3Client.headObject(request -> request
-                    .bucket(properties.bucket())
+                    .bucket(properties.userAssetBucket())
                     .key(key));
             return Optional.of(new UploadedImage(head.contentLength(), head.contentType()));
         } catch (NoSuchKeyException e) {
@@ -62,7 +62,7 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
     @Override
     public String generate(String key) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(properties.bucket())
+                .bucket(properties.userAssetBucket())
                 .key(key)
                 .build();
         PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(builder -> builder
