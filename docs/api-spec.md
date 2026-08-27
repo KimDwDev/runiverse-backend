@@ -1167,6 +1167,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
 - 종료 신호나 타임아웃에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 거리·시간·경로를 산출할 수 있는 트랙이 있으면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 그렇지 않으면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
+- **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 실제 거리를 그대로 쓴다
+- **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
 - `RUNNING_FINISH`는 멱등이다. 타임아웃이나 이전 요청으로 이미 확정됐으면 기록을 덮어쓰지 않고 `RUNNING_FINISHED`를 다시 보내 로컬 트랙을 정리하게 한다
 - 방 시작 때 `RUNNING`으로 전환된 참가자 전원이 종료 상태가 되고 기록 확정이 끝나면 방을 `FINISHED`로 바꾼다. 타임아웃에는 남은 참가자를 먼저 같은 규칙으로 종료 처리한다
@@ -1253,8 +1255,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "runningRoomId": 125,
-  "splitDistanceMeters": 1000,          // 기본 구간 거리
-  "totalDistanceMeters": 5020,          // 현재 사용자 총 거리
+  "splitDistanceMeters": 10,            // 고정 구간 거리
+  "totalDistanceMeters": 5000,          // 현재 사용자 총 거리 — 목표를 넘겼으면 목표에서 끊은 값
   "totalElevationGainMeters": 42,       // 현재 사용자 누적 상승 고도
   "startedAt": "2026-07-25T19:00:30",
   "finishedAt": "2026-07-25T19:30:30",
@@ -1269,29 +1271,34 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     },
     "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline). running_records.route_polyline
   },
+  "players": [                           // 참가자 메타데이터는 여기 한 번만 — 구간마다 반복하지 않는다
+    {
+      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "nickname": "동완러너",
+      "profileImageUrl": "https://...",
+      "status": "COMPLETED",
+      "isDeleted": false,
+      "isMe": true
+    }
+  ],
   "splits": [
     {
       "splitNumber": 1,                  // 1부터 시작
       "startDistanceMeters": 0,
-      "endDistanceMeters": 1000,
-      "distanceMeters": 1000,            // 마지막 구간은 1000 미만일 수 있음
+      "endDistanceMeters": 10,
+      "distanceMeters": 10,              // 고정 10m
       "startPoint": {
         "latitude": 35.1795543,
         "longitude": 129.0756416
       },
       "players": [
         {
-          "userId": "550e8400-e29b-41d4-a716-446655440015",
-          "nickname": "동완러너",
-          "profileImageUrl": "https://...",
-          "status": "COMPLETED",
-          "isDeleted": false,
-          "isMe": true,
-          "durationSeconds": 345,
+          "userId": "550e8400-e29b-41d4-a716-446655440015",  // 최상위 players와 조인
+          "durationSeconds": 3,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
-          "caloriesKcal": 68,
-          "elevationChangeMeters": 12       // 순고도차 — 내리막이면 음수
+          "caloriesKcal": 1,
+          "elevationChangeMeters": null     // 10m 구간에서는 대체로 null
         }
       ]
     }
@@ -1299,8 +1306,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `running_records` 행이 없는 참가자는 `splits[].players`에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
-- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다
+- **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
+- **구간 경계는 방 전체가 공유한다** — `running_rooms.target_distance`를 10m로 나눈 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
+- `running_records` 행이 없는 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
+- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다 — **10m 구간의 `elevationChangeMeters`는 대체로 null이다**(GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다)
 - 최상위 `totalElevationGainMeters`도 유효 고도 표본이 부족하면 null이다
 - 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`·`route`는 null이고 `splits`는 빈 배열이다
 - 경로는 `running_records.route_polyline`의 encoded polyline으로 내려 S3를 조회하지 않는다.
