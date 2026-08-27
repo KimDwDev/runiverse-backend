@@ -5,6 +5,8 @@ import com.runiverse.running_service.application.auth.command.emailverification.
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpUserRegistrar;
 import com.runiverse.running_service.integration_test.fake.FakeEmailSender;
+import com.runiverse.running_service.integration_test.fake.FakeGpsTrackUploader;
+import com.runiverse.running_service.integration_test.fake.FakeWeatherProvider;
 import com.runiverse.running_service.integration_test.fake.FakeOauthClient;
 import com.runiverse.running_service.integration_test.fake.FakePasswordHasher;
 import com.runiverse.running_service.integration_test.fake.FakeTokenProvider;
@@ -17,7 +19,9 @@ import com.runiverse.running_service.integration_test.fake.InMemoryAccessTokenBl
 import com.runiverse.running_service.integration_test.fake.InMemoryEmailVerificationStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryOnboardingStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRefreshTokenStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRunningRecordStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRunningStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRunningTrackStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryUserStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryVerificationTicketStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +36,10 @@ public abstract class IntegrationTestSupport {
     protected InMemoryRefreshTokenStore refreshTokenStore;
     protected InMemoryOnboardingStore onboardingStore;
     protected InMemoryRunningStore runningStore;
+    protected InMemoryRunningTrackStore runningTrackStore;
+    protected InMemoryRunningRecordStore runningRecordStore;
+    protected FakeGpsTrackUploader gpsTrackUploader;
+    protected FakeWeatherProvider weatherProvider;
     protected InMemoryAccessTokenBlacklist accessTokenBlacklist;
     protected InMemoryVerificationTicketStore verificationTicketStore;
     protected InMemoryEmailVerificationStore emailVerificationStore;
@@ -51,6 +59,10 @@ public abstract class IntegrationTestSupport {
         refreshTokenStore = new InMemoryRefreshTokenStore();
         onboardingStore = new InMemoryOnboardingStore();
         runningStore = new InMemoryRunningStore();
+        runningTrackStore = new InMemoryRunningTrackStore();
+        runningRecordStore = new InMemoryRunningRecordStore();
+        gpsTrackUploader = new FakeGpsTrackUploader();
+        weatherProvider = new FakeWeatherProvider();
         accessTokenBlacklist = new InMemoryAccessTokenBlacklist();
         verificationTicketStore = new InMemoryVerificationTicketStore();
         emailVerificationStore = new InMemoryEmailVerificationStore(MAX_ATTEMPTS, DAILY_LIMIT);

@@ -1,13 +1,16 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
+import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
+import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
@@ -47,8 +50,10 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -84,6 +89,10 @@ class RunningWebSocketHandlerTest {
     @Mock
     private AppendRunningTrackPort appendRunningTrackPort;
 
+    // 종료 확정은 DB·S3·Redis를 한꺼번에 건드리는 일이라 유스케이스째로 가짜다
+    @Mock
+    private FinishRunningUsecase finishRunningUsecase;
+
     private RunningWebSocketHandler handler;
 
     @BeforeEach
@@ -96,7 +105,8 @@ class RunningWebSocketHandlerTest {
                 startRunningUsecase,
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
                 new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
-                new UpdateRunningLocationHandler(appendRunningTrackPort));
+                new UpdateRunningLocationHandler(appendRunningTrackPort),
+                finishRunningUsecase);
         given(session.getId()).willReturn("session-1");
         given(session.getAttributes()).willReturn(authenticated());
         given(other.getId()).willReturn("session-2");
@@ -119,6 +129,11 @@ class RunningWebSocketHandlerTest {
     private static TextMessage locationUpdate(String data) {
         return new TextMessage("""
                 {"event":"RUNNING_LOCATION_UPDATE","data":%s}""".formatted(data));
+    }
+
+    private static TextMessage runningFinish(String data) {
+        return new TextMessage("""
+                {"event":"RUNNING_FINISH","data":%s}""".formatted(data));
     }
 
     // 단말이 못 잰 값을 뺀 좌표 — Location.isValid()가 요구하는 것만 담았다.
@@ -451,6 +466,109 @@ class RunningWebSocketHandlerTest {
         verifyNoInteractions(appendRunningTrackPort);
     }
 
+    @Test
+    @DisplayName("RUNNING_FINISH를 보내면 유스케이스를 태우고 RUNNING_FINISHED로 응답한다")
+    void respondsRunningFinished() throws Exception {
+        // given
+        started();
+
+        // when
+        handler.handleMessage(session, runningFinish("""
+                {"forced":false}"""));
+
+        // then -> 클라는 이 ack를 받고 로컬 트랙을 지운 뒤 REST로 결과를 본다(api-spec 5-D)
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
+        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, false));
+    }
+
+    @Test
+    @DisplayName("조기 종료 의사는 그대로 유스케이스에 전달된다")
+    void passesForcedFlag() throws Exception {
+        // given
+        started();
+
+        // when -> forced는 의사일 뿐 최종 상태는 서버가 확정한 거리로 정해진다
+        handler.handleMessage(session, runningFinish("""
+                {"forced":true}"""));
+
+        // then
+        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, true));
+    }
+
+    @Test
+    @DisplayName("RUNNING_START 없이 종료를 보내면 RUNNING_NOT_STARTED로 응답한다")
+    void rejectsFinishBeforeStart() throws Exception {
+        // when -> 세션에 방이 없으면 무엇을 끝낼지 모른다
+        handler.handleMessage(session, runningFinish("""
+                {"forced":false}"""));
+
+        // then
+        assertThatError(captureSent(), "RUNNING_NOT_STARTED", "RUNNING_FINISH");
+        verifyNoInteractions(finishRunningUsecase);
+    }
+
+    @Test
+    @DisplayName("forced가 없으면 유스케이스를 태우지 않고 INVALID_REQUEST로 응답한다")
+    void respondsInvalidRequestWithoutForced() throws Exception {
+        // given
+        started();
+
+        // when -> WS에는 @Valid 파이프라인이 없어 핸들러가 직접 걸러야 한다
+        handler.handleMessage(session, runningFinish("{}"));
+
+        // then
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_FINISH");
+        verifyNoInteractions(finishRunningUsecase);
+    }
+
+    @Test
+    @DisplayName("종료 유스케이스가 튕겨내면 그 에러 코드를 ERROR로 돌려준다")
+    void respondsFinishUsecaseErrorCode() throws Exception {
+        // given
+        started();
+        willThrow(new NotRoomPlayerException()).given(finishRunningUsecase).handle(any());
+
+        // when
+        handler.handleMessage(session, runningFinish("""
+                {"forced":false}"""));
+
+        // then -> ack 대신 코드가 나간다. 클라는 로컬 트랙을 지우지 않는다
+        assertThatError(captureLastSent(session), "NOT_ROOM_PLAYER", "RUNNING_FINISH");
+    }
+
+    @Test
+    @DisplayName("종료에 실린 runningRoomId도 무시하고 세션이 기억한 방을 끝낸다")
+    void ignoresClientSuppliedRoomIdOnFinish() throws Exception {
+        // given -> 남의 방을 지정해 끝내지 못하게 한다. 구버전 앱이 계속 실어 보낼 수 있다
+        started();
+
+        // when
+        handler.handleMessage(session, runningFinish("""
+                {"runningRoomId":999999,"forced":false}"""));
+
+        // then
+        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, false));
+    }
+
+    @Test
+    @DisplayName("ack를 놓친 클라가 다시 보내도 RUNNING_FINISHED를 또 준다")
+    void acksRepeatedFinish() throws Exception {
+        // given -> 세션의 방을 지우면 재전송이 RUNNING_NOT_STARTED로 걸려
+        // 클라가 로컬 트랙을 영영 못 지운다. 멱등은 유스케이스가 책임진다
+        started();
+        handler.handleMessage(session, runningFinish("""
+                {"forced":false}"""));
+
+        // when
+        handler.handleMessage(session, runningFinish("""
+                {"forced":false}"""));
+
+        // then
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
+        verify(finishRunningUsecase, times(2))
+                .handle(new FinishRunningCommand(ROOM_ID, USER_ID, false));
+    }
+
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다
     @ParameterizedTest(name = "{0}")
     @EnumSource(RunningMessageType.class)
@@ -475,6 +593,13 @@ class RunningWebSocketHandlerTest {
         // then
         verify(session, never()).close();
         verify(session, never()).close(any(CloseStatus.class));
+    }
+
+    // 종료 케이스는 전부 "이미 시작한 러닝"에서 출발한다
+    private void started() throws Exception {
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
     }
 
     private TextMessage text(String payload) {

@@ -3,7 +3,9 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
@@ -11,6 +13,7 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
@@ -19,12 +22,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 // RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다
 public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort {
+        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        ExistsRunningPlayerPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();
@@ -75,6 +81,32 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .filter(player -> player.getUserId().equals(userId) && player.isActive())
                 .findFirst()
                 .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()));
+    }
+
+    // 실제 어댑터처럼 세션을 거쳐 방의 참가자를 찾는다.
+    // deleted_at은 보지 않는다 — 이미 종료된 참가자도 찾아야 RUNNING_FINISH가 멱등이 된다
+    @Override
+    public Optional<RunningPlayer> load(RunningRoomId runningRoomId, UserId userId) {
+        return playersOf(runningRoomId)
+                .filter(player -> player.getUserId().equals(userId))
+                .findFirst()
+                .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()));
+    }
+
+    @Override
+    public boolean existsRunning(RunningRoomId runningRoomId) {
+        return playersOf(runningRoomId)
+                .anyMatch(player -> player.getStatus() == RunningPlayerStatus.RUNNING);
+    }
+
+    private Stream<RunningPlayer> playersOf(RunningRoomId runningRoomId) {
+        RunningRoom room = rooms.get(runningRoomId.value());
+        if (room == null) {
+            return Stream.empty();
+        }
+        return room.getSessions().stream()
+                .map(session -> players.get(session.getRunningPlayerId().value()))
+                .filter(Objects::nonNull);
     }
 
     @Override

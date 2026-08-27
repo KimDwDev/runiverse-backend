@@ -1,6 +1,7 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
+import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
@@ -19,6 +20,7 @@ import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.Weight;
 import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,7 +30,7 @@ import java.util.UUID;
 
 public class InMemoryOnboardingStore implements ExistsOnboardingPort,
         CheckNicknameDuplicatePort, SaveOnboardingPort, LoadNicknamePort, UpdateNicknamePort,
-        UpdateOnboardingPort, LoadUserAvgPacePort {
+        UpdateOnboardingPort, LoadUserAvgPacePort, LoadUserWeightPort {
 
     // 실제 어댑터가 컬럼 단위로 갱신하므로 도메인 객체가 아니라 user_onboardings의 한 행을 들고 있는다
     @Getter
@@ -112,6 +114,15 @@ public class InMemoryOnboardingStore implements ExistsOnboardingPort,
                 .map(OnboardingRow::getAvgPace)
                 .map(AvgPace::secondPerKm)
                 .map(Pace::new);
+    }
+
+    // 체중도 같은 행에서 나온다 — 종료 시 칼로리 계산이 이 값을 쓴다.
+    // 비어 있으면 온보딩을 마치지 않은 사용자다
+    @Override
+    public Optional<BigDecimal> loadWeightKg(UserId userId) {
+        return row(userId)
+                .map(OnboardingRow::getWeight)
+                .map(Weight::value);
     }
 
     // 테스트 준비
