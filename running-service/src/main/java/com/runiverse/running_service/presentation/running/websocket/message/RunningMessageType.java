@@ -11,10 +11,12 @@ public enum RunningMessageType {
     HEALTH_CHECK,
     RUNNING_START,
     RUNNING_LOCATION_UPDATE,
+    RUNNING_FINISH,
 
     // S -> C
     HEALTH_CHECKED,
     RUNNING_STARTED,
+    RUNNING_FINISHED,
     ERROR;
 
     // 모르는 타입은 예외가 아니라 빈 값이다 — 연결을 끊지 않고 ERROR로 돌려주기 위해서다.
