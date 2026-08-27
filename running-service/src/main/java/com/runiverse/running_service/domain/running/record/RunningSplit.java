@@ -6,8 +6,8 @@ import com.runiverse.running_service.domain.running.metric.vo.Calories;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.ElapsedTime;
 import com.runiverse.running_service.domain.running.metric.vo.ElevationChange;
-import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.metric.vo.RunningPeriod;
+import com.runiverse.running_service.domain.running.metric.vo.SplitPace;
 import com.runiverse.running_service.domain.running.record.vo.RouteRange;
 import com.runiverse.running_service.domain.running.record.vo.RunningSplitId;
 import com.runiverse.running_service.domain.running.record.vo.SplitNumber;
@@ -23,7 +23,7 @@ public class RunningSplit {
 
     private final RunningSplitId runningSplitId;
     private final SplitNumber splitNumber;
-    private final Pace avgPace;
+    private final SplitPace avgPace;
     private final Distance distance;
     private final ElapsedTime duration;
     private final RouteRange routeRange;
@@ -41,7 +41,7 @@ public class RunningSplit {
                          Integer avgCadence, Integer elevationChange) {
         this.runningSplitId = runningSplitId == null ? null : new RunningSplitId(runningSplitId);
         this.splitNumber = new SplitNumber(splitNumber);
-        this.avgPace = new Pace(avgPace);
+        this.avgPace = new SplitPace(avgPace);
         this.distance = new Distance(distance);
         this.duration = new ElapsedTime(duration);
         this.routeRange = new RouteRange(routeStartIndex, routeEndIndex);
