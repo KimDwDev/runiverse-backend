@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPo
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
+import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
@@ -37,6 +38,7 @@ import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -45,7 +47,7 @@ import java.util.Optional;
 public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUserPort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
-        UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort {
+        UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort, LoadUserWeightPort {
 
     private final EntityManager entityManager;
 
@@ -171,6 +173,20 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         if (height != null) {
             entity.changeHeight(height.value());
         }
+    }
+
+    // 칼로리 계산에만 쓴다. 온보딩을 안 끝낸 유저는 행이 없어 Optional이다 —
+    // 그 경우 기록 없이 상태만 확정하는 경로로 흘러간다
+    @Override
+    public Optional<BigDecimal> loadWeightKg(UserId userId) {
+        return entityManager.createQuery("""
+                        select onboarding.weight
+                        from UserOnboardingJpaEntity onboarding
+                        where onboarding.userId = :userId
+                        """, BigDecimal.class)
+                .setParameter("userId", userId.value())
+                .getResultStream()
+                .findFirst();
     }
 
     private User toDomain(UserJpaEntity entity) {

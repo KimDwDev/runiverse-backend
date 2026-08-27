@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.redis.running;
 
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.DeleteRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRunningTrackPort {
+public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRunningTrackPort, DeleteRunningTrackPort {
 
     // 커서를 읽고 쓰는 사이에 재연결 배치가 끼면 중복이 샌다 - 한 덩어리로 실행한다.
     // 좌표 값은 건드리지 않고 순번만 숫자로 읽어 정밀도가 흔들릴 여지를 없앤다
@@ -155,6 +156,19 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                             ZoneId.systemDefault())));
         }
         return points;
+    }
+
+    // 종료 확정 뒤 버퍼를 비운다. TTL이 있어 남겨도 새지는 않지만,
+    // 끝난 러닝에 재연결 재전송이 다시 쌓이는 걸 막는다.
+    // 실패해도 종료를 되돌리지 않는다 — 이미 기록은 DB에 있고 TTL이 결국 지운다
+    @Override
+    public void delete(Long runningRoomId, UserId userId) {
+        try {
+            redisTemplate.delete(List.of(
+                    trackKey(runningRoomId, userId), sequenceKey(runningRoomId, userId)));
+        } catch (RuntimeException e) {
+            log.warn("러닝 트랙 삭제 실패 — roomId={}, userId={}", runningRoomId, userId, e);
+        }
     }
 
     // 못 잰 값은 "null"로 적혀 있다 — nullable()의 역방향
