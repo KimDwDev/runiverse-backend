@@ -4,7 +4,7 @@ import com.runiverse.running_service.application.running.port.out.TrackPoint;
 
 import java.util.List;
 
-public class PolylineEncoder {
+public final class PolylineEncoder {
 
     private static final double FACTOR = 1e5;        // 정밀도 5
     private static final int CHUNK_MASK = 0x1f;      // 한 번에 떼는 5비트
@@ -14,7 +14,7 @@ public class PolylineEncoder {
     private PolylineEncoder() {
     }
 
-    static String encode(List<TrackPoint> points) {
+    public static String encode(List<TrackPoint> points) {
         StringBuilder encoded = new StringBuilder();
         long previousLatitude = 0;
         long previousLongitude = 0;
