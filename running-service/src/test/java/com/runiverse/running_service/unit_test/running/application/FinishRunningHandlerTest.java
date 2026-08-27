@@ -10,6 +10,7 @@ import com.runiverse.running_service.application.running.exception.RunningNotSta
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
@@ -20,6 +21,7 @@ import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.Weather;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -40,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -56,6 +59,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -110,6 +114,12 @@ public class FinishRunningHandlerTest {
     @Mock
     private DeleteRunningTrackPort deleteRunningTrackPort;
 
+    @Mock
+    private ExistsRunningPlayerPort existsRunningPlayerPort;
+
+    @Mock
+    private UpdateRunningRoomPort updateRunningRoomPort;
+
     @Captor
     private ArgumentCaptor<RunningRecord> recordCaptor;
 
@@ -124,7 +134,7 @@ public class FinishRunningHandlerTest {
         handler = new FinishRunningHandler(loadRunningRoomPort, loadRoomPlayerPort,
                 loadRunningTrackPort, loadUserWeightPort, loadWeatherPort, saveGpsTrackPort,
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
-                PROPERTIES);
+                existsRunningPlayerPort, updateRunningRoomPort, PROPERTIES);
     }
 
     // 종료 시각이 찍힌 참가자 = 이미 확정이 끝난 참가자다(deleted_at이 곧 종료 표시)
@@ -141,10 +151,17 @@ public class FinishRunningHandlerTest {
     }
 
     private static RunningRoom room(RunningRoomType type, Integer targetDistance) {
+        return room(type, targetDistance, RunningRoomStatus.STARTED);
+    }
+
+    private static RunningRoom room(RunningRoomType type, Integer targetDistance,
+                                    RunningRoomStatus status) {
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
                 .type(type)
-                .status(RunningRoomStatus.STARTED)
+                .status(status)
+                // 종료 상태는 닫힌 시각이 있어야 복원된다
+                .closeAt(status.isTerminal() ? PAST.plusMinutes(1) : null)
                 .startAt(PAST)
                 .targetDistance(targetDistance)
                 .avgPace(AVG_PACE)
@@ -468,6 +485,82 @@ public class FinishRunningHandlerTest {
             assertThat(splits.get(0).getRouteRange().startIndex()).isZero();
             assertThat(splits.get(splits.size() - 1).getRouteRange().endIndex())
                     .isEqualTo(splits.size());
+        }
+    }
+
+    @Nested
+    @DisplayName("방 마감 테스트")
+    class CloseRoomTest {
+
+        private RunningRoom finishIn(RunningRoom room) {
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room);
+            givenTrack(track(1_801, 2.8));
+            finish();
+            return room;
+        }
+
+        @Test
+        @DisplayName("아직 뛰는 참가자가 있으면 방을 닫지 않는다")
+        void keepsRoomOpenWhileOthersRun() {
+            // given -> 4인 방에서 나만 먼저 끝냈다
+            given(existsRunningPlayerPort.existsRunning(new RunningRoomId(ROOM_ID)))
+                    .willReturn(true);
+
+            // when
+            RunningRoom room = finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+            verifyNoInteractions(updateRunningRoomPort);
+        }
+
+        @Test
+        @DisplayName("전원이 종료되면 방이 닫힌다")
+        void closesRoomWhenLastPlayerFinishes() {
+            // given -> existsRunning이 false = 남은 사람이 없다
+
+            // when
+            RunningRoom room = finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then -> 상태와 닫힌 시각이 함께 확정된다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+            assertThat(room.getCloseAt()).isPresent();
+            verify(updateRunningRoomPort).update(room);
+        }
+
+        @Test
+        @DisplayName("혼자 뛴 방도 CANCELLED가 아니라 FINISHED다")
+        void closesSoloRoomAsFinished() {
+            // when
+            RunningRoom room = finishIn(room(RunningRoomType.SOLO, null));
+
+            // then -> CANCELLED로 닫으면 terminal이라 결과 조회 경로가 무너진다(feature-spec §2)
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        }
+
+        @Test
+        @DisplayName("타임아웃이 먼저 닫은 방은 다시 건드리지 않는다")
+        void skipsAlreadyClosedRoom() {
+            // given -> 참가자는 아직 RUNNING인데 방만 닫혀 있는 상태
+            RunningRoom room = finishIn(
+                    room(RunningRoomType.MATCH, TARGET, RunningRoomStatus.FINISHED));
+
+            // then -> finish()를 다시 부르면 도메인 예외라 조회조차 하지 않는다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+            verifyNoInteractions(existsRunningPlayerPort, updateRunningRoomPort);
+        }
+
+        @Test
+        @DisplayName("참가자 갱신을 반영한 뒤에 남은 사람을 센다")
+        void countsRunnersAfterPlayerUpdate() {
+            // when
+            finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then -> 순서가 뒤집히면 방금 끝낸 자신이 RUNNING으로 잡혀 혼자 뛴 방이 안 닫힌다
+            InOrder order = inOrder(updateRunningPlayerPort, existsRunningPlayerPort);
+            order.verify(updateRunningPlayerPort).update(any());
+            order.verify(existsRunningPlayerPort).existsRunning(new RunningRoomId(ROOM_ID));
         }
     }
 

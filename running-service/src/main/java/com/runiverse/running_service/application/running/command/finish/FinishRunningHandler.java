@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.running.exception.RunningRoomNo
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
@@ -16,6 +17,7 @@ import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.Weather;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -26,6 +28,7 @@ import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +52,8 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     private final CreateRunningRecordPort createRunningRecordPort;
     private final UpdateRunningPlayerPort updateRunningPlayerPort;
     private final DeleteRunningTrackPort deleteRunningTrackPort;
+    private final ExistsRunningPlayerPort existsRunningPlayerPort;
+    private final UpdateRunningRoomPort updateRunningRoomPort;
     private final RunningFinishProperties properties;
 
     @Override
@@ -87,7 +92,11 @@ public class FinishRunningHandler implements FinishRunningUsecase {
         // 5. 상태를 확정한다
         finish(player, room, analysis.map(TrackAnalysis::totalDistanceMeters).orElse(0));
         updateRunningPlayerPort.update(player);
-        deleteRunningTrackPort.delete(command.runningRoomId(), userId);
+
+        // 6. 방은 마지막 한 사람이 끝낼 때 닫힌다.
+        //    참가자 갱신을 먼저 반영해야 방금 끝낸 자신이 RUNNING으로 세어지지 않는다
+        closeRoomIfLastPlayer(room);
+        deleteRunningTrackPort.delete(command.runningRoomId(), userId); // 맨 아래 두는 것은 트랜잭션이 안됨으로
     }
 
     // 솔로 방은 목표 거리가 없다 — 상한을 넘겨 실측 트랙을 자르지 않고 그대로 분석한다
@@ -154,5 +163,18 @@ public class FinishRunningHandler implements FinishRunningUsecase {
         }
         double ratio = (double) totalDistanceMeters / target.get().meters();
         player.leave(ratio < properties.penaltyDistanceRatio(), finishedAt);
+    }
+
+    // 시작 때 RUNNING이 된 참가자가 전원 종료되면 방도 끝난다(api-spec 5-D).
+    // 1인 방도 같은 규칙이다 — 인원이 0이 됐다고 CANCELLED로 닫지 않는다.
+    // 닫으면 CANCELLED가 terminal이라 FINISHED에 못 가고 결과 조회 경로가 무너진다(feature-spec §2)
+    private void closeRoomIfLastPlayer(RunningRoom room) {
+        // 타임아웃이 먼저 닫았을 수 있다 — 끝난 방에 finish()를 다시 부르면 도메인 예외다
+        if (room.getStatus() != RunningRoomStatus.STARTED
+                || existsRunningPlayerPort.existsRunning(room.getRunningRoomId().orElseThrow())) {
+            return;
+        }
+        room.finish(LocalDateTime.now());
+        updateRunningRoomPort.update(room);
     }
 }
