@@ -1,7 +1,5 @@
 package com.runiverse.running_service.application.running.command.finish;
 
-import com.runiverse.running_service.application.running.port.out.TrackPoint;
-
 import java.util.List;
 
 public final class PolylineEncoder {
@@ -14,11 +12,11 @@ public final class PolylineEncoder {
     private PolylineEncoder() {
     }
 
-    public static String encode(List<TrackPoint> points) {
+    public static String encode(List<BoundaryPoint> points) {
         StringBuilder encoded = new StringBuilder();
         long previousLatitude = 0;
         long previousLongitude = 0;
-        for (TrackPoint point : points) {
+        for (BoundaryPoint point : points) {
             // 먼저 반올림하고 그다음 차분을 낸다 — 순서가 바뀌면 점마다 오차가 쌓인다
             long latitude = Math.round(point.latitude() * FACTOR);
             long longitude = Math.round(point.longitude() * FACTOR);
