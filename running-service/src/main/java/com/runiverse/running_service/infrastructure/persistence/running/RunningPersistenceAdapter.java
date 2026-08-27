@@ -3,7 +3,9 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
@@ -12,6 +14,7 @@ import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
@@ -28,7 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort {
+        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        ExistsRunningPlayerPort {
 
     private final EntityManager entityManager;
 
@@ -170,6 +174,40 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         RunningPlayerJpaEntity entity = entityManager.find(RunningPlayerJpaEntity.class, playerId);
         entity.changeStatus(player.getStatus());
         entity.changeDeletedAt(player.getDeletedAt().orElse(null));
+    }
+
+    // deleted_at을 보지 않는다 — 이미 종료된 참가자도 찾아야 RUNNING_FINISH가 멱등이 된다.
+    // 방 배정은 세션이 들고 있으므로 세션을 거쳐 참가자를 찾는다
+    @Override
+    public Optional<RunningPlayer> load(RunningRoomId runningRoomId, UserId userId) {
+        return entityManager.createQuery("""
+                        select player
+                        from RunningRoomSessionJpaEntity session
+                        join session.player player
+                        where session.room.runningRoomId = :roomId
+                          and player.userId = :userId
+                        """, RunningPlayerJpaEntity.class)
+                .setParameter("roomId", runningRoomId.value())
+                .setParameter("userId", userId.value())
+                .getResultStream()
+                .findFirst()
+                .map(this::toDomain);
+    }
+
+    // 아직 RUNNING으로 남은 참가자가 있는지 — 전원 종료돼야 방을 FINISHED로 닫는다.
+    // 참가자 전체를 불러와 세지 않고 존재 여부만 묻는다
+    @Override
+    public boolean existsRunning(RunningRoomId runningRoomId) {
+        return entityManager.createQuery("""
+                        select count(player)
+                        from RunningRoomSessionJpaEntity session
+                        join session.player player
+                        where session.room.runningRoomId = :roomId
+                          and player.status = :status
+                        """, Long.class)
+                .setParameter("roomId", runningRoomId.value())
+                .setParameter("status", RunningPlayerStatus.RUNNING)
+                .getSingleResult() > 0;
     }
 
     private List<RunningRoomSessionJpaEntity> loadSessions(RunningRoomJpaEntity room) {
