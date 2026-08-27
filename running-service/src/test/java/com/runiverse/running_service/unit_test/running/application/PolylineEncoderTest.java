@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.running.application;
 
+import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
 import com.runiverse.running_service.application.running.command.finish.PolylineEncoder;
-import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,9 +18,10 @@ public class PolylineEncoderTest {
     private static final LocalDateTime AT = LocalDateTime.of(2026, 8, 27, 19, 0, 0);
     private static final double PRECISION = 1e-5;
 
-    private static TrackPoint point(long sequence, double latitude, double longitude) {
-        return new TrackPoint(sequence, latitude, longitude,
-                null, 5.0, null, null, null, null, AT.plusSeconds(sequence));
+    // 폴리라인은 경계점 목록에서 나온다 — sequence 자리에 경계 거리가 들어간다
+    private static BoundaryPoint point(int distanceMeters, double latitude, double longitude) {
+        return new BoundaryPoint(distanceMeters, latitude, longitude,
+                AT.plusSeconds(distanceMeters), 0);
     }
 
     // 인코더와 반대 방향으로 독립 구현해 왕복을 검증한다 — 같은 코드를 두 번 쓰면 검증이 아니다
@@ -60,7 +61,7 @@ public class PolylineEncoderTest {
     void encodesGoogleReferenceVector() {
         // given -> 직접 구현한 인코더라 외부 기준값에 맞춰두지 않으면
         // 클라이언트 디코더와 어긋나도 알 수 없다
-        List<TrackPoint> points = List.of(
+        List<BoundaryPoint> points = List.of(
                 point(1, 38.5, -120.2),
                 point(2, 40.7, -120.95),
                 point(3, 43.252, -126.453));
@@ -93,7 +94,7 @@ public class PolylineEncoderTest {
     @DisplayName("남서 방향으로 움직여도 왕복이 유지된다")
     void handlesNegativeDeltas() {
         // given -> 위도·경도가 모두 줄어드는 경로
-        List<TrackPoint> points = List.of(
+        List<BoundaryPoint> points = List.of(
                 point(1, 37.51234, 127.02345),
                 point(2, 37.51000, 127.02000),
                 point(3, 37.50777, 127.01888));
@@ -114,7 +115,7 @@ public class PolylineEncoderTest {
     void roundsBeforeDiffingSoErrorDoesNotAccumulate() {
         // given -> 5자리 아래에서만 움직이는 점들.
         // 차분을 먼저 내고 반올림하면 매번 0이 되어 경로가 시작점에 붙어버린다
-        List<TrackPoint> points = List.of(
+        List<BoundaryPoint> points = List.of(
                 point(1, 37.000004, 127.0),
                 point(2, 37.000008, 127.0),
                 point(3, 37.000012, 127.0));
@@ -132,7 +133,7 @@ public class PolylineEncoderTest {
     @DisplayName("긴 트랙도 마지막 점까지 좌표가 보존된다")
     void preservesEveryPointInLongTrack() {
         // given -> 오차가 쌓이면 뒤로 갈수록 벌어진다
-        List<TrackPoint> points = new ArrayList<>();
+        List<BoundaryPoint> points = new ArrayList<>();
         for (int i = 0; i < 500; i++) {
             points.add(point(i, 37.5 + i * 0.00013, 127.0 + i * 0.00017));
         }
