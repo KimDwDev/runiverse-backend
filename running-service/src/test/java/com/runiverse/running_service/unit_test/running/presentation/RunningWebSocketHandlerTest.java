@@ -1,14 +1,21 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionHandler;
+import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
+import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
+import com.runiverse.running_service.application.running.port.out.RunningSessionPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.application.running.port.out.RunningRoomMembershipPort;
+import com.runiverse.running_service.infrastructure.websocket.RunningSessionRegistryAdapter;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
-import com.runiverse.running_service.presentation.running.websocket.RunningSessionRegistry;
 import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,14 +65,30 @@ class RunningWebSocketHandlerTest {
     @Mock
     private StartRunningUsecase startRunningUsecase;
 
-    private RunningSessionRegistry sessionRegistry;
+    @Mock
+    private PublishSupersedePort publishSupersedePort;
+
+    // 방 합류는 Redis 구독을 건드리므로 가짜로 둔다
+    @Mock
+    private RunningRoomMembershipPort runningRoomMembershipPort;
+
+    // 좌표 적재도 Redis로 나가는 일이라 가짜로 둔다
+    @Mock
+    private AppendRunningTrackPort appendRunningTrackPort;
+
     private RunningWebSocketHandler handler;
 
     @BeforeEach
     void setUp() {
-        // 레지스트리는 상태만 들고 있는 POJO라 실제 구현을 쓴다 — 중복 연결 판정이 진짜로 도는지 봐야 한다
-        sessionRegistry = new RunningSessionRegistry();
-        handler = new RunningWebSocketHandler(jsonMapper, startRunningUsecase, sessionRegistry);
+        // 소켓 명부와 등록·해제 유스케이스는 상태만 들고 있는 POJO라 실제 구현을 쓴다
+        // — 중복 연결 판정이 진짜로 도는지 봐야 한다. 인스턴스 밖으로 나가는 것만 가짜다
+        RunningSessionPort sessionPort = new RunningSessionRegistryAdapter();
+        handler = new RunningWebSocketHandler(
+                jsonMapper,
+                startRunningUsecase,
+                new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
+                new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
+                new UpdateRunningLocationHandler(appendRunningTrackPort));
         given(session.getId()).willReturn("session-1");
         given(session.getAttributes()).willReturn(authenticated());
         given(other.getId()).willReturn("session-2");
@@ -208,6 +231,20 @@ class RunningWebSocketHandlerTest {
         verify(session).close(captor.capture());
         assertThat(captor.getValue().getCode()).isEqualTo(4001);
         assertThat(captureSent(other).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("등록에 성공하면 다른 인스턴스가 옛 연결을 닫도록 통지한다")
+    void publishesSupersedeNotification() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then -> 밀어낼 옛 연결이 이 인스턴스에 없어도 다른 인스턴스에는 남아 있을 수 있다
+        verify(publishSupersedePort).publish(USER_ID, ROOM_ID, "session-1");
     }
 
     @Test
