@@ -158,6 +158,8 @@ public class GlobalExceptionHandler {
             case ROOM_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case NOT_ROOM_PLAYER -> HttpStatus.FORBIDDEN;
             case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
+            case RUNNING_SESSION_UNAVAILABLE,
+                 RUNNING_TRACK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
     }
 }

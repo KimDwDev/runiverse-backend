@@ -1,5 +1,6 @@
 package com.runiverse.running_service.infrastructure.redis.running;
 
+import com.runiverse.running_service.application.running.exception.RunningSessionUnavailableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -16,8 +17,13 @@ public class RunningRoomSubscriber {
     private final RunningRoomListener runningRoomListener;
 
     public void subscribe(Long runningRoomId) {
-        runningChannelContainer.addMessageListener(
-                runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
+        try {
+            runningChannelContainer.addMessageListener(
+                    runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
+        } catch (RuntimeException e) {
+            log.warn("러닝 방 채널 구독 실패 - roomId={}", runningRoomId, e);
+            throw new RunningSessionUnavailableException();
+        }
         log.debug("러닝 방 채널 구독 — roomId={}", runningRoomId);
     }
 

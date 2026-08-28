@@ -1043,6 +1043,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `MISSING_MESSAGE_TYPE` | `event`가 비어 있음 |
   | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
   | `INVALID_REQUEST` | `data` 검증 실패 |
+  | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
+  | `RUNNING_SESSION_UNAVAILABLE` | 외부 저장소 장애로 세션을 등록하지 못함 — 러닝이 시작되지 않았으니 잠시 뒤 `RUNNING_START`를 재시도한다 |
+  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
@@ -1068,7 +1071,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | 2 | 배정(`is_connected`)이 끊겨 있으면 거부한다 | `INVALID_ROOM_STATE` — 1번을 통과한 뒤 남는 방어선이다 |
   | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
   | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
-  | 5 | WS 세션을 사용자 기준으로 등록한다(중복 연결 정리용) | 덮어쓴다 |
+  | 5 | WS 세션을 방에 등록하고 세션이 `runningRoomId`를 기억한다(브로드캐스트 대상·이후 메시지의 방) | 덮어쓴다 |
   | 6 | ack 전송 | — |
 
 - **3번에 `type` 분기가 없다.** 매칭은 `start_at`에 스케줄러가 이미 올려놨으니 통과하고, 솔로는 `start_at`이 개시 시각(과거)이라 여기서 올라간다. 같은 코드가 두 종류를 다 덮는다
@@ -1083,7 +1086,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningRoomId": 125,
   "locations": [
     {
       "sequence": 15,                    // Long, 러닝 내 좌표 순번
@@ -1091,49 +1093,50 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "longitude": 129.0756416,          // -180~180
       "altitudeMeters": 18.4,            // 단말 GPS 측정 고도(m), nullable
       "accuracyMeters": 6.2,             // GPS 수평 오차 반경 m
-      "speedMetersPerSecond": 2.8,
-      "headingDegrees": 85.3,            // 0~360
-      "cadenceSpm": 165,
-      "currentPaceSecondsPerKm": 345,
+      "speedMetersPerSecond": 2.8,       // nullable
+      "headingDegrees": 85.3,            // 0~360, nullable
+      "cadenceSpm": 165,                 // nullable
+      "currentPaceSecondsPerKm": 345,    // nullable
       "recordedAt": "2026-07-25T19:10:30"   // 측정 시각
     }
   ]
 }
 ```
 
+- **`runningRoomId`를 싣지 않는다.** 방은 `RUNNING_START`가 참가자 검증을 마치고 정한 뒤 서버가 WS 세션에 들고 있다. 10초마다 반복되는 메시지에 매번 실으면 클라가 참가하지 않은 방을 지정할 수 있게 된다
+  - `RUNNING_START` 없이 이 메시지를 보내면 서버에 정해진 방이 없어 `RUNNING_NOT_STARTED`로 거부한다. 클라는 `RUNNING_START`부터 다시 보낸다
+- **필수는 `sequence`·`latitude`·`longitude`·`accuracyMeters`·`recordedAt` 다섯뿐이다.** 나머지는 단말이 못 잴 수 있어 `null`로 보내도 되고, 서버는 그 좌표를 버리지 않고 값이 비었다는 사실만 남긴다 — 배치 하나가 통째로 거절되면 그 10초가 통으로 빈다. 케이던스는 보수 센서가, 속도·방위는 GPS 픽스가 있어야 온다
+  - 비어 있으면 해당 지표를 표본에서 제외한다. 유효 표본이 없으면 지표 자체가 null이다(`running_records.avg_cadence`, erd.md)
 - **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
 - 페이스·거리·케이던스·진행 시간은 러닝 중 표시용으로 클라이언트가 계산한다. 칼로리는 러닝 중 표시·전송하지 않고 종료 시 서버가 계산한다
-- 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`)
+- 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`) — `runningRoomId`는 세션이 들고 있는 값이다
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
-- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다. ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED` ack 뒤 삭제한다
+  - 저장소 장애로 배치를 담지 못하면 `RUNNING_TRACK_UNAVAILABLE`을 보내되 **연결은 끊지 않고 러닝도 계속한다.** 원본이 로컬 트랙에 남아 있어 재연결로 복구되기 때문이다
+  - 장애가 이어지면 배치마다 `ERROR`가 나간다. 클라는 건별 알림 대신 "저장 실패 중" 상태 표시 하나로 다룬다
+- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED` ack 뒤 삭제한다
 
 #### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
 
 ```json
 {
-  "runningRoomId": 125,
-  "players": [
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
-      "profileImageUrl": "https://...",
-      "distanceMeters": 1520,               // 현재까지 이동 거리
-      "targetDistanceMeters": 5000,         // 목표 거리(m)
-      "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km)
-      "paused": false                       // 일시정지 중이면 true
-    },
-    {
-      "userId": "550e8400-e29b-41d4-a716-446655440013",
-      "profileImageUrl": "https://...",
-      "distanceMeters": 1360,
-      "targetDistanceMeters": 5000,
-      "currentPaceSecondsPerKm": 372,
-      "paused": true
-    }
-  ]
+  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "distanceMeters": 1520,               // 현재까지 이동 거리(서버가 좌표로 누적)
+  "targetDistanceMeters": 5000,         // 목표 거리(m)
+  "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km), nullable
+  "paused": false                       // 일시정지 중이면 true
 }
 ```
 
+- **갱신된 참가자 한 명만 싣는다.** 좌표 배치를 받아 진행이 바뀐 사람만 알리면 되고, 전원 스냅샷을 매번 보내면 인원수만큼 payload가 커진다
+  - 클라는 참가자별 최신값을 로컬에 들고 이 메시지로 덮는다
+  - **[미정]** 최초 진입·재연결 시 다른 참가자의 현재 진행을 받는 경로는 따로 정한다 — 이 메시지는 갱신분만 나르므로 그것만으로는 화면을 복구할 수 없다
+  - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
+  - `profileImageUrl`을 싣지 않는다 — 고빈도 메시지마다 presigned URL을 만들면 비싸다. 프로필은 `RUNNING_STARTED` 스냅샷에서 받는다
+- **본인에게는 보내지 않는다.** 본인 진행은 클라가 이미 계산해 화면에 띄우고 있다
+- `distanceMeters`는 **서버가 수신한 좌표로 누적한 값**이다. 클라 표시용 거리(5-D)와 미세하게 다를 수 있으나 다른 참가자 화면에 쓰는 값이라 서버 기준으로 통일한다
+- `currentPaceSecondsPerKm`는 마지막 좌표의 값을 그대로 옮긴다 — 단말이 못 재면 `null`이다
 - `paused`가 없으면 상대가 멈춘 것과 느려진 것을 구분할 수 없다 — 화면에서 갑자기 뒤처진 것처럼 보인다
+  - **[미정]** `RUNNING_PAUSE`/`RUNNING_RESUME` 구현 전까지 항상 `false`로 나간다
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
@@ -1161,6 +1164,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
 - 종료 신호나 타임아웃에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 거리·시간·경로를 산출할 수 있는 트랙이 있으면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 그렇지 않으면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
+- **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 실제 거리를 그대로 쓴다
+- **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
 - `RUNNING_FINISH`는 멱등이다. 타임아웃이나 이전 요청으로 이미 확정됐으면 기록을 덮어쓰지 않고 `RUNNING_FINISHED`를 다시 보내 로컬 트랙을 정리하게 한다
 - 방 시작 때 `RUNNING`으로 전환된 참가자 전원이 종료 상태가 되고 기록 확정이 끝나면 방을 `FINISHED`로 바꾼다. 타임아웃에는 남은 참가자를 먼저 같은 규칙으로 종료 처리한다
@@ -1247,8 +1252,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "runningRoomId": 125,
-  "splitDistanceMeters": 1000,          // 기본 구간 거리
-  "totalDistanceMeters": 5020,          // 현재 사용자 총 거리
+  "splitDistanceMeters": 10,            // 고정 구간 거리
+  "totalDistanceMeters": 5000,          // 현재 사용자 총 거리 — 목표를 넘겼으면 목표에서 끊은 값
   "totalElevationGainMeters": 42,       // 현재 사용자 누적 상승 고도
   "startedAt": "2026-07-25T19:00:30",
   "finishedAt": "2026-07-25T19:30:30",
@@ -1263,29 +1268,34 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     },
     "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline). running_records.route_polyline
   },
+  "players": [                           // 참가자 메타데이터는 여기 한 번만 — 구간마다 반복하지 않는다
+    {
+      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "nickname": "동완러너",
+      "profileImageUrl": "https://...",
+      "status": "COMPLETED",
+      "isDeleted": false,
+      "isMe": true
+    }
+  ],
   "splits": [
     {
       "splitNumber": 1,                  // 1부터 시작
       "startDistanceMeters": 0,
-      "endDistanceMeters": 1000,
-      "distanceMeters": 1000,            // 마지막 구간은 1000 미만일 수 있음
+      "endDistanceMeters": 10,
+      "distanceMeters": 10,              // 고정 10m
       "startPoint": {
         "latitude": 35.1795543,
         "longitude": 129.0756416
       },
       "players": [
         {
-          "userId": "550e8400-e29b-41d4-a716-446655440015",
-          "nickname": "동완러너",
-          "profileImageUrl": "https://...",
-          "status": "COMPLETED",
-          "isDeleted": false,
-          "isMe": true,
-          "durationSeconds": 345,
+          "userId": "550e8400-e29b-41d4-a716-446655440015",  // 최상위 players와 조인
+          "durationSeconds": 3,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
-          "caloriesKcal": 68,
-          "elevationChangeMeters": 12       // 순고도차 — 내리막이면 음수
+          "caloriesKcal": 1,
+          "elevationChangeMeters": null     // 10m 구간에서는 대체로 null
         }
       ]
     }
@@ -1293,8 +1303,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `running_records` 행이 없는 참가자는 `splits[].players`에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
-- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다
+- **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
+- **구간 경계는 방 전체가 공유한다** — `running_rooms.target_distance`를 10m로 나눈 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
+- `running_records` 행이 없는 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
+- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다 — **10m 구간의 `elevationChangeMeters`는 대체로 null이다**(GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다)
 - 최상위 `totalElevationGainMeters`도 유효 고도 표본이 부족하면 null이다
 - 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`·`route`는 null이고 `splits`는 빈 배열이다
 - 경로는 `running_records.route_polyline`의 encoded polyline으로 내려 S3를 조회하지 않는다.

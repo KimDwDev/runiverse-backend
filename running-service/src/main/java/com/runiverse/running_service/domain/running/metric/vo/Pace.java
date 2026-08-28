@@ -14,6 +14,12 @@ public record Pace(int secondsPerKm) {
         }
     }
 
+    // 기록으로 만들 수 있는 페이스인지 미리 묻는다 — 예외로 흐름을 만들지 않기 위해서다.
+    // 범위를 밖에 한 번 더 적으면 어긋나므로 VO가 직접 답한다
+    public static boolean isValid(int secondsPerKm) {
+        return secondsPerKm >= MIN && secondsPerKm <= MAX;
+    }
+
     // 매칭 후보 판정 — 방 평균과 신청자 페이스가 이만큼 안에 있으면 같이 뛸 만하다
     public boolean isCloseTo(Pace other) {
         return Math.abs(secondsPerKm - other.secondsPerKm) <= MATCH_TOLERANCE;

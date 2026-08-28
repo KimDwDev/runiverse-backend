@@ -12,7 +12,9 @@ public enum RunningErrorCode implements ErrorCode {
     NOT_ROOM_PLAYER("NOT_ROOM_PLAYER", "이 방의 참가자가 아닙니다."),
     INVALID_ROOM_STATE("INVALID_ROOM_STATE", "지금은 시작할 수 없는 방입니다."),
     // 외부 저장소 장애로 세션을 등록하지 못한 경우 — 클라는 잠시 뒤 RUNNING_START를 재시도한다
-    RUNNING_SESSION_UNAVAILABLE("RUNNING_SESSION_UNAVAILABLE", "일시적인 오류로 러닝을 시작하지 못했습니다.");
+    RUNNING_SESSION_UNAVAILABLE("RUNNING_SESSION_UNAVAILABLE", "일시적인 오류로 러닝을 시작하지 못했습니다."),
+    // 좌표를 저장하지 못한 경우 — 러닝은 계속된다. 클라는 로컬 트랙을 지우지 않고 재연결로 복구한다
+    RUNNING_TRACK_UNAVAILABLE("RUNNING_TRACK_UNAVAILABLE", "위치 정보를 저장하지 못했습니다.");
     private final String code;
     private final String message;
 }

@@ -30,7 +30,9 @@ import static org.mockito.Mockito.when;
 public class S3StorageAdapterLoadTest {
 
     private static final String REGION = "ap-northeast-2";
-    private static final String BUCKET = "runiverse-test-bucket";
+    // 두 버킷 값을 다르게 둬야 어댑터가 버킷을 바꿔 쓰는 실수가 테스트에 드러난다
+    private static final String USER_ASSET_BUCKET = "runiverse-user-assets-test";
+    private static final String GPS_TRACK_BUCKET = "runiverse-gps-tracks-test";
     private static final Duration TTL = Duration.ofMinutes(10);
     private static final Duration VIEW_TTL = Duration.ofHours(1);
     private static final String KEY = "profiles/9f1cf1a0-0000-7000-8000-000000000001/0198a3f2.jpg";
@@ -43,7 +45,8 @@ public class S3StorageAdapterLoadTest {
     @BeforeEach
     void setUp() {
         // 조회 경로는 presigner를 쓰지 않는다. 호출되면 NPE로 드러나도록 null을 넣는다
-        adapter = new S3StorageAdapter(null, new S3Properties(REGION, BUCKET, TTL, VIEW_TTL, null, null), s3Client);
+        adapter = new S3StorageAdapter(null,
+                new S3Properties(REGION, USER_ASSET_BUCKET, GPS_TRACK_BUCKET, TTL, VIEW_TTL, null, null), s3Client);
     }
 
     @Test
@@ -114,7 +117,7 @@ public class S3StorageAdapterLoadTest {
         org.mockito.Mockito.verify(s3Client).headObject(captor.capture());
         captor.getValue().accept(builder);
         HeadObjectRequest request = builder.build();
-        assertThat(request.bucket()).isEqualTo(BUCKET);
+        assertThat(request.bucket()).isEqualTo(USER_ASSET_BUCKET);
         assertThat(request.key()).isEqualTo(KEY);
     }
 }
