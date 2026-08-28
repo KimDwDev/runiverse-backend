@@ -408,7 +408,21 @@ class RunningWebSocketHandlerTest {
                 {"locations":[%s]}""".formatted(pointWithoutOptionalFields(0))));
 
         // then -> 배치 하나가 통째로 사라지면 그 10초가 빈다(api-spec 5-D)
-        verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), anyList());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), eq(new UserId(USER_ID)), captor.capture());
+        // 못 잰 값은 0이 아니라 null로 내려가야 한다 — TrackPoint가 primitive로 돌아가면
+        // 여기서 언박싱 NPE가 나고, 기본값으로 메우면 안 뛴 케이던스가 0으로 기록된다
+        assertThat(captor.getValue()).singleElement().satisfies(point -> {
+            assertThat(point.altitudeMeters()).isNull();
+            assertThat(point.speedMetersPerSecond()).isNull();
+            assertThat(point.headingDegrees()).isNull();
+            assertThat(point.cadenceSpm()).isNull();
+            assertThat(point.currentPaceSecondsPerKm()).isNull();
+            // 필수 그룹은 그대로 실려 있어야 선택 필드가 빠졌다고 배치가 버려진 게 아님이 된다
+            assertThat(point.sequence()).isZero();
+            assertThat(point.accuracyMeters()).isEqualTo(6.2);
+        });
     }
 
     @Test
