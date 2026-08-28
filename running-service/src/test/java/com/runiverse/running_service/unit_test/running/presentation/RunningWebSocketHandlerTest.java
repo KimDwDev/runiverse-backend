@@ -13,7 +13,11 @@ import com.runiverse.running_service.application.running.exception.RunningTrackU
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
+import com.runiverse.running_service.application.running.port.out.PublishRunningProgressPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
+import com.runiverse.running_service.application.running.port.out.RunningDistance;
+import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.RunningSessionPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -67,6 +71,8 @@ class RunningWebSocketHandlerTest {
     private static final long ROOM_ID = 125L;
     // Location.MAX_SEQUENCE와 같은 값 — 구현이 바뀌면 이 상수도 같이 옮긴다
     private static final long MAX_SEQUENCE = 100_000L;
+    // RUNNING_START가 세션에 새겨 두는 방의 목표 거리
+    private static final int TARGET_DISTANCE_METERS = 5_000;
 
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -91,6 +97,16 @@ class RunningWebSocketHandlerTest {
     @Mock
     private AppendRunningTrackPort appendRunningTrackPort;
 
+    // 누적 거리와 진행 발행도 Redis로 나간다
+    @Mock
+    private LoadRunningDistancePort loadRunningDistancePort;
+
+    @Mock
+    private SaveRunningDistancePort saveRunningDistancePort;
+
+    @Mock
+    private PublishRunningProgressPort publishRunningProgressPort;
+
     // 종료 확정은 DB·S3·Redis를 한꺼번에 건드리는 일이라 유스케이스째로 가짜다
     @Mock
     private FinishRunningUsecase finishRunningUsecase;
@@ -107,8 +123,12 @@ class RunningWebSocketHandlerTest {
                 startRunningUsecase,
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
                 new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
-                new UpdateRunningLocationHandler(appendRunningTrackPort),
+                new UpdateRunningLocationHandler(appendRunningTrackPort, loadRunningDistancePort,
+                        saveRunningDistancePort, publishRunningProgressPort),
                 finishRunningUsecase);
+        // 좌표를 한 번도 못 받은 상태에서 시작한다 — 누적 거리는 이 테스트의 관심사가 아니다
+        given(loadRunningDistancePort.loadDistance(anyLong(), any()))
+                .willReturn(RunningDistance.empty());
         given(session.getId()).willReturn("session-1");
         given(session.getAttributes()).willReturn(authenticated());
         given(other.getId()).willReturn("session-2");
@@ -229,7 +249,7 @@ class RunningWebSocketHandlerTest {
     void respondsRunningStarted() throws Exception {
         // given
         given(startRunningUsecase.handle(new StartRunningCommand(USER_ID, ROOM_ID)))
-                .willReturn(new StartRunningResult(ROOM_ID));
+                .willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
 
         // when
         handler.handleMessage(session, runningStart("""
@@ -269,7 +289,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("같은 유저가 다른 기기로 들어오면 이전 연결을 4001로 닫는다")
     void closesSupersededSession() throws Exception {
         // given -> 첫 기기가 이미 붙어 있다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -288,7 +308,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("등록에 성공하면 다른 인스턴스가 옛 연결을 닫도록 통지한다")
     void publishesSupersedeNotification() throws Exception {
         // given
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
 
         // when
         handler.handleMessage(session, runningStart("""
@@ -303,7 +323,7 @@ class RunningWebSocketHandlerTest {
     void keepsPreviousSessionWhenUsecaseFails() throws Exception {
         // given -> 첫 기기는 성공, 두 번째 요청은 유스케이스가 튕겨낸다
         given(startRunningUsecase.handle(any()))
-                .willReturn(new StartRunningResult(ROOM_ID))
+                .willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS))
                 .willThrow(new RunningRoomNotFoundException());
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
@@ -321,7 +341,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("같은 소켓이 RUNNING_START를 두 번 보내도 자기 자신을 끊지 않는다")
     void doesNotCloseItselfOnResend() throws Exception {
         // given -> 재연결 뒤 클라가 같은 메시지를 다시 보내는 정상 경로
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -349,7 +369,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("RUNNING_START를 마친 뒤 좌표를 보내면 세션이 기억한 방으로 적재한다")
     void appendsLocationToStartedRoom() throws Exception {
         // given
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -366,7 +386,7 @@ class RunningWebSocketHandlerTest {
     void ignoresClientSuppliedRoomId() throws Exception {
         // given -> 참가하지 않은 방을 클라가 지정할 수 있으면 남의 방에 트랙이 쌓인다.
         // 필드를 빼도 구버전 앱이 계속 보낼 수 있으므로 무시되는지까지 못 박는다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -382,7 +402,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("보낸 좌표는 순번 그대로 트랙 포인트로 옮겨진다")
     void mapsLocationsToTrackPoints() throws Exception {
         // given
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -402,7 +422,7 @@ class RunningWebSocketHandlerTest {
     void appendsLocationWithMissingOptionalFields() throws Exception {
         // given -> Location.isValid()는 거리 계산에 필요한 값만 막는다.
         // 속도·방위·케이던스·페이스가 없는 배치도 서버가 받아들여야 한다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -433,7 +453,7 @@ class RunningWebSocketHandlerTest {
     void rejectsSequenceBeyondUpperBound() throws Exception {
         // given -> Redis 커서(last)는 되돌아오지 않는다. 튄 순번이 한 번 실리면
         // 남은 러닝의 정상 좌표가 전부 sequence > last에 걸려 버려진다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -450,7 +470,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("Long.MAX_VALUE 순번은 커서에 닿기 전에 막는다")
     void rejectsLongMaxValueSequence() throws Exception {
         // given -> 클라 버그 하나로 TTL 6시간 동안 트랙이 통째로 비는 경로다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -467,7 +487,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("순번 상한 값 자체는 정상 좌표로 받는다")
     void acceptsSequenceAtUpperBound() throws Exception {
         // given -> 상한은 sanity bound다. 경계를 한 칸 잘못 잡으면 멀쩡한 배치를 버린다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -487,7 +507,7 @@ class RunningWebSocketHandlerTest {
     void keepsAppendingAfterRejectedBatch() throws Exception {
         // given -> 이번 버그의 핵심. 튄 좌표가 그 배치 10초만 잃게 하고
         // 남은 러닝까지 끌고 가지 않아야 한다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
         handler.handleMessage(session, locationUpdate("""
@@ -509,7 +529,7 @@ class RunningWebSocketHandlerTest {
     void respondsTrackUnavailableWithoutClosing() throws Exception {
         // given -> 원본은 클라 로컬 트랙에 남아 있어 재연결로 복구된다(api-spec 5-D).
         // 저장소 장애 하나로 달리는 사람을 끊어서는 안 된다
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
         given(appendRunningTrackPort.append(anyLong(), any(), anyList()))
@@ -529,7 +549,7 @@ class RunningWebSocketHandlerTest {
     @DisplayName("locations가 비어 있으면 INVALID_REQUEST로 응답하고 적재하지 않는다")
     void rejectsEmptyLocations() throws Exception {
         // given
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
 
@@ -690,7 +710,7 @@ class RunningWebSocketHandlerTest {
 
     // 종료 케이스는 전부 "이미 시작한 러닝"에서 출발한다
     private void started() throws Exception {
-        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID));
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
         handler.handleMessage(session, runningStart("""
                 {"runningRoomId":125}"""));
     }
