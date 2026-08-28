@@ -128,7 +128,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
             return new RunningTrack("[]", List.of());
         }
         // 배치마다 바깥 [ ]를 벗겨 잇는다 - 이미 압축 포맷이라 풀었다 다시 만들 이유가 없다.
-        // 스크립트가 커서보다 큰 순번만 담고 커서는 앞으로만 가므로 이어붙인 순서가 곧 순번 순서다
+        // 구멍을 나중에 메울 수 있어 저장 순서가 순번 순서가 아니다 - 아래에서 조각째 정렬한다
         String joined = batches.stream()
                 .map(batch -> (String) batch.getValue().get(POINTS_FIELD))
                 .map(points -> points.substring(1, points.length() - 1))
