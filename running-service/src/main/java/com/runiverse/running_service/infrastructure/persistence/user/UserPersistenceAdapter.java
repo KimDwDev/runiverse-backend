@@ -13,7 +13,9 @@ import com.runiverse.running_service.application.user.port.out.CheckNicknameDupl
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
+import com.runiverse.running_service.application.user.port.out.LoadOnboardingProfilePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
+import com.runiverse.running_service.application.user.port.out.OnboardingProfile;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
@@ -265,6 +267,18 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
                 .map(UserOnboardingJpaEntity::getNickname)
                 .map(Nickname::new);
+    }
+
+    @Override
+    public Optional<OnboardingProfile> loadOnboardingProfile(UserId userId) {
+        // 온보딩 행이 없으면 빈 Optional — 온보딩 전에도 프로필 편집 화면은 열린다
+        return Optional.ofNullable(entityManager.find(UserOnboardingJpaEntity.class, userId.value()))
+                .map(entity -> new OnboardingProfile(
+                        entity.getGender(),
+                        new Birthday(entity.getBirthday()),
+                        new Weight(entity.getWeight()),
+                        new Height(entity.getHeight())
+                ));
     }
 
     @Override

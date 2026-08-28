@@ -4,9 +4,9 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
-import com.runiverse.running_service.application.user.query.profile.GetProfileHandler;
-import com.runiverse.running_service.application.user.query.profile.GetProfileQuery;
-import com.runiverse.running_service.application.user.query.profile.GetProfileResult;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoHandler;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoQuery;
+import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.Nickname;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("내 기본 정보 조회 단위 테스트")
-public class GetProfileHandlerTest {
+public class GetMyBasicInfoHandlerTest {
 
     // PasswordHash VO가 Argon2id 형식만 허용하므로 형식에 맞는 값을 쓴다
     private static final String PASSWORD_HASH =
@@ -42,7 +42,7 @@ public class GetProfileHandlerTest {
     private LoadNicknamePort loadNicknamePort;
 
     @InjectMocks
-    private GetProfileHandler handler;
+    private GetMyBasicInfoHandler handler;
 
     private static User userOf(UUID userId) {
         return new User(userId, "runner@runiverse.com", PASSWORD_HASH, true,
@@ -60,7 +60,7 @@ public class GetProfileHandlerTest {
                 .thenReturn(Optional.of(new Nickname(NICKNAME)));
 
         // when
-        GetProfileResult result = handler.handle(new GetProfileQuery(userId));
+        GetMyBasicInfoResult result = handler.handle(new GetMyBasicInfoQuery(userId));
 
         // then
         assertThat(result.userId()).isEqualTo(userId);
@@ -78,7 +78,7 @@ public class GetProfileHandlerTest {
         when(loadNicknamePort.loadNickname(new UserId(userId))).thenReturn(Optional.empty());
 
         // when
-        GetProfileResult result = handler.handle(new GetProfileQuery(userId));
+        GetMyBasicInfoResult result = handler.handle(new GetMyBasicInfoQuery(userId));
 
         // then -> 온보딩 전은 정상 상태다. 앱은 이 값으로 홈과 온보딩 화면을 가른다
         assertThat(result.userId()).isEqualTo(userId);
@@ -94,7 +94,7 @@ public class GetProfileHandlerTest {
         when(loadUserByIdPort.loadById(new UserId(unknownUserId))).thenReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> handler.handle(new GetProfileQuery(unknownUserId)))
+        assertThatThrownBy(() -> handler.handle(new GetMyBasicInfoQuery(unknownUserId)))
                 .isInstanceOf(UserNotFoundException.class);
         verifyNoInteractions(loadNicknamePort);
     }

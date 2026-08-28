@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.user.exception.UserNotFoundExce
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
@@ -491,6 +492,24 @@ public class UserPersistenceAdapterTest {
         assertThatThrownBy(() -> userPersistenceAdapter.updateProfileImage(
                 new UserId(userId), new ProfileImageKey(profileImageKeyOf(userId))))
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("소개글을 빈 문자열로 지우면 컬럼을 null로 비운다")
+    void updateIntroductionConvertsEmptyToNull() {
+        // given -> 도메인은 소개글 없음을 빈 문자열로 들고 있지만 컬럼에는 남기지 않는다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, "즐겁게 달려요"
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.updateIntroduction(new UserId(userId), new Introduction(""));
+
+        // then -> 가입 시 save()와 같은 방식이라 "없음"의 표현이 하나로 유지된다
+        assertThat(entity.getIntroduction()).isNull();
     }
 
     @Test

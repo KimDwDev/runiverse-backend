@@ -6,6 +6,8 @@ import com.runiverse.running_service.application.user.exception.OnboardingNotCom
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
+import com.runiverse.running_service.application.user.port.out.LoadOnboardingProfilePort;
+import com.runiverse.running_service.application.user.port.out.OnboardingProfile;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
 import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
@@ -79,6 +81,13 @@ public class InMemoryOnboardingStore implements ExistsOnboardingPort,
     @Override
     public Optional<Nickname> loadNickname(UserId userId) {
         return row(userId).map(OnboardingRow::getNickname);
+    }
+
+    // 실제 어댑터와 같이 행이 없으면 빈 Optional이고, 그게 곧 "온보딩 전" 판정이 된다
+    @Override
+    public Optional<OnboardingProfile> loadOnboardingProfile(UserId userId) {
+        return row(userId).map(row -> new OnboardingProfile(
+                row.gender, row.birthday, row.weight, row.height));
     }
 
     // 실제 어댑터와 같이 온보딩 행이 없으면 막고, 유니크 위반은 DB가 아니라 여기서 흉내 낸다
