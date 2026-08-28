@@ -111,8 +111,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                     new StartRunningCommand(userId.value(), request.runningRoomId()));
             // 실패한 요청으로 남의 기기를 끊지 않도록 성공한 뒤에 등록한다
             registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
-                    userId.value(), request.runningRoomId(), new WebSocketRunningConnection(session)));
-
+                    userId.value(), request.runningRoomId(),
+                    new WebSocketRunningConnection(session, jsonMapper)));
         } catch (BusinessException e) {
             // 유스케이스가 튕겨낸 것만 코드로 내보낸다.
             // 도메인 예외가 여기까지 오면 핸들러의 선검사가 샌 것이라 잡지 않는다
@@ -235,7 +235,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         // 연결 끊김 ≠ 방 나가기 — running_room_sessions.is_connected는 여기서 건드리지 않는다.
         // 명부는 접속 여부라 여기서 지운다
         removeRunningSessionUsecase.handle(
-                new RemoveRunningSessionCommand(userId.value(), new WebSocketRunningConnection(session)));
+                new RemoveRunningSessionCommand(
+                        userId.value(), new WebSocketRunningConnection(session, jsonMapper)));
         log.info("러닝 WebSocket 종료 — userId={}, status={}", userId(session), status);
     }
 

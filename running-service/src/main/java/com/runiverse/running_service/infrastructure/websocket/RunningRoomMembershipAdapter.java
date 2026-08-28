@@ -37,6 +37,12 @@ public class RunningRoomMembershipAdapter implements RunningRoomMembershipPort {
         }
     }
 
+    @Override
+    public Set<UserId> usersIn(Long runningRoomId) {
+        // 원본을 그대로 주면 호출자가 명부를 바꿀 수 있다 — 복사본을 준다
+        return Set.copyOf(usersByRoom.getOrDefault(runningRoomId, Set.of()));
+    }
+
     // 그 방의 첫 참가자를 받은 순간에만 구독한다
     private void attach(Long runningRoomId, UserId userId) {
         usersByRoom.compute(runningRoomId, (key, users) -> {
