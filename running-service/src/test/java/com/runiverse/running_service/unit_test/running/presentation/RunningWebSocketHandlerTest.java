@@ -43,10 +43,10 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -138,7 +138,9 @@ class RunningWebSocketHandlerTest {
     // 핸드셰이크 인터셉터가 채워 넣는 값.
     // 핸들러가 RUNNING_START에서 runningRoomId를 더 넣으므로 실제 세션처럼 가변이어야 한다
     private static Map<String, Object> authenticated() {
-        Map<String, Object> attributes = new HashMap<>();
+        // 실제 세션(StandardWebSocketSession)은 ConcurrentHashMap이라 null 값을 거부한다.
+        // HashMap으로 흉내 내면 목표 거리가 없는 솔로 방에서 나는 NPE를 놓친다
+        Map<String, Object> attributes = new ConcurrentHashMap<>();
         attributes.put(JwtHandshakeInterceptor.USER_ID, new UserId(USER_ID));
         return attributes;
     }
@@ -351,6 +353,38 @@ class RunningWebSocketHandlerTest {
 
         // then
         verify(session, never()).close(any(CloseStatus.class));
+    }
+
+    @Test
+    @DisplayName("목표 거리가 없는 솔로 방도 RUNNING_STARTED로 응답한다")
+    void respondsRunningStartedForRoomWithoutTarget() throws Exception {
+        // given -> 솔로 방은 target_distance가 nullable이다(erd.md).
+        // 세션 attribute는 ConcurrentHashMap이라 null을 그대로 넣으면 NPE가 나고,
+        // 그 예외가 핸들러 밖으로 새면 Spring이 세션을 1011로 닫는다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, null));
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("목표 거리가 없으면 좌표 배치에도 null로 실어 보낸다")
+    void passesNullTargetToLocationCommand() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, null));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(0))));
+
+        // then -> 목표가 없다는 사실이 진행 통지까지 그대로 흘러야 한다
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), anyList());
     }
 
     @Test

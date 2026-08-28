@@ -120,7 +120,14 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         session.getAttributes().put(RUNNING_ROOM_ID, request.runningRoomId());
-        session.getAttributes().put(TARGET_DISTANCE_METERS, result.targetDistanceMeters());
+        // 세션 attribute는 ConcurrentHashMap이라 null을 못 담는다.
+        // 목표 없는 솔로 방은 키 자체를 비워 두면 읽는 쪽이 null로 받는다
+        Integer targetDistanceMeters = result.targetDistanceMeters();
+        if (targetDistanceMeters == null) {
+            session.getAttributes().remove(TARGET_DISTANCE_METERS);
+        } else {
+            session.getAttributes().put(TARGET_DISTANCE_METERS, targetDistanceMeters);
+        }
         send(session, RunningMessageType.RUNNING_STARTED.message());
     }
 
