@@ -1,6 +1,7 @@
 package com.runiverse.running_service.presentation.common.exception;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
@@ -19,7 +20,7 @@ public final class ErrorExposurePolicy {
             UserErrorCode.ALREADY_ONBOARDED.getCode(),
             UserErrorCode.ONBOARDING_NOT_COMPLETED.getCode(),
             UserErrorCode.PROFILE_IMAGE_NOT_UPLOADED.getCode(),
-            UserErrorCode.PROFILE_NOT_FOUND.getCode(),
+            ResourceErrorCode.NOT_FOUND.getCode(),
             UserErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             AuthErrorCode.INVALID_CREDENTIALS.getCode(),
             AuthErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),

@@ -166,6 +166,7 @@
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
+- **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담아 돌려주므로 그쪽의 `null`은 "보내지 않았다"를 뜻한다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 
 ### 공통 에러 응답
@@ -2125,12 +2126,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 사진이 등록돼 있지 않으면 `profileImageUrl`은 `null`이다.
 
-- **에러 (400 Bad Request — 대상 사용자 없음)**
+- **에러 (404 Not Found — 대상 사용자 없음)**
 
 ```json
 {
-  "code": "PROFILE_NOT_FOUND",
-  "message": "사용자를 찾을 수 없습니다."
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
 }
 ```
 
@@ -2163,7 +2164,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 설명 | 출처 |
 |---|---|---|---|
-| `introduction` | String | 소개글. 없으면 `""` | `users` |
+| `introduction` | String | 소개글. 없으면 `null` | `users` |
 | `gender` | String | `MALE` \| `FEMALE`. 온보딩 전이면 `null` | `user_onboardings` |
 | `birthday` | String | `YYYY-MM-DD`. 온보딩 전이면 `null` | `user_onboardings` |
 | `weightKg` | Number | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` | `user_onboardings` |
@@ -2214,6 +2215,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **바꾼 값만 돌려준다** — 사진 반영(11-2)·닉네임(11-7)과 같은 형태다
 - **11-5 `GET`의 `null`과 뜻이 다르다** — 여기서 빠진 필드는 "안 보냈다", 11-5의 `null`은 "아직 값이 없다"다
+- **소개글을 `""`로 지우면 응답도 `""`다** — 조회는 `null`이지만 여기서는 `null`이 "안 보냈다"라 겹쳐 쓸 수 없다
 
 - **에러 (400 Bad Request)** — 문구는 온보딩(1-9)과 같다
 

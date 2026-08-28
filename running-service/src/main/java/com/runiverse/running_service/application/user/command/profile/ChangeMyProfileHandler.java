@@ -2,7 +2,7 @@ package com.runiverse.running_service.application.user.command.profile;
 
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.application.user.port.in.ChangeProfileUsecase;
+import com.runiverse.running_service.application.user.port.in.ChangeMyProfileUsecase;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class ChangeProfileHandler implements ChangeProfileUsecase {
+public class ChangeMyProfileHandler implements ChangeMyProfileUsecase {
 
     private final LoadUserByIdPort loadUserByIdPort;
     private final UpdateIntroductionPort updateIntroductionPort;
@@ -28,7 +28,7 @@ public class ChangeProfileHandler implements ChangeProfileUsecase {
     private final UpdateOnboardingPort updateOnboardingPort;
 
     @Override
-    public ChangeProfileResult handle(ChangeProfileCommand command) {
+    public ChangeMyProfileResult handle(ChangeMyProfileCommand command) {
         UserId userId = new UserId(command.userId());
 
         // 1. 갱신 대상이 남아 있는지 확인
@@ -55,7 +55,7 @@ public class ChangeProfileHandler implements ChangeProfileUsecase {
             updateOnboardingPort.updateOnboarding(userId, gender, birthday, weight, height);
         }
 
-        return new ChangeProfileResult(
+        return new ChangeMyProfileResult(
                 introduction == null ? null : introduction.value(),
                 gender == null ? null : gender.name(),
                 birthday == null ? null : birthday.value(),
