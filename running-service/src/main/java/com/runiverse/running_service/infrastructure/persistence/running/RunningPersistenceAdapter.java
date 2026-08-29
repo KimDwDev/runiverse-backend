@@ -9,8 +9,10 @@ import com.runiverse.running_service.application.running.port.out.LoadRoomPlayer
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
+import com.runiverse.running_service.application.running.port.out.RunningSplitRow;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -36,7 +38,7 @@ import java.util.stream.Collectors;
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
         LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
-        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort {
+        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort {
 
     private final EntityManager entityManager;
 
@@ -250,6 +252,24 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .setParameter("userId", userId.value())
                 .getResultStream()
                 .findFirst();
+    }
+
+    @Override
+    public List<RunningSplitRow> loadSplits(RunningRoomId runningRoomId) {
+        // 방의 모든 기록에 딸린 구간을 한 번에 긁는다 — 참가자·구간별로 나눠 부르면 수백 번 나간다.
+        // 참가자 구분은 record.userId로 하고, 묶는 것은 핸들러가 splitNumber로 한다
+        return entityManager.createQuery("""
+                        select new com.runiverse.running_service.application.running.port.out.RunningSplitRow(
+                            record.userId, split.splitNumber, split.distance, split.duration,
+                            split.avgPace, split.avgCadence, split.elevationChange, split.calories,
+                            split.routeStartIndex, split.routeEndIndex)
+                        from RunningSplitJpaEntity split
+                        join split.record record
+                        where record.room.runningRoomId = :roomId
+                        order by split.splitNumber, record.userId
+                        """, RunningSplitRow.class)
+                .setParameter("roomId", runningRoomId.value())
+                .getResultList();
     }
 
     private RunningResultPlayer toResultPlayer(RunningPlayerJpaEntity player,
