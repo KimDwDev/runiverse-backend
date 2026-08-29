@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.running.query.result;
+package com.runiverse.running_service.application.running.command.finish;
 
 import com.runiverse.running_service.application.running.port.out.RoutePoint;
 

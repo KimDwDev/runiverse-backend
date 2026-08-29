@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
+import com.runiverse.running_service.application.running.command.finish.PolylineDecoder;
 import com.runiverse.running_service.application.running.command.finish.PolylineEncoder;
 import com.runiverse.running_service.application.running.port.out.RoutePoint;
-import com.runiverse.running_service.application.running.query.result.PolylineDecoder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
