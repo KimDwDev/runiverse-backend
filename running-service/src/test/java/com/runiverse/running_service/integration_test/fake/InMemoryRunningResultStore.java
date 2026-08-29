@@ -45,7 +45,10 @@ public class InMemoryRunningResultStore
                 .map(record -> new RunningResultRecord(
                         record.getRoutePolyline().value(),
                         record.getPeriod().startAt(),
-                        record.getPeriod().endAt()));
+                        record.getPeriod().endAt(),
+                        record.getTotalDistance().meters(),
+                        record.getTotalElevationGain()
+                                .map(ElevationGain::meters).orElse(null)));
     }
 
     private RunningResultPlayer toResultPlayer(RunningRoomId runningRoomId, RunningPlayer player) {

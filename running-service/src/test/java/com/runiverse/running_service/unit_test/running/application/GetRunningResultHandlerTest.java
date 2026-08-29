@@ -128,7 +128,7 @@ public class GetRunningResultHandlerTest {
                 finished(ME, RunningPlayerStatus.COMPLETED),
                 finished(OTHER, RunningPlayerStatus.COMPLETED)));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
-                .thenReturn(Optional.of(new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT)));
+                .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", IMAGE_KEY), profile(OTHER, "러닝초보", null));
         when(generateViewUrlPort.generate(anyString())).thenReturn(IMAGE_URL);
 
@@ -172,7 +172,7 @@ public class GetRunningResultHandlerTest {
                 finished(ME, RunningPlayerStatus.COMPLETED),
                 withoutRecord(OTHER, RunningPlayerStatus.RUNNING)));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
-                .thenReturn(Optional.of(new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT)));
+                .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null), profile(OTHER, "러닝초보", null));
 
         // when
@@ -199,7 +199,7 @@ public class GetRunningResultHandlerTest {
                 finished(ME, RunningPlayerStatus.COMPLETED),
                 finished(OTHER, RunningPlayerStatus.RUNNING_LEFT_PENALTY)));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
-                .thenReturn(Optional.of(new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT)));
+                .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null), profile(OTHER, "러닝초보", null));
 
         // when
@@ -219,7 +219,7 @@ public class GetRunningResultHandlerTest {
                 finished(ME, RunningPlayerStatus.COMPLETED),
                 finished(OTHER, RunningPlayerStatus.COMPLETED)));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
-                .thenReturn(Optional.of(new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT)));
+                .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null));
 
         // when
@@ -242,7 +242,7 @@ public class GetRunningResultHandlerTest {
         when(loadRunningResultPlayersPort.loadPlayers(any()))
                 .thenReturn(List.of(finished(ME, RunningPlayerStatus.COMPLETED)));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
-                .thenReturn(Optional.of(new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT)));
+                .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null));
 
         // when
@@ -278,6 +278,11 @@ public class GetRunningResultHandlerTest {
 
     private RunningResultPlayer withoutRecord(UUID userId, RunningPlayerStatus status) {
         return new RunningResultPlayer(userId, status, null, null, null, null, null, null);
+    }
+
+    // 6-2가 쓰는 두 값까지 채운다 — 6-1은 앞의 셋만 읽는다
+    private RunningResultRecord record() {
+        return new RunningResultRecord(polyline(), STARTED_AT, FINISHED_AT, 5020, 42);
     }
 
     private String polyline() {
