@@ -162,7 +162,8 @@
 ## 0. 공통 규칙
 
 - **refreshToken**: 바디로 전달하고 클라이언트 Keychain/Keystore에 보관한다.
-- **경로(`routePolyline`)**: Google Encoded Polyline, precision 5(소수점 5자리, 약 1m). 서버와 클라이언트가 같은 precision을 사용한다.
+- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **대시보드(6-1·6-2)는 서버가 풀어 좌표 배열 `routes`로 내리고**, 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다.
+- **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점(`startPoint` 등)도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
@@ -1185,6 +1186,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "startedAt": "2026-07-25T19:00:30",   // 현재 사용자 기록 기준, 기록 없으면 null
   "finishedAt": "2026-07-25T19:30:30",  // 현재 사용자 기록 기준, 기록 없으면 null
+  "routes": [                             // 현재 사용자 경로 [위도, 경도] — 본인 기록이 없으면 null
+    [35.1795543, 129.0756416],
+    [35.1796012, 129.0757104]
+  ],
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1222,7 +1227,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 기록이 있어도 케이던스·유효 고도 표본이 부족하면 `averageCadenceSpm`·`totalElevationGainMeters`는 null일 수 있다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
 
-- **`startedAt`·`finishedAt`은 본인 기록 기준이다**(`running_records.start_at`/`end_at`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
+- **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
+- **`routes`는 서버가 폴리라인을 풀어서 내린다** — 저장은 `running_records.route_polyline`(encoded polyline)이지만 응답은 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. 6-2의 `routes`와 같은 값이다
+- **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
+- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면에만 쓴다
 
 - **에러 (403 Forbidden — 같은 방 참가자만 열람)**
 
@@ -1257,17 +1265,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "totalElevationGainMeters": 42,       // 현재 사용자 누적 상승 고도
   "startedAt": "2026-07-25T19:00:30",
   "finishedAt": "2026-07-25T19:30:30",
-  "route": {                             // 현재 사용자의 전체 경로
-    "startLocation": {
-      "latitude": 35.1795543,
-      "longitude": 129.0756416
-    },
-    "endLocation": {
-      "latitude": 35.1842012,
-      "longitude": 129.0831421
-    },
-    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 다운샘플 경로(encoded polyline). running_records.route_polyline
-  },
+  "routes": [                            // 현재 사용자의 전체 경로 [위도, 경도] — 6-1의 routes와 같은 값
+    [35.1795543, 129.0756416],
+    [35.1842012, 129.0831421]
+  ],
   "players": [                           // 참가자 메타데이터는 여기 한 번만 — 구간마다 반복하지 않는다
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1284,10 +1285,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "startDistanceMeters": 0,
       "endDistanceMeters": 10,
       "distanceMeters": 10,              // 고정 10m
-      "startPoint": {
-        "latitude": 35.1795543,
-        "longitude": 129.0756416
-      },
+      "startPoint": [35.1795543, 129.0756416],   // [위도, 경도] — routes와 같은 형식
       "players": [
         {
           "userId": "550e8400-e29b-41d4-a716-446655440015",  // 최상위 players와 조인
@@ -1308,9 +1306,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `running_records` 행이 없는 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
 - 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다 — **10m 구간의 `elevationChangeMeters`는 대체로 null이다**(GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다)
 - 최상위 `totalElevationGainMeters`도 유효 고도 표본이 부족하면 null이다
-- 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`·`route`는 null이고 `splits`는 빈 배열이다
-- 경로는 `running_records.route_polyline`의 encoded polyline으로 내려 S3를 조회하지 않는다.
-- **`startLocation`·`endLocation`·`startPoint`는 저장된 컬럼이 아니라 폴리라인에서 뽑은 값이다** — 지도 마커용으로 서버가 미리 꺼내 실어준다. 앞의 둘은 `running_records.route_polyline`의 첫 점·끝 점, `startPoint`는 같은 폴리라인에서 `running_splits.route_start_index`가 가리키는 점이다
+- 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`·`routes`는 null이고 `splits`는 빈 배열이다
+- 경로는 `running_records.route_polyline`에서 나온다 — 서버가 풀어 `routes`로 내리므로 S3를 조회하지 않는다.
+- **`routes`·`startPoint`는 저장된 컬럼이 아니라 폴리라인을 푼 값이다** — `routes`는 푼 결과 전체이고, `startPoint`는 그 배열에서 `running_splits.route_start_index`가 가리키는 원소다. 시작·끝 지점은 `routes`의 첫 원소·끝 원소라 따로 싣지 않는다
 - 구간 경로 자체는 반환하지 않는다.
 - 점별 고도·정확도·순간 페이스·케이던스·시각은 반환하지 않고 구간 단위 값만 제공한다.
 - **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
