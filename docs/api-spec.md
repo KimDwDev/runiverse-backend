@@ -1195,7 +1195,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "userId": "550e8400-e29b-41d4-a716-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",   // nullable
-      "status": "COMPLETED",
+      "status": "COMPLETED",              // COMPLETED | RUNNING 두 값뿐이다
       "isDeleted": false,
       "isMe": true,
       "totalDistanceMeters": 5020,
@@ -1209,7 +1209,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "userId": "550e8400-e29b-41d4-a716-446655440031",
       "nickname": "러닝초보",
       "profileImageUrl": null,
-      "status": "RUNNING_LEFT_NO_PENALTY",
+      "status": "COMPLETED",
       "isDeleted": false,
       "isMe": false,
       "totalDistanceMeters": 4870,
@@ -1223,6 +1223,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **`status`는 `COMPLETED`·`RUNNING` 두 값뿐이다** — 러닝을 끝낸 사람은 완주든 중도이탈이든 `COMPLETED`, 아직 뛰는 중이면 `RUNNING`이다. DB의 `running_players.status`(`RUNNING_LEFT_PENALTY` 등, `erd.md` §6)를 그대로 노출하지 않는다: **페널티 여부는 본인 매칭 쿨다운 판정에 쓰는 내부 값이라 남의 화면에 실을 이유가 없다.** 얼마나 뛰었는지는 `totalDistanceMeters`로 드러난다
 - `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 시작 전 이탈자는 제외한다. 기록이 없으면 사용자 정보와 `status`만 채우고 `totalDistanceMeters`·`totalDurationSeconds`·`totalCaloriesKcal`·`averagePaceSecondsPerKm`·`averageCadenceSpm`·`totalElevationGainMeters`는 null로 내려 화면에 "기록 없음"으로 표시한다
 - 기록이 있어도 케이던스·유효 고도 표본이 부족하면 `averageCadenceSpm`·`totalElevationGainMeters`는 null일 수 있다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
@@ -1274,7 +1275,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "userId": "550e8400-e29b-41d4-a716-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",
-      "status": "COMPLETED",
+      "status": "COMPLETED",             // 6-1과 같은 규칙 — COMPLETED | RUNNING
       "isDeleted": false,
       "isMe": true
     }
