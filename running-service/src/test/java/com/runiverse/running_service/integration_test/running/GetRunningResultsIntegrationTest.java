@@ -14,7 +14,7 @@ import com.runiverse.running_service.application.running.command.start.StartRunn
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
-import com.runiverse.running_service.application.running.query.result.GetRunningResultHandler;
+import com.runiverse.running_service.application.running.query.result.GetRunningResultsHandler;
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsQuery;
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsResult;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
@@ -66,7 +66,7 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
 
     private InMemoryPlayerProfileStore playerProfileStore;
     private FakeViewUrlGenerator viewUrlGenerator;
-    private GetRunningResultHandler handler;
+    private GetRunningResultsHandler handler;
 
     @BeforeEach
     void setUp() {
@@ -114,7 +114,7 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
         viewUrlGenerator = new FakeViewUrlGenerator();
         InMemoryRunningResultStore resultStore =
                 new InMemoryRunningResultStore(runningStore, runningRecordStore);
-        handler = new GetRunningResultHandler(
+        handler = new GetRunningResultsHandler(
                 runningStore,       // LoadRunningRoomPort
                 resultStore,        // LoadRunningResultPlayersPort
                 resultStore,        // LoadRunningResultRecordPort

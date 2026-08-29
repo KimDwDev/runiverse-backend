@@ -29,7 +29,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class GetRunningResultHandler implements GetRunningResultsUsecase {
+public class GetRunningResultsHandler implements GetRunningResultsUsecase {
 
     private static final String DELETED_NICKNAME = "탈퇴한 사용자";
     private static final String STATUS_RUNNING = "RUNNING";

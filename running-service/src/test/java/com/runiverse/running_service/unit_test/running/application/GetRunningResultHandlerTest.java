@@ -12,7 +12,7 @@ import com.runiverse.running_service.application.running.port.out.LoadRunningRoo
 import com.runiverse.running_service.application.running.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
-import com.runiverse.running_service.application.running.query.result.GetRunningResultHandler;
+import com.runiverse.running_service.application.running.query.result.GetRunningResultsHandler;
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsQuery;
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsResult;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
@@ -66,11 +66,11 @@ public class GetRunningResultHandlerTest {
     @Mock
     private GenerateViewUrlPort generateViewUrlPort;
 
-    private GetRunningResultHandler handler;
+    private GetRunningResultsHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new GetRunningResultHandler(
+        handler = new GetRunningResultsHandler(
                 loadRunningRoomPort,
                 loadRunningResultPlayersPort,
                 loadRunningResultRecordPort,
