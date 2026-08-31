@@ -134,6 +134,26 @@ class UserProfileE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("업로드하지 않은 키로는 프로필 사진을 반영할 수 없다")
+    void unuploadedProfileImageKeyIsRejected() {
+        // given - URL만 받고 실제 업로드는 하지 않는다
+        TestUser user = signUpAndOnboard();
+        String key = post("/users/me/profile-image/presigned-url", Map.of(
+                "mimeType", "image/png",
+                "fileSizeBytes", 1024
+        ), user.accessToken()).text("profileImageKey");
+        // when - 서버가 S3에 실제로 객체가 있는지 확인한다
+        Response response = patch("/users/me/profile-image",
+                Map.of("profileImageKey", key), user.accessToken());
+        // then - 발급만으로는 사진이 생기지 않는다
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.text("code")).isEqualTo("PROFILE_IMAGE_NOT_UPLOADED");
+        // 반영이 막혔으므로 내 정보에도 사진이 붙지 않는다
+        assertThat(get("/users/" + user.userId(), user.accessToken())
+                .text("profileImageUrl")).isNull();
+    }
+
+    @Test
     @DisplayName("허용하지 않는 형식은 업로드 URL 발급 단계에서 400으로 걸린다")
     void unsupportedImageTypeIsRejected() {
         // given

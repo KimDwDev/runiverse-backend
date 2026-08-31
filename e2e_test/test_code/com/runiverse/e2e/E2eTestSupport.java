@@ -62,6 +62,11 @@ public abstract class E2eTestSupport {
         public List<Map<String, Object>> objects(String field) {
             return (List<Map<String, Object>>) body.get(field);
         }
+
+        // routes처럼 객체가 아니라 [위도, 경도] 배열이 담긴 목록은 원소 타입을 못 박지 않는다
+        public List<?> list(String field) {
+            return (List<?>) body.get(field);
+        }
     }
 
     /** 가입·온보딩까지 마친 사용자. 러닝처럼 온보딩이 전제인 흐름은 전부 여기서 출발한다. */
