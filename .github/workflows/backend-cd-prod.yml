@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   # 이미지 빌드 -> 프로덕션 ECR push
+  # 수정
   runiverse-backend-prod-image:
     name: running-service 프로덕션 이미지 빌드
     runs-on: ubuntu-24.04
