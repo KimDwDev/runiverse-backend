@@ -102,7 +102,7 @@ jobs:
           ECR_REGISTRY="__ECR_REGISTRY__"
           IMAGE_URI="__IMAGE_URI__"
           CONTAINER_NAME="runiverse-backend"
-          PARAMETER_PATH="/runiverse/prod"
+          PARAMETER_PATH="/runiverse/deploy"
           ENV_DIRECTORY="/opt/runiverse"
           ENV_FILE="${ENV_DIRECTORY}/.env"
           echo "===== Runiverse production deployment started ====="
