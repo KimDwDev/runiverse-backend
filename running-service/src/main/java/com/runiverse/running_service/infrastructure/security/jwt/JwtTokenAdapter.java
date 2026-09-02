@@ -2,10 +2,16 @@ package com.runiverse.running_service.infrastructure.security.jwt;
 
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.ParseRefreshTokenPort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -16,6 +22,7 @@ import java.util.UUID;
 
 @Component
 public class JwtTokenAdapter implements GenerateTokenPort, ParseRefreshTokenPort {
+
     private static final String CLAIM_TOKEN_TYPE = "typ";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
@@ -26,10 +33,10 @@ public class JwtTokenAdapter implements GenerateTokenPort, ParseRefreshTokenPort
     private final JwtProperties properties;
 
     public JwtTokenAdapter(
-        @Qualifier("accessTokenEncoder") JwtEncoder accessTokenEncoder,
-        @Qualifier("refreshTokenEncoder") JwtEncoder refreshTokenEncoder,
-        @Qualifier("refreshTokenDecoder") JwtDecoder refreshTokenDecoder,
-        JwtProperties properties
+            @Qualifier("accessTokenEncoder") JwtEncoder accessTokenEncoder,
+            @Qualifier("refreshTokenEncoder") JwtEncoder refreshTokenEncoder,
+            @Qualifier("refreshTokenDecoder") JwtDecoder refreshTokenDecoder,
+            JwtProperties properties
     ) {
         this.accessTokenEncoder = accessTokenEncoder;
         this.refreshTokenEncoder = refreshTokenEncoder;

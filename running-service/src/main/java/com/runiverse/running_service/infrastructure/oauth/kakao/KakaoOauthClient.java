@@ -8,7 +8,6 @@ import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -26,22 +25,26 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
-public class KakaoOauthClient implements OauthClient{
+public class KakaoOauthClient implements OauthClient {
+
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
+
     KakaoOauthClient(
-            @Qualifier("kakaoRestClient") RestClient restClient,
+            RestClient restClient,
             KakaoOauthProperties properties
     ) {
         this.restClient = restClient;
         this.properties = properties;
     }
+
     @Override
     public Provider provider() {
         return Provider.KAKAO;
     }
+
     @Override
     public OauthProfile exchange(String authorizationCode, String codeVerifier) {
         try {
@@ -53,18 +56,18 @@ public class KakaoOauthClient implements OauthClient{
             throw new OauthCodeExchangeFailedException();
         }
     }
-    private String requestAccessToken(String authorization, String codeVerifier) {
+
+    private String requestAccessToken(String authorizationCode, String codeVerifier) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE);
         form.add("client_id", properties.clientId());
         form.add("redirect_uri", properties.redirectUri());
-        form.add("code", authorization);
+        form.add("code", authorizationCode);
+        // 앱이 PKCE로 인가를 시작하므로 검증값은 항상 온다
+        form.add("code_verifier", codeVerifier);
+        // REST API 키에 기본 활성화돼 있으면 필수다
         if (StringUtils.hasText(properties.clientSecret())) {
             form.add("client_secret", properties.clientSecret());
-        }
-        // client가 없다면 verifier가 없음
-        if (StringUtils.hasText(codeVerifier)) {
-            form.add("code_verifier", codeVerifier);
         }
         KakaoTokenResponse response = restClient.post()
                 .uri(properties.tokenUri())
@@ -82,6 +85,7 @@ public class KakaoOauthClient implements OauthClient{
         }
         return response.accessToken();
     }
+
     // 카카오 액세스 토큰으로 사용자 정보 조회
     private KakaoUserResponse fetchUser(String kakaoAccessToken) {
         KakaoUserResponse response = restClient.get()
@@ -99,6 +103,7 @@ public class KakaoOauthClient implements OauthClient{
         }
         return response;
     }
+
     private OauthProfile toProfile(KakaoUserResponse response) {
         // 보낸 데이터 에서 email이 있으면 account로 받아온다
         KakaoUserResponse.KakaoAccount account = response.kakaoAccount();
@@ -108,6 +113,7 @@ public class KakaoOauthClient implements OauthClient{
         }
         return new OauthProfile(Provider.KAKAO, String.valueOf(response.id()), email);
     }
+
     private void logFailure(String step, ClientHttpResponse response) throws IOException {
         log.warn("카카오 {} 실패: status={}, body={}",
                 step,

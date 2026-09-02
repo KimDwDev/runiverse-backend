@@ -1,18 +1,21 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.user;
 
-import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
-import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardJpaEntity;
-
-import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
-import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
-
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboard;
+import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Gender;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.Nickname;
+import com.runiverse.running_service.domain.user.vo.PasswordHash;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
+import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.persistence.user.OauthUserJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardingJpaEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +34,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -44,6 +48,10 @@ public class UserPersistenceAdapterTest {
     // PasswordHash VO가 Argon2id 형식만 허용하므로 형식에 맞는 값을 쓴다
     private static final String PASSWORD_HASH =
             "$argon2id$v=19$m=16384,t=2,p=1$c29tZXNhbHQ$aGFzaHZhbHVl";
+
+    private static String profileImageKeyOf(UUID userId) {
+        return "profiles/" + userId + "/photo.jpg";
+    }
 
     // 카카오 회원번호
     private static final String PROVIDER_ID = "1234567890";
@@ -100,9 +108,8 @@ public class UserPersistenceAdapterTest {
         // when
         boolean result = userPersistenceAdapter.existsByEmail(email);
 
-        // then
+        // then -> 이메일이 실제로 쿼리에 바인딩됐는지는 반환값으로 증명되지 않는다
         assertThat(result).isFalse();
-
         verify(countQuery).setParameter("email", email);
         verify(countQuery).getSingleResult();
     }
@@ -115,7 +122,7 @@ public class UserPersistenceAdapterTest {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
 
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, email, PASSWORD_HASH, true, "러닝을 좋아합니다"
+                userId, email, PASSWORD_HASH, true, profileImageKeyOf(userId), ProfileVisibility.FRIENDS, "러닝을 좋아합니다"
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -131,7 +138,11 @@ public class UserPersistenceAdapterTest {
         assertThat(user.getEmail().value()).isEqualTo(email);
         assertThat(user.getPasswordHash().value()).isEqualTo(PASSWORD_HASH);
         assertThat(user.isAlertConsent()).isTrue();
-        assertThat(user.getDescription().value()).isEqualTo("러닝을 좋아합니다");
+        assertThat(user.getProfileImageKey())
+                .map(ProfileImageKey::value)
+                .contains(profileImageKeyOf(userId));
+        assertThat(user.getProfileVisibility()).isEqualTo(ProfileVisibility.FRIENDS);
+        assertThat(user.getIntroduction().value()).isEqualTo("러닝을 좋아합니다");
     }
 
     @Test
@@ -150,13 +161,13 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("description이 null이면 빈 문자열로 변환한다")
-    void loadByEmailConvertsNullDescription() {
+    @DisplayName("introduction이 null이면 빈 문자열로 변환한다")
+    void loadByEmailConvertsNullIntroduction() {
         // given
         String email = "test@example.com";
 
         UserJpaEntity entity = UserJpaEntity.create(
-                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, null
+                UuidCreator.getTimeOrderedEpoch(), email, PASSWORD_HASH, false, null, ProfileVisibility.PUBLIC, null
         );
 
         givenUserQueryReturns(email, Stream.of(entity));
@@ -166,16 +177,16 @@ public class UserPersistenceAdapterTest {
 
         // then
         assertThat(result).isPresent();
-        assertThat(result.get().getDescription().value()).isEmpty();
+        assertThat(result.get().getIntroduction().value()).isEmpty();
     }
 
     @Test
     @DisplayName("provider와 providerId에 연동된 유저를 도메인 User로 변환해 반환한다")
     void loadByProviderReturnsUser() {
-        // given - 소셜 전용 계정은 hash_password와 description이 NULL로 저장된다
+        // given -> 소셜 전용 계정은 password_hash와 introduction이 NULL로 저장된다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "kakao@example.com", null, false, null
+                userId, "kakao@example.com", null, false, null, ProfileVisibility.PUBLIC, null
         );
 
         givenProviderQueryReturns(PROVIDER_ID, Stream.of(entity));
@@ -192,7 +203,10 @@ public class UserPersistenceAdapterTest {
 
         // NULL은 도메인이 허용하지 않으므로 빈 문자열로 복원되어야 한다
         assertThat(user.getPasswordHash().value()).isEmpty();
-        assertThat(user.getDescription().value()).isEmpty();
+        assertThat(user.getIntroduction().value()).isEmpty();
+
+        // 사진은 빈 문자열이 아니라 빈 Optional로 복원된다
+        assertThat(user.getProfileImageKey()).isEmpty();
     }
 
     @Test
@@ -251,7 +265,63 @@ public class UserPersistenceAdapterTest {
 
         UserJpaEntity entity = (UserJpaEntity) captor.getAllValues().get(0);
         assertThat(entity.getPasswordHash()).isNull();
-        assertThat(entity.getDescription()).isNull();
+        assertThat(entity.getIntroduction()).isNull();
+    }
+
+    @Test
+    @DisplayName("신규 유저를 저장하면 profile_visibility에 PUBLIC이 채워진다")
+    void savePersistsDefaultProfileVisibility() {
+        // given -> profile_visibility는 NOT NULL이라 저장 시 값이 비면 안 된다
+        User user = new User(
+                UuidCreator.getTimeOrderedEpoch(), "local@example.com", PASSWORD_HASH
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileVisibility()).isEqualTo(ProfileVisibility.PUBLIC);
+    }
+
+    @Test
+    @DisplayName("신규 유저를 저장하면 profile_image_key는 NULL로 저장된다")
+    void savePersistsNullProfileImageKeyForNewUser() {
+        // given -> 가입 시점에는 프로필 사진이 없다
+        User user = new User(
+                UuidCreator.getTimeOrderedEpoch(), "local@example.com", PASSWORD_HASH
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("프로필 사진이 있는 유저를 저장하면 profile_image_key에 key가 채워진다")
+    void savePersistsProfileImageKey() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        User user = new User(
+                userId, "local@example.com", PASSWORD_HASH, false,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+
+        // when
+        userPersistenceAdapter.save(user);
+
+        // then
+        ArgumentCaptor<UserJpaEntity> captor = ArgumentCaptor.forClass(UserJpaEntity.class);
+        verify(entityManager).persist(captor.capture());
+
+        assertThat(captor.getValue().getProfileImageKey()).isEqualTo(profileImageKeyOf(userId));
     }
 
     @Test
@@ -276,7 +346,7 @@ public class UserPersistenceAdapterTest {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         UserJpaEntity entity = UserJpaEntity.create(
-                userId, "test@example.com", PASSWORD_HASH, false, null
+                userId, "test@example.com", PASSWORD_HASH, false, null, ProfileVisibility.PUBLIC, null
         );
 
         when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
@@ -363,8 +433,8 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("온보딩을 저장하면 user_onboard 행을 영속화한다")
-    void saveOnboardPersistsOnboardRow() {
+    @DisplayName("온보딩을 저장하면 user_onboardings 행을 영속화한다")
+    void saveOnboardingPersistsOnboardingRow() {
         // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         User user = new User(userId, "test@example.com", PASSWORD_HASH);
@@ -372,17 +442,17 @@ public class UserPersistenceAdapterTest {
                 "러너킴", "MALE", LocalDate.of(1999, 5, 20),
                 330, new BigDecimal("70.5"), new BigDecimal("175.0")
         );
-        UserOnboard onboard = user.getOnboard().orElseThrow();
+        UserOnboarding onboarding = user.getOnboarding().orElseThrow();
 
         // when
-        userPersistenceAdapter.saveOnboard(onboard);
+        userPersistenceAdapter.saveOnboarding(onboarding);
 
         // then -> VO가 껍질을 벗고 원시 값으로 내려가야 한다
-        ArgumentCaptor<UserOnboardJpaEntity> captor =
-                ArgumentCaptor.forClass(UserOnboardJpaEntity.class);
+        ArgumentCaptor<UserOnboardingJpaEntity> captor =
+                ArgumentCaptor.forClass(UserOnboardingJpaEntity.class);
         verify(entityManager).persist(captor.capture());
 
-        UserOnboardJpaEntity entity = captor.getValue();
+        UserOnboardingJpaEntity entity = captor.getValue();
         assertThat(entity.getUserId()).isEqualTo(userId);
         assertThat(entity.getNickname()).isEqualTo("러너킴");
         assertThat(entity.getGender()).isEqualTo(Gender.MALE);
@@ -390,6 +460,136 @@ public class UserPersistenceAdapterTest {
         assertThat(entity.getAvgPace()).isEqualTo(330);
         assertThat(entity.getWeight()).isEqualByComparingTo("70.5");
         assertThat(entity.getHeight()).isEqualByComparingTo("175.0");
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 key를 바꾸면 조회한 엔티티에 반영한다")
+    void updateProfileImageChangesEntity() {
+        // given -> save()는 persist라 신규 전용이므로 갱신은 변경 감지로 처리한다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+        String newKey = "profiles/" + userId + "/019ffa54-917f-7477-9482-5792597ef3b0.jpg";
+
+        // when
+        userPersistenceAdapter.updateProfileImage(new UserId(userId), new ProfileImageKey(newKey));
+
+        // then -> 별도 저장 호출 없이 엔티티 상태만 바꾼다
+        assertThat(entity.getProfileImageKey()).isEqualTo(newKey);
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 프로필 이미지를 바꾸지 않고 예외를 던진다")
+    void updateProfileImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.updateProfileImage(
+                new UserId(userId), new ProfileImageKey(profileImageKeyOf(userId))))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("소개글을 빈 문자열로 지우면 컬럼을 null로 비운다")
+    void updateIntroductionConvertsEmptyToNull() {
+        // given -> 도메인은 소개글 없음을 빈 문자열로 들고 있지만 컬럼에는 남기지 않는다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, "즐겁게 달려요"
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.updateIntroduction(new UserId(userId), new Introduction(""));
+
+        // then -> 가입 시 save()와 같은 방식이라 "없음"의 표현이 하나로 유지된다
+        assertThat(entity.getIntroduction()).isNull();
+    }
+
+    @Test
+    @DisplayName("프로필 이미지를 지우면 엔티티의 key를 null로 만든다")
+    void clearProfileImageRemovesKey() {
+        // given -> S3 객체는 그대로 두고 DB의 연결만 끊는다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.clearProfileImage(new UserId(userId));
+
+        // then -> 별도 저장 호출 없이 변경 감지로 반영한다
+        assertThat(entity.getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 이미지가 없어도 지우기는 그대로 성공한다")
+    void clearProfileImageIsIdempotent() {
+        // given -> profile_image_key가 이미 null인 사용자다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.clearProfileImage(new UserId(userId));
+
+        // then
+        assertThat(entity.getProfileImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 프로필 이미지를 지우지 않고 예외를 던진다")
+    void clearProfileImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.clearProfileImage(new UserId(userId)))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("비밀번호를 바꾸면 엔티티의 해시가 갱신된다")
+    void updatePasswordChangesEntity() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                null, ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+        String newHash = "$argon2id$v=19$m=16384,t=2,p=1$YW5vdGhlcnNhbHQ$bmV3aGFzaA";
+
+        // when
+        userPersistenceAdapter.updatePassword(new UserId(userId), new PasswordHash(newHash));
+
+        // then -> 유니크 제약이 없어 flush 없이 변경 감지에 맡긴다
+        assertThat(entity.getPasswordHash()).isEqualTo(newHash);
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 비밀번호를 바꾸지 않고 예외를 던진다")
+    void updatePasswordThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.updatePassword(
+                new UserId(userId), new PasswordHash(PASSWORD_HASH)))
+                .isInstanceOf(UserNotFoundException.class);
     }
 
     private void givenCountQueryReturns(String parameterName, Object value, long count) {

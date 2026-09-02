@@ -8,10 +8,15 @@ import java.util.Locale;
 public enum Gender {
     MALE,
     FEMALE;
+
     public static Gender from(String value) {
-        if (value == null) throw new GenderRequiredException();
+        if (value == null) {
+            throw new GenderRequiredException();
+        }
         String normalized = value.trim().toUpperCase(Locale.ROOT);
-        if (normalized.isEmpty()) throw new GenderRequiredException();
+        if (normalized.isEmpty()) {
+            throw new GenderRequiredException();
+        }
         try {
             return valueOf(normalized);
         } catch (IllegalArgumentException e) {

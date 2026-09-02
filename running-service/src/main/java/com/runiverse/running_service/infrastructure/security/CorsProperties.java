@@ -10,4 +10,5 @@ public record CorsProperties(
         List<String> allowedMethods,
         List<String> allowedHeaders
 ) {
+
 }

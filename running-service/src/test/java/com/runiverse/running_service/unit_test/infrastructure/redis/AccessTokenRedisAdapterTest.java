@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.runiverse.running_service.infrastructure.redis.token.AccessTokenRedisAdapter;
-
 import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,12 +13,14 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
 import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class AccessTokenRedisAdapterTest {
+
     private static final Duration ACCESS_TTL = Duration.ofMinutes(30);
     private static final String BLOCKED = "1";
     @Mock
@@ -29,6 +30,7 @@ public class AccessTokenRedisAdapterTest {
     private AccessTokenRedisAdapter accessTokenRedisAdapter;
     private String accessTokenId;
     private String expectedKey;
+
     @BeforeEach
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties(
@@ -52,6 +54,7 @@ public class AccessTokenRedisAdapterTest {
         // then
         verify(valueOperations).set(expectedKey, BLOCKED, ACCESS_TTL);
     }
+
     @Test
     @DisplayName("등록된 jti는 차단된 것으로 판단한다")
     void isBlockedReturnsTrueWhenKeyExists() {
@@ -60,6 +63,7 @@ public class AccessTokenRedisAdapterTest {
         // when & then
         assertThat(accessTokenRedisAdapter.isBlocked(accessTokenId)).isTrue();
     }
+
     @Test
     @DisplayName("등록되지 않은 jti는 통과시킨다")
     void isBlockedReturnsFalseWhenKeyAbsent() {
@@ -68,6 +72,7 @@ public class AccessTokenRedisAdapterTest {
         // when & then
         assertThat(accessTokenRedisAdapter.isBlocked(accessTokenId)).isFalse();
     }
+
     @Test
     @DisplayName("hasKey가 null을 반환해도 통과시킨다")
     void isBlockedReturnsFalseWhenHasKeyIsNull() {

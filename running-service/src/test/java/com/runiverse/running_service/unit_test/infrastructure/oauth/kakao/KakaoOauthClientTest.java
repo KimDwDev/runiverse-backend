@@ -1,8 +1,6 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 
-import com.runiverse.running_service.infrastructure.oauth.kakao.KakaoOauthClient;
-
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
@@ -42,46 +40,50 @@ public class KakaoOauthClientTest {
     private static final String PROVIDER_ID = "1234567890";
     private static final String EMAIL = "kakao@example.com";
 
-    private static final String TOKEN_RESPONSE = """
-            {
-              "token_type": "bearer",
-              "access_token": "kakao-access-token",
-              "expires_in": 21599,
-              "refresh_token": "kakao-refresh-token"
-            }
-            """;
+    private static final String TOKEN_RESPONSE =
+            """
+                    {
+                      "token_type": "bearer",
+                      "access_token": "kakao-access-token",
+                      "expires_in": 21599,
+                      "refresh_token": "kakao-refresh-token"
+                    }
+                    """;
 
-    private static final String USER_RESPONSE = """
-            {
-              "id": 1234567890,
-              "connected_at": "2026-07-30T00:00:00Z",
-              "kakao_account": {
-                "has_email": true,
-                "email_needs_agreement": false,
-                "is_email_valid": true,
-                "is_email_verified": true,
-                "email": "kakao@example.com"
-              }
-            }
-            """;
+    private static final String USER_RESPONSE =
+            """
+                    {
+                      "id": 1234567890,
+                      "connected_at": "2026-07-30T00:00:00Z",
+                      "kakao_account": {
+                        "has_email": true,
+                        "email_needs_agreement": false,
+                        "is_email_valid": true,
+                        "is_email_verified": true,
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
 
     // 이메일 동의를 받지 못하면 email 필드 자체가 응답에서 빠진다
-    private static final String USER_RESPONSE_WITHOUT_EMAIL = """
-            {
-              "id": 1234567890,
-              "kakao_account": {
-                "has_email": true,
-                "email_needs_agreement": true
-              }
-            }
-            """;
+    private static final String USER_RESPONSE_WITHOUT_EMAIL =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "has_email": true,
+                        "email_needs_agreement": true
+                      }
+                    }
+                    """;
 
     // 동의 항목이 하나도 없으면 kakao_account 자체가 오지 않는다
-    private static final String USER_RESPONSE_WITHOUT_ACCOUNT = """
-            {
-              "id": 1234567890
-            }
-            """;
+    private static final String USER_RESPONSE_WITHOUT_ACCOUNT =
+            """
+                    {
+                      "id": 1234567890
+                    }
+                    """;
 
     private MockRestServiceServer mockServer;
 
@@ -144,17 +146,18 @@ public class KakaoOauthClientTest {
     }
 
     @Test
-    @DisplayName("client_secret과 code_verifier가 없으면 폼에 담지 않는다")
-    void exchangeOmitsBlankOptionalParameters() {
-        // given - 콘솔에서 client_secret을 쓰지 않고, PKCE도 쓰지 않는 클라이언트
+    @DisplayName("client_secret이 없으면 폼에 담지 않는다")
+    void exchangeOmitsBlankClientSecret() {
+        // given -> 콘솔에서 client_secret을 끈 클라이언트
         KakaoOauthClient client = createClient("");
 
-        // formData는 완전 일치를 검사하므로 이 4개만 있어야 통과한다
+        // formData는 완전 일치를 검사하므로 이 5개만 있어야 통과한다
         MultiValueMap<String, String> expectedForm = new LinkedMultiValueMap<>();
         expectedForm.add("grant_type", "authorization_code");
         expectedForm.add("client_id", CLIENT_ID);
         expectedForm.add("redirect_uri", REDIRECT_URI);
         expectedForm.add("code", AUTHORIZATION_CODE);
+        expectedForm.add("code_verifier", CODE_VERIFIER);
 
         mockServer.expect(requestTo(TOKEN_URI))
                 .andExpect(content().formData(expectedForm))
@@ -164,7 +167,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        client.exchange(AUTHORIZATION_CODE, null);
+        client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         mockServer.verify();
@@ -173,14 +176,15 @@ public class KakaoOauthClientTest {
     @Test
     @DisplayName("토큰 요청이 실패하면 OauthCodeExchangeFailedException을 던진다")
     void exchangeFailsWhenTokenRequestRejected() {
-        // given - 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
+        // given -> 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
 
         mockServer.expect(requestTo(TOKEN_URI))
                 .andRespond(withBadRequest()
-                        .body("""
-                                {"error":"invalid_grant","error_description":"authorization code not found","error_code":"KOE320"}
-                                """)
+                        .body(
+                                """
+                                        {"error":"invalid_grant","error_description":"authorization code not found","error_code":"KOE320"}
+                                        """)
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when & then
@@ -193,7 +197,7 @@ public class KakaoOauthClientTest {
     @Test
     @DisplayName("토큰 응답에 access_token이 없으면 OauthCodeExchangeFailedException을 던진다")
     void exchangeFailsWhenAccessTokenMissing() {
-        // given - 200이지만 본문이 비어 있는 경우를 방어한다
+        // given -> 200이지만 본문이 비어 있는 경우를 방어한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
 
         mockServer.expect(requestTo(TOKEN_URI))

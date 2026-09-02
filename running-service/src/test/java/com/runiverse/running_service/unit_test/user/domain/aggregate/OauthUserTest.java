@@ -2,17 +2,17 @@ package com.runiverse.running_service.domain.user.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.exception.UserIdRequiredException;
+import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.user.vo.UserId;
-
-import static org.assertj.core.api.Assertions.*;
-
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // OauthUser의 생성자가 package-private 이라 같은 패키지에 둔다
 public class OauthUserTest {
@@ -79,9 +79,9 @@ public class OauthUserTest {
     class EqualityTest {
 
         @Test
-        @DisplayName("userId와 provider가 같으면 providerId가 달라도 같은 엔티티이다")
+        @DisplayName("userId가 같으면 providerId가 달라도 같은 엔티티이다")
         void sameIdentityMeansEqual() {
-            // given -> Entity의 동등성은 식별자(user_id + provider)로만 판단한다
+            // given -> Entity의 동등성은 식별자(user_id)로만 판단한다
             OauthUser one = new OauthUser(USER_ID, Provider.KAKAO, "111");
             OauthUser another = new OauthUser(USER_ID, Provider.KAKAO, "222");
 
@@ -91,14 +91,15 @@ public class OauthUserTest {
         }
 
         @Test
-        @DisplayName("provider가 다르면 다른 엔티티이다")
-        void differentProviderMeansNotEqual() {
-            // given
+        @DisplayName("userId가 같으면 provider가 달라도 같은 엔티티이다")
+        void sameUserIdMeansEqualRegardlessOfProvider() {
+            // given -> PK가 user_id 단독이라 유저당 oauth_user는 1건, provider는 식별에 관여하지 않는다
             OauthUser kakao = new OauthUser(USER_ID, Provider.KAKAO, KAKAO_ID);
             OauthUser google = new OauthUser(USER_ID, Provider.GOOGLE, KAKAO_ID);
 
             // when & then
-            assertThat(kakao).isNotEqualTo(google);
+            assertThat(kakao).isEqualTo(google);
+            assertThat(kakao).hasSameHashCodeAs(google);
         }
 
         @Test

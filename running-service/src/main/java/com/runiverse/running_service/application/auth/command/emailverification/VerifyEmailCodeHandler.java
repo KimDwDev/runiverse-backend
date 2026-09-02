@@ -4,7 +4,13 @@ import com.runiverse.running_service.application.auth.exception.EmailVerificatio
 import com.runiverse.running_service.application.auth.exception.InvalidVerificationCodeException;
 import com.runiverse.running_service.application.auth.exception.TooManyVerificationAttemptsException;
 import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.ConsumeVerificationAttemptPort;
+import com.runiverse.running_service.application.auth.port.out.DeleteVerificationCodePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateVerificationTicketPort;
+import com.runiverse.running_service.application.auth.port.out.SaveVerificationTicketPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationAttempt;
+import com.runiverse.running_service.application.auth.port.out.VerificationCodeHashPort;
+import com.runiverse.running_service.application.auth.port.out.VerificationTicketHashPort;
 import com.runiverse.running_service.domain.user.vo.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,16 +31,19 @@ public class VerifyEmailCodeHandler implements VerifyEmailCodeUsecase {
         // 1. Email vo 정규화
         String email = new Email(command.email()).value();
 
-        // 2. 시도 횟수 1 소비 -> 인증코드 확인 -> 상태 반환
+        // 2. 시도 횟수를 소비하고 저장된 코드 상태를 가져온다
         VerificationAttempt attempt = consumeVerificationAttemptPort.consume(email);
         switch (attempt.status()) {
             case NOT_FOUND -> throw new EmailVerificationNotFoundException();
             case EXHAUSTED -> throw new TooManyVerificationAttemptsException();
-            case AVAILABLE -> { }
+            case AVAILABLE -> {
+            }
         }
 
         // 3. 코드 대조. 시도 횟수는 이미 소비됐다
-        if (!verificationCodeHashPort.matches(command.code(), attempt.hashedCode())) throw new InvalidVerificationCodeException();
+        if (!verificationCodeHashPort.matches(command.code(), attempt.hashedCode())) {
+            throw new InvalidVerificationCodeException();
+        }
 
         // 4. 맞은 코드는 재사용할 수 없도록 지운다.
         deleteVerificationCodePort.delete(email);

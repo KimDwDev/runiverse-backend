@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public class FakeVerificationTicketHasher implements VerificationTicketHashPort {
+
     private static final String PREFIX = "sha256:";
+
     @Override
     public String hash(String ticket) {
         return PREFIX + Base64.getEncoder()

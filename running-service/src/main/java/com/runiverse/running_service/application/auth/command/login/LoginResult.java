@@ -5,7 +5,7 @@ import java.util.UUID;
 public record LoginResult(
         UUID userId,
         String accessToken,
-        String refreshToken,
-        boolean isOnboarded
+        String refreshToken
 ) {
+
 }

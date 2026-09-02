@@ -2,16 +2,16 @@ package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderIdTooLongException;
+import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.exception.UnsupportedProviderException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
-
-import static org.assertj.core.api.Assertions.*;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class OauthVoTest {
 
@@ -66,7 +66,7 @@ public class OauthVoTest {
         void createProviderWithUnsupportedValueFails() {
             // when & then
             assertThatThrownBy(() -> Provider.from("facebook"))
-                    .isInstanceOf(UnsupportedProviderException.class)
+                    .isInstanceOf(ProviderNotSupportedException.class)
                     .hasMessage("지원하지 않는 소셜 로그인입니다.");
         }
 

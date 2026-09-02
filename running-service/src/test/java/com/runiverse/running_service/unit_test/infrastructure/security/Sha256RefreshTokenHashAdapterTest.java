@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.security;
 
 import com.runiverse.running_service.infrastructure.security.hash.Sha256HashAdapter;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

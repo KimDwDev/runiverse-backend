@@ -1,12 +1,12 @@
 package com.runiverse.running_service.unit_test.infrastructure.identifier;
 
 import com.runiverse.running_service.infrastructure.identifier.UuidGeneratorAdapter;
-
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class UuidGeneratorAdapterTest {
 
@@ -36,7 +36,7 @@ public class UuidGeneratorAdapterTest {
     @Test
     @DisplayName("생성된 사용자 ID는 UUID 버전 7이다")
     void generateUuidVersion7() {
-        //when
+        // when
         UUID userId = uuidGeneratorAdapter.generate();
 
         // then

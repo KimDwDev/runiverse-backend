@@ -1,8 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.security.jwt.validator;
 
 import com.runiverse.running_service.infrastructure.security.jwt.validator.AudienceValidator;
-
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -10,7 +8,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 public class AudienceValidatorTest {
+
     private static final String AUDIENCE = "runiverse-api";
     private final AudienceValidator validator = new AudienceValidator(AUDIENCE);
 
@@ -51,6 +52,7 @@ public class AudienceValidatorTest {
         // when & then
         assertThat(validator.validate(jwt).hasErrors()).isTrue();
     }
+
     private Jwt jwtWithAudience(List<String> audiences) {
         Jwt.Builder builder = Jwt.withTokenValue("token")
                 .header("alg", "HS256")

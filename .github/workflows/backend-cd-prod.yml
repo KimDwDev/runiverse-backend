@@ -1,0 +1,303 @@
+name: Backend CD - Production
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: read
+# 프로덕션은 진행 중인 배포를 절대 중간에 끊지 않는다.
+# 컨테이너를 내린 상태에서 취소되면 서비스가 죽은 채로 남는다.
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  # 이미지 빌드 -> 프로덕션 ECR push
+  runiverse-backend-prod-image:
+    name: running-service 프로덕션 이미지 빌드
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC ID Token 발급 허용
+    defaults:
+      run:
+        working-directory: running-service
+    outputs:
+      image-uri: ${{ steps.image.outputs.uri }}
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v6
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            running-service/*.gradle*
+            running-service/gradle/wrapper/gradle-wrapper.properties
+      - name: Grant execute permission for Gradle
+        run: chmod +x gradlew
+      # 검증은 dev 파이프라인에서 끝났다는 전제라 여기서는 테스트를 돌리지 않는다
+      - name: Build bootJar
+        run: ./gradlew bootJar -x test --no-daemon
+      # 레이어 캐시 사용을 위해 필요
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_PROD_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: runiverse-prod-ecr-push
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push Docker image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: running-service
+          file: running-service/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_BACKEND_PROD_REPOSITORY }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_BACKEND_PROD_REPOSITORY }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=runiverse-backend-prod
+          cache-to: type=gha,scope=runiverse-backend-prod,mode=max
+      # 배포 잡이 계정 ID를 다시 조회하지 않도록 여기서 확정해 넘긴다
+      - name: Export image URI
+        id: image
+        run: |
+          echo "uri=${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_BACKEND_PROD_REPOSITORY }}:sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+  # ECR -> Private EC2 배포
+  runiverse-backend-prod-deploy:
+    name: running-service 프로덕션 배포
+    needs: runiverse-backend-prod-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: runiverse-prod-deploy
+      - name: Deploy application through SSM
+        id: deploy
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.PROD_EC2_INSTANCE_ID }}
+          IMAGE_URI: ${{ needs.runiverse-backend-prod-image.outputs.image-uri }}
+        run: |
+          set -Eeuo pipefail
+          ECR_REGISTRY="${IMAGE_URI%%/*}"
+          DEPLOY_SCRIPT=$(cat <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+          AWS_REGION="__AWS_REGION__"
+          ECR_REGISTRY="__ECR_REGISTRY__"
+          IMAGE_URI="__IMAGE_URI__"
+          CONTAINER_NAME="runiverse-backend"
+          PARAMETER_PATH="/runiverse/prod"
+          ENV_DIRECTORY="/opt/runiverse"
+          ENV_FILE="${ENV_DIRECTORY}/.env"
+          echo "===== Runiverse production deployment started ====="
+          echo "Image: ${IMAGE_URI}"
+          echo "Host: $(hostname)"
+          mkdir -p "${ENV_DIRECTORY}"
+          RAW_PARAMETERS=$(mktemp)
+          TEMP_ENV=$(mktemp)
+          trap 'rm -f "${RAW_PARAMETERS}" "${TEMP_ENV}"' EXIT
+          # Parameter Store에서 환경변수 내려받기
+          echo "Loading environment variables from Parameter Store..."
+          # 파이프가 아니라 파일을 거친다.
+          # 파이프면 아래 while이 서브셸에서 돌아 검증 실패 시 exit가 스크립트를 세우지 못한다
+          aws ssm get-parameters-by-path \
+            --region "${AWS_REGION}" \
+            --path "${PARAMETER_PATH}" \
+            --recursive \
+            --with-decryption \
+            --query 'Parameters[*].[Name,Value]' \
+            --output text > "${RAW_PARAMETERS}"
+          while IFS=$'\t' read -r NAME VALUE; do
+            KEY="${NAME##*/}"
+            if [[ ! "${KEY}" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+              echo "Invalid environment variable name: ${KEY}" >&2
+              exit 1
+            fi
+            # Docker env-file은 한 줄에 KEY=VALUE 형식이어야 함
+            if [[ "${VALUE}" == *$'\n'* || "${VALUE}" == *$'\r'* ]]; then
+              echo "Multiline value is not supported: ${KEY}" >&2
+              exit 1
+            fi
+            printf '%s=%s\n' "${KEY}" "${VALUE}"
+          done < "${RAW_PARAMETERS}" > "${TEMP_ENV}"
+          if [ ! -s "${TEMP_ENV}" ]; then
+            echo "No parameters found under ${PARAMETER_PATH}" >&2
+            exit 1
+          fi
+          install -o root -g root -m 600 "${TEMP_ENV}" "${ENV_FILE}"
+          echo "Environment file generated successfully."
+          echo "Loaded environment variable names:"
+          cut -d= -f1 "${ENV_FILE}"
+          # ECR 인증
+          echo "Logging in to Amazon ECR..."
+          aws ecr get-login-password \
+            --region "${AWS_REGION}" |
+            docker login \
+              --username AWS \
+              --password-stdin "${ECR_REGISTRY}"
+          # 이미지 Pull - 기존 컨테이너를 내리기 전에 받아둬야 실패 시 다운타임이 없다
+          echo "Pulling Docker image..."
+          docker pull "${IMAGE_URI}"
+          # 롤백 대상으로 쓸 직전 이미지 보존
+          PREVIOUS_IMAGE=""
+          if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+            PREVIOUS_IMAGE=$(docker inspect \
+              --format='{{.Config.Image}}' \
+              "${CONTAINER_NAME}")
+          fi
+          echo "Removing existing container..."
+          docker rm -f "${CONTAINER_NAME}" || true
+          echo "Starting new container..."
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            --restart unless-stopped \
+            --network host \
+            --env-file "${ENV_FILE}" \
+            --label "runiverse.commit=__GITHUB_SHA__" \
+            "${IMAGE_URI}"
+          # Spring Boot 시작 대기
+          echo "Waiting for application startup..."
+          STARTED=false
+          for attempt in $(seq 1 30); do
+            if ! docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+              echo "Container no longer exists." >&2
+              break
+            fi
+            RUNNING=$(docker inspect \
+              --format='{{.State.Running}}' \
+              "${CONTAINER_NAME}")
+            if [ "${RUNNING}" != "true" ]; then
+              echo "Container stopped during startup." >&2
+              break
+            fi
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              http://127.0.0.1:8080/api/v1/actuator/health \
+              >/dev/null 2>&1; then
+              STARTED=true
+              break
+            fi
+            echo "Waiting for health check... (${attempt}/30)"
+            sleep 5
+          done
+          if [ "${STARTED}" != "true" ]; then
+            echo "Application health check failed." >&2
+            echo "===== Container logs ====="
+            docker logs --tail 200 "${CONTAINER_NAME}" || true
+            docker rm -f "${CONTAINER_NAME}" || true
+            # 직전 이미지가 있다면 자동 롤백.
+            # 주의: env 파일은 방금 만든 새 것을 그대로 쓴다.
+            # 환경변수 오설정이 원인이면 롤백해도 같은 이유로 죽는다
+            if [ -n "${PREVIOUS_IMAGE}" ]; then
+              echo "Rolling back to previous image: ${PREVIOUS_IMAGE}"
+              docker run -d \
+                --name "${CONTAINER_NAME}" \
+                --restart unless-stopped \
+                --network host \
+                --env-file "${ENV_FILE}" \
+                "${PREVIOUS_IMAGE}"
+            fi
+            exit 1
+          fi
+          echo "Application health check passed."
+          docker ps --filter "name=${CONTAINER_NAME}"
+          # dangling 이미지만 정리한다 (-a가 아니라 롤백용 직전 이미지는 남는다)
+          docker image prune -f
+          echo "===== Runiverse production deployment completed ====="
+          REMOTE_SCRIPT
+          )
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__AWS_REGION__/$AWS_REGION}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__ECR_REGISTRY__/$ECR_REGISTRY}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__IMAGE_URI__/$IMAGE_URI}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//__GITHUB_SHA__/$GITHUB_SHA}"
+          DEPLOY_SCRIPT_BASE64=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
+          PARAMETERS=$(jq -n \
+          --arg script "$DEPLOY_SCRIPT_BASE64" \
+          '{
+            commands: [
+              "echo " + $script + " | base64 -d | bash"
+            ]
+          }')
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy runiverse backend to production ${GITHUB_SHA}" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 900 \
+            --query "Command.CommandId" \
+            --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+      - name: Wait for deployment
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.PROD_EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.deploy.outputs.command_id }}
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || echo "Pending")
+            echo "Deployment status: $STATUS"
+            case "$STATUS" in
+              Success)
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "Deployment failed with status: $STATUS" >&2
+                exit 1
+                ;;
+              Pending|InProgress|Delayed)
+                ;;
+              *)
+                echo "Unknown deployment status: $STATUS"
+                ;;
+            esac
+            sleep 5
+          done
+          echo "Deployment result wait timed out." >&2
+          exit 1
+      # 성공하거나 실패해도 실행 결과 출력
+      - name: Print deployment result
+        if: always()
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          INSTANCE_ID: ${{ vars.PROD_EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.deploy.outputs.command_id }}
+        run: |
+          if [ -z "${COMMAND_ID:-}" ]; then
+            echo "SSM command was not created."
+            exit 0
+          fi
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query '{
+              Status: Status,
+              StandardOutput: StandardOutputContent,
+              StandardError: StandardErrorContent
+            }' \
+            --output yaml

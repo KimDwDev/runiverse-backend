@@ -3,8 +3,8 @@ package com.runiverse.running_service.application.auth.command.signup;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
 import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
-import com.runiverse.running_service.application.auth.port.out.PasswordHashPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,7 +25,9 @@ public class SignUpUserRegistrar {
     public User register(String email, String rawPassword) {
         // 1. 이메일 중복 확인
         boolean emailExists = checkEmailDuplicatePort.existsByEmail(email);
-        if (emailExists) throw new EmailAlreadyExistsException();
+        if (emailExists) {
+            throw new EmailAlreadyExistsException();
+        }
 
         // 2. 비밀번호 해시화
         String hashedPassword = passwordHashPort.hash(rawPassword);

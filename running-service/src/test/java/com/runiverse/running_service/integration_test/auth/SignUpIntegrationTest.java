@@ -7,20 +7,25 @@ import com.runiverse.running_service.application.auth.exception.EmailAlreadyExis
 import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 @DisplayName("회원가입 통합 테스트")
 public class SignUpIntegrationTest extends IntegrationTestSupport {
+
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
     private SignUpHandler signUpHandler;
+
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
     }
+
     @Test
     @DisplayName("회원가입에 성공하면 UUIDv7 userId를 반환하고 티켓에 담긴 이메일로 유저가 저장된다")
     void signUpSuccess() {
@@ -36,6 +41,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         // 요청에는 이메일이 없다. 이 값은 오직 티켓에서만 나온다
         assertThat(saved.getEmail().value()).isEqualTo(EMAIL);
     }
+
     @Test
     @DisplayName("가입에 성공하면 티켓은 소비되어 저장소에서 사라진다")
     void signUpConsumesTicket() {
@@ -46,6 +52,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(verificationTicketStore.size()).isZero();
     }
+
     @Test
     @DisplayName("비밀번호는 평문이 아니라 해시로 저장된다")
     void signUpStoresHashedPassword() {
@@ -59,6 +66,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThat(passwordHasher.matches(PASSWORD, storedHash)).isTrue();
         assertThat(passwordHasher.matches("WrongPassword1!", storedHash)).isFalse();
     }
+
     @Test
     @DisplayName("이미 가입된 이메일이면 EmailAlreadyExistsException이 발생한다")
     void signUpWithDuplicateEmail() {
@@ -74,6 +82,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         // 실패했으므로 토큰도 첫 가입 때 받은 것 하나뿐이다
         assertThat(refreshTokenStore.size()).isEqualTo(1);
     }
+
     @Test
     @DisplayName("중복 이메일로 실패해도 티켓은 이미 소비되어 되돌아오지 않는다")
     void signUpConsumesTicketEvenWhenDuplicate() {
@@ -86,6 +95,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         // then - Redis 삭제는 트랜잭션 롤백 대상이 아니다. 재시도하려면 이메일 인증부터 다시 해야 한다
         assertThat(verificationTicketStore.size()).isZero();
     }
+
     @Test
     @DisplayName("서로 다른 이메일로 가입하면 각각 다른 userId를 받는다")
     void signUpMultipleUsers() {
@@ -96,6 +106,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThat(second.userId()).isNotEqualTo(first.userId());
         assertThat(userStore.size()).isEqualTo(2);
     }
+
     @Test
     @DisplayName("가입에 성공하면 자동 로그인되어 토큰 두 개를 함께 받는다")
     void signUpIssuesTokens() {
@@ -107,6 +118,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThat(result.refreshToken()).isNotBlank();
         assertThat(result.accessToken()).isNotEqualTo(result.refreshToken());
     }
+
     @Test
     @DisplayName("refresh token은 원문이 아니라 해시로 저장된다")
     void signUpStoresHashedRefreshToken() {
@@ -118,13 +130,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThat(storedHash).isNotEqualTo(result.refreshToken());
         assertThat(tokenProvider.matches(result.refreshToken(), storedHash)).isTrue();
     }
-    @Test
-    @DisplayName("가입 직후에는 온보딩을 하지 않았으므로 isOnboarded가 false다")
-    void signUpIsNotOnboarded() {
-        SignUpResult result = signUpHandler.handle(
-                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
-        assertThat(result.isOnboarded()).isFalse();
-    }
+
     @Test
     @DisplayName("발급받은 적 없는 티켓이면 EmailNotVerifiedException이 발생하고 저장되지 않는다")
     void signUpWithUnknownTicket() {
@@ -134,6 +140,7 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         // 유저가 없으니 토큰도 발급되지 않는다
         assertThat(refreshTokenStore.isEmpty()).isTrue();
     }
+
     @Test
     @DisplayName("같은 티켓을 두 번 쓰면 두 번째는 EmailNotVerifiedException이 발생한다")
     void signUpWithUsedTicket() {

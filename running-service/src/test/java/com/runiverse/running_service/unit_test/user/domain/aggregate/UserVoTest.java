@@ -1,17 +1,30 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 
-import com.runiverse.running_service.domain.user.vo.Description;
+import com.runiverse.running_service.domain.user.exception.EmailRequiredException;
+import com.runiverse.running_service.domain.user.exception.EmailTooLongException;
+import com.runiverse.running_service.domain.user.exception.IntroductionRequiredException;
+import com.runiverse.running_service.domain.user.exception.IntroductionTooLongException;
+import com.runiverse.running_service.domain.user.exception.InvalidEmailFormatException;
+import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
+import com.runiverse.running_service.domain.common.exception.InvalidUserIdFormatException;
+import com.runiverse.running_service.domain.user.exception.PasswordHashRequiredException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyRequiredException;
+import com.runiverse.running_service.domain.user.exception.ProfileImageKeyTooLongException;
+import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.user.vo.Email;
+import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
-import com.runiverse.running_service.domain.user.vo.UserId;
-import com.runiverse.running_service.domain.user.exception.*;
-import static org.assertj.core.api.Assertions.*;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UserVoTest {
 
@@ -23,7 +36,6 @@ public class UserVoTest {
         @Test
         @DisplayName("UUIDv7으로 사용자 ID를 생성할 수 있다.")
         void createUserIdWithUuidV7Success() {
-
             // given
             UUID uuidV7 = UUID.fromString("0190a5b4-3c2d-7e1f-8a2b-123456789abc");
 
@@ -50,7 +62,6 @@ public class UserVoTest {
         @Test
         @DisplayName("UserId가 null이면 예외가 발생한다")
         void createUserIdWithNullFails() {
-
             assertThatThrownBy(() -> new UserId(null))
                     .isInstanceOf(UserIdRequiredException.class)
                     .hasMessage("사용자 ID는 필수입니다.");
@@ -74,7 +85,7 @@ public class UserVoTest {
                     .isNotSameAs(second);
         }
     }
-    
+
     // Email 테스트
     @Nested
     @DisplayName("Email 테스트")
@@ -301,79 +312,165 @@ public class UserVoTest {
         }
     }
 
-    // Description 테스트
+    // Introduction 테스트
     @Nested
-    @DisplayName("Description 테스트")
-    class DescriptionTest {
+    @DisplayName("Introduction 테스트")
+    class IntroductionTest {
 
         @Test
         @DisplayName("100자 이하의 소개는 생성할 수 있다")
-        void createDescriptionSuccess() {
+        void createIntroductionSuccess() {
             // given
             String value = "함께 즐겁게 달려요!";
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value()).isEqualTo(value);
+            assertThat(introduction.value()).isEqualTo(value);
         }
 
         @Test
         @DisplayName("빈 소개는 생성할 수 있다")
-        void createEmptyDescriptionSuccess() {
+        void createEmptyIntroductionSuccess() {
             // given
             String value = "";
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value()).isEmpty();
+            assertThat(introduction.value()).isEmpty();
         }
 
         @Test
         @DisplayName("소개가 정확히 100자이면 생성할 수 있다")
-        void createDescriptionWithMaxLengthSuccess() {
+        void createIntroductionWithMaxLengthSuccess() {
             // given
             String value = "가".repeat(100);
 
             // when
-            Description description = new Description(value);
+            Introduction introduction = new Introduction(value);
 
             // then
-            assertThat(description.value())
+            assertThat(introduction.value())
                     .hasSize(100)
                     .isEqualTo(value);
         }
 
         @Test
         @DisplayName("소개가 100자를 초과하면 예외가 발생한다")
-        void createDescriptionOverMaxLengthFails() {
+        void createIntroductionOverMaxLengthFails() {
             // given
             String value = "가".repeat(101);
 
             // when & then
-            assertThatThrownBy(() -> new Description(value))
-                    .isInstanceOf(DescriptionTooLongException.class)
+            assertThatThrownBy(() -> new Introduction(value))
+                    .isInstanceOf(IntroductionTooLongException.class)
                     .hasMessage("소개는 100자를 초과할 수 없습니다.");
         }
 
         @Test
         @DisplayName("소개가 null이면 예외가 발생한다")
-        void createDescriptionWithNullFails() {
+        void createIntroductionWithNullFails() {
             // when & then
-            assertThatThrownBy(() -> new Description(null))
-                    .isInstanceOf(DescriptionRequiredException.class)
+            assertThatThrownBy(() -> new Introduction(null))
+                    .isInstanceOf(IntroductionRequiredException.class)
                     .hasMessage("소개는 null일 수 없습니다.");
         }
 
         @Test
-        @DisplayName("같은 소개를 가진 Description은 같은 값 객체이다")
-        void descriptionEqualsTest() {
+        @DisplayName("같은 소개를 가진 Introduction은 같은 값 객체이다")
+        void introductionEqualsTest() {
             // given
-            Description first = new Description("함께 달려요!");
-            Description second = new Description("함께 달려요!");
+            Introduction first = new Introduction("함께 달려요!");
+            Introduction second = new Introduction("함께 달려요!");
+
+            // then
+            assertThat(first)
+                    .isEqualTo(second)
+                    .hasSameHashCodeAs(second);
+
+            assertThat(first).isNotSameAs(second);
+        }
+    }
+
+    // ProfileImageKey 테스트
+    @Nested
+    @DisplayName("ProfileImageKey 테스트")
+    class ProfileImageKeyTest {
+
+        private static final String KEY = "profiles/0190a5b4-3c2d-7e1f-8a2b-123456789abc/photo.jpg";
+
+        @Test
+        @DisplayName("255자 이하의 키는 생성할 수 있다")
+        void createProfileImageKeySuccess() {
+            // when
+            ProfileImageKey key = new ProfileImageKey(KEY);
+
+            // then
+            assertThat(key.value()).isEqualTo(KEY);
+        }
+
+        @Test
+        @DisplayName("앞뒤 공백은 제거된다")
+        void createProfileImageKeyTrimsWhitespace() {
+            // when
+            ProfileImageKey key = new ProfileImageKey("  " + KEY + "  ");
+
+            // then
+            assertThat(key.value()).isEqualTo(KEY);
+        }
+
+        @Test
+        @DisplayName("키가 정확히 255자이면 생성할 수 있다")
+        void createProfileImageKeyWithMaxLengthSuccess() {
+            // given
+            String value = "a".repeat(255);
+
+            // when
+            ProfileImageKey key = new ProfileImageKey(value);
+
+            // then
+            assertThat(key.value()).hasSize(255);
+        }
+
+        @Test
+        @DisplayName("키가 255자를 초과하면 예외가 발생한다")
+        void createProfileImageKeyOverMaxLengthFails() {
+            // given
+            String value = "a".repeat(256);
+
+            // when & then
+            assertThatThrownBy(() -> new ProfileImageKey(value))
+                    .isInstanceOf(ProfileImageKeyTooLongException.class);
+        }
+
+        @Test
+        @DisplayName("키가 null이면 예외가 발생한다")
+        void createProfileImageKeyWithNullFails() {
+            // when & then -> 사진 없음은 VO가 아니라 null 필드로 표현한다
+            assertThatThrownBy(() -> new ProfileImageKey(null))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("키가 빈 문자열이거나 공백뿐이면 예외가 발생한다")
+        void createProfileImageKeyWithBlankFails() {
+            // when & then
+            assertThatThrownBy(() -> new ProfileImageKey(""))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+
+            assertThatThrownBy(() -> new ProfileImageKey("   "))
+                    .isInstanceOf(ProfileImageKeyRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("같은 키를 가진 ProfileImageKey는 같은 값 객체이다")
+        void profileImageKeyEqualsTest() {
+            // given
+            ProfileImageKey first = new ProfileImageKey(KEY);
+            ProfileImageKey second = new ProfileImageKey(KEY);
 
             // then
             assertThat(first)

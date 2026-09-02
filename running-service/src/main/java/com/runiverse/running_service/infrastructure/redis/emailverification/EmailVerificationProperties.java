@@ -16,4 +16,5 @@ public record EmailVerificationProperties(
         @Positive int maxAttempts,
         @Positive int dailyLimit
 ) {
+
 }

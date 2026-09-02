@@ -1,8 +1,11 @@
 package com.runiverse.running_service.domain.user.exception;
 
 import com.runiverse.running_service.domain.common.exception.BusinessException;
-import com.runiverse.running_service.domain.common.exception.ErrorCode;
+import com.runiverse.running_service.domain.common.exception.UserOnboardingErrorCode;
 
 public class HeightOutOfRangeException extends BusinessException {
-    public HeightOutOfRangeException() {super(ErrorCode.HEIGHT_OUT_OF_RANGE);}
+
+    public HeightOutOfRangeException() {
+        super(UserOnboardingErrorCode.HEIGHT_OUT_OF_RANGE);
+    }
 }

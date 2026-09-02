@@ -5,35 +5,40 @@ import com.runiverse.running_service.application.auth.command.login.LoginHandler
 import com.runiverse.running_service.application.auth.command.login.LoginResult;
 import com.runiverse.running_service.application.auth.command.logout.LogoutCommand;
 import com.runiverse.running_service.application.auth.command.logout.LogoutHandler;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueCommand;
-import com.runiverse.running_service.application.auth.command.reissue.ReissueHandler;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshCommand;
+import com.runiverse.running_service.application.auth.command.refresh.RefreshHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 @DisplayName("로그아웃 통합 테스트")
 public class LogoutIntegrationTest extends IntegrationTestSupport {
+
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
     private static final String ACCESS_TOKEN_ID = "jti-access-1";
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
-    private ReissueHandler reissueHandler;
+    private RefreshHandler refreshHandler;
     private LogoutHandler logoutHandler;
+
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
         loginHandler = new LoginHandler(
                 userStore, passwordHasher, tokenProvider,
-                tokenProvider, refreshTokenStore, onboardStore);
-        reissueHandler = new ReissueHandler(
+                tokenProvider, refreshTokenStore);
+        refreshHandler = new RefreshHandler(
                 tokenProvider, refreshTokenStore, tokenProvider,
                 refreshTokenStore, tokenProvider, refreshTokenStore);
         logoutHandler = new LogoutHandler(
@@ -41,6 +46,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
                 accessTokenBlacklist   // BlockAccessTokenPort
         );
     }
+
     private LoginResult signUpAndLogin() {
         signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
         return loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
@@ -57,16 +63,18 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         assertThat(refreshTokenStore.loadById(login.userId())).isEmpty();
         assertThat(accessTokenBlacklist.isBlocked(ACCESS_TOKEN_ID)).isTrue();
     }
+
     @Test
     @DisplayName("로그아웃한 뒤에는 기존 refresh token으로 재발급할 수 없다")
-    void reissueAfterLogoutFails() {
+    void refreshAfterLogoutFails() {
         // given
         LoginResult login = signUpAndLogin();
         logoutHandler.handle(new LogoutCommand(login.userId(), ACCESS_TOKEN_ID));
         // when & then
-        assertThatThrownBy(() -> reissueHandler.handle(new ReissueCommand(login.refreshToken())))
+        assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand(login.refreshToken())))
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
+
     @Test
     @DisplayName("로그아웃 후 다시 로그인하면 새 refresh token이 발급된다")
     void loginAgainAfterLogout() {
@@ -82,6 +90,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         String storedHash = refreshTokenStore.loadById(second.userId()).orElseThrow();
         assertThat(tokenProvider.matches(second.refreshToken(), storedHash)).isTrue();
     }
+
     @Test
     @DisplayName("이전 access token은 재로그인해도 블랙리스트에 남는다")
     void blacklistSurvivesReLogin() {
@@ -93,6 +102,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(accessTokenBlacklist.isBlocked(ACCESS_TOKEN_ID)).isTrue();
     }
+
     @Test
     @DisplayName("이미 로그아웃한 상태에서 다시 로그아웃해도 예외가 발생하지 않는다")
     void logoutIsIdempotent() {
@@ -104,6 +114,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
                 .doesNotThrowAnyException();
         assertThat(refreshTokenStore.loadById(login.userId())).isEmpty();
     }
+
     @Test
     @DisplayName("로그인한 적 없는 유저를 로그아웃해도 예외 없이 access token만 차단한다")
     void logoutWithoutLogin() {
@@ -115,6 +126,7 @@ public class LogoutIntegrationTest extends IntegrationTestSupport {
                 .doesNotThrowAnyException();
         assertThat(accessTokenBlacklist.isBlocked(ACCESS_TOKEN_ID)).isTrue();
     }
+
     @Test
     @DisplayName("한 유저의 로그아웃이 다른 유저의 세션을 건드리지 않는다")
     void logoutDoesNotAffectOtherUsers() {

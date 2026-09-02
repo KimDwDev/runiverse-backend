@@ -1,8 +1,13 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
-import com.runiverse.running_service.application.auth.port.out.*;
+import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplicatePort;
+import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPort;
+import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
+import com.runiverse.running_service.application.auth.port.out.OauthProfile;
+import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.vo.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,30 +33,35 @@ public class OauthUserResolver {
         );
 
         // 2. 있으면 그대로 반환
-        if (foundUser.isPresent()) return foundUser.get();
+        if (foundUser.isPresent()) {
+            return foundUser.get();
+        }
 
         // 3. 없으면 가입
         return register(oauthProfile);
     }
 
     private User register(OauthProfile oauthProfile) {
-        // 1. 기존 로컬 계정과 이메일이 겹치면 자동 연동하지 않는다
-        if (checkEmailDuplicatePort.existsByEmail(oauthProfile.email())) {
+        // 1. 저장할 형태로 정규화한다 — 검사와 생성이 다른 값을 쓰면 UNIQUE 위반으로 500이 된다
+        String email = new Email(oauthProfile.email()).value();
+
+        // 2. 기존 로컬 계정과 이메일이 겹치면 자동 연동하지 않는다
+        if (checkEmailDuplicatePort.existsByEmail(email)) {
             throw new EmailAlreadyExistsException();
         }
 
-        // 2.UUIDv7 발급
+        // 3. UUIDv7 발급
         UUID userId = generateUserIdPort.generate();
 
-        // 3. 유저 생성 + 소셜 연결
+        // 4. 유저 생성 + 소셜 연결
         User user = User.registerWithOauth(
                 userId,
-                oauthProfile.email(),
+                email,
                 oauthProfile.provider(),
                 oauthProfile.providerId()
         );
 
-        // 4. 저장
+        // 5. 저장
         return saveUserPort.save(user);
     }
 

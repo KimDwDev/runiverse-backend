@@ -1,23 +1,22 @@
 package com.runiverse.running_service.unit_test.infrastructure.security.jwt;
 
-import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
-import com.runiverse.running_service.infrastructure.security.jwt.JwtTokenAdapter;
-
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.auth.port.out.CheckBlockedAccessTokenPort;
-import com.runiverse.running_service.domain.user.vo.UserId;
+import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.security.jwt.JwtProperties;
+import com.runiverse.running_service.infrastructure.security.jwt.JwtTokenAdapter;
 import com.runiverse.running_service.infrastructure.security.jwt.config.JwtDecoderConfig;
 import com.runiverse.running_service.infrastructure.security.jwt.config.JwtEncoderConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwsHeader;
 
 import java.time.Duration;
 import java.time.Instant;

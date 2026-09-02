@@ -1,32 +1,38 @@
 package com.runiverse.running_service.infrastructure.persistence.user;
 
 import com.runiverse.running_service.domain.user.vo.Provider;
-import jakarta.persistence.*;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
 @Entity
 @Table(
-        name = "oauth_user",
+        name = "oauth_users",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_oauth_user_provider_provider_id",
                 columnNames = {"provider", "provider_id"}
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OauthUserJpaEntity {
-    // PK가 (user_id, provider) 이다
+public class OauthUserJpaEntity extends BaseTimeEntity {
+
     @Id
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
@@ -37,14 +43,6 @@ public class OauthUserJpaEntity {
 
     @Column(name = "provider_id", nullable = false, updatable = false, length = 255)
     private String providerId;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     private OauthUserJpaEntity(UUID userId, Provider provider, String providerId) {
         this.userId = userId;
