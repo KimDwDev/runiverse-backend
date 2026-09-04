@@ -30,7 +30,7 @@ public class MatchStreamController {
     private final CloseMatchStreamUsecase closeMatchStreamUsecase;
     private final MatchStreamProperties matchStreamProperties;
 
-    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(path = "stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@AuthenticationPrincipal Jwt jwt) throws IOException {
         UUID userId = UUID.fromString(jwt.getSubject());
         // 30초 컨테이너 기본값 대신 명시한다
