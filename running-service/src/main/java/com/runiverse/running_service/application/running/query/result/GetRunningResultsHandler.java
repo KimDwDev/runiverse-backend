@@ -1,14 +1,14 @@
 package com.runiverse.running_service.application.running.query.result;
 
+import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.command.finish.PolylineDecoder;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
 import com.runiverse.running_service.application.running.port.in.GetRunningResultsUsecase;
-import com.runiverse.running_service.application.running.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.port.out.RoutePoint;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;

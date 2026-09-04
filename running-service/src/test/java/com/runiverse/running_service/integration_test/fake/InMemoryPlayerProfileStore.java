@@ -1,7 +1,7 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.running.port.out.LoadPlayerProfilesPort;
-import com.runiverse.running_service.application.running.port.out.PlayerProfile;
+import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 
@@ -39,8 +39,11 @@ public class InMemoryPlayerProfileStore implements LoadPlayerProfilesPort {
             if (user.isEmpty() || nickname.isEmpty()) {
                 continue;
             }
+            // users.introduction은 비우면 null이다(erd.md) — 빈 문자열로 내리지 않는다
+            String introduction = user.get().getIntroduction().value();
             profiles.put(userId, new PlayerProfile(userId, nickname.get(),
-                    user.get().getProfileImageKey().map(ProfileImageKey::value).orElse(null)));
+                    user.get().getProfileImageKey().map(ProfileImageKey::value).orElse(null),
+                    introduction.isEmpty() ? null : introduction));
         }
         return profiles;
     }

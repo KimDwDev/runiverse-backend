@@ -1,17 +1,17 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
 import com.runiverse.running_service.application.running.command.finish.PolylineEncoder;
 import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
-import com.runiverse.running_service.application.running.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
-import com.runiverse.running_service.application.running.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
 import com.runiverse.running_service.application.running.port.out.RunningSplitRow;
@@ -247,7 +247,7 @@ public class GetRunningSplitResultsHandlerTest {
         when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(OTHER, 1, 0, 2)));
         when(loadRunningResultRecordPort.loadRecord(any(), any())).thenReturn(Optional.empty());
         when(loadPlayerProfilesPort.loadProfiles(any()))
-                .thenReturn(Map.of(OTHER, new PlayerProfile(OTHER, "러닝초보", null)));
+                .thenReturn(Map.of(OTHER, new PlayerProfile(OTHER, "러닝초보", null, null)));
 
         // when
         GetRunningSplitResultsResult result =
@@ -312,8 +312,8 @@ public class GetRunningSplitResultsHandlerTest {
                 new RunningResultRecord(
                         PolylineEncoder.encode(ROUTE), STARTED_AT, FINISHED_AT, 5020, 42)));
         Map<UUID, PlayerProfile> profiles = new HashMap<>();
-        profiles.put(ME, new PlayerProfile(ME, "동완러너", null));
-        profiles.put(OTHER, new PlayerProfile(OTHER, "러닝초보", null));
+        profiles.put(ME, new PlayerProfile(ME, "동완러너", null, null));
+        profiles.put(OTHER, new PlayerProfile(OTHER, "러닝초보", null, null));
         when(loadPlayerProfilesPort.loadProfiles(any())).thenReturn(profiles);
     }
 
