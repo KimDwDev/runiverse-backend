@@ -3,6 +3,7 @@ package com.runiverse.running_service.presentation.common.exception;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
@@ -107,6 +108,7 @@ public class GlobalExceptionHandler {
             case UserErrorCode code -> toStatus(code);
             case AuthErrorCode code -> toStatus(code);
             case RunningErrorCode code -> toStatus(code);
+            case MatchErrorCode code -> toStatus(code);
             case ResourceErrorCode code -> toStatus(code);
         };
     }
@@ -160,6 +162,12 @@ public class GlobalExceptionHandler {
             case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
             case RUNNING_SESSION_UNAVAILABLE,
                  RUNNING_TRACK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+    }
+
+    private HttpStatus toStatus(MatchErrorCode code) {
+        return switch (code) {
+            case MATCH_ALREADY_IN_PROGRESS -> HttpStatus.CONFLICT;
         };
     }
 }

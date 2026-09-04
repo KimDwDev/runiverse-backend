@@ -1,6 +1,7 @@
 package com.runiverse.running_service.presentation.common.exception;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
@@ -42,9 +43,10 @@ public final class ErrorExposurePolicy {
             AuthErrorCode.EMAIL_SEND_FAILED.getCode(),
             RunningErrorCode.RUNNING_ALREADY_IN_PROGRESS.getCode(),
             // 6-1이 이 코드를 REST로 던진다 — 방 참가자가 아니면 403으로 그대로 나간다
-            RunningErrorCode.NOT_ROOM_PLAYER.getCode()
+            RunningErrorCode.NOT_ROOM_PLAYER.getCode(),
             // ROOM_NOT_FOUND·INVALID_ROOM_STATE는 아직 WS ERROR 메시지로만 나간다.
             // 6-1의 404는 ResourceErrorCode.NOT_FOUND를 쓴다(api-spec 6-1)
+            MatchErrorCode.MATCH_ALREADY_IN_PROGRESS.getCode()
     );
 
     private ErrorExposurePolicy() {

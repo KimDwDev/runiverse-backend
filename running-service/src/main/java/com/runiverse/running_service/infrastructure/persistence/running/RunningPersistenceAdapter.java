@@ -1,5 +1,10 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
@@ -25,6 +30,7 @@ import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -38,7 +44,10 @@ import java.util.stream.Collectors;
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
         LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
-        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort {
+        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort,
+        // 매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다
+        CreateMatchApplicationPort, ExistsActiveApplicationPort,
+        CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort {
 
     private final EntityManager entityManager;
 
@@ -270,6 +279,25 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                         """, RunningSplitRow.class)
                 .setParameter("roomId", runningRoomId.value())
                 .getResultList();
+    }
+
+    @Override
+    public Optional<RunningRoom> lockById(RunningRoomId runningRoomId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT r
+                                FROM RunningRoomJpaEntity r
+                                WHERE r.runningRoomId = :runningRoomId
+                                  AND r.deletedAt IS NULL
+                                """, RunningRoomJpaEntity.class
+                )
+                .setParameter("runningRoomId", runningRoomId.value())
+                // 방 행만 잠근다 — 인원 갱신이 겹치면 정원을 넘길 수 있다.
+                // 세션은 별도 조회라 잠기지 않는다(같은 방의 다른 신청과만 경쟁한다)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(entity -> toDomain(entity, loadSessions(entity)));
     }
 
     private RunningResultPlayer toResultPlayer(RunningPlayerJpaEntity player,
