@@ -908,8 +908,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "state": "MATCHED",
-  "runningRoomId": 125,
-  "room": { ... }
+  "room": { ... }        // RoomInfo — 방 ID는 이 안에 있다(최상위에 두면 같은 값이 두 번 내려간다)
 }
 ```
 
@@ -952,22 +951,25 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
       "nickname": "동완러너",
-      "status": "JOINED",              // PlayerStatus — 값 목록은 erd.md §6
       "profileImageUrl": "https://...",
       "introduction": "즐겁게 같이 달려요!",   // users.introduction
-      "averagePaceSecondsPerKm": 360
+      "averagePaceSecondsPerKm": 360,
+      "isDeleted": false                     // 탈퇴 유저 표시 — §0 공통 규칙
     },
     {
       "userId": "550e8400-e29b-41d4-a716-446655440013",
       "nickname": "철수",
-      "status": "JOINED",
       "profileImageUrl": "https://...",
       "introduction": "천천히 오래 달려요.",
-      "averagePaceSecondsPerKm": 390
+      "averagePaceSecondsPerKm": 390,
+      "isDeleted": false
     }
   ]
 }
 ```
+
+- **참가자별 `status`는 내려보내지 않는다** — 이탈자는 배정 행이 `is_connected=false`가 되어 목록에서 빠지므로 남아 있는 참가자는 전부 `JOINED`다. 방의 진행 단계는 위 `status`가 나른다
+- **탈퇴한 참가자도 목록에서 빼지 않는다** — 빼면 `players.length`가 방 인원과 어긋난다. §0 규칙대로 닉네임·사진을 익명 처리하고 `isDeleted: true`로 표시한다
 
 #### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
