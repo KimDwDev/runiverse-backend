@@ -1,4 +1,4 @@
-package com.runiverse.running_service.infrastructure.sse;
+package com.runiverse.running_service.presentation.match.sse;
 
 import com.runiverse.running_service.application.match.port.out.MatchStreamConnection;
 import lombok.extern.slf4j.Slf4j;

@@ -5,7 +5,8 @@ import com.runiverse.running_service.application.match.command.stream.OpenMatchS
 import com.runiverse.running_service.application.match.port.in.CloseMatchStreamUsecase;
 import com.runiverse.running_service.application.match.port.in.OpenMatchStreamUsecase;
 import com.runiverse.running_service.application.match.port.out.MatchStreamConnection;
-import com.runiverse.running_service.infrastructure.sse.SseMatchStreamConnection;
+import com.runiverse.running_service.presentation.match.sse.MatchStreamProperties;
+import com.runiverse.running_service.presentation.match.sse.SseMatchStreamConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -17,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.UUID;
 
 @Slf4j
@@ -28,12 +28,13 @@ public class MatchStreamController {
 
     private final OpenMatchStreamUsecase openMatchStreamUsecase;
     private final CloseMatchStreamUsecase closeMatchStreamUsecase;
+    private final MatchStreamProperties matchStreamProperties;
 
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@AuthenticationPrincipal Jwt jwt) throws IOException {
         UUID userId = UUID.fromString(jwt.getSubject());
         // 30초 컨테이너 기본값 대신 명시한다
-        SseEmitter emitter = new SseEmitter(Duration.ofMinutes(30).toMillis());
+        SseEmitter emitter = new SseEmitter(matchStreamProperties.timeout().toMillis());
         MatchStreamConnection connection =
                 new SseMatchStreamConnection(UUID.randomUUID().toString(), emitter);
         // 이게 없으면 타임아웃이 예외로 터져 500이 된다. 스스로 complete하지 않는다
