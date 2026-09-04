@@ -41,7 +41,7 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
         return entityManager.createQuery(
                         """
                                 SELECT new com.runiverse.running_service.application.match.port.out.MatchPlayer(
-                                    p.userId, p.status, p.avgPace)
+                                    p.userId, p.avgPace)
                                 FROM RunningRoomSessionJpaEntity s
                                 JOIN s.player p
                                 WHERE s.room.runningRoomId = :runningRoomId

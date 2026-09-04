@@ -1,6 +1,5 @@
 package com.runiverse.running_service.application.match.query.roominfo;
 
-import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 
 import java.time.LocalDateTime;
@@ -23,7 +22,6 @@ public record RoomInfo(
     public record RoomPlayer(
             UUID userId,
             String nickname,
-            RunningPlayerStatus status,
             String profileImageUrl,
             String introduction,
             int averagePaceSecondsPerKm,

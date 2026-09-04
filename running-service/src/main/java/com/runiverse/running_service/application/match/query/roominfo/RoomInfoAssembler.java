@@ -53,7 +53,6 @@ public class RoomInfoAssembler {
         return new RoomInfo.RoomPlayer(
                 player.userId(),
                 deleted ? DELETED_NICKNAME : profile.nickname(),
-                player.status(),
                 deleted ? null : profileImageUrl(profile),
                 deleted ? null : profile.introduction(),
                 player.avgPaceSecondsPerKm(),
