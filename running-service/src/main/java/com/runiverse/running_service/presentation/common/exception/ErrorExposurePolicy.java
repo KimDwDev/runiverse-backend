@@ -46,7 +46,8 @@ public final class ErrorExposurePolicy {
             RunningErrorCode.NOT_ROOM_PLAYER.getCode(),
             // ROOM_NOT_FOUND·INVALID_ROOM_STATE는 아직 WS ERROR 메시지로만 나간다.
             // 6-1의 404는 ResourceErrorCode.NOT_FOUND를 쓴다(api-spec 6-1)
-            MatchErrorCode.MATCH_ALREADY_IN_PROGRESS.getCode()
+            MatchErrorCode.MATCH_ALREADY_IN_PROGRESS.getCode(),
+            MatchErrorCode.MATCH_SLOT_CLOSED.getCode()
     );
 
     private ErrorExposurePolicy() {
