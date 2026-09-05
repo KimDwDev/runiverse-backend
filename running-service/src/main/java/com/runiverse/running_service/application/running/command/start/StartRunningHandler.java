@@ -41,13 +41,13 @@ public class StartRunningHandler implements StartRunningUsecase {
         RunningRoom room = loadRunningRoomPort.loadById(new RunningRoomId(command.runningRoomId()))
                 .orElseThrow(RunningRoomNotFoundException::new);
 
-        // 2. 커맨드에는 userId뿐이라 활성 신청을 읽어 playerId를 얻고,
-        //    그 ID가 이 방의 세션에 있는지로 참가자 여부를 판정한다.
-        RunningPlayer player = loadActiveRunningPlayerPort.loadActive(new UserId(command.userId()))
+        // 2. 세션의 키가 유저라 유저로 참가자 여부를 판정한다.
+        //    신청은 상태 검사와 RUNNING 전환에 쓴다
+        UserId userId = new UserId(command.userId());
+        RunningPlayer player = loadActiveRunningPlayerPort.loadActive(userId)
                 .orElseThrow(NotRoomPlayerException::new);
-        RunningPlayerId playerId = player.getRunningPlayerId().orElseThrow();
         RoomSession session = room.getSessions().stream()
-                .filter(roomSession -> roomSession.isSamePlayer(playerId))
+                .filter(roomSession -> roomSession.isSameUser(userId))
                 .findFirst()
                 .orElseThrow(NotRoomPlayerException::new);
         // 도메인 예외는 WS 에러 코드로 매핑하지 않는다 — 거부 사유는 전부 여기서 걸러야 한다.
@@ -60,7 +60,7 @@ public class StartRunningHandler implements StartRunningUsecase {
             if (!room.getPlayerCount().canJoin()) {
                 throw new RunningNotStartableException();   // 그새 자리가 찼다
             }
-            room.rejoin(playerId);
+            room.rejoin(userId);
         }
 
         // 4. 이미 STARTED면 재연결이라 아무 일도 일어나지 않는다

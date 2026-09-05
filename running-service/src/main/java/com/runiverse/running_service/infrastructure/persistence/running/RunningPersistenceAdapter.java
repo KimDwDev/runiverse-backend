@@ -37,6 +37,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -86,12 +87,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         );
         entityManager.persist(roomEntity);
         // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 저장한다.
-        // 플레이어는 이미 저장돼 있으니 프록시만 잡고 조회는 하지 않는다
+        // 신청은 다른 애그리거트라 ID 값만 담는다 — 프록시를 잡을 필요가 없어졌다
         List<RunningRoomSessionJpaEntity> sessions = room.getSessions().stream()
                 .map(session -> RunningRoomSessionJpaEntity.create(
                         roomEntity,
-                        entityManager.getReference(RunningPlayerJpaEntity.class,
-                                session.getRunningPlayerId().value()),
+                        session.getUserId().value(),
+                        session.getRunningPlayerId().value(),
                         session.getLeaveCount().value(),
                         session.isConnected()))
                 .toList();
@@ -159,23 +160,24 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         entity.changeCloseAt(room.getCloseAt().orElse(null));
         entity.changeAvgPace(room.getAvgPace().map(Pace::secondsPerKm).orElse(null));
         entity.changeCurrentPlayerCount(room.getPlayerCount().current());
-        // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다
-        Map<Long, RunningRoomSessionJpaEntity> stored = loadSessions(entity).stream()
-                .collect(Collectors.toMap(RunningRoomSessionJpaEntity::playerId,
+        // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다.
+        // 키는 유저다 — 재배정이면 행을 새로 만들지 않고 신청만 갈아 끼운다
+        Map<UUID, RunningRoomSessionJpaEntity> stored = loadSessions(entity).stream()
+                .collect(Collectors.toMap(RunningRoomSessionJpaEntity::getUserId,
                         session -> session));
         room.getSessions().forEach(session -> {
+            UUID userId = session.getUserId().value();
             Long playerId = session.getRunningPlayerId().value();
-            RunningRoomSessionJpaEntity target = stored.get(playerId);
+            RunningRoomSessionJpaEntity target = stored.get(userId);
             if (target == null) {
-                // 합류로 새로 생긴 관계 — 방은 이미 저장돼 있으니 여기서 만든다.
-                // 플레이어도 저장돼 있으므로 프록시만 잡고 조회는 하지 않는다
+                // 처음 이 방에 들어온 유저 — 방은 이미 저장돼 있으니 여기서 만든다
                 entityManager.persist(RunningRoomSessionJpaEntity.create(
-                        entity,
-                        entityManager.getReference(RunningPlayerJpaEntity.class, playerId),
-                        session.getLeaveCount().value(),
-                        session.isConnected()));
+                        entity, userId, playerId,
+                        session.getLeaveCount().value(), session.isConnected()));
                 return;
             }
+            // 전에 거쳐 간 방에 새 신청으로 다시 들어왔으면 신청이 갈린다
+            target.changeRunningPlayerId(playerId);
             target.changeLeaveCount(session.getLeaveCount().value());
             target.changeConnected(session.isConnected());
         });
@@ -198,7 +200,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         return entityManager.createQuery("""
                         select player
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         where session.room.runningRoomId = :roomId
                           and player.userId = :userId
                         """, RunningPlayerJpaEntity.class)
@@ -216,7 +219,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         return entityManager.createQuery("""
                         select count(player)
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         where session.room.runningRoomId = :roomId
                           and player.status = :status
                         """, Long.class)
@@ -232,7 +236,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         List<Object[]> rows = entityManager.createQuery("""
                         select player, record
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         left join RunningRecordJpaEntity record
                             on record.room.runningRoomId = session.room.runningRoomId
                            and record.userId = player.userId
@@ -356,7 +361,9 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .currentPlayerCount(entity.getCurrentPlayerCount())
                 .maxPlayerCount(entity.getMaxPlayerCount())
                 .sessions(sessions.stream()
-                        .map(s -> new SessionDraft(new RunningPlayerId(s.playerId()),
+                        .map(s -> new SessionDraft(
+                                new UserId(s.getUserId()),
+                                new RunningPlayerId(s.getRunningPlayerId()),
                                 s.getLeaveCount(), s.isConnected()))
                         .toList())
                 .build();

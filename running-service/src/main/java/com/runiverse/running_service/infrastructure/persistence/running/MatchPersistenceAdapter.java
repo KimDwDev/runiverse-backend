@@ -5,7 +5,7 @@ import com.runiverse.running_service.application.match.port.out.LoadMatchPlayers
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCandidate;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
-import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
@@ -25,16 +25,16 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
     private final EntityManager entityManager;
 
     @Override
-    public Optional<RunningRoomId> findAssignedRoom(RunningPlayerId runningPlayerId) {
+    public Optional<RunningRoomId> findAssignedRoom(UserId userId) {
         return entityManager.createQuery(
                         """
                                 SELECT s.room.runningRoomId
                                 FROM RunningRoomSessionJpaEntity s
-                                WHERE s.player.runningPlayerId = :runningPlayerId
+                                WHERE s.userId = :userId
                                   AND s.connected = true
                                 """, Long.class
                 )
-                .setParameter("runningPlayerId", runningPlayerId.value())
+                .setParameter("userId", userId.value())
                 // 현재 배정된 행은 하나다(erd) — 어긋나도 깨지지 않게 첫 건만 쓴다
                 .getResultStream()
                 .findFirst()
@@ -48,7 +48,8 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
                                 SELECT new com.runiverse.running_service.application.match.port.out.MatchPlayer(
                                     p.userId, p.avgPace)
                                 FROM RunningRoomSessionJpaEntity s
-                                JOIN s.player p
+                                JOIN RunningPlayerJpaEntity p
+                                    ON p.runningPlayerId = s.runningPlayerId
                                 WHERE s.room.runningRoomId = :runningRoomId
                                   AND s.connected = true
                                 ORDER BY p.runningPlayerId

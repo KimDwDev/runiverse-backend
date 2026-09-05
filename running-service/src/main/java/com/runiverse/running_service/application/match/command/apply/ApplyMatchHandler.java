@@ -42,7 +42,7 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
                 command.targetDistanceMeters(), command.scheduledStartAt()));
         // 4. 붙을 방을 찾거나 새로 연다
         RunningRoomId roomId = matchRoomAssigner.assign(
-                player.getRunningPlayerId().orElseThrow(), pace,
+                userId, player.getRunningPlayerId().orElseThrow(), pace,
                 command.scheduledStartAt(), command.targetDistanceMeters());
         return new ApplyMatchResult(roomId.value());
     }

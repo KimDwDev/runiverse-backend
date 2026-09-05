@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.port.out.LoadMatchPlayers
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCandidate;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
@@ -37,8 +38,9 @@ public class MatchRoomAssigner {
     private final CreateMatchRoomPort createMatchRoomPort;
     private final MatchProperties matchProperties;
 
-    // 붙을 방이 없으면 1인 방을 새로 연다 — "방 미배정" 상태는 없다(feature-spec)
-    public RunningRoomId assign(RunningPlayerId playerId, Pace pace,
+    // 붙을 방이 없으면 1인 방을 새로 연다 — "방 미배정" 상태는 없다(feature-spec).
+    // 세션의 키가 유저라 배정에는 둘 다 필요하다 — 유저로 자리를 잡고 신청을 그 자리에 꽂는다
+    public RunningRoomId assign(UserId userId, RunningPlayerId playerId, Pace pace,
                                 LocalDateTime startAt, int targetDistanceMeters) {
         for (MatchCandidate candidate : ranked(pace, startAt, targetDistanceMeters)) {
             RunningRoomId roomId = new RunningRoomId(candidate.runningRoomId());
@@ -49,7 +51,7 @@ public class MatchRoomAssigner {
             }
             RunningRoom room = locked.get();
             try {
-                room.join(playerId, pace);
+                room.join(userId, playerId, pace);
             } catch (RoomNotJoinableException e) {
                 // 스캔과 합류 사이에 마감됐거나 자리가 찼다 — 다음 후보로 넘어간다
                 log.debug("후보 방 합류 실패 — roomId={}", roomId.value());
@@ -59,7 +61,7 @@ public class MatchRoomAssigner {
             updateMatchRoomPort.update(room);
             return roomId;
         }
-        return openNewRoom(playerId, pace, startAt, targetDistanceMeters);
+        return openNewRoom(userId, playerId, pace, startAt, targetDistanceMeters);
     }
 
     // ① 페이스가 가장 가까운 방 ② 그 차이가 임계 안으로 비슷하면 leave_count가 적은 방(feature-spec)
@@ -85,11 +87,11 @@ public class MatchRoomAssigner {
         return paces;
     }
 
-    private RunningRoomId openNewRoom(RunningPlayerId playerId, Pace pace,
+    private RunningRoomId openNewRoom(UserId userId, RunningPlayerId playerId, Pace pace,
                                       LocalDateTime startAt, int targetDistanceMeters) {
         // 1인 방은 창설자 페이스가 곧 방 평균이라 재계산할 것이 없다
         RunningRoom room = createMatchRoomPort.create(RunningRoom.openMatch(
-                playerId, pace.secondsPerKm(), targetDistanceMeters, startAt));
+                userId, playerId, pace.secondsPerKm(), targetDistanceMeters, startAt));
         return room.getRunningRoomId().orElseThrow();
     }
 
