@@ -147,7 +147,8 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     private RunningRoom copyWithId(RunningRoom room, long id) {
         List<SessionDraft> sessions = new ArrayList<>();
         room.getSessions().forEach(session -> sessions.add(new SessionDraft(
-                session.getRunningPlayerId(), session.getLeaveCount().value(), session.isConnected())));
+                session.getUserId(), session.getRunningPlayerId(),
+                session.getLeaveCount().value(), session.isConnected())));
         return RunningRoom.builder()
                 .runningRoomId(id)
                 .type(room.getType())

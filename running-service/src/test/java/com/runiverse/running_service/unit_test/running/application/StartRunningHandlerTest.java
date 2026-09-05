@@ -83,7 +83,8 @@ public class StartRunningHandlerTest {
                 .avgPace(AVG_PACE)
                 .currentPlayerCount(currentPlayerCount)
                 .maxPlayerCount(maxPlayerCount)
-                .sessions(List.of(new SessionDraft(new RunningPlayerId(PLAYER_ID), 0, connected)))
+                .sessions(List.of(new SessionDraft(
+                        new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, connected)))
                 .build();
     }
 
@@ -100,7 +101,7 @@ public class StartRunningHandlerTest {
 
     private static RoomSession sessionOf(RunningRoom room) {
         return room.getSessions().stream()
-                .filter(session -> session.isSamePlayer(new RunningPlayerId(PLAYER_ID)))
+                .filter(session -> session.isSameUser(new UserId(USER_ID)))
                 .findFirst()
                 .orElseThrow();
     }
@@ -280,7 +281,10 @@ public class StartRunningHandlerTest {
                     .avgPace(AVG_PACE)
                     .currentPlayerCount(1)
                     .maxPlayerCount(4)
-                    .sessions(List.of(new SessionDraft(new RunningPlayerId(99L), 0, true)))
+                    // 세션의 키가 유저라 "남의 방"은 다른 유저의 세션으로 만든다
+                    .sessions(List.of(new SessionDraft(
+                            new UserId(UuidCreator.getTimeOrderedEpoch()),
+                            new RunningPlayerId(99L), 0, true)))
                     .build();
             givenStore(room, player(RunningPlayerStatus.JOINED));
 

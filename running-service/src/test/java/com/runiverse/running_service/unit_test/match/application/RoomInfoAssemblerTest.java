@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.query.roominfo.RoomInfo;
 import com.runiverse.running_service.application.match.query.roominfo.RoomInfoAssembler;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
@@ -161,7 +162,8 @@ class RoomInfoAssemblerTest {
                 .avgPace(TEAM_PACE)
                 .currentPlayerCount(1)
                 .maxPlayerCount(4)
-                .sessions(List.of(new SessionDraft(new RunningPlayerId(1L), 0, true)))
+                .sessions(List.of(new SessionDraft(
+                        new UserId(ME), new RunningPlayerId(1L), 0, true)))
                 .build();
     }
 }

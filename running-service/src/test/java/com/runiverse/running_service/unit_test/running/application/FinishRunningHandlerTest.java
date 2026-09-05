@@ -167,7 +167,8 @@ public class FinishRunningHandlerTest {
                 .avgPace(AVG_PACE)
                 .currentPlayerCount(1)
                 .maxPlayerCount(type == RunningRoomType.SOLO ? 1 : 4)
-                .sessions(List.of(new SessionDraft(new RunningPlayerId(PLAYER_ID), 0, true)))
+                .sessions(List.of(new SessionDraft(
+                        new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true)))
                 .build();
     }
 

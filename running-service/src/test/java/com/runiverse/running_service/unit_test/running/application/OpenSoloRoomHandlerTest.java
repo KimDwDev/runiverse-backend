@@ -14,6 +14,7 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
@@ -156,7 +157,7 @@ public class OpenSoloRoomHandlerTest {
     }
 
     @Test
-    @DisplayName("방의 세션은 저장된 신청 식별자를 참조한다")
+    @DisplayName("방의 세션은 개시한 유저와 저장된 신청 식별자를 참조한다")
     void roomSessionPointsAtSavedPlayer() {
         // given -> 신청을 먼저 저장해야 방이 참조할 ID가 생긴다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
@@ -174,9 +175,11 @@ public class OpenSoloRoomHandlerTest {
         org.mockito.Mockito.verify(createRunningRoomPort).create(captor.capture());
 
         assertThat(captor.getValue().getSessions()).hasSize(1);
-        assertThat(captor.getValue().getSessions().get(0)
-                .isSamePlayer(new RunningPlayerId(PLAYER_ID))).isTrue();
-        assertThat(captor.getValue().getSessions().get(0).isConnected()).isTrue();
+        RoomSession session = captor.getValue().getSessions().getFirst();
+        // 세션의 키는 유저다 — 신청은 지금 이 방에 들어와 있는 것을 가리키는 값이다
+        assertThat(session.isSameUser(new UserId(userId))).isTrue();
+        assertThat(session.getRunningPlayerId()).isEqualTo(new RunningPlayerId(PLAYER_ID));
+        assertThat(session.isConnected()).isTrue();
     }
 
     @Test
