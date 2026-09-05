@@ -121,7 +121,7 @@
 > **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있는 설계라(방 이동은 향후 매칭 알고리즘 몫) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 닫는다 — 시작 전이면 `CANCELLED`, 시작 후면 유효 기록이 있을 때만 `FINISHED`이고 없으면 `CANCELLED`다. 친구 초대 생명주기는 MVP에서 정의하지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 닫는다 — 시작 전이면 `CANCELLED`, 시작 후면 유효 기록이 있을 때만 `FINISHED`이고 없으면 `CANCELLED`다. **완주도 배정 행을 `is_connected=false`로 내리지만 인원은 줄이지 않는다** — 이탈이 아니라 `leave_count`도 올리지 않고, 인원을 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버린다(방을 닫는 건 전원 종료를 확인하는 별도 경로다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
 > **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`.
 > **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·타임아웃·러닝 중 탈퇴에 같은 규칙을 적용하고, 유효 러닝 판정(거리·시간·경로 산출 가능 + 최소 거리·최소 시간 통과)을 지난 트랙만 기록으로 만든다. 산출할 수 없으면 실제 거리를 0으로 판정한다. **미달이어도 `status`는 그대로 남는다** — 기록 유무와 개인 종료 상태는 별개다.
 
@@ -130,14 +130,15 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
-| running_player_id | bigint | PK2, FK → running_players, ON DELETE CASCADE | |
+| user_id | UUID | PK2, → users | 논리 참조(FK 제약 없음). **키를 신청이 아니라 유저로 잡는다** — 취소 후 같은 방에 다시 신청해도 행이 늘지 않고 기존 행을 되살린다 |
+| running_player_id | bigint | NOT NULL, FK → running_players, ON DELETE CASCADE | **현재 이 방에 들어와 있는 신청.** PK가 아니라 재배정 시 새 신청으로 갱신된다. 참가자의 상태·페이스·기록을 읽는 조인 경로이며, 지우고 `user_id`로 우회하면 유저의 과거 신청까지 딸려 오거나 완주(`deleted_at` 기록) 후 조인이 끊긴다 |
 | leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
-| is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈 후에는 모두 false다 |
+| is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈·**완주** 후에는 모두 false다. **"이 유저가 이 방에서 뛰었나"를 판정하지 않는다** — 그건 `running_players.status`가 답하며, 결과 조회는 이 컬럼을 보지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 이탈, 그리고 향후 재배정·복귀로 갱신되는 테이블이다 |
 
 > **지금은 배정이 신청당 한 번이다** — 신청하면 방 하나에 배정되고, 현재 구현·명세에는 배정을 바꾸는 흐름이 없다. 나가면 그 행이 `is_connected=false`로 남는다.
 > **스키마는 방 이동을 담을 수 있게 미리 설계돼 있다** — 매칭 알고리즘이 고도화되면 서버가 활성 신청을 더 맞는 방으로 옮겨 다니게 한다. 그때 신청이 방을 옮기면 row가 쌓여 참여 이력이 되고, 거쳐 간 방으로 돌아오면 복합 PK가 같으므로 기존 행의 `is_connected`를 되살리고 `leave_count`만 누적한다(그래서 2 이상이 될 수 있다). 이동 시 두 방의 `current_player_count`는 한 트랜잭션에서 같이 갱신한다.
-> **취소 후 재신청은 별개다** — 이전에 나갔던 방도 후보에서 막지 않는다. `leave_count`가 방 순위를 낮춰 되도록 피할 뿐이다. 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
+> **취소 후 재신청은 같은 행을 쓴다** — 키가 유저라 이전에 나갔던 방에 다시 배정되면 행을 새로 만들지 않고 `is_connected`를 되살리며 `running_player_id`를 새 신청으로 갱신한다. 후보에서 막지는 않으며 `leave_count`가 방 순위를 낮춰 되도록 피할 뿐이다. 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
 
 ### running_records
 
@@ -374,6 +375,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
 | running_records.user_id | 내 기록 조회 |
 | running_records.running_room_id | 방 결과 조회 |
-| running_room_sessions.running_player_id | 참가자의 현재 방 조회 (복합 PK가 `running_room_id` 방향만 커버) |
+| running_room_sessions.user_id | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 탄다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중인 방(`type='MATCH' AND status='MATCHING'`) + 페이스 근접(±30초/km) 판정. 솔로 방·초대방을 인덱스 단계에서 배제한다. 모집 마감 스케줄러도 앞 4개 컬럼을 그대로 탄다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작. 페널티 판정(최근 제재 이탈 조회)도 이 인덱스를 탄다 |
