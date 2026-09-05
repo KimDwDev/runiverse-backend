@@ -21,14 +21,15 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.io.Serializable;
+import java.util.UUID;
 
 @Getter
 @Entity
 @Table(
         name = "running_room_sessions",
-        // 플레이어 → 배정된 방 역방향 조회 (복합 PK 선두가 running_room_id라 미커버)
-        // -> 아마 나중에 유저가 방에 있는지 확인할때 쓰인다.
-        indexes = @Index(name = "idx_room_session_player", columnList = "running_player_id")
+        // 유저 → 배정된 방 역방향 조회 (복합 PK 선두가 running_room_id라 미커버).
+        // 활성 신청에서 지금 속한 방을 찾을 때 is_connected를 항상 함께 보므로 복합으로 둔다
+        indexes = @Index(name = "idx_room_session_user", columnList = "user_id, is_connected")
 )
 @IdClass(RunningRoomSessionJpaEntity.Pk.class)
 @Check(name = "ck_room_session_leave_count", constraints = "leave_count >= 0")
@@ -41,13 +42,16 @@ public class RunningRoomSessionJpaEntity extends BaseTimeEntity {
             foreignKey = @ForeignKey(name = "fk_room_session_room"))
     @OnDelete(action = OnDeleteAction.CASCADE)
     private RunningRoomJpaEntity room;
-    // 플레이어 삭제(탈퇴 시 앱이 삭제) 시 링크도 연쇄 삭제
+    // 키를 신청이 아니라 유저로 잡는다 — 취소 후 같은 방에 다시 신청해도 행이 늘지 않는다.
+    // users 논리 참조라 FK를 걸지 않는다(erd §0 user_id FK 정책)
     @Id
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "running_player_id", nullable = false, updatable = false,
-            foreignKey = @ForeignKey(name = "fk_room_session_player"))
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    private RunningPlayerJpaEntity player;
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+    // 지금 이 방에 들어와 있는 신청 — 다른 애그리거트라 ID로만 참조한다(Reference by Identity).
+    // PK가 아니라 재배정 시 갱신되며, 참가자의 상태·페이스·기록을 읽는 조인 경로다.
+    // 무결성은 앱이 관리한다 — 탈퇴 정리 때 세션도 user_id로 함께 지운다
+    @Column(name = "running_player_id", nullable = false)
+    private Long runningPlayerId;
     // 이 방에서 나간 누적 횟수 — 나갔다 다시 들어오면 또 쌓인다. 페널티 판정 근거
     @Column(name = "leave_count", nullable = false)
     private int leaveCount;
@@ -56,23 +60,32 @@ public class RunningRoomSessionJpaEntity extends BaseTimeEntity {
     @Column(name = "is_connected", nullable = false)
     private boolean connected;
 
-    private RunningRoomSessionJpaEntity(RunningRoomJpaEntity room, RunningPlayerJpaEntity player,
-                                        int leaveCount, boolean connected) {
+    private RunningRoomSessionJpaEntity(RunningRoomJpaEntity room, UUID userId,
+                                        Long runningPlayerId, int leaveCount, boolean connected) {
         this.room = room;
-        this.player = player;
+        this.userId = userId;
+        this.runningPlayerId = runningPlayerId;
         this.leaveCount = leaveCount;
         this.connected = connected;
     }
 
-    public static RunningRoomSessionJpaEntity create(RunningRoomJpaEntity room,
-                                                     RunningPlayerJpaEntity player,
+    public static RunningRoomSessionJpaEntity create(RunningRoomJpaEntity room, UUID userId,
+                                                     Long runningPlayerId,
                                                      int leaveCount, boolean connected) {
-        return new RunningRoomSessionJpaEntity(room, player, leaveCount, connected);
+        return new RunningRoomSessionJpaEntity(room, userId, runningPlayerId, leaveCount, connected);
     }
 
-    // 프록시여도 식별자는 초기화 없이 읽힌다 — 도메인 복원 시 추가 쿼리가 안 나간다
-    public Long playerId() {
-        return player.getRunningPlayerId();
+    // 재배정 — 행을 새로 만들지 않고 신청만 갈아 끼운다
+    public void changeRunningPlayerId(Long runningPlayerId) {
+        this.runningPlayerId = runningPlayerId;
+    }
+
+    public void changeLeaveCount(int leaveCount) {
+        this.leaveCount = leaveCount;
+    }
+
+    public void changeConnected(boolean connected) {
+        this.connected = connected;
     }
 
     // @IdClass의 필드명은 엔티티의 @Id 필드명과 같고, 타입은 대상 엔티티의 PK 타입이다
@@ -83,14 +96,6 @@ public class RunningRoomSessionJpaEntity extends BaseTimeEntity {
     public static class Pk implements Serializable {
 
         private Long room;
-        private Long player;
-    }
-
-    public void changeLeaveCount(int leaveCount) {
-        this.leaveCount = leaveCount;
-    }
-
-    public void changeConnected(boolean connected) {
-        this.connected = connected;
+        private UUID userId;
     }
 }
