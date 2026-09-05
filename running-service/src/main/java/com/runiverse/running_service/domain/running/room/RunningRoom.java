@@ -1,5 +1,6 @@
 package com.runiverse.running_service.domain.running.room;
 
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
@@ -69,8 +70,8 @@ public class RunningRoom {
 
 
     // 솔로 — 모집 단계 없이 확정(MATCHED)된 채로 태어난다
-    public static RunningRoom openSolo(RunningPlayerId runningPlayerId, int avgPace,
-                                       Integer targetDistance, LocalDateTime startAt) {
+    public static RunningRoom openSolo(UserId userId, RunningPlayerId runningPlayerId,
+                                       int avgPace, Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
                 .type(RunningRoomType.SOLO)
                 .startAt(startAt)
@@ -79,13 +80,13 @@ public class RunningRoom {
                 .currentPlayerCount(1)
                 .maxPlayerCount(SOLO_MAX_PLAYER)
                 .build();
-        room.sessions.add(RoomSession.open(runningPlayerId));
+        room.sessions.add(RoomSession.open(userId, runningPlayerId));
         return room;
     }
 
     // 매칭 — 항상 1인 방으로 태어나 start_at - 모집마감오프셋까지 모집한다
-    public static RunningRoom openMatch(RunningPlayerId runningPlayerId, int avgPace,
-                                        Integer targetDistance, LocalDateTime startAt) {
+    public static RunningRoom openMatch(UserId userId, RunningPlayerId runningPlayerId,
+                                        int avgPace, Integer targetDistance, LocalDateTime startAt) {
         RunningRoom room = builder()
                 .type(RunningRoomType.MATCH)
                 .startAt(startAt)
@@ -94,7 +95,7 @@ public class RunningRoom {
                 .currentPlayerCount(1)
                 .maxPlayerCount(MATCH_MAX_PLAYER)
                 .build();
-        room.sessions.add(RoomSession.open(runningPlayerId));
+        room.sessions.add(RoomSession.open(userId, runningPlayerId));
         return room;
     }
 
@@ -124,15 +125,22 @@ public class RunningRoom {
     }
 
     // 후보 스캔이 걸러도 애그리거트가 다시 지킨다 — 스캔과 합류 사이에 자리가 찰 수 있다
-    public void join(RunningPlayerId runningPlayerId, Pace pace) {
+    public void join(UserId userId, RunningPlayerId runningPlayerId, Pace pace) {
         if (!canJoin(pace)) {
             throw new RoomNotJoinableException();
         }
-        if (findSession(runningPlayerId).isPresent()) {
+        RoomSession existing = findSession(userId).orElse(null);
+        if (existing == null) {
+            this.playerCount = playerCount.join();
+            this.sessions.add(RoomSession.open(userId, runningPlayerId));
+            return;
+        }
+        if (existing.isConnected()) {
             throw new AlreadyRoomPlayerException();   // 한 플레이어 = 최대 한 방
         }
+        // 전에 거쳐 간 방이다 — 키가 유저라 행을 새로 만들지 않고 되살린다(erd)
         this.playerCount = playerCount.join();
-        this.sessions.add(RoomSession.open(runningPlayerId));
+        existing.reassign(runningPlayerId);
     }
 
     // start_at·target_distance는 조회가 등가로 거르고, 페이스 근접만 방이 판정한다
@@ -150,11 +158,11 @@ public class RunningRoom {
     }
 
     // 나갔던 사람이 돌아옴 — 러닝 중에도 가능해서 join()의 모집 조건을 타지 않는다
-    public void rejoin(RunningPlayerId runningPlayerId) {
+    public void rejoin(UserId userId) {
         if (status.isTerminal()) {
             throw new RoomNotJoinableException();   // 끝났거나 취소된 방엔 돌아올 수 없다
         }
-        RoomSession session = session(runningPlayerId);
+        RoomSession session = session(userId);
         if (session.isConnected()) {
             throw new AlreadyRoomPlayerException();
         }
@@ -162,8 +170,8 @@ public class RunningRoom {
         session.rejoin();
     }
 
-    public void leave(RunningPlayerId runningPlayerId, LocalDateTime leftAt) {
-        RoomSession session = session(runningPlayerId);          // 1. 이 방 참가자인가
+    public void leave(UserId userId, LocalDateTime leftAt) {
+        RoomSession session = session(userId);                    // 1. 이 방 참가자인가
         if (!session.isConnected()) {
             throw new AlreadyLeftRoomException();                // 2. 이미 나갔는가 — 중복 이탈 방어
         }
@@ -178,6 +186,12 @@ public class RunningRoom {
             this.closeAt = leftAt;
         }
         session.leave();
+    }
+
+    // 완주로 자리를 비운다 — 인원도 방 상태도 건드리지 않는다.
+    // leave()를 쓰면 마지막 완주자가 인원을 0으로 만들어 방이 CANCELLED가 된다(erd 생명주기)
+    public void finishSession(UserId userId) {
+        session(userId).finish();
     }
 
     // 후보가 여럿일 때 순위를 가른다 — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다(erd).
@@ -210,12 +224,12 @@ public class RunningRoom {
         return Collections.unmodifiableList(sessions);
     }
 
-    private RoomSession session(RunningPlayerId runningPlayerId) {
-        return findSession(runningPlayerId).orElseThrow(NotRoomPlayerException::new);
+    private RoomSession session(UserId userId) {
+        return findSession(userId).orElseThrow(NotRoomPlayerException::new);
     }
 
-    private Optional<RoomSession> findSession(RunningPlayerId runningPlayerId) {
-        return sessions.stream().filter(s -> s.isSamePlayer(runningPlayerId)).findFirst();
+    private Optional<RoomSession> findSession(UserId userId) {
+        return sessions.stream().filter(session -> session.isSameUser(userId)).findFirst();
     }
 
     // 닫힌 시각은 종료 상태와 짝이다 — DB에서 복원할 때 어긋난 행을 여기서 잡는다
