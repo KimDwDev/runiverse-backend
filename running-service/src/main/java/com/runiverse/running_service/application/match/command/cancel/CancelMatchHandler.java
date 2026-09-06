@@ -15,7 +15,6 @@ import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,18 +59,13 @@ public class CancelMatchHandler implements CancelMatchUsecase {
                         "배정된 방을 찾을 수 없다 — runningRoomId=" + roomId.value()));
 
         LocalDateTime now = LocalDateTime.now();
-        if (isRecruiting(room, now)) {
-            // 5-a. 모집 중 취소 — 제재가 없고 status도 그대로 둔다(방 이력을 남길 필요가 없다)
-            player.cancel(now);
-        } else {
-            // 5-b. 확정 후 이탈 — 제재 여부를 지금 판정해 status에 굳힌다.
-            //      인원은 room.leave() 전에 읽어야 '이탈 시점' 값이 된다
-            boolean penalty = isPenalty(room, now);
-            player.leave(penalty, now);
-            if (penalty) {
-                // 근거는 status에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
-                matchCooldownPort.start(userId);
-            }
+        // 5. 대기 취소든 확정 후 이탈이든 신청이 끝난 사유를 status에 남긴다 — 제재 여부만 갈린다.
+        //    마감 전이면 isPenalty가 false라 자연히 대기 취소(MATCHED_LEFT_NO_PENALTY)가 된다
+        boolean penalty = isPenalty(room, now);
+        player.leave(penalty, now);
+        if (penalty) {
+            // 근거는 status에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
+            matchCooldownPort.start(userId);
         }
         // 6. 세션을 끊고 인원을 줄인다. 0이 되면 방이 CANCELLED로 닫힌다
         room.leave(userId, now);
@@ -80,12 +74,8 @@ public class CancelMatchHandler implements CancelMatchUsecase {
         updateMatchRoomPort.update(room);
     }
 
-    // 상태만 보지 않고 마감 시각도 함께 본다 — 마감이 지났는데 스케줄러가 아직 안 닫은
-    // MATCHING 방을 '모집 중'으로 처리하면 그 틈에 나가 제재를 피할 수 있다
-    private boolean isRecruiting(RunningRoom room, LocalDateTime now) {
-        return room.getStatus() == RunningRoomStatus.MATCHING && now.isBefore(closeAt(room));
-    }
-
+    // 마감·인원·방 종류가 함께 걸린다 — 혼자 남은 방을 나가는 데는 손해를 보는 상대가 없고(feature-spec),
+    // 마감 전이면 아직 확정되지 않아 깰 약속도 없다
     private boolean isPenalty(RunningRoom room, LocalDateTime now) {
         return room.getType() == RunningRoomType.MATCH
                 && !now.isBefore(closeAt(room))

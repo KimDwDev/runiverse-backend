@@ -121,7 +121,7 @@
 > **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있는 설계라(방 이동은 향후 매칭 알고리즘 몫) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
 > **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `deleted_at` 기록 / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 닫는다 — 시작 전이면 `CANCELLED`, 시작 후면 유효 기록이 있을 때만 `FINISHED`이고 없으면 `CANCELLED`다. **완주도 배정 행을 `is_connected=false`로 내리지만 인원은 줄이지 않는다** — 이탈이 아니라 `leave_count`도 올리지 않고, 인원을 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버린다(방을 닫는 건 전원 종료를 확인하는 별도 경로다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록(마감 전이라 언제나 미제재다) / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 닫는다 — 시작 전이면 `CANCELLED`, 시작 후면 유효 기록이 있을 때만 `FINISHED`이고 없으면 `CANCELLED`다. **완주도 배정 행을 `is_connected=false`로 내리지만 인원은 줄이지 않는다** — 이탈이 아니라 `leave_count`도 올리지 않고, 인원을 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버린다(방을 닫는 건 전원 종료를 확인하는 별도 경로다). 친구 초대 생명주기는 MVP에서 정의하지 않는다.
 > **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`.
 > **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·타임아웃·러닝 중 탈퇴에 같은 규칙을 적용하고, 유효 러닝 판정(거리·시간·경로 산출 가능 + 최소 거리·최소 시간 통과)을 지난 트랙만 기록으로 만든다. 산출할 수 없으면 실제 거리를 0으로 판정한다. **미달이어도 `status`는 그대로 남는다** — 기록 유무와 개인 종료 상태는 별개다.
 
@@ -353,7 +353,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
-| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / 확정 후 이탈(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주 |
+| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소와 확정 후 이탈을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 방이 빔 — 시작 전이면 항상, 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO | |

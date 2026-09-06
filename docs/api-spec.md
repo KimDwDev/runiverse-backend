@@ -913,7 +913,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `DELETE /api/v1/users/me/running-match` — 매칭 취소·방 나가기 (겸용)
 
 - **서버가 방 상태로 분기**
-  - 대기 중(`MATCHING`) = 대기 취소(`deleted_at` 소프트 삭제). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
+  - 대기 중(마감 전) = 대기 취소(`status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
+  - **분기는 방의 `status`가 아니라 모집 마감 시각으로 한다** — 마감이 지났는데 스케줄러가 아직 `MATCHING`을 안 닫은 틈에 나가면 제재를 피할 수 있기 때문이다
+  - **러닝이 시작된 뒤(`status='RUNNING'`)에는 이 API를 쓸 수 없다** — `409 MATCH_ALREADY_STARTED`. 종료는 WS `RUNNING_FINISH`가 맡으며, 여기서 끊으면 GPS 트랙과 기록이 저장되지 않는다
   - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 모집 마감(`start_at - 오프셋`) + 유예, 그리고 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 유예가 지났어도 면제다. 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
   - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
 - **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고 늦은 이탈은 쿨다운으로 다룬다
