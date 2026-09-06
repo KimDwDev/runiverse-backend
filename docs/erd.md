@@ -190,6 +190,28 @@
 
 ---
 
+### scheduled_jobs (예약 작업)
+
+> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감만 쓰지만 러닝 강제 종료·시작 리마인더가 같은 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| scheduled_job_id | bigint | PK | |
+| job_type | varchar(50) | NOT NULL | 무엇을 할 것인가 — [§6 enum 사전](#6-enum-사전) |
+| target_id | varchar(100) | NOT NULL | 대상 식별자. 타입마다 가리키는 테이블이 달라(`MATCH_CLOSE`면 `running_room_id`) FK 없이 문자열로 둔다 |
+| execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋` |
+| is_sent | boolean | NOT NULL, default false | 실행 완료 여부. 여러 인스턴스가 같은 예약을 들고 있어도 여기서 하나만 이긴다 |
+| sent_at | timestamp | nullable | 실제 실행 시각. `execute_at`과의 차이가 곧 지연이라 운영 지표로 쓴다 |
+| created_at | timestamp | NOT NULL | |
+
+> UNIQUE (job_type, target_id) — 한 대상에 같은 종류의 예약은 하나다. 인스턴스 여럿이 같은 예약을 넣으려 해도 DB가 막는다.
+> **정본은 이 표고 메모리 타이머는 사본이다.** 각 인스턴스가 `execute_at`에 깨도록 타이머를 걸지만 재시작하면 사라지므로, 부팅 때 `is_sent=false`를 전부 읽어 **지난 것은 즉시 실행하고 남은 것은 다시 건다**. 그래서 타이머가 여러 인스턴스에 중복으로 걸리는 것은 낭비가 아니라 이중화다 — 한 대가 죽어도 남은 대가 쏜다.
+> **실행 직전 조건부 UPDATE로 이긴 하나만 일한다** — `SET is_sent=true WHERE scheduled_job_id=? AND is_sent=false`가 0행이면 남이 이미 했다는 뜻이라 그냥 빠진다. 대상 테이블을 잠그기 전에 걸러지므로 중복 발화 비용이 UPDATE 한 번이다. 대상 쪽 상태 재확인은 이것과 별개로 남는다 — 예약이 아닌 경로(사용자 취소 등)로 이미 상태가 넘어가 있을 수 있다.
+> **`execute_at`을 저장하는 대가는 오프셋 변경이다** — 모집 마감 오프셋을 바꾸면 아직 실행되지 않은 `MATCH_CLOSE`의 `execute_at`을 함께 UPDATE 해야 한다. 방에서 매번 계산하지 않고 시각을 굳히는 대신 치르는 값이다.
+> **행은 지우지 않는다** — 실행 이력이 곧 "그 시각에 확정이 실제로 돌았는가"의 근거다. 보존 기간은 운영에서 정한다.
+
+---
+
 ## 3. 도메인 C — 소셜 (친구 · 피드 · 댓글)
 
 > **`[MVP 제외]` 표기**: 지금 만들지 않는 테이블. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이다.
@@ -357,6 +379,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 방이 빔 — 시작 전이면 항상, 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO | |
+| scheduled_jobs.job_type | MATCH_CLOSE | 모집 마감 확정(`MATCHING`→`MATCHED`). 러닝 강제 종료·시작 리마인더는 붙일 때 값을 추가한다 |
 
 ---
 
@@ -376,5 +399,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록 조회 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.user_id | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 탄다 |
-| running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중인 방(`type='MATCH' AND status='MATCHING'`) + 페이스 근접(±30초/km) 판정. 솔로 방·초대방을 인덱스 단계에서 배제한다. 모집 마감 스케줄러도 앞 4개 컬럼을 그대로 탄다 |
+| running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중인 방(`type='MATCH' AND status='MATCHING'`) + 페이스 근접(±30초/km) 판정. 솔로 방·초대방을 인덱스 단계에서 배제한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |
+| scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작. 페널티 판정(최근 제재 이탈 조회)도 이 인덱스를 탄다 |
