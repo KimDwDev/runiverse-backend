@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.redis;
 
 public enum RedisKey {
     USER("user"),
+    MATCH("match"),
     RUNNING_TRACK("running:track");
 
     private static final String DELIMITER = ":";

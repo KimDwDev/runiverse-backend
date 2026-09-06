@@ -15,7 +15,9 @@ public record MatchProperties(
         @NotNull Duration closeOffset,
         // 페이스 차이가 이 값 이내면 동급으로 보고 leave_count로 순위를 가른다.
         // 후보 자격(±30초)은 Pace.isCloseTo가 판정한다 — 이건 그 안에서의 동점 처리다
-        @NotNull @Positive Integer paceTieToleranceSecondsPerKm
+        @NotNull @Positive Integer paceTieToleranceSecondsPerKm,
+        // 제재 대상 이탈 후 재신청이 막히는 기간. Redis 키의 TTL로 쓴다
+        @NotNull Duration cooldown
 ) {
 
 }
