@@ -168,7 +168,8 @@ public class GlobalExceptionHandler {
     private HttpStatus toStatus(MatchErrorCode code) {
         return switch (code) {
             case MATCH_ALREADY_IN_PROGRESS,
-                 MATCH_SLOT_CLOSED -> HttpStatus.CONFLICT;
+                 MATCH_SLOT_CLOSED,
+                 MATCH_ALREADY_STARTED -> HttpStatus.CONFLICT;
         };
     }
 }
