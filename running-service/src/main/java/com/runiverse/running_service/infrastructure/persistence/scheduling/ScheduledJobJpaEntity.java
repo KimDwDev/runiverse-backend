@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.scheduling;
 
-import com.runiverse.running_service.application.common.scheduling.ScheduledJobType;
+import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -63,4 +63,11 @@ public class ScheduledJobJpaEntity extends BaseCreatedAtEntity {
                                                LocalDateTime executeAt) {
         return new ScheduledJobJpaEntity(jobType, targetId, executeAt);
     }
+
+    // 선점 결과를 되받는다 — 도메인이 짝을 검증했으므로 여기서는 다시 보지 않는다
+    public void changeSent(boolean sent, LocalDateTime sentAt) {
+        this.sent = sent;
+        this.sentAt = sentAt;
+    }
+
 }

@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.common.port.out;
 
-import com.runiverse.running_service.application.common.scheduling.ScheduledJob;
+
+import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 
 import java.util.List;
 

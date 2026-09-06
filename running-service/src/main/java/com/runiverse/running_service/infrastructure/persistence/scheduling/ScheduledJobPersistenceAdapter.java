@@ -1,81 +1,96 @@
 package com.runiverse.running_service.infrastructure.persistence.scheduling;
 
-import com.runiverse.running_service.application.common.port.out.ClaimScheduledJobPort;
 import com.runiverse.running_service.application.common.port.out.LoadPendingJobsPort;
+import com.runiverse.running_service.application.common.port.out.LockScheduledJobPort;
 import com.runiverse.running_service.application.common.port.out.SaveScheduledJobPort;
-import com.runiverse.running_service.application.common.scheduling.ScheduledJob;
-import com.runiverse.running_service.application.common.scheduling.ScheduledJobType;
+import com.runiverse.running_service.application.common.port.out.UpdateScheduledJobPort;
+import com.runiverse.running_service.domain.scheduling.ScheduledJob;
+import com.runiverse.running_service.domain.scheduling.vo.JobTarget;
+import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class ScheduledJobPersistenceAdapter
-        implements SaveScheduledJobPort, LoadPendingJobsPort, ClaimScheduledJobPort {
+public class ScheduledJobPersistenceAdapter implements SaveScheduledJobPort,
+        LoadPendingJobsPort, LockScheduledJobPort, UpdateScheduledJobPort {
 
     private final EntityManager entityManager;
 
     @Override
-    public ScheduledJob save(ScheduledJobType type, String targetId, LocalDateTime executeAt) {
-        // 같은 (타입, 대상)이 이미 있으면 그대로 쓴다 — 중복 INSERT로 UNIQUE에 부딪히면
-        // 대상 생성 트랜잭션까지 함께 죽는다
-        return findBy(type, targetId).orElseGet(() -> {
-            ScheduledJobJpaEntity entity =
-                    ScheduledJobJpaEntity.create(type, targetId, executeAt);
+    public ScheduledJob save(ScheduledJob job) {
+        if (!job.isNew()) {
+            throw new IllegalStateException("이미 저장된 예약이다 — 발화 처리는 별도 포트로 한다");
+        }
+        JobTarget target = job.getTarget();
+        // 바로 INSERT를 치면 UNIQUE 위반이 대상 생성 트랜잭션까지 끌고 죽는다.
+        // 이미 있으면 그 예약을 그대로 쓴다
+        return findBy(target).orElseGet(() -> {
+            ScheduledJobJpaEntity entity = ScheduledJobJpaEntity.create(
+                    target.type(), target.id(), job.getExecuteAt());
             entityManager.persist(entity);
             // 타이머를 걸려면 ID가 필요하다 — 커밋까지 기다리지 않고 여기서 채운다
             entityManager.flush();
-            return toScheduledJob(entity);
+            return toDomain(entity);
         });
     }
 
     @Override
     public List<ScheduledJob> loadPending() {
         return entityManager.createQuery("""
-                        SELECT j FROM ScheduledJobJpaEntity j
-                        WHERE j.sent = false
-                        ORDER BY j.executeAt ASC
+                        select job
+                        from ScheduledJobJpaEntity job
+                        where job.sent = false
+                        order by job.executeAt asc
                         """, ScheduledJobJpaEntity.class)
                 .getResultList().stream()
-                .map(ScheduledJobPersistenceAdapter::toScheduledJob)
+                .map(ScheduledJobPersistenceAdapter::toDomain)
                 .toList();
     }
 
-    // 대상 처리와 같은 트랜잭션에 두면 그쪽이 롤백될 때 선점도 풀려 두 번 실행된다.
-    // 선점은 독립 트랜잭션으로 먼저 확정한다 — 실패해도 다시 실행되지 않는 쪽을 택한다
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean claim(Long scheduledJobId) {
-        return entityManager.createQuery("""
-                        UPDATE ScheduledJobJpaEntity j
-                        SET j.sent = true, j.sentAt = :now
-                        WHERE j.scheduledJobId = :scheduledJobId AND j.sent = false
-                        """)
-                .setParameter("now", LocalDateTime.now())
-                .setParameter("scheduledJobId", scheduledJobId)
-                .executeUpdate() == 1;
+    public Optional<ScheduledJob> lockById(ScheduledJobId scheduledJobId) {
+        return Optional.ofNullable(entityManager.find(
+                        ScheduledJobJpaEntity.class, scheduledJobId.value(),
+                        LockModeType.PESSIMISTIC_WRITE))
+                .map(ScheduledJobPersistenceAdapter::toDomain);
     }
 
-    private java.util.Optional<ScheduledJob> findBy(ScheduledJobType type, String targetId) {
+    @Override
+    public void update(ScheduledJob job) {
+        Long jobId = job.getScheduledJobId()
+                .orElseThrow(() -> new IllegalStateException("저장되지 않은 예약은 갱신할 수 없다"))
+                .value();
+        // 영속 상태로 올려두면 더티 체킹이 UPDATE를 만든다
+        ScheduledJobJpaEntity entity = entityManager.find(ScheduledJobJpaEntity.class, jobId);
+        entity.changeSent(job.isSent(), job.getSentAt().orElse(null));
+    }
+
+    private Optional<ScheduledJob> findBy(JobTarget target) {
         return entityManager.createQuery("""
-                        SELECT j FROM ScheduledJobJpaEntity j
-                        WHERE j.jobType = :type AND j.targetId = :targetId
+                        select job
+                        from ScheduledJobJpaEntity job
+                        where job.jobType = :type and job.targetId = :targetId
                         """, ScheduledJobJpaEntity.class)
-                .setParameter("type", type)
-                .setParameter("targetId", targetId)
+                .setParameter("type", target.type())
+                .setParameter("targetId", target.id())
                 .getResultStream()
                 .findFirst()
-                .map(ScheduledJobPersistenceAdapter::toScheduledJob);
+                .map(ScheduledJobPersistenceAdapter::toDomain);
     }
 
-    private static ScheduledJob toScheduledJob(ScheduledJobJpaEntity entity) {
-        return new ScheduledJob(entity.getScheduledJobId(), entity.getJobType(),
-                entity.getTargetId(), entity.getExecuteAt());
+    private static ScheduledJob toDomain(ScheduledJobJpaEntity entity) {
+        return ScheduledJob.builder()
+                .scheduledJobId(entity.getScheduledJobId())
+                .target(new JobTarget(entity.getJobType(), entity.getTargetId()))
+                .executeAt(entity.getExecuteAt())
+                .sent(entity.isSent())
+                .sentAt(entity.getSentAt())
+                .build();
     }
 }
