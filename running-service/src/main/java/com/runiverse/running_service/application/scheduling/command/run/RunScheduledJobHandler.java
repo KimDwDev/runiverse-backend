@@ -1,9 +1,9 @@
 package com.runiverse.running_service.application.scheduling.command.run;
 
-import com.runiverse.running_service.application.common.port.out.LockScheduledJobPort;
-import com.runiverse.running_service.application.common.port.out.UpdateScheduledJobPort;
 import com.runiverse.running_service.application.scheduling.ScheduledJobExecutor;
 import com.runiverse.running_service.application.scheduling.port.in.RunScheduledJobUsecase;
+import com.runiverse.running_service.application.scheduling.port.out.LockScheduledJobPort;
+import com.runiverse.running_service.application.scheduling.port.out.UpdateScheduledJobPort;
 import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 import com.runiverse.running_service.domain.scheduling.vo.JobTarget;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobId;
