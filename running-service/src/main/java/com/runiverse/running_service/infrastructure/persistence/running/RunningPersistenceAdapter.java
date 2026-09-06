@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.match.port.out.CreateMatchAppli
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -52,7 +53,9 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
         CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
         // 취소·나가기가 쓰는 둘 — 시그니처가 같아 기존 메서드가 그대로 만족시킨다
-        LoadActiveApplicationPort, UpdateMatchApplicationPort {
+        LoadActiveApplicationPort, UpdateMatchApplicationPort,
+        // 스냅샷 조회 — 잠그지 않는 것만 lockById와 다르다
+        LoadMatchRoomDetailPort {
 
     private final EntityManager entityManager;
 
@@ -304,6 +307,24 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 // 방 행만 잠근다 — 인원 갱신이 겹치면 정원을 넘길 수 있다.
                 // 세션은 별도 조회라 잠기지 않는다(같은 방의 다른 신청과만 경쟁한다)
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(entity -> toDomain(entity, loadSessions(entity)));
+    }
+
+    // 스냅샷 조회가 신청·취소와 경합하면 안 된다 — 여긴 잠그지 않는 것만 lockById와 다르다.
+    // 세션까지 함께 복원한다(방 애그리거트는 세션 없이는 판정할 수 없다)
+    @Override
+    public Optional<RunningRoom> loadDetailById(RunningRoomId runningRoomId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT r
+                                FROM RunningRoomJpaEntity r
+                                WHERE r.runningRoomId = :runningRoomId
+                                  AND r.deletedAt IS NULL
+                                """, RunningRoomJpaEntity.class
+                )
+                .setParameter("runningRoomId", runningRoomId.value())
                 .getResultStream()
                 .findFirst()
                 .map(entity -> toDomain(entity, loadSessions(entity)));

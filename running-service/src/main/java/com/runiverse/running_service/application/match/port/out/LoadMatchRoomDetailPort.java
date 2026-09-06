@@ -9,5 +9,5 @@ public interface LoadMatchRoomDetailPort {
 
     // 잠그지 않고 방을 읽는다 — 스냅샷 조회가 신청·취소와 경합하면 안 된다.
     // 세션까지 함께 복원한다(방 애그리거트는 세션 없이는 판정할 수 없다)
-    Optional<RunningRoom> loadById(RunningRoomId runningRoomId);
+    Optional<RunningRoom> loadDetailById(RunningRoomId runningRoomId);
 }

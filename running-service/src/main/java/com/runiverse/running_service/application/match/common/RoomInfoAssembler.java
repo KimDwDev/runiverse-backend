@@ -79,7 +79,7 @@ public class RoomInfoAssembler {
     public Optional<RoomInfo> assembleFor(UserId userId) {
         return loadActiveApplicationPort.loadActive(userId)
                 .flatMap(player -> loadMatchRoomPort.findAssignedRoom(userId))
-                .flatMap(loadMatchRoomDetailPort::loadById)
+                .flatMap(loadMatchRoomDetailPort::loadDetailById)
                 .map(this::assemble);
     }
 }

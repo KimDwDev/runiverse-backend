@@ -10,10 +10,14 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
+// 스냅샷을 읽는 동안 커넥션을 잡고 있어야 한다 —
+// 어댑터가 getResultStream()으로 게으르게 읽어서, 트랜잭션이 없으면 커서가 먼저 닫힌다
+@Transactional(readOnly = true)
 public class OpenMatchStreamHandler implements OpenMatchStreamUsecase {
 
     private final MatchStreamPort matchStreamPort;
