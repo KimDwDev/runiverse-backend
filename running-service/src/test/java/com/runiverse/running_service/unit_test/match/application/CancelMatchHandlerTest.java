@@ -110,7 +110,8 @@ class CancelMatchHandlerTest {
         // then -> 근거는 status에 남고 "지금 막혀 있나"는 Redis가 답한다
         assertThat(leftPlayer().getStatus())
                 .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_PENALTY);
-        verify(matchCooldownPort).start(new UserId(USER_ID));
+        // 기간은 호출자가 넘긴다 — 조기 종료 제재(running-finish.cooldown)와 따로 조절한다
+        verify(matchCooldownPort).start(new UserId(USER_ID), COOLDOWN);
     }
 
     @Test

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,8 +57,10 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
     private static final double PRECISION = 1e-5;
     private static final int SPLIT_DISTANCE = 10;
 
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 이 테스트의 주제는 아니다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final RunningFinishProperties PROPERTIES = new RunningFinishProperties(
-            0.8, SPLIT_DISTANCE, 100, 60, 3.0);
+            0.8, SPLIT_DISTANCE, 100, 60, 3.0, COOLDOWN);
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
@@ -82,7 +85,11 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
         finishRunningHandler = new FinishRunningHandler(
                 runningStore, runningStore, runningTrackStore, onboardingStore, weatherProvider,
                 gpsTrackUploader, runningRecordStore, runningStore, runningTrackStore,
-                runningStore, runningStore, PROPERTIES);
+                runningStore, runningStore,
+                // 쿨다운 발급은 이 테스트의 주제가 아니다 — 아무것도 하지 않는다
+                (userId, cooldown) -> {
+                },
+                PROPERTIES);
 
         InMemoryRunningResultStore resultStore =
                 new InMemoryRunningResultStore(runningStore, runningRecordStore);

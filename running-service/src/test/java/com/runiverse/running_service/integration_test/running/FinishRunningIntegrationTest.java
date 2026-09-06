@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,8 +51,10 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     private static final double METERS_PER_DEGREE = Math.toRadians(1) * 6_371_008.8;
 
     // 운영 설정과 같은 값
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 이 테스트의 주제는 아니다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final RunningFinishProperties PROPERTIES = new RunningFinishProperties(
-            0.8, 10, 100, 60, 3.0);
+            0.8, 10, 100, 60, 3.0, COOLDOWN);
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
@@ -99,6 +102,9 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 runningTrackStore,  // DeleteRunningTrackPort
                 runningStore,       // ExistsRunningPlayerPort
                 runningStore,       // UpdateRunningRoomPort
+                // 쿨다운 발급은 이 테스트의 주제가 아니다 — 아무것도 하지 않는다
+                (userId, cooldown) -> {
+                },                  // StartMatchCooldownPort
                 PROPERTIES
         );
     }

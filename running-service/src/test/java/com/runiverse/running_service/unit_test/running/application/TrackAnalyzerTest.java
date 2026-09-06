@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,8 +29,10 @@ public class TrackAnalyzerTest {
     private static final BigDecimal WEIGHT = new BigDecimal("70.0");
     private static final UUID USER_ID = UUID.fromString("01a02344-364f-7d53-860a-c4f967cf1dbd");
 
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 이 테스트의 주제는 아니다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final RunningFinishProperties PROPERTIES = new RunningFinishProperties(
-            0.8, 10, 100, 60, 3.0);
+            0.8, 10, 100, 60, 3.0, COOLDOWN);
 
     private static TrackPoint point(long sequence, double latitude, Double altitude,
                                     LocalDateTime at) {

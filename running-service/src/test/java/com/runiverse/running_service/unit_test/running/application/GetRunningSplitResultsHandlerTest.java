@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -57,8 +58,10 @@ public class GetRunningSplitResultsHandlerTest {
     private static final double PRECISION = 1e-5;
 
     // 운영 설정과 같은 값 — splitDistanceMeters가 구간 경계 계산의 기준이다
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 이 테스트의 주제는 아니다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final RunningFinishProperties PROPERTIES =
-            new RunningFinishProperties(0.8, SPLIT_DISTANCE, 100, 60, 3.0);
+            new RunningFinishProperties(0.8, SPLIT_DISTANCE, 100, 60, 3.0, COOLDOWN);
 
     // 점 다섯 개짜리 경로. 인덱스로 잘린 구간을 눈으로 확인하려고 위도를 1씩 띄운다
     private static final List<BoundaryPoint> ROUTE = List.of(
