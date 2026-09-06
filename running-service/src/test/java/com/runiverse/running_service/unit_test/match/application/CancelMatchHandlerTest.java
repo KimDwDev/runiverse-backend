@@ -4,12 +4,17 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
 import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
+import com.runiverse.running_service.application.match.port.out.MatchEventType;
+import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
+import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -28,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -38,6 +44,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -54,6 +61,10 @@ class CancelMatchHandlerTest {
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
     private static final int PACE_TIE_TOLERANCE = 10;
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
+    // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
+    private static final RoomInfo ROOM_INFO = new RoomInfo(
+            ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
+            LocalDateTime.now().plusHours(1), TARGET_DISTANCE, AVG_PACE, List.of());
 
     @Mock
     private LoadActiveApplicationPort loadActiveApplicationPort;
@@ -73,6 +84,12 @@ class CancelMatchHandlerTest {
     @Mock
     private MatchCooldownPort matchCooldownPort;
 
+    @Mock
+    private RoomInfoAssembler roomInfoAssembler;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private CancelMatchHandler cancelMatchHandler;
 
     @BeforeEach
@@ -80,7 +97,8 @@ class CancelMatchHandlerTest {
         cancelMatchHandler = new CancelMatchHandler(
                 loadActiveApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
                 updateMatchApplicationPort, updateMatchRoomPort, matchCooldownPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
+                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                roomInfoAssembler, eventPublisher);
     }
 
     @Test
@@ -299,5 +317,33 @@ class CancelMatchHandlerTest {
                 .maxPlayerCount(maxPlayerCount)
                 .sessions(sessions)
                 .build();
+    }
+
+    @Test
+    @DisplayName("남은 참가자에게 방 갱신을 발행한다")
+    void publishesRoomUpdateToRemainingPlayers() {
+        // given -> 나가면 남은 사람 화면의 인원이 줄어야 한다
+        givenActiveMatch(room(startAfter(Duration.ofHours(2)), 2));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then -> 커밋 후에 나가도록 스프링 이벤트로 넘긴다
+        verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
+                new MatchStreamEvent(MatchEventType.MATCH_ROOM_UPDATED, ROOM_INFO)));
+    }
+
+    @Test
+    @DisplayName("방이 비면 발행하지 않는다")
+    void skipsPublishWhenRoomIsEmpty() {
+        // given -> 마지막 참가자가 나가 인원이 0이 된다. 받을 사람이 없다
+        givenActiveMatch(room(startAfter(Duration.ofHours(2)), 1));
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then
+        verifyNoInteractions(eventPublisher, roomInfoAssembler);
     }
 }
