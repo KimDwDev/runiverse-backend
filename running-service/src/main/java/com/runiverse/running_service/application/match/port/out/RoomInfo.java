@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.match.query.roominfo;
+package com.runiverse.running_service.application.match.port.out;
 
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 

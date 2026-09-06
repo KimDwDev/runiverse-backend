@@ -54,11 +54,10 @@
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
-**매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
+**매칭 SSE** — 이벤트 2종. 연결 직후 현재 상태 스냅샷을 받는다.
 
 | 이벤트 | 비고 |
 |--------|------|
-| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 (`RoomInfo`) |
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
 | `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 취소·러닝 시작 포함 |
 
@@ -151,7 +150,7 @@
 | 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개(13번 [MVP 제외]) + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 57개(13번 [MVP 제외]) + SSE 스트림 1개(이벤트 2종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -802,7 +801,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 이벤트 | 시점 |
 |---|---|
-| `MATCH_PLAYERS_UPDATED` | 대기 인원 변동 — `data` = `RoomInfo` |
 | `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
 | `MATCH_ROOM_UPDATED` | 방 정보 갱신·취소·러닝 시작 — `data` = `RoomInfo` |
 
@@ -918,7 +916,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - **분기는 방의 `status`가 아니라 모집 마감 시각으로 한다** — 마감이 지났는데 스케줄러가 아직 `MATCHING`을 안 닫은 틈에 나가면 제재를 피할 수 있기 때문이다
   - **러닝이 시작된 뒤(`status='RUNNING'`)에는 이 API를 쓸 수 없다** — `409 MATCH_ALREADY_STARTED`. 종료는 WS `RUNNING_FINISH`가 맡으며, 여기서 끊으면 GPS 트랙과 기록이 저장되지 않는다
   - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 모집 마감(`start_at - 오프셋`)과 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 마감이 지났어도 면제다. 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
-  - 남은 인원에게는 `MATCH_PLAYERS_UPDATED` 또는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
+  - 남은 인원에게는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
 - **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고 늦은 이탈은 쿨다운으로 다룬다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
@@ -955,18 +953,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 클라이언트는 `MATCHED`에서 `players`가 1건인 경우를 **혼자 확정된 상태**로 그린다. 이때 나가기는 페널티가 없다(5-B)
 - **인증**: 필요
 
-#### `MATCH_PLAYERS_UPDATED` (SSE) — 매칭 참가자 갱신
-
-- `data`는 `status='MATCHING'`인 `RoomInfo` 전체다. 현재 인원은 `players.length`로 계산한다.
-
-- `runningRoomId`는 **항상 값이 있다**(신청 즉시 방에 배정된다). 다만 이 값이 "매칭이 확정됐다"는 뜻은 아니다. 확정 여부는 `MATCH_STARTED` 수신이나 `MATCH_ROOM_UPDATED.status`로 판단한다
-- 방 취소(참가자 전원 이탈) 통지: 별도 이벤트 없음 — **`MATCH_ROOM_UPDATED`의 `status: "CANCELLED"`**로 전달. 이 SSE는 매칭 단계 채널이라 실제로는 시작 전 취소만 여기로 나간다
-
 ### 5-B. 매칭 방 (매칭완료 대기방)
 
 #### 공통 객체 `RoomInfo` — 매칭방 전체 정보
 
-세 SSE 이벤트와 현재 매칭 조회의 `room`은 아래 **동일 구조를 공유**한다.
+두 SSE 이벤트가 아래 **같은 구조를 싣는다** — `data`가 완전히 동일하고 이벤트 이름만 다르다.
 
 ```json
 {
@@ -1003,11 +994,22 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_STARTED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
-- **발화 시점은 모집 마감(`start_at - 오프셋`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_PLAYERS_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
+- **발화 시점은 모집 마감(`start_at - 오프셋`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_ROOM_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
 
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
-- `data` = `RoomInfo` 전체 재전송 — 방 정보가 갱신·취소되거나 서버가 방을 `STARTED`로 전환할 때
+- `data` = `RoomInfo` 전체 재전송. **모집 중 인원 변동, 방 취소, `STARTED` 전환, 그리고 연결 직후 스냅샷이 전부 이 이벤트로 나간다**
+- 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`와 `players`가 말해주므로 이벤트를 더 쪼개지 않는다
+
+| `status` | 클라가 할 일 |
+|---|---|
+| `MATCHING` | 대기 화면 — 인원·마감 시각 갱신 |
+| `MATCHED` | 대기방 |
+| `STARTED` | 러닝 화면으로 전환하고 WS `RUNNING_START`를 보낸다 |
+| `CANCELLED` | 홈으로 |
+
+- **`MATCH_STARTED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_STARTED`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
+- 방 취소(참가자 전원 이탈)도 별도 이벤트 없이 `status: "CANCELLED"`로 전달한다
 
 #### 방 나가기 — 별도 이벤트 없음
 

@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.match.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
+import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;

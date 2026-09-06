@@ -1,6 +1,6 @@
 package com.runiverse.running_service.presentation.match.response;
 
-import com.runiverse.running_service.application.match.query.roominfo.RoomInfo;
+import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 
 import java.time.LocalDateTime;
@@ -18,6 +18,17 @@ public record RoomInfoResponse(
         Integer teamAveragePaceSecondsPerKm,
         List<PlayerResponse> players
 ) {
+
+    public static RoomInfoResponse from(RoomInfo room) {
+        return new RoomInfoResponse(
+                room.runningRoomId(),
+                room.status(),
+                room.scheduledStartAt(),
+                room.closeAt(),
+                room.targetDistanceMeters(),
+                room.teamAveragePaceSecondsPerKm(),
+                room.players().stream().map(PlayerResponse::from).toList());
+    }
 
     public record PlayerResponse(
             UUID userId,

@@ -32,6 +32,11 @@ public class MatchStreamRegistryAdapter implements MatchStreamPort {
         return connectionByUser.remove(userId, connection);
     }
 
+    @Override
+    public Optional<MatchStreamConnection> find(UserId userId) {
+        return Optional.ofNullable(connectionByUser.get(userId));
+    }
+
     // keep-alive 전용 — 포트에 두지 않는다. 유스케이스가 아니라 연결 유지라는 기술 관심사다
     Collection<MatchStreamConnection> all() {
         // 순회 중 등록·해제가 일어나도 안전하게 스냅샷을 준다
