@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.match.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
+import com.runiverse.running_service.application.common.port.out.ScheduleJobPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchCandidatesPort;
@@ -11,6 +12,7 @@ import com.runiverse.running_service.application.match.port.out.MatchCandidate;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
@@ -68,13 +70,16 @@ class MatchRoomAssignerTest {
     @Mock
     private CreateMatchRoomPort createMatchRoomPort;
 
+    @Mock
+    private ScheduleJobPort scheduleJobPort;
+
     private MatchRoomAssigner matchRoomAssigner;
 
     @BeforeEach
     void setUp() {
         matchRoomAssigner = new MatchRoomAssigner(
                 loadMatchCandidatesPort, lockMatchRoomPort, loadMatchPlayersPort,
-                updateMatchRoomPort, createMatchRoomPort,
+                updateMatchRoomPort, createMatchRoomPort, scheduleJobPort,
                 new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
@@ -348,5 +353,35 @@ class MatchRoomAssignerTest {
                 .sessions(List.of(new SessionDraft(
                         APPLICANT, APPLICATION, 0, true)))
                 .build();
+    }
+
+    @Test
+    @DisplayName("방을 새로 열면 마감 확정을 예약한다")
+    void schedulesCloseForNewRoom() {
+        // given -> 이 예약이 없으면 방이 영원히 MATCHING에 머문다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 마감은 start_at - 오프셋이다. 컬럼에 저장하지 않고 여기서 계산한다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.MATCH_CLOSE, NEW_ROOM_ID, START_AT.minus(CLOSE_OFFSET));
+    }
+
+    @Test
+    @DisplayName("기존 방에 합류할 때는 예약하지 않는다")
+    void doesNotScheduleWhenJoiningExistingRoom() {
+        // given -> 그 방을 연 신청자가 이미 걸어뒀다. 또 걸면 UNIQUE에 부딪힌다
+        givenCandidates(candidate(1L, MY_PACE.secondsPerKm(), 0));
+        given(lockMatchRoomPort.lockById(new RunningRoomId(1L)))
+                .willReturn(Optional.of(room(1L, MY_PACE.secondsPerKm(), 1)));
+
+        // when
+        assign();
+
+        // then
+        verifyNoInteractions(scheduleJobPort);
     }
 }
