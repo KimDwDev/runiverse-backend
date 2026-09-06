@@ -1,7 +1,10 @@
 package com.runiverse.running_service.application.match.command.stream;
 
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.in.OpenMatchStreamUsecase;
+import com.runiverse.running_service.application.match.port.out.MatchRoomMembershipPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamConnection;
+import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.MatchStreamPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;
@@ -14,14 +17,23 @@ import org.springframework.stereotype.Service;
 public class OpenMatchStreamHandler implements OpenMatchStreamUsecase {
 
     private final MatchStreamPort matchStreamPort;
+    private final MatchRoomMembershipPort matchRoomMembershipPort;
+    private final RoomInfoAssembler roomInfoAssembler;
 
     @Override
     public void handle(OpenMatchStreamCommand command) {
+        UserId userId = new UserId(command.userId());
         MatchStreamConnection connection = command.connection();
         // 앱 재시작처럼 끊긴 줄 모르고 남아 있는 옛 연결이 있다 — 마지막 연결만 남긴다
-        matchStreamPort.register(new UserId(command.userId()), connection)
+        matchStreamPort.register(userId, connection)
                 .ifPresent(MatchStreamConnection::closeSuperseded);
-        log.info("매칭 스트림 연결 — userId={}, connectionId={}", command.userId(), connection.id());
-        // 다음 단계: 활성 신청 확인 → RoomInfo 스냅샷 발신
+        // 활성 신청이 없으면 보낼 것도 구독할 것도 없다.
+        // 스펙상 클라는 그때 연결하지 않지만 서버가 막지는 않는다
+        roomInfoAssembler.assembleFor(userId).ifPresent(room -> {
+            // 구독을 먼저 건다 — 스냅샷을 보내는 사이에 온 갱신을 놓치지 않는다
+            matchRoomMembershipPort.join(userId, room.runningRoomId());
+            // 재연결이 곧 스냅샷 재수신이다(feature-spec) — 놓친 이벤트를 되짚을 필요가 없다
+            connection.send(MatchStreamEvent.updated(room));
+        });
     }
 }

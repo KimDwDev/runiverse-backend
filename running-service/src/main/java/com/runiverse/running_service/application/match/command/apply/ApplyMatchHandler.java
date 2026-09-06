@@ -1,7 +1,9 @@
 package com.runiverse.running_service.application.match.command.apply;
 
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
-import com.runiverse.running_service.application.match.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.exception.MatchSlotClosedException;
@@ -9,12 +11,14 @@ import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
+import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,8 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
     private final CreateMatchApplicationPort createMatchApplicationPort;
     private final MatchRoomAssigner matchRoomAssigner;
     private final MatchProperties matchProperties;
+    private final RoomInfoAssembler roomInfoAssembler;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public ApplyMatchResult handle(ApplyMatchCommand command) {
@@ -60,9 +66,14 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
                 command.userId(), pace.secondsPerKm(),
                 command.targetDistanceMeters(), command.scheduledStartAt()));
         // 6. 붙을 방을 찾거나 새로 연다
-        RunningRoomId roomId = matchRoomAssigner.assign(
+        RunningRoom room = matchRoomAssigner.assign(
                 userId, player.getRunningPlayerId().orElseThrow(), pace,
                 command.scheduledStartAt(), command.targetDistanceMeters());
-        return new ApplyMatchResult(roomId.value());
+        // 7. 기존 참가자에게 인원 변동을 알린다 — 신청자 본인은 아직 스트림을 열기 전이다.
+        //    조립은 트랜잭션 안에서 한다(자기 쓰기를 보고, 커밋 후 리스너가 DB를 다시 안 읽는다)
+        eventPublisher.publishEvent(new MatchRoomChangedEvent(
+                MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));
+        return new ApplyMatchResult(room.getRunningRoomId().orElseThrow().value());
     }
+
 }

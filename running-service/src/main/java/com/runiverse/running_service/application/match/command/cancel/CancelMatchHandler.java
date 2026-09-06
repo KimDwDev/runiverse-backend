@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.match.command.cancel;
 
-import com.runiverse.running_service.application.match.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;

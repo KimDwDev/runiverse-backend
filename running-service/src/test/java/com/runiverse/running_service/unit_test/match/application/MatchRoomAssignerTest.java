@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.match.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.match.MatchProperties;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchCandidatesPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;

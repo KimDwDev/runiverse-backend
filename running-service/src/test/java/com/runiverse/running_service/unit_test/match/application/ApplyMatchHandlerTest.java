@@ -2,11 +2,11 @@ package com.runiverse.running_service.unit_test.match.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
-import com.runiverse.running_service.application.match.MatchProperties;
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchCommand;
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchHandler;
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchResult;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.exception.MatchSlotClosedException;

@@ -1,12 +1,15 @@
-package com.runiverse.running_service.application.match.query.roominfo;
+package com.runiverse.running_service.application.match.common;
 
 import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
-import com.runiverse.running_service.application.match.MatchProperties;
+import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 // 13번 조회와 SSE 세 이벤트가 같은 RoomInfo를 쓴다 — 조립은 여기 한 곳에서만 한다
@@ -28,6 +32,9 @@ public class RoomInfoAssembler {
     private final LoadPlayerProfilesPort loadPlayerProfilesPort;
     private final GenerateViewUrlPort generateViewUrlPort;
     private final MatchProperties matchProperties;
+    private final LoadActiveApplicationPort loadActiveApplicationPort;
+    private final LoadMatchRoomPort loadMatchRoomPort;
+    private final LoadMatchRoomDetailPort loadMatchRoomDetailPort;   // 잠금 없는 조회
 
     public RoomInfo assemble(RunningRoom room) {
         RunningRoomId roomId = room.getRunningRoomId()
@@ -65,5 +72,14 @@ public class RoomInfoAssembler {
         return profile.profileImageKey() == null
                 ? null
                 : generateViewUrlPort.generate(profile.profileImageKey());
+    }
+
+    // 스트림에 붙은 유저의 현재 방을 찾아 조립한다 — 활성 신청이 없으면 비어 있다.
+    // 연결 직후 스냅샷이 쓴다
+    public Optional<RoomInfo> assembleFor(UserId userId) {
+        return loadActiveApplicationPort.loadActive(userId)
+                .flatMap(player -> loadMatchRoomPort.findAssignedRoom(userId))
+                .flatMap(loadMatchRoomDetailPort::loadById)
+                .map(this::assemble);
     }
 }

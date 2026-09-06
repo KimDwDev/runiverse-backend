@@ -1,14 +1,14 @@
 package com.runiverse.running_service.application.match.command.apply;
 
-import com.runiverse.running_service.application.match.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchCandidatesPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCandidate;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
-import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
@@ -40,8 +40,8 @@ public class MatchRoomAssigner {
 
     // 붙을 방이 없으면 1인 방을 새로 연다 — "방 미배정" 상태는 없다(feature-spec).
     // 세션의 키가 유저라 배정에는 둘 다 필요하다 — 유저로 자리를 잡고 신청을 그 자리에 꽂는다
-    public RunningRoomId assign(UserId userId, RunningPlayerId playerId, Pace pace,
-                                LocalDateTime startAt, int targetDistanceMeters) {
+    public RunningRoom assign(UserId userId, RunningPlayerId playerId, Pace pace,
+                              LocalDateTime startAt, int targetDistanceMeters) {
         for (MatchCandidate candidate : ranked(pace, startAt, targetDistanceMeters)) {
             RunningRoomId roomId = new RunningRoomId(candidate.runningRoomId());
             // 잠금 없이 스캔했으므로 그새 자리가 찼을 수 있다 — 확정 직전에 잠그고 다시 읽는다
@@ -59,7 +59,7 @@ public class MatchRoomAssigner {
             }
             room.recalculateAvgPace(pacesAfterJoin(roomId, pace));
             updateMatchRoomPort.update(room);
-            return roomId;
+            return room;
         }
         return openNewRoom(userId, playerId, pace, startAt, targetDistanceMeters);
     }
@@ -87,12 +87,11 @@ public class MatchRoomAssigner {
         return paces;
     }
 
-    private RunningRoomId openNewRoom(UserId userId, RunningPlayerId playerId, Pace pace,
-                                      LocalDateTime startAt, int targetDistanceMeters) {
+    private RunningRoom openNewRoom(UserId userId, RunningPlayerId playerId, Pace pace,
+                                    LocalDateTime startAt, int targetDistanceMeters) {
         // 1인 방은 창설자 페이스가 곧 방 평균이라 재계산할 것이 없다
-        RunningRoom room = createMatchRoomPort.create(RunningRoom.openMatch(
+        return createMatchRoomPort.create(RunningRoom.openMatch(
                 userId, playerId, pace.secondsPerKm(), targetDistanceMeters, startAt));
-        return room.getRunningRoomId().orElseThrow();
     }
 
     private static Pace paceOf(MatchCandidate candidate) {

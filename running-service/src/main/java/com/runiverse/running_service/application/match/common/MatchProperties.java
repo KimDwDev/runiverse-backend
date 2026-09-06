@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.match;
+package com.runiverse.running_service.application.match.common;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
