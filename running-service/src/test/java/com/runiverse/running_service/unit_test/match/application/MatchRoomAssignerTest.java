@@ -49,6 +49,8 @@ class MatchRoomAssignerTest {
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
     // 페이스 차가 이 값 이내면 동급으로 보고 leave_count가 순위를 가른다
     private static final int PACE_TIE_TOLERANCE = 10;
+    // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final long NEW_ROOM_ID = 999L;
 
     @Mock
@@ -73,7 +75,7 @@ class MatchRoomAssignerTest {
         matchRoomAssigner = new MatchRoomAssigner(
                 loadMatchCandidatesPort, lockMatchRoomPort, loadMatchPlayersPort,
                 updateMatchRoomPort, createMatchRoomPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE));
+                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
     @Test

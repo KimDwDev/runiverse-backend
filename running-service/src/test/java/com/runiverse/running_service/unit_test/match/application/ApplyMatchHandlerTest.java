@@ -50,6 +50,8 @@ class ApplyMatchHandlerTest {
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
     private static final int PACE_TIE_TOLERANCE = 10;
+    // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
 
     @Mock
     private ExistsActiveApplicationPort existsActiveApplicationPort;
@@ -69,7 +71,7 @@ class ApplyMatchHandlerTest {
     void setUp() {
         applyMatchHandler = new ApplyMatchHandler(
                 existsActiveApplicationPort, loadUserAvgPacePort, createMatchApplicationPort,
-                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE));
+                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
     @Test

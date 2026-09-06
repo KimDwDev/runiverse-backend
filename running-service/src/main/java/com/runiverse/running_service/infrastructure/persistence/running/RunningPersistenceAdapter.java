@@ -3,7 +3,9 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
@@ -48,7 +50,9 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort,
         // 매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
-        CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort {
+        CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
+        // 취소·나가기가 쓰는 둘 — 시그니처가 같아 기존 메서드가 그대로 만족시킨다
+        LoadActiveApplicationPort, UpdateMatchApplicationPort {
 
     private final EntityManager entityManager;
 

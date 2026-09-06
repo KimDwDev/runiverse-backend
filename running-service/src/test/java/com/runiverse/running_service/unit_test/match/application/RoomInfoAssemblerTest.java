@@ -42,6 +42,8 @@ class RoomInfoAssemblerTest {
     private static final Long ROOM_ID = 125L;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
     private static final int PACE_TIE_TOLERANCE = 10;
+    // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final LocalDateTime START_AT = LocalDateTime.of(2026, 7, 25, 19, 0);
     private static final int TEAM_PACE = 375;
     private static final int TARGET_DISTANCE = 5000;
@@ -64,7 +66,7 @@ class RoomInfoAssemblerTest {
         // 페이스 동점 임계는 후보 배정(11번)에서만 쓴다 — 조립에는 마감 오프셋만 걸린다
         roomInfoAssembler = new RoomInfoAssembler(
                 loadMatchPlayersPort, loadPlayerProfilesPort, generateViewUrlPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE));
+                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
     @Test
