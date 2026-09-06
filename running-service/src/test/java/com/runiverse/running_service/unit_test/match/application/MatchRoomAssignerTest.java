@@ -261,9 +261,12 @@ class MatchRoomAssignerTest {
         assertThat(session.getLeaveCount().value()).isEqualTo(1);
     }
 
+    // 배정 결과를 RoomInfo로 조립해 스트림에 실어야 해서 방 객체를 돌려준다
     private RunningRoomId assign() {
         return matchRoomAssigner.assign(
-                APPLICANT, APPLICATION, MY_PACE, START_AT, TARGET_DISTANCE);
+                        APPLICANT, APPLICATION, MY_PACE, START_AT, TARGET_DISTANCE)
+                .getRunningRoomId()
+                .orElseThrow();
     }
 
     private void givenCandidates(MatchCandidate... candidates) {

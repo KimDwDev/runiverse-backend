@@ -6,6 +6,8 @@ import com.runiverse.running_service.application.match.command.apply.ApplyMatchC
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchHandler;
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchResult;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
+import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
@@ -18,7 +20,14 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.application.match.port.out.MatchEventType;
+import com.runiverse.running_service.application.match.port.out.RoomInfo;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,6 +64,11 @@ class ApplyMatchHandlerTest {
     private static final int PACE_TIE_TOLERANCE = 10;
     // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
+    // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
+    private static final RoomInfo ROOM_INFO = new RoomInfo(
+            ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
+            LocalDateTime.now().plusHours(2).minus(CLOSE_OFFSET),
+            TARGET_DISTANCE, AVG_PACE, List.of());
 
     @Mock
     private MatchCooldownPort matchCooldownPort;
@@ -70,6 +85,12 @@ class ApplyMatchHandlerTest {
     @Mock
     private MatchRoomAssigner matchRoomAssigner;
 
+    @Mock
+    private RoomInfoAssembler roomInfoAssembler;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ApplyMatchHandler applyMatchHandler;
 
     @BeforeEach
@@ -77,7 +98,8 @@ class ApplyMatchHandlerTest {
         applyMatchHandler = new ApplyMatchHandler(
                 matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort,
-                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
+                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                roomInfoAssembler, eventPublisher);
     }
 
     @Test
@@ -207,7 +229,24 @@ class ApplyMatchHandlerTest {
                 .willReturn(Optional.of(new Pace(AVG_PACE)));
         given(createMatchApplicationPort.create(any())).willReturn(savedApplication());
         given(matchRoomAssigner.assign(any(), any(), any(), any(), anyInt()))
-                .willReturn(new RunningRoomId(ROOM_ID));
+                .willReturn(assignedRoom());
+        given(roomInfoAssembler.assemble(any())).willReturn(ROOM_INFO);
+    }
+
+    // 배정된 방 — 핸들러는 이걸 조립해 스트림에 실을 이벤트를 만든다
+    private static RunningRoom assignedRoom() {
+        return RunningRoom.builder()
+                .runningRoomId(ROOM_ID)
+                .type(RunningRoomType.MATCH)
+                .status(RunningRoomStatus.MATCHING)
+                .startAt(LocalDateTime.now().plusHours(2))
+                .targetDistance(TARGET_DISTANCE)
+                .avgPace(AVG_PACE)
+                .currentPlayerCount(1)
+                .maxPlayerCount(4)
+                .sessions(List.of(new SessionDraft(
+                        new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true)))
+                .build();
     }
 
     // 마감(start_at - 15분)이 아직 안 지난 슬롯을 만든다

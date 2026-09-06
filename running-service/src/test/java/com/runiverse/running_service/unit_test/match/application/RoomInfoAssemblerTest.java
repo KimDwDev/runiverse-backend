@@ -5,7 +5,10 @@ import com.runiverse.running_service.application.common.port.out.LoadPlayerProfi
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
+import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
@@ -59,6 +62,16 @@ class RoomInfoAssemblerTest {
     @Mock
     private GenerateViewUrlPort generateViewUrlPort;
 
+    // assembleFor(UserId) 경로가 쓰는 셋 — 이 테스트는 assemble(RunningRoom)만 다룬다
+    @Mock
+    private LoadActiveApplicationPort loadActiveApplicationPort;
+
+    @Mock
+    private LoadMatchRoomPort loadMatchRoomPort;
+
+    @Mock
+    private LoadMatchRoomDetailPort loadMatchRoomDetailPort;
+
     private RoomInfoAssembler roomInfoAssembler;
 
     @BeforeEach
@@ -66,7 +79,8 @@ class RoomInfoAssemblerTest {
         // 페이스 동점 임계는 후보 배정(11번)에서만 쓴다 — 조립에는 마감 오프셋만 걸린다
         roomInfoAssembler = new RoomInfoAssembler(
                 loadMatchPlayersPort, loadPlayerProfilesPort, generateViewUrlPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
+                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                loadActiveApplicationPort, loadMatchRoomPort, loadMatchRoomDetailPort);
     }
 
     @Test
