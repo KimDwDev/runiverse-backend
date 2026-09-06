@@ -1,6 +1,8 @@
 package com.runiverse.running_service.application.match.command.cancel;
 
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;
@@ -8,6 +10,7 @@ import com.runiverse.running_service.application.match.port.out.LoadActiveApplic
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
+import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -17,6 +20,7 @@ import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,8 @@ public class CancelMatchHandler implements CancelMatchUsecase {
     private final UpdateMatchRoomPort updateMatchRoomPort;
     private final MatchCooldownPort matchCooldownPort;
     private final MatchProperties matchProperties;
+    private final RoomInfoAssembler roomInfoAssembler;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public void handle(CancelMatchCommand command) {
@@ -72,6 +78,12 @@ public class CancelMatchHandler implements CancelMatchUsecase {
 
         updateMatchApplicationPort.update(player);
         updateMatchRoomPort.update(room);
+        // 7. 남은 참가자에게 알린다. 나간 본인은 곧 스트림을 닫으므로 대상이 아니다.
+        // 인원이 0이면 받을 사람이 없어 발행하지 않는다
+        if (room.getPlayerCount().current() > 0) {
+            eventPublisher.publishEvent(new MatchRoomChangedEvent(
+                    MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));
+        }
     }
 
     // 마감·인원·방 종류가 함께 걸린다 — 혼자 남은 방을 나가는 데는 손해를 보는 상대가 없고(feature-spec),
