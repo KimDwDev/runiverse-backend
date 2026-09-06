@@ -8,9 +8,11 @@ import com.runiverse.running_service.application.match.command.apply.ApplyMatchH
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchResult;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
+import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.exception.MatchSlotClosedException;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -54,6 +56,9 @@ class ApplyMatchHandlerTest {
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
 
     @Mock
+    private MatchCooldownPort matchCooldownPort;
+
+    @Mock
     private ExistsActiveApplicationPort existsActiveApplicationPort;
 
     @Mock
@@ -70,7 +75,8 @@ class ApplyMatchHandlerTest {
     @BeforeEach
     void setUp() {
         applyMatchHandler = new ApplyMatchHandler(
-                existsActiveApplicationPort, loadUserAvgPacePort, createMatchApplicationPort,
+                matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
+                createMatchApplicationPort,
                 matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
@@ -148,9 +154,29 @@ class ApplyMatchHandlerTest {
     }
 
     @Test
+    @DisplayName("제재 이탈로 쿨다운 중이면 신청하지 못한다")
+    void rejectsWhileCoolingDown() {
+        // given -> 근거는 DB의 status에 남고, "지금 막혀 있나"는 Redis 키가 답한다
+        LocalDateTime cooldownUntil = LocalDateTime.now().plusMinutes(12);
+        given(matchCooldownPort.until(new UserId(USER_ID)))
+                .willReturn(Optional.of(cooldownUntil));
+        ApplyMatchCommand command = command(slotAfter(Duration.ofHours(2)));
+
+        // when & then -> 해제 시각을 함께 실어 클라가 "언제부터 되나"를 그릴 수 있게 한다
+        assertThatThrownBy(() -> applyMatchHandler.handle(command))
+                .isInstanceOf(MatchCooldownException.class)
+                .extracting(e -> ((MatchCooldownException) e).getCooldownUntil())
+                .isEqualTo(cooldownUntil);
+        // Redis 키 하나로 끝나야 한다 — DB는 건드리지 않는다
+        verifyNoInteractions(existsActiveApplicationPort, loadUserAvgPacePort,
+                createMatchApplicationPort, matchRoomAssigner);
+    }
+
+    @Test
     @DisplayName("활성 신청이 있으면 다시 신청하지 못한다")
     void rejectsWhenAlreadyApplied() {
         // given -> deleted_at만 보므로 대기·확정뿐 아니라 러닝 중도 여기서 막힌다
+        given(matchCooldownPort.until(new UserId(USER_ID))).willReturn(Optional.empty());
         given(existsActiveApplicationPort.existsActive(new UserId(USER_ID))).willReturn(true);
         ApplyMatchCommand command = command(slotAfter(Duration.ofHours(2)));
 
@@ -175,6 +201,7 @@ class ApplyMatchHandlerTest {
     }
 
     private void givenApplicable() {
+        given(matchCooldownPort.until(new UserId(USER_ID))).willReturn(Optional.empty());
         given(existsActiveApplicationPort.existsActive(new UserId(USER_ID))).willReturn(false);
         given(loadUserAvgPacePort.loadAvgPace(new UserId(USER_ID)))
                 .willReturn(Optional.of(new Pace(AVG_PACE)));

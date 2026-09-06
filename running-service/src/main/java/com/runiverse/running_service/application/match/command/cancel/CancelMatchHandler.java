@@ -65,7 +65,7 @@ public class CancelMatchHandler implements CancelMatchUsecase {
         player.leave(penalty, now);
         if (penalty) {
             // 근거는 status에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
-            matchCooldownPort.start(userId);
+            matchCooldownPort.start(userId, matchProperties.cooldown());
         }
         // 6. 세션을 끊고 인원을 줄인다. 0이 되면 방이 CANCELLED로 닫힌다
         room.leave(userId, now);

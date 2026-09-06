@@ -15,6 +15,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
@@ -54,6 +55,7 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     private final DeleteRunningTrackPort deleteRunningTrackPort;
     private final ExistsRunningPlayerPort existsRunningPlayerPort;
     private final UpdateRunningRoomPort updateRunningRoomPort;
+    private final StartMatchCooldownPort startMatchCooldownPort;
     private final RunningFinishProperties properties;
 
     @Override
@@ -162,7 +164,12 @@ public class FinishRunningHandler implements FinishRunningUsecase {
             return;
         }
         double ratio = (double) totalDistanceMeters / target.get().meters();
-        player.leave(ratio < properties.penaltyDistanceRatio(), finishedAt);
+        boolean penalty = ratio < properties.penaltyDistanceRatio();
+        player.leave(penalty, finishedAt);
+        if (penalty) {
+            // 근거는 status(RUNNING_LEFT_PENALTY)에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
+            startMatchCooldownPort.start(player.getUserId(), properties.cooldown());
+        }
     }
 
     // 시작 때 RUNNING이 된 참가자가 전원 종료되면 방도 끝난다(api-spec 5-D).

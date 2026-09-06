@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Duration;
+
 @ConfigurationProperties(prefix = "running-finish")
 @Validated
 public record RunningFinishProperties(
@@ -17,7 +19,9 @@ public record RunningFinishProperties(
         @NotNull @Positive Integer minDistanceMeters,
         @NotNull @Positive Integer minDurationSeconds,
         // 이 값 이하의 고도 변화는 GPS 수직 오차로 보고 버린다
-        @NotNull @Positive Double elevationNoiseThresholdMeters
+        @NotNull @Positive Double elevationNoiseThresholdMeters,
+        // 조기 종료 제재로 매칭 신청이 막히는 기간 — 취소 이탈(match.cooldown)과 따로 둔다
+        @NotNull Duration cooldown
 ) {
 
 }

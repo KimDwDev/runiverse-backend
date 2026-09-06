@@ -47,7 +47,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_ALREADY_IN_PROGRESS`·`MATCH_SLOT_CLOSED` |
+| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_ALREADY_IN_PROGRESS`·`MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN` |
 | 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 13 | GET | `/api/v1/users/me/running-match` | **[MVP 제외]** 현재 매칭 상태 — 매칭·러닝을 함께 다루는 전체 상태 API로 대체 예정 |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
@@ -897,7 +897,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
 - 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
 
-- **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 페널티 대상 이탈로 신청이 제한된 상태다. 응답에 해제 시각을 담는다
+- **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
 
 ```json
 {

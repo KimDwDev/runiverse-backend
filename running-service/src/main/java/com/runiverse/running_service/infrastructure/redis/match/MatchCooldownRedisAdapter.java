@@ -1,28 +1,28 @@
 package com.runiverse.running_service.infrastructure.redis.match;
 
-import com.runiverse.running_service.application.match.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class MatchCooldownRedisAdapter implements MatchCooldownPort {
+public class MatchCooldownRedisAdapter implements MatchCooldownPort, StartMatchCooldownPort {
 
     private static final String COOLDOWN = "cooldown";
     private static final String BLOCKED = "1";
     private final StringRedisTemplate redisTemplate;
-    private final MatchProperties matchProperties;
 
     @Override
-    public void start(UserId userId) {
-        redisTemplate.opsForValue().set(key(userId), BLOCKED, matchProperties.cooldown());
+    public void start(UserId userId, Duration cooldown) {
+        redisTemplate.opsForValue().set(key(userId), BLOCKED, cooldown);
     }
 
     @Override
