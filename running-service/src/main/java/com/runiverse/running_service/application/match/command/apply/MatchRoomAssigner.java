@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.match.command.apply;
 
+import com.runiverse.running_service.application.common.port.out.ScheduleJobPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchCandidatesPort;
@@ -14,6 +15,7 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -36,6 +38,7 @@ public class MatchRoomAssigner {
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
     private final CreateMatchRoomPort createMatchRoomPort;
+    private final ScheduleJobPort scheduleJobPort;
     private final MatchProperties matchProperties;
 
     // 붙을 방이 없으면 1인 방을 새로 연다 — "방 미배정" 상태는 없다(feature-spec).
@@ -90,9 +93,16 @@ public class MatchRoomAssigner {
     private RunningRoom openNewRoom(UserId userId, RunningPlayerId playerId, Pace pace,
                                     LocalDateTime startAt, int targetDistanceMeters) {
         // 1인 방은 창설자 페이스가 곧 방 평균이라 재계산할 것이 없다
-        return createMatchRoomPort.create(RunningRoom.openMatch(
+        RunningRoom room = createMatchRoomPort.create(RunningRoom.openMatch(
                 userId, playerId, pace.secondsPerKm(), targetDistanceMeters, startAt));
+        // 방이 새로 생길 때만 건다 — 기존 방에 합류하면 그 방 예약이 이미 있다
+        scheduleJobPort.schedule(
+                ScheduledJobType.MATCH_CLOSE,
+                room.getRunningRoomId().orElseThrow().value(),
+                startAt.minus(matchProperties.closeOffset()));
+        return room;
     }
+
 
     private static Pace paceOf(MatchCandidate candidate) {
         return new Pace(candidate.avgPaceSecondsPerKm());
