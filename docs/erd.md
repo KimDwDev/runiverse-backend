@@ -34,7 +34,7 @@
 | user_id | UUID | PK | |
 | email | varchar | UNIQUE, NOT NULL | 로컬·소셜 공통 |
 | password_hash | varchar | nullable | 소셜 전용 유저는 null. 원문 미보관 |
-| alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-3/12-4) |
+| alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-2/12-3) |
 | profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
 | introduction | varchar(100) | nullable | 소개글. 비우면 null |
