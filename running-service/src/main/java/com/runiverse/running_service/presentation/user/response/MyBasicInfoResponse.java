@@ -4,6 +4,8 @@ import java.util.UUID;
 
 public record MyBasicInfoResponse(
         UUID userId,
+        String email,
+        String loginType,
         String nickname,
         boolean isOnboarded
 ) {

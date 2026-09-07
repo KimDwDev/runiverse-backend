@@ -1,8 +1,12 @@
 package com.runiverse.running_service.integration_test.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginCommand;
+import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginHandler;
+import com.runiverse.running_service.application.auth.command.oauthlogin.OauthUserResolver;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
+import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.user.command.nickname.ChangeNicknameCommand;
 import com.runiverse.running_service.application.user.command.nickname.ChangeNicknameHandler;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
@@ -11,6 +15,7 @@ import com.runiverse.running_service.application.user.exception.UserNotFoundExce
 import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoHandler;
 import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoQuery;
 import com.runiverse.running_service.application.user.query.basicinfo.GetMyBasicInfoResult;
+import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,8 +36,16 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     private static final String PASSWORD = "Password123!";
     private static final String NICKNAME = "러너킴";
     private static final String NEW_NICKNAME = "동완러너";
+    private static final String KAKAO_CODE = "kakao-authorization-code";
+    private static final String KAKAO_ID = "1234567890";
+    private static final String KAKAO_EMAIL = "runner@kakao.com";
+    private static final String GOOGLE_CODE = "google-authorization-code";
+    private static final String GOOGLE_ID = "9876543210";
+    private static final String GOOGLE_EMAIL = "runner@gmail.com";
+    private static final String CODE_VERIFIER = "pkce-code-verifier";
 
     private SignUpHandler signUpHandler;
+    private OauthLoginHandler oauthLoginHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
     private ChangeNicknameHandler changeNicknameHandler;
     private GetMyBasicInfoHandler getMyBasicInfoHandler;
@@ -40,6 +53,19 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
+        OauthUserResolver oauthUserResolver = new OauthUserResolver(
+                userStore,        // LoadUserByProviderPort
+                userStore,        // CheckEmailDuplicatePort
+                userIdGenerator,  // GenerateUserIdPort
+                userStore         // SaveUserPort
+        );
+        oauthLoginHandler = new OauthLoginHandler(
+                oauthClient,       // ExchangeOauthCodePort
+                oauthUserResolver,
+                tokenProvider,     // GenerateTokenPort
+                tokenProvider,     // RefreshTokenHashPort
+                refreshTokenStore  // SaveRefreshTokenHashPort
+        );
         completeOnboardingHandler = new CompleteOnboardingHandler(
                 userStore,        // LoadUserByIdPort
                 onboardingStore,  // ExistsOnboardingPort
@@ -52,13 +78,20 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
                 onboardingStore   // UpdateNicknamePort
         );
         getMyBasicInfoHandler = new GetMyBasicInfoHandler(
-                userStore,       // LoadUserByIdPort
-                onboardingStore  // LoadNicknamePort
+                userStore,        // LoadUserByIdPort
+                onboardingStore,  // LoadNicknamePort
+                userStore         // LoadOauthProviderPort
         );
+        oauthClient.register(KAKAO_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
+        oauthClient.register(GOOGLE_CODE, new OauthProfile(Provider.GOOGLE, GOOGLE_ID, GOOGLE_EMAIL));
     }
 
     private UUID signUp(String email) {
         return signUpHandler.handle(new SignUpCommand(issueVerificationTicket(email), PASSWORD)).userId();
+    }
+
+    private UUID oauthLogin(String provider, String code) {
+        return oauthLoginHandler.handle(new OauthLoginCommand(provider, code, CODE_VERIFIER)).userId();
     }
 
     private void completeOnboarding(UUID userId, String nickname) {
@@ -127,6 +160,60 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
         // when & then
         assertThat(basicInfoOf(userId).isOnboarded()).isFalse();
         assertThat(basicInfoOf(otherUserId).isOnboarded()).isTrue();
+    }
+
+    @Test
+    @DisplayName("로컬로 가입한 사용자는 가입 이메일과 LOCAL을 받는다")
+    void reportsLocalForSignUpUser() {
+        // given
+        UUID userId = signUp(EMAIL);
+
+        // when
+        GetMyBasicInfoResult result = basicInfoOf(userId);
+
+        // then -> 클라는 LOCAL일 때만 비밀번호 변경 메뉴를 노출한다
+        assertThat(result.email()).isEqualTo(EMAIL);
+        assertThat(result.loginType()).isEqualTo("LOCAL");
+    }
+
+    @Test
+    @DisplayName("카카오로 가입한 사용자는 카카오 이메일과 KAKAO를 받는다")
+    void reportsKakaoForKakaoUser() {
+        // given
+        UUID userId = oauthLogin("kakao", KAKAO_CODE);
+
+        // when
+        GetMyBasicInfoResult result = basicInfoOf(userId);
+
+        // then
+        assertThat(result.email()).isEqualTo(KAKAO_EMAIL);
+        assertThat(result.loginType()).isEqualTo("KAKAO");
+    }
+
+    @Test
+    @DisplayName("구글로 가입한 사용자는 구글 이메일과 GOOGLE을 받는다")
+    void reportsGoogleForGoogleUser() {
+        // given
+        UUID userId = oauthLogin("google", GOOGLE_CODE);
+
+        // when
+        GetMyBasicInfoResult result = basicInfoOf(userId);
+
+        // then
+        assertThat(result.email()).isEqualTo(GOOGLE_EMAIL);
+        assertThat(result.loginType()).isEqualTo("GOOGLE");
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 로그인 수단이 내 판정에 섞이지 않는다")
+    void otherUsersProviderDoesNotLeak() {
+        // given -> 로컬과 소셜 계정이 함께 있는 상태
+        UUID localUserId = signUp(EMAIL);
+        UUID kakaoUserId = oauthLogin("kakao", KAKAO_CODE);
+
+        // when & then
+        assertThat(basicInfoOf(localUserId).loginType()).isEqualTo("LOCAL");
+        assertThat(basicInfoOf(kakaoUserId).loginType()).isEqualTo("KAKAO");
     }
 
     @Test

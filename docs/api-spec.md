@@ -115,7 +115,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 사용 화면: 전역 |
+| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
 | 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
 | 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
 | 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
@@ -144,11 +144,10 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 55 | GET | `/api/v1/users/me/account` | 계정 정보 — 이메일 + 로그인 수단(비밀번호 변경 노출 판정) |
-| 56 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 57 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
 **합계: REST 57개(13번 [MVP 제외]) + SSE 스트림 1개(이벤트 2종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
 
@@ -167,7 +166,7 @@
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담아 돌려주므로 그쪽의 `null`은 "보내지 않았다"를 뜻한다.
-- **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-4). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 보낸 필드만 담는 기존 계약이라 그대로 유지한다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
+- **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 보낸 필드만 담는 기존 계약이라 그대로 유지한다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 
 ### 공통 에러 응답
@@ -1865,8 +1864,23 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 10-1. `GET /api/v1/users/me` — 내 기본 정보
 
 - **화면**: 전역 (앱 진입 시 `isOnboarded`로 홈/온보딩 분기)
-- **Response `200 OK`**: `{ "userId", "nickname", "isOnboarded" }`
-- **표시 전용 값은 싣지 않는다** — 앱을 열 때마다 타는 경로라 특정 화면에서만 쓰는 값을 담지 않는다. 이메일은 12-1, 소개글은 10-2, 프로필 사진은 11-3이 각각 담당한다
+- **Response `200 OK`**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "email": "run@example.com",
+  "loginType": "GOOGLE",               // LOCAL | GOOGLE | KAKAO
+  "nickname": "동완러너",                // 온보딩 전이면 null
+  "isOnboarded": true
+}
+```
+
+- **계정 정보를 함께 싣는다** — 이메일과 로그인 수단을 쓰는 곳은 설정 화면뿐이지만, 설정에서 따로 호출하지 않고 앱 진입 때 받아 둔 값을 그대로 쓴다. 어차피 매번 타는 경로라 여기 얹으면 설정 진입에 추가 왕복이 없다
+- **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
+- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 `409`로 거부하므로(1-5/1-7) 단일 값으로 표현된다
+- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
+- **소개글은 싣지 않는다** — 프로필 화면에서만 쓰고 10-2가 담당한다
 - **`profileImageUrl`을 내리지 않는 이유** — 11-3이 전용 조회를 제공하고, presigned URL은 TTL이 있어 표시 시점에 다시 받아야 한다. 앱 진입마다 발급하면 쓰이지 않을 URL에 S3 호출만 늘어난다
 - **`userId`는 남긴다** — `{userId}` 경로 API(10-2·10-4 등)에서 본인 여부를 가리는 데 쓴다. 액세스 토큰에도 들어 있지만 클라이언트가 토큰을 파싱하게 만들지 않는다
 - **인증**: 필요
@@ -2250,7 +2264,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **필드를 생략하면 현재 값을 그대로 둔다.** 소개글만 빈 문자열(`""`)로 지울 수 있고, 나머지 넷은 온보딩에서 필수라 지우는 개념이 없다
 - **키·몸무게는 소수점 첫째 자리로 정규화한다.** `70.55`를 보내면 거부하지 않고 `70.6`으로 저장하며, 응답에도 정규화된 값이 나가 클라이언트가 저장된 값을 알 수 있다. 정상 범위의 값을 자릿수만으로 400으로 막지 않기 위해서다
 - **화면 구성이 확정되기 전이라 편집 가능한 값을 한 엔드포인트에 모았다** — 저장 버튼이 하나로 묶이든 여러 화면으로 갈리든 클라이언트가 자기 필드만 보내면 된다. 화면이 정해지면 이 구성을 다시 본다
-- **`profileVisibility`는 여기 없다** — 프로필 편집이 아니라 설정 페이지 값이라 12-4가 담당한다
+- **`profileVisibility`는 여기 없다** — 프로필 편집이 아니라 설정 페이지 값이라 12-3이 담당한다
 
 - **Response `200 OK`** — 갱신본. 보낸 필드만 담아 돌려준다
 
@@ -2425,24 +2439,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 12. 설정 페이지
 
-### 12-1. `GET /api/v1/users/me/account` — 계정 정보
-
-- **화면**: 설정 (계정 항목)
-- **Response `200 OK`**
-
-```json
-{
-  "email": "run@example.com",
-  "loginType": "GOOGLE"                  // LOCAL | GOOGLE | KAKAO
-}
-```
-
-- **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
-- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 로컬 계정과 겹치면 `409`로 거부하므로(1-5/1-7) 단일 값으로 표현된다
-- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
-- **인증**: 필요
-
-### 12-2. `PATCH /api/v1/users/me/password` — 비밀번호 변경
+### 12-1. `PATCH /api/v1/users/me/password` — 비밀번호 변경
 
 로컬 계정만 가능. 현재 비밀번호로 본인을 재확인한다.
 
@@ -2504,13 +2501,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 클라는 12-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
+- 클라는 10-1의 `loginType`으로 메뉴를 감추지만 서버도 막는다 — 구버전 앱과 직접 호출이 있다
 
 - **인증**: 필요
 
 > 비밀번호 찾기(로그인 전 재설정)는 명세에 없다. 이 API는 로그인 상태 전용이다.
 
-### 12-3. `GET /api/v1/users/me/settings` — 설정 조회
+### 12-2. `GET /api/v1/users/me/settings` — 설정 조회
 
 - **화면**: 설정
 - **Response `200 OK`**
@@ -2526,7 +2523,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **공개범위 설정**: `profileVisibility` 하나뿐이다. **피드 작성 기본값은 서버에 두지 않는다** — 매 피드마다 `feeds.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
-### 12-4. `PATCH /api/v1/users/me/settings` — 설정 변경
+### 12-3. `PATCH /api/v1/users/me/settings` — 설정 변경
 
 - **화면**: 설정
 - **Request**
@@ -2543,7 +2540,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `alertConsent` | Boolean | 선택. 전체 알림 on/off |
 | `profileVisibility` | String | 선택. `FRIENDS` \| `PUBLIC` |
 
-- **Response `200 OK`** — 12-3과 같은 형식으로 저장 후 설정 전체를 담는다
+- **Response `200 OK`** — 12-2와 같은 형식으로 저장 후 설정 전체를 담는다
 
 ```json
 {
@@ -2565,7 +2562,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **인증**: 필요
 
-### 12-5. `DELETE /api/v1/users/me` — 회원탈퇴
+### 12-4. `DELETE /api/v1/users/me` — 회원탈퇴
 
 - **화면**: 설정 (확인 팝업 후)
 - **동작 (테이블별 정책)**:

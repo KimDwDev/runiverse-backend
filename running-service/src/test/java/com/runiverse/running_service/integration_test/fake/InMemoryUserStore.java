@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPo
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
+import com.runiverse.running_service.application.user.port.out.LoadOauthProviderPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
@@ -24,7 +25,7 @@ import java.util.UUID;
 
 public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort, LoadUserByEmailPort,
         LoadUserByProviderPort, LoadUserByIdPort, UpdatePasswordPort, UpdateIntroductionPort,
-        UpdateSettingsPort {
+        UpdateSettingsPort, LoadOauthProviderPort {
 
     private final Map<UUID, User> users = new LinkedHashMap<>();
     private final Map<UUID, PasswordHash> updatedPasswords = new LinkedHashMap<>();
@@ -60,6 +61,15 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
     @Override
     public Optional<User> loadById(UserId userId) {
         return Optional.ofNullable(users.get(userId.value()));
+    }
+
+    // 여기서는 애그리거트에서 읽는다 — 실제 어댑터는 oauth_users를 직접 조회한다.
+    // loadById가 소셜 연결을 복원하지 않아 실제로는 애그리거트로 판정할 수 없기 때문이다
+    @Override
+    public Optional<Provider> loadProvider(UserId userId) {
+        return loadById(userId)
+                .flatMap(User::getOauthUser)
+                .map(oauth -> oauth.getProvider());
     }
 
     @Override
