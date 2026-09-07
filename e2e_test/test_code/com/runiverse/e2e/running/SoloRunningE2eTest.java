@@ -61,14 +61,10 @@ class SoloRunningE2eTest extends E2eTestSupport {
             socket.await("RUNNING_STARTED");
             sendTrack(socket);
 
-            // 좌표 배치에는 ack가 없다 — 누적 거리가 진행 통지로 돌아오는 것으로 확인한다
-            Map<String, Object> progress = socket.await("PLAYER_RUNNING_PROGRESS_UPDATED");
-            @SuppressWarnings("unchecked")
-            Map<String, Object> payload = (Map<String, Object>) progress.get("data");
-            assertThat(payload.get("userId")).isEqualTo(user.userId());
-            assertThat((Integer) payload.get("distanceMeters")).isPositive();
-            // 목표 없는 솔로 방이라 남은 거리를 잴 기준이 없다
-            assertThat(payload.get("targetDistanceMeters")).isNull();
+            // 좌표 배치에는 ack가 없고, PLAYER_RUNNING_PROGRESS_UPDATED는 본인에게 오지 않는다
+            // (api-spec.md — 본인 진행은 클라가 이미 계산해 띄우고 있다). 참가자가 본인뿐인
+            // 솔로 방에서는 수신자가 0명이라 그걸 기다리면 반드시 타임아웃이다.
+            // 좌표가 실제로 누적됐는지는 아래 결과의 totalDistanceMeters·routes로 확인한다
 
             // 종료가 GPS 원본 트랙을 S3에 올린다 — 여기가 통과해야 기록이 생긴다
             socket.send("RUNNING_FINISH", Map.of("forced", false));
