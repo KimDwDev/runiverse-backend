@@ -119,8 +119,12 @@ public class UserController {
     public ResponseEntity<MyBasicInfoResponse> getMyBasicInfo(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
         GetMyBasicInfoResult result = getMyBasicInfoUsecase.handle(new GetMyBasicInfoQuery(userId));
-        return ResponseEntity.ok(
-                new MyBasicInfoResponse(result.userId(), result.nickname(), result.isOnboarded()));
+        return ResponseEntity.ok(new MyBasicInfoResponse(
+                result.userId(),
+                result.email(),
+                result.loginType(),
+                result.nickname(),
+                result.isOnboarded()));
     }
 
     @GetMapping("/{userId}")
