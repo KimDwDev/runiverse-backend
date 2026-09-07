@@ -60,8 +60,9 @@ public class ChangeMyProfileIntegrationTest extends IntegrationTestSupport {
                 onboardingStore   // UpdateOnboardingPort
         );
         getMyBasicInfoHandler = new GetMyBasicInfoHandler(
-                userStore,       // LoadUserByIdPort
-                onboardingStore  // LoadNicknamePort
+                userStore,        // LoadUserByIdPort
+                onboardingStore,  // LoadNicknamePort
+                userStore         // LoadOauthProviderPort
         );
     }
 
