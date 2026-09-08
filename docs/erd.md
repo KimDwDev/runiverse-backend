@@ -192,14 +192,14 @@
 
 ### scheduled_jobs (예약 작업)
 
-> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감만 쓰지만 러닝 강제 종료·시작 리마인더가 같은 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
+> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감·시작 통지·정각 시작이 쓰고, 러닝 강제 종료가 같은 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | scheduled_job_id | bigint | PK | |
 | job_type | varchar(50) | NOT NULL | 무엇을 할 것인가 — [§6 enum 사전](#6-enum-사전) |
 | target_id | varchar(100) | NOT NULL | 대상 식별자. 타입마다 가리키는 테이블이 달라(`MATCH_CLOSE`면 `running_room_id`) FK 없이 문자열로 둔다 |
-| execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋` |
+| execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋`, `RUNNING_READY`는 `start_at - 리드타임`, `RUNNING_START`는 `start_at` 정각 |
 | is_sent | boolean | NOT NULL | 실행 완료 여부. 여러 인스턴스가 같은 예약을 들고 있어도 여기서 하나만 이긴다 |
 | sent_at | timestamp | nullable | 실제 실행 시각. `execute_at`과의 차이가 곧 지연이라 운영 지표로 쓴다 |
 | created_at | timestamp | NOT NULL | |
@@ -385,7 +385,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 방이 빔 — 시작 전이면 항상, 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO | |
-| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다). 러닝 강제 종료는 붙일 때 값을 추가한다 |
+| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY / RUNNING_START | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다) / 정각 시작(`start_at`에 `MATCHED`→`STARTED`. 매칭 방에만 걸고, 참가자 상태는 바꾸지 않는다). 러닝 강제 종료는 붙일 때 값을 추가한다 |
 | delete_users.login_type | LOCAL / GOOGLE / KAKAO | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
 
 ---

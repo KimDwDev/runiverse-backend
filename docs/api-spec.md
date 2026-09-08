@@ -1008,7 +1008,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
 - `data` = `RoomInfo` 전체 재전송. **모집 중 인원 변동, 방 취소, 그리고 연결 직후 스냅샷이 이 이벤트로 나간다**
-- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
+- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 `start_at` 정각의 시작 스케줄러가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
 - 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`와 `players`가 말해주므로 이벤트를 더 쪼개지 않는다
 
 | `status` | 클라가 할 일 |
@@ -1042,7 +1042,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다. **`RUNNING_READY`를 기다리지 않는다** — `scheduledStartAt`은 이미 `RoomInfo`로 알고 있고, 연결이 늦으면 정각에 보낼 수 없다
 2. 서버가 `scheduledStartAt - 리드타임`(운영값)에 `RUNNING_READY`를 보낸다. 클라는 `startsInMs`로 발사 타이머를 건다
 3. 타이머에서 파생해 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱)을 표시하고 뒤로가기를 차단한다
-4. `scheduledStartAt`에 타이머가 만료되면 러닝 화면으로 전환해 `RUNNING_START`를 보낸다. 이 메시지가 방을 `STARTED`로 올리고, 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다
+4. `scheduledStartAt`에 타이머가 만료되면 러닝 화면으로 전환해 `RUNNING_START`를 보낸다. 방은 같은 시각의 시작 스케줄러가 이미 `STARTED`로 올려놨고, 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다
 5. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
 **`RUNNING_READY`를 못 받아도 러닝은 시작한다** — SSE가 끊겼거나 앱이 백그라운드였으면 이벤트가 오지 않는다. 그때는 기기 시각으로 `scheduledStartAt`을 넘겼는지 보고 그냥 `RUNNING_START`를 보낸다. 서버가 방 상태로 판정하므로 틀린 요청이면 거절될 뿐이다.
@@ -1050,7 +1050,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `RUNNING_READY` (SSE) — 곧 시작 통지
 
 - **발화 시점은 `scheduledStartAt - 리드타임`이다**(리드타임은 운영값). 방이 `MATCHED`로 확정될 때 이 시각으로 예약을 걸어둔다. **정각이 아니라 미리 보내는 것이 요점이다** — 정각에 보내면 클라의 발사 시점과 겹쳐 이벤트가 늘 늦게 도착한다
-- 이 이벤트는 방 상태를 바꾸지 않는다. `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다
+- 이 이벤트는 방 상태를 바꾸지 않는다. `STARTED` 전환은 `scheduledStartAt` 정각에 따로 걸린 시작 스케줄러가 일으킨다
 
 ```json
 {
