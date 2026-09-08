@@ -8,7 +8,7 @@ import com.runiverse.running_service.application.match.common.MatchRoomChangedEv
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
-import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
@@ -67,7 +67,7 @@ class CancelMatchHandlerTest {
             LocalDateTime.now().plusHours(1), TARGET_DISTANCE, AVG_PACE, List.of());
 
     @Mock
-    private LoadActiveApplicationPort loadActiveApplicationPort;
+    private LockMatchApplicationPort lockMatchApplicationPort;
 
     @Mock
     private LoadMatchRoomPort loadMatchRoomPort;
@@ -95,7 +95,7 @@ class CancelMatchHandlerTest {
     @BeforeEach
     void setUp() {
         cancelMatchHandler = new CancelMatchHandler(
-                loadActiveApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
+                lockMatchApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
                 updateMatchApplicationPort, updateMatchRoomPort, matchCooldownPort,
                 new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
                 roomInfoAssembler, eventPublisher);
@@ -228,8 +228,9 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("러닝이 시작된 뒤에는 취소할 수 없다")
     void cannotCancelAfterRunningStarted() {
-        // given -> 여기서 끊으면 WS 종료 경로를 건너뛰어 GPS 트랙과 기록이 저장되지 않는다
-        given(loadActiveApplicationPort.loadActive(new UserId(USER_ID)))
+        // given -> 여기서 끊으면 WS 종료 경로를 건너뛰어 GPS 트랙과 기록이 저장되지 않는다.
+        // 시작이 먼저 커밋된 경합도 여기로 온다 — 잠그고 읽으니 RUNNING이 보여 취소가 막힌다
+        given(lockMatchApplicationPort.lockActive(new UserId(USER_ID)))
                 .willReturn(Optional.of(player(RunningPlayerStatus.RUNNING)));
 
         // when & then
@@ -243,7 +244,7 @@ class CancelMatchHandlerTest {
     @DisplayName("활성 신청이 없으면 취소할 것도 없다")
     void rejectsWhenNoActiveApplication() {
         // given
-        given(loadActiveApplicationPort.loadActive(new UserId(USER_ID)))
+        given(lockMatchApplicationPort.lockActive(new UserId(USER_ID)))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -253,7 +254,7 @@ class CancelMatchHandlerTest {
     }
 
     private void givenActiveMatch(RunningRoom room) {
-        given(loadActiveApplicationPort.loadActive(new UserId(USER_ID)))
+        given(lockMatchApplicationPort.lockActive(new UserId(USER_ID)))
                 .willReturn(Optional.of(player(RunningPlayerStatus.JOINED)));
         given(loadMatchRoomPort.findAssignedRoom(new UserId(USER_ID)))
                 .willReturn(Optional.of(new RunningRoomId(ROOM_ID)));

@@ -245,8 +245,10 @@ public class StartRunningHandlerTest {
         @Test
         @DisplayName("없는 방이면 거부한다")
         void rejectUnknownRoom() {
-            // given
-            given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID)))
+            // given -> 신청은 살아 있는데 방이 없다. 신청을 먼저 잠그므로 그 스텁이 함께 필요하다
+            given(lockRunningPlayerPort.lockActive(new UserId(USER_ID)))
+                    .willReturn(Optional.of(player(RunningPlayerStatus.JOINED)));
+            given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID)))
                     .willReturn(Optional.empty());
 
             // when & then
@@ -258,16 +260,16 @@ public class StartRunningHandlerTest {
         @Test
         @DisplayName("활성 신청이 없으면 이 방 사람일 수 없다")
         void rejectWithoutActivePlayer() {
-            // given
-            given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID)))
-                    .willReturn(Optional.of(room(RunningRoomStatus.MATCHED)));
-            given(loadActiveRunningPlayerPort.loadActive(new UserId(USER_ID)))
+            // given -> 취소가 먼저 커밋돼 deleted_at이 찍힌 상태다.
+            // 잠그고 읽으니 그 커밋이 보이고, 조회가 비어 여기서 걸린다 — 덮어쓰기로 되살아나지 않는다
+            given(lockRunningPlayerPort.lockActive(new UserId(USER_ID)))
                     .willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(StartRunningHandlerTest.this::start)
                     .isInstanceOf(NotRoomPlayerException.class);
-            verifyNoInteractions(updateRunningRoomPort, updateRunningPlayerPort);
+            // 방까지 가지 않는다 — 신청이 없으면 방을 잠글 이유도 없다
+            verifyNoInteractions(lockRunningRoomPort, updateRunningRoomPort, updateRunningPlayerPort);
         }
 
         @Test

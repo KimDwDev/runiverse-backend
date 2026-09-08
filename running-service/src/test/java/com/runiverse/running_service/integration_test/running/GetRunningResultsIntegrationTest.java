@@ -87,9 +87,9 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
                 runningStore      // CreateRunningRoomPort
         );
         startRunningHandler = new StartRunningHandler(
-                runningStore,     // LoadRunningRoomPort
+                runningStore,     // LockRunningPlayerPort
+                runningStore,     // LockRunningRoomPort
                 runningStore,     // UpdateRunningRoomPort
-                runningStore,     // LoadActiveRunningPlayerPort
                 runningStore      // UpdateRunningPlayerPort
         );
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
