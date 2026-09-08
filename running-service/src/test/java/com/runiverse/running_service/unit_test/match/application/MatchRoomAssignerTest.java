@@ -404,6 +404,22 @@ class MatchRoomAssignerTest {
     }
 
     @Test
+    @DisplayName("방을 새로 열면 강제 종료도 함께 예약한다")
+    void schedulesForceFinishForNewRoom() {
+        // given -> 이 예약이 없으면 종료 메시지가 오지 않은 방이 영영 열린 채로 남는다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 마감·통지와 달리 유일하게 start_at 뒤다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.RUNNING_FORCE_FINISH, NEW_ROOM_ID,
+                START_AT.plus(FORCE_FINISH_OFFSET));
+    }
+
+    @Test
     @DisplayName("기존 방에 합류할 때는 예약하지 않는다")
     void doesNotScheduleWhenJoiningExistingRoom() {
         // given -> 그 방을 연 신청자가 이미 걸어뒀다. 또 걸면 UNIQUE에 부딪힌다
