@@ -1,8 +1,10 @@
 package com.runiverse.running_service.presentation.match.sse;
 
+import com.runiverse.running_service.application.match.port.out.MatchEventType;
 import com.runiverse.running_service.application.match.port.out.MatchStreamConnection;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.presentation.match.response.RoomInfoResponse;
+import com.runiverse.running_service.presentation.match.response.RunningReadyResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -41,10 +43,16 @@ public class SseMatchStreamConnection implements MatchStreamConnection {
     @Override
     public void send(MatchStreamEvent event) {
         // 와이어 계약은 presentation이 갖는다 — application 모델을 그대로 흘리지 않는다.
-        // data(…, APPLICATION_JSON)은 등록된 메시지 컨버터를 타므로 ObjectMapper가 필요 없다
+        // 이벤트 이름마다 data 형태가 다르므로 여기서 가른다
         send(SseEmitter.event()
                 .name(event.type().name())
-                .data(RoomInfoResponse.from(event.room()), MediaType.APPLICATION_JSON));
+                .data(bodyOf(event), MediaType.APPLICATION_JSON));
+    }
+
+    private Object bodyOf(MatchStreamEvent event) {
+        return event.type() == MatchEventType.RUNNING_READY
+                ? RunningReadyResponse.from(event.ready())
+                : RoomInfoResponse.from(event.room());
     }
 
     private void send(SseEmitter.SseEventBuilder event) {
