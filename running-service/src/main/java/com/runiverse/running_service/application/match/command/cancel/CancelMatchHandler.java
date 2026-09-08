@@ -6,8 +6,8 @@ import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;
-import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
@@ -34,7 +34,7 @@ public class CancelMatchHandler implements CancelMatchUsecase {
     // 확정된 방을 깨는 이탈만 제재한다 — 혼자 남은 방을 나가는 데는 손해를 보는 상대가 없다
     private static final int PENALTY_MIN_PLAYER_COUNT = 2;
 
-    private final LoadActiveApplicationPort loadActiveApplicationPort;
+    private final LockMatchApplicationPort lockMatchApplicationPort;
     private final LoadMatchRoomPort loadMatchRoomPort;
     private final LockMatchRoomPort lockMatchRoomPort;
     private final UpdateMatchApplicationPort updateMatchApplicationPort;
@@ -48,7 +48,7 @@ public class CancelMatchHandler implements CancelMatchUsecase {
     public void handle(CancelMatchCommand command) {
         UserId userId = new UserId(command.userId());
         // 1. 취소할 신청이 없다
-        RunningPlayer player = loadActiveApplicationPort.loadActive(userId)
+        RunningPlayer player = lockMatchApplicationPort.lockActive(userId)
                 .orElseThrow(ActiveMatchNotFoundException::new);
         // 2. 러닝이 시작된 뒤에는 이 버튼을 쓰지 않는다 — 여기서 끊으면 WS 종료 경로를 건너뛰어
         //    GPS 트랙과 기록이 저장되지 않은 채 신청만 끝난다

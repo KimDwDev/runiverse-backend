@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.match.port.out.CreateMatchRoomP
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -12,12 +13,13 @@ import com.runiverse.running_service.application.running.port.out.CreateRunningP
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
 import com.runiverse.running_service.application.running.port.out.RunningSplitRow;
@@ -46,14 +48,14 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
-        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, LockRunningRoomPort, UpdateRunningRoomPort,
+        LoadActiveRunningPlayerPort, LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
         ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort,
         // 매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
         CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
         // 취소·나가기가 쓰는 둘 — 시그니처가 같아 기존 메서드가 그대로 만족시킨다
-        LoadActiveApplicationPort, UpdateMatchApplicationPort,
+        LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
         // 스냅샷 조회 — 잠그지 않는 것만 lockById와 다르다
         LoadMatchRoomDetailPort {
 
@@ -257,6 +259,26 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .map(row -> toResultPlayer(
                         (RunningPlayerJpaEntity) row[0], (RunningRecordJpaEntity) row[1]))
                 .toList();
+    }
+
+    // loadActive와 조건이 같고 잠그는 것만 다르다 — 같은 행을 고치는 취소·시작이 이걸 쓴다
+    @Override
+    public Optional<RunningPlayer> lockActive(UserId userId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT p
+                                FROM RunningPlayerJpaEntity p
+                                WHERE p.userId = :userId
+                                  AND p.deletedAt IS NULL
+                                """, RunningPlayerJpaEntity.class
+                )
+                .setParameter("userId", userId.value())
+                // 상대가 커밋할 때까지 기다렸다 읽는다 — 기다리지 않으면 취소된 신청을
+                // 활성으로 오인해 deleted_at을 null로 되돌린다
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(this::toDomain);
     }
 
     @Override

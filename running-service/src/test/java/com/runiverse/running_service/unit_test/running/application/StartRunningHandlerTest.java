@@ -7,8 +7,8 @@ import com.runiverse.running_service.application.running.command.start.StartRunn
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
-import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -51,14 +51,15 @@ public class StartRunningHandlerTest {
     private static final LocalDateTime PAST = LocalDateTime.now().minusMinutes(5);
     private static final LocalDateTime FUTURE = LocalDateTime.now().plusMinutes(5);
 
+    // 취소와 같은 행을 고치므로 잠그고 읽는 포트를 쓴다 — 잠금 없는 조회 포트는 남겨두지 않았다
     @Mock
-    private LoadRunningRoomPort loadRunningRoomPort;
+    private LockRunningRoomPort lockRunningRoomPort;
 
     @Mock
     private UpdateRunningRoomPort updateRunningRoomPort;
 
     @Mock
-    private LoadActiveRunningPlayerPort loadActiveRunningPlayerPort;
+    private LockRunningPlayerPort lockRunningPlayerPort;
 
     @Mock
     private UpdateRunningPlayerPort updateRunningPlayerPort;
@@ -107,9 +108,9 @@ public class StartRunningHandlerTest {
     }
 
     private void givenStore(RunningRoom room, RunningPlayer player) {
-        given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
-        given(loadActiveRunningPlayerPort.loadActive(new UserId(USER_ID)))
+        given(lockRunningPlayerPort.lockActive(new UserId(USER_ID)))
                 .willReturn(Optional.of(player));
+        given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
     }
 
     private StartRunningResult start() {

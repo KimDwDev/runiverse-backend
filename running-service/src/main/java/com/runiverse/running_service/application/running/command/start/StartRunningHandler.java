@@ -4,14 +4,13 @@ import com.runiverse.running_service.application.running.exception.NotRoomPlayer
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
-import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
-import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
@@ -28,24 +27,24 @@ import java.time.LocalDateTime;
 @Transactional
 public class StartRunningHandler implements StartRunningUsecase {
 
-    private final LoadRunningRoomPort loadRunningRoomPort;
+    private final LockRunningPlayerPort lockRunningPlayerPort;
+    private final LockRunningRoomPort lockRunningRoomPort;
     private final UpdateRunningRoomPort updateRunningRoomPort;
-    private final LoadActiveRunningPlayerPort loadActiveRunningPlayerPort;
     private final UpdateRunningPlayerPort updateRunningPlayerPort;
 
     // 채널 등록·재입장·방 시작·참가자 시작을 한 번에 처리한다.
     // 클라는 최초 진입인지 재연결인지 구분하지 않고 언제나 같은 메시지를 보낸다
     @Override
     public StartRunningResult handle(StartRunningCommand command) {
-        // 1. 방을 우선 찾는다.
-        RunningRoom room = loadRunningRoomPort.loadById(new RunningRoomId(command.runningRoomId()))
-                .orElseThrow(RunningRoomNotFoundException::new);
-
-        // 2. 세션의 키가 유저라 유저로 참가자 여부를 판정한다.
-        //    신청은 상태 검사와 RUNNING 전환에 쓴다
+        // 1. 취소와 같은 행을 고치므로 잠그고 읽는다. 취소가 먼저 커밋됐으면
+        //    deleted_at이 찍혀 조회 자체가 비고, 여기서 자연히 거절된다
         UserId userId = new UserId(command.userId());
-        RunningPlayer player = loadActiveRunningPlayerPort.loadActive(userId)
+        RunningPlayer player = lockRunningPlayerPort.lockActive(userId)
                 .orElseThrow(NotRoomPlayerException::new);
+        // 2. 방도 인원이 바뀌므로 잠근다 — 취소의 leave()와 rejoin()이 겹치면 인원이 어긋난다.
+        //    잠금 순서는 취소 핸들러와 같게 참가자 → 방으로 맞춘다
+        RunningRoom room = lockRunningRoomPort.lockById(new RunningRoomId(command.runningRoomId()))
+                .orElseThrow(RunningRoomNotFoundException::new);
         RoomSession session = room.getSessions().stream()
                 .filter(roomSession -> roomSession.isSameUser(userId))
                 .findFirst()
