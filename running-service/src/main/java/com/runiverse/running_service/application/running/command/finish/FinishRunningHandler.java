@@ -15,6 +15,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
@@ -56,7 +57,12 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     private final DeleteRunningTrackPort deleteRunningTrackPort;
     private final ExistsRunningPlayerPort existsRunningPlayerPort;
     private final UpdateRunningRoomPort updateRunningRoomPort;
+    private final StartMatchCooldownPort startMatchCooldownPort;
     private final RunningFinishProperties properties;
+    // 1인 확정 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
+    // 시작 전 이탈(CancelMatchHandler)의 면제와 같은 기준이다.
+    // 러닝 시작 후에는 인원이 줄지 않으므로(erd) 이 값이 곧 확정 시점 인원이다
+    private static final int PENALTY_MIN_PLAYER_COUNT = 2;
 
     @Override
     public void handle(FinishRunningCommand command) {
@@ -94,8 +100,10 @@ public class FinishRunningHandler implements FinishRunningUsecase {
         // 5. 상태를 확정한다
         finish(player, room, analysis.map(TrackAnalysis::totalDistanceMeters).orElse(0));
         updateRunningPlayerPort.update(player);
-
-        // 6. 방은 마지막 한 사람이 끝낼 때 닫힌다.
+        // 6. 러닝이 끝났으니 자리를 비운다 — 인원과 방 상태는 건드리지 않는다.
+        //    러닝 시작 후 current_player_count는 "몇 명으로 확정됐나"로 고정된다(erd)
+        room.finishSession(userId);
+        // 7. 방은 마지막 한 사람이 끝낼 때 닫힌다.
         //    참가자 갱신을 먼저 반영해야 방금 끝낸 자신이 RUNNING으로 세어지지 않는다
         closeRoomIfLastPlayer(room);
         deleteTrackAfterCommit(command.runningRoomId(), userId);
@@ -164,7 +172,13 @@ public class FinishRunningHandler implements FinishRunningUsecase {
             return;
         }
         double ratio = (double) totalDistanceMeters / target.get().meters();
-        player.leave(ratio < properties.penaltyDistanceRatio(), finishedAt);
+        boolean penalty = ratio < properties.penaltyDistanceRatio()
+                && room.getPlayerCount().current() >= PENALTY_MIN_PLAYER_COUNT;
+        player.leave(penalty, finishedAt);
+        if (penalty) {
+            // 근거는 status(RUNNING_LEFT_PENALTY)에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
+            startMatchCooldownPort.start(player.getUserId(), properties.cooldown());
+        }
     }
 
     // 시작 때 RUNNING이 된 참가자가 전원 종료되면 방도 끝난다.
@@ -172,11 +186,11 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     // 닫으면 CANCELLED가 terminal이라 FINISHED에 못 가고 결과 조회 경로가 무너진다
     private void closeRoomIfLastPlayer(RunningRoom room) {
         // 타임아웃이 먼저 닫았을 수 있다 — 끝난 방에 finish()를 다시 부르면 도메인 예외다
-        if (room.getStatus() != RunningRoomStatus.STARTED
-                || existsRunningPlayerPort.existsRunning(room.getRunningRoomId().orElseThrow())) {
-            return;
+        if (room.getStatus() == RunningRoomStatus.STARTED
+                && !existsRunningPlayerPort.existsRunning(room.getRunningRoomId().orElseThrow())) {
+            room.finish(LocalDateTime.now());
         }
-        room.finish(LocalDateTime.now());
+        // 방을 닫지 않아도 세션 변경(is_connected)은 저장돼야 한다
         updateRunningRoomPort.update(room);
     }
 

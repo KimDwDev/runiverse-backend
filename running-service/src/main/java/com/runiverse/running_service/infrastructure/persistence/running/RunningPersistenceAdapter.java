@@ -1,15 +1,25 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
 import com.runiverse.running_service.application.running.port.out.RunningSplitRow;
@@ -25,20 +35,29 @@ import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
-        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
-        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort {
+        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, LockRunningRoomPort, UpdateRunningRoomPort,
+        LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort,
+        // 매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다
+        CreateMatchApplicationPort, ExistsActiveApplicationPort,
+        CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
+        // 취소·나가기가 쓰는 둘 — 시그니처가 같아 기존 메서드가 그대로 만족시킨다
+        LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
+        // 스냅샷 조회 — 잠그지 않는 것만 lockById와 다르다
+        LoadMatchRoomDetailPort {
 
     private final EntityManager entityManager;
 
@@ -77,12 +96,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         );
         entityManager.persist(roomEntity);
         // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 저장한다.
-        // 플레이어는 이미 저장돼 있으니 프록시만 잡고 조회는 하지 않는다
+        // 신청은 다른 애그리거트라 ID 값만 담는다 — 프록시를 잡을 필요가 없어졌다
         List<RunningRoomSessionJpaEntity> sessions = room.getSessions().stream()
                 .map(session -> RunningRoomSessionJpaEntity.create(
                         roomEntity,
-                        entityManager.getReference(RunningPlayerJpaEntity.class,
-                                session.getRunningPlayerId().value()),
+                        session.getUserId().value(),
+                        session.getRunningPlayerId().value(),
                         session.getLeaveCount().value(),
                         session.isConnected()))
                 .toList();
@@ -150,23 +169,24 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         entity.changeCloseAt(room.getCloseAt().orElse(null));
         entity.changeAvgPace(room.getAvgPace().map(Pace::secondsPerKm).orElse(null));
         entity.changeCurrentPlayerCount(room.getPlayerCount().current());
-        // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다
-        Map<Long, RunningRoomSessionJpaEntity> stored = loadSessions(entity).stream()
-                .collect(Collectors.toMap(RunningRoomSessionJpaEntity::playerId,
+        // 세션은 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다.
+        // 키는 유저다 — 재배정이면 행을 새로 만들지 않고 신청만 갈아 끼운다
+        Map<UUID, RunningRoomSessionJpaEntity> stored = loadSessions(entity).stream()
+                .collect(Collectors.toMap(RunningRoomSessionJpaEntity::getUserId,
                         session -> session));
         room.getSessions().forEach(session -> {
+            UUID userId = session.getUserId().value();
             Long playerId = session.getRunningPlayerId().value();
-            RunningRoomSessionJpaEntity target = stored.get(playerId);
+            RunningRoomSessionJpaEntity target = stored.get(userId);
             if (target == null) {
-                // 합류로 새로 생긴 관계 — 방은 이미 저장돼 있으니 여기서 만든다.
-                // 플레이어도 저장돼 있으므로 프록시만 잡고 조회는 하지 않는다
+                // 처음 이 방에 들어온 유저 — 방은 이미 저장돼 있으니 여기서 만든다
                 entityManager.persist(RunningRoomSessionJpaEntity.create(
-                        entity,
-                        entityManager.getReference(RunningPlayerJpaEntity.class, playerId),
-                        session.getLeaveCount().value(),
-                        session.isConnected()));
+                        entity, userId, playerId,
+                        session.getLeaveCount().value(), session.isConnected()));
                 return;
             }
+            // 전에 거쳐 간 방에 새 신청으로 다시 들어왔으면 신청이 갈린다
+            target.changeRunningPlayerId(playerId);
             target.changeLeaveCount(session.getLeaveCount().value());
             target.changeConnected(session.isConnected());
         });
@@ -189,7 +209,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         return entityManager.createQuery("""
                         select player
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         where session.room.runningRoomId = :roomId
                           and player.userId = :userId
                         """, RunningPlayerJpaEntity.class)
@@ -207,7 +228,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         return entityManager.createQuery("""
                         select count(player)
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         where session.room.runningRoomId = :roomId
                           and player.status = :status
                         """, Long.class)
@@ -223,7 +245,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         List<Object[]> rows = entityManager.createQuery("""
                         select player, record
                         from RunningRoomSessionJpaEntity session
-                        join session.player player
+                        join RunningPlayerJpaEntity player
+                            on player.runningPlayerId = session.runningPlayerId
                         left join RunningRecordJpaEntity record
                             on record.room.runningRoomId = session.room.runningRoomId
                            and record.userId = player.userId
@@ -236,6 +259,26 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .map(row -> toResultPlayer(
                         (RunningPlayerJpaEntity) row[0], (RunningRecordJpaEntity) row[1]))
                 .toList();
+    }
+
+    // loadActive와 조건이 같고 잠그는 것만 다르다 — 같은 행을 고치는 취소·시작이 이걸 쓴다
+    @Override
+    public Optional<RunningPlayer> lockActive(UserId userId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT p
+                                FROM RunningPlayerJpaEntity p
+                                WHERE p.userId = :userId
+                                  AND p.deletedAt IS NULL
+                                """, RunningPlayerJpaEntity.class
+                )
+                .setParameter("userId", userId.value())
+                // 상대가 커밋할 때까지 기다렸다 읽는다 — 기다리지 않으면 취소된 신청을
+                // 활성으로 오인해 deleted_at을 null로 되돌린다
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(this::toDomain);
     }
 
     @Override
@@ -270,6 +313,43 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                         """, RunningSplitRow.class)
                 .setParameter("roomId", runningRoomId.value())
                 .getResultList();
+    }
+
+    @Override
+    public Optional<RunningRoom> lockById(RunningRoomId runningRoomId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT r
+                                FROM RunningRoomJpaEntity r
+                                WHERE r.runningRoomId = :runningRoomId
+                                  AND r.deletedAt IS NULL
+                                """, RunningRoomJpaEntity.class
+                )
+                .setParameter("runningRoomId", runningRoomId.value())
+                // 방 행만 잠근다 — 인원 갱신이 겹치면 정원을 넘길 수 있다.
+                // 세션은 별도 조회라 잠기지 않는다(같은 방의 다른 신청과만 경쟁한다)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(entity -> toDomain(entity, loadSessions(entity)));
+    }
+
+    // 스냅샷 조회가 신청·취소와 경합하면 안 된다 — 여긴 잠그지 않는 것만 lockById와 다르다.
+    // 세션까지 함께 복원한다(방 애그리거트는 세션 없이는 판정할 수 없다)
+    @Override
+    public Optional<RunningRoom> loadDetailById(RunningRoomId runningRoomId) {
+        return entityManager.createQuery(
+                        """
+                                SELECT r
+                                FROM RunningRoomJpaEntity r
+                                WHERE r.runningRoomId = :runningRoomId
+                                  AND r.deletedAt IS NULL
+                                """, RunningRoomJpaEntity.class
+                )
+                .setParameter("runningRoomId", runningRoomId.value())
+                .getResultStream()
+                .findFirst()
+                .map(entity -> toDomain(entity, loadSessions(entity)));
     }
 
     private RunningResultPlayer toResultPlayer(RunningPlayerJpaEntity player,
@@ -328,7 +408,9 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .currentPlayerCount(entity.getCurrentPlayerCount())
                 .maxPlayerCount(entity.getMaxPlayerCount())
                 .sessions(sessions.stream()
-                        .map(s -> new SessionDraft(new RunningPlayerId(s.playerId()),
+                        .map(s -> new SessionDraft(
+                                new UserId(s.getUserId()),
+                                new RunningPlayerId(s.getRunningPlayerId()),
                                 s.getLeaveCount(), s.isConnected()))
                         .toList())
                 .build();

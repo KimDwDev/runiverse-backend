@@ -1,11 +1,11 @@
 package com.runiverse.running_service.application.running.command.solo;
 
+import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
 import com.runiverse.running_service.application.running.port.in.OpenSoloRoomUsecase;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -49,7 +49,7 @@ public class OpenSoloRoomHandler implements OpenSoloRoomUsecase {
         //    방의 target_distance는 nullable이라 목표 없는 솔로는 null이 정본이다
         //    (player 쪽은 NOT NULL이라 Distance.unlimited()가 들어간다)
         RunningRoom room = createRunningRoomPort.create(
-                RunningRoom.openSolo(playerId, avgPace.secondsPerKm(), null, startAt));
+                RunningRoom.openSolo(userId, playerId, avgPace.secondsPerKm(), null, startAt));
         return new OpenSoloRoomResult(
                 room.getRunningRoomId().orElseThrow().value(), startAt);
     }

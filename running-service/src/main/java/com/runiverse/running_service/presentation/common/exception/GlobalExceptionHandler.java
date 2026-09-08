@@ -3,9 +3,12 @@ package com.runiverse.running_service.presentation.common.exception;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
+import com.runiverse.running_service.application.match.exception.MatchCooldownException;
+import com.runiverse.running_service.presentation.common.response.CooldownErrorResponse;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -91,6 +94,18 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // BusinessException 핸들러보다 구체적이라 Spring이 이쪽을 고른다.
+    // 노출 정책을 타지 않고 바로 내보내지만, 실수로 일반 경로를 타도 마스킹되지 않게
+    // EXPOSED_CODES에도 등록해 둔다
+    @ExceptionHandler(MatchCooldownException.class)
+    public ResponseEntity<CooldownErrorResponse> handleMatchCooldown(MatchCooldownException e) {
+        ErrorCode errorCode = e.getErrorCode();
+        log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new CooldownErrorResponse(
+                        errorCode.getCode(), errorCode.getMessage(), e.getCooldownUntil()));
+    }
+
     // 노출 대상이 아닌 경우 전부 500으로 대체
     private ResponseEntity<ErrorResponse> respond(HttpStatus status, String code, String message) {
         if (!ErrorExposurePolicy.isExposed(status, code)) {
@@ -107,6 +122,7 @@ public class GlobalExceptionHandler {
             case UserErrorCode code -> toStatus(code);
             case AuthErrorCode code -> toStatus(code);
             case RunningErrorCode code -> toStatus(code);
+            case MatchErrorCode code -> toStatus(code);
             case ResourceErrorCode code -> toStatus(code);
         };
     }
@@ -160,6 +176,15 @@ public class GlobalExceptionHandler {
             case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
             case RUNNING_SESSION_UNAVAILABLE,
                  RUNNING_TRACK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+    }
+
+    private HttpStatus toStatus(MatchErrorCode code) {
+        return switch (code) {
+            case MATCH_ALREADY_IN_PROGRESS,
+                 MATCH_COOLDOWN,
+                 MATCH_SLOT_CLOSED,
+                 MATCH_ALREADY_STARTED -> HttpStatus.CONFLICT;
         };
     }
 }

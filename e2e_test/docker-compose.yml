@@ -38,9 +38,12 @@ services:
       default:
         aliases:
           # SDK는 엔드포인트를 갈아끼워도 가상 호스트 주소(<버킷>.<호스트>)로 요청한다.
-          # 이 별칭이 없으면 컨테이너 DNS가 그 이름을 못 풀어 PutObject가 죽는다
-          - runiverse-e2e-gps-track.localstack
-          - runiverse-e2e-user-asset.localstack
+          # 이 별칭이 없으면 컨테이너 DNS가 그 이름을 못 풀어 PutObject가 죽는다.
+          # 도메인은 .env.test의 AWS_ENDPOINT_URL_S3과 반드시 같아야 한다 —
+          # localstack이 버킷을 떼어 읽는 도메인이 이것뿐이다
+          - s3.localhost.localstack.cloud
+          - runiverse-e2e-gps-track.s3.localhost.localstack.cloud
+          - runiverse-e2e-user-asset.s3.localhost.localstack.cloud
     volumes:
       - ./localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
     healthcheck:

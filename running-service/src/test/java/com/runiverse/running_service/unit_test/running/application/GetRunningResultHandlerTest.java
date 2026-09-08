@@ -1,15 +1,15 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
 import com.runiverse.running_service.application.running.command.finish.PolylineEncoder;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
-import com.runiverse.running_service.application.running.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsHandler;
@@ -269,7 +269,8 @@ public class GetRunningResultHandlerTest {
     }
 
     private PlayerProfile profile(UUID userId, String nickname, String imageKey) {
-        return new PlayerProfile(userId, nickname, imageKey);
+        // 소개글은 러닝 결과 응답에 쓰이지 않는다 — 매칭 대기방만 읽는다
+        return new PlayerProfile(userId, nickname, imageKey, null);
     }
 
     private RunningResultPlayer finished(UUID userId, RunningPlayerStatus status) {

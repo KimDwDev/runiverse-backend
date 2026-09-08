@@ -1,6 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.running.port.out.LoadUserAvgPacePort;
+import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;

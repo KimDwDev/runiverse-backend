@@ -4,9 +4,10 @@ import com.runiverse.running_service.application.running.port.out.CreateRunningP
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadActiveRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -26,10 +27,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-// RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다
+// RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다.
+// 잠금 포트도 함께 구현하지만 단일 스레드 맵이라 실제로 잠그지는 않는다 —
+// 락 동작 자체는 여기서 검증할 수 없고, 잠긴 뒤의 판정만 본다
 public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunningRoomPort,
-        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        ExistsActiveRunningPlayerPort, LoadRunningRoomPort, LockRunningRoomPort, UpdateRunningRoomPort,
+        LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
         ExistsRunningPlayerPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
@@ -75,8 +78,14 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .map(room -> copyWithId(room, runningRoomId.value()));
     }
 
+    // 어댑터의 lockById처럼 조건은 loadById와 같다 — 여기서 다른 것은 잠그지 않는다는 점뿐이다
     @Override
-    public Optional<RunningPlayer> loadActive(UserId userId) {
+    public Optional<RunningRoom> lockById(RunningRoomId runningRoomId) {
+        return loadById(runningRoomId);
+    }
+
+    @Override
+    public Optional<RunningPlayer> lockActive(UserId userId) {
         return players.values().stream()
                 .filter(player -> player.getUserId().equals(userId) && player.isActive())
                 .findFirst()
@@ -147,7 +156,8 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     private RunningRoom copyWithId(RunningRoom room, long id) {
         List<SessionDraft> sessions = new ArrayList<>();
         room.getSessions().forEach(session -> sessions.add(new SessionDraft(
-                session.getRunningPlayerId(), session.getLeaveCount().value(), session.isConnected())));
+                session.getUserId(), session.getRunningPlayerId(),
+                session.getLeaveCount().value(), session.isConnected())));
         return RunningRoom.builder()
                 .runningRoomId(id)
                 .type(room.getType())

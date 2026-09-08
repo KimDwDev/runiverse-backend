@@ -1,17 +1,17 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
 import com.runiverse.running_service.application.running.command.finish.PolylineEncoder;
 import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
-import com.runiverse.running_service.application.running.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
-import com.runiverse.running_service.application.running.port.out.PlayerProfile;
 import com.runiverse.running_service.application.running.port.out.RunningResultPlayer;
 import com.runiverse.running_service.application.running.port.out.RunningResultRecord;
 import com.runiverse.running_service.application.running.port.out.RunningSplitRow;
@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -57,8 +58,10 @@ public class GetRunningSplitResultsHandlerTest {
     private static final double PRECISION = 1e-5;
 
     // 운영 설정과 같은 값 — splitDistanceMeters가 구간 경계 계산의 기준이다
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 이 테스트의 주제는 아니다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final RunningFinishProperties PROPERTIES =
-            new RunningFinishProperties(0.8, SPLIT_DISTANCE, 100, 60, 3.0);
+            new RunningFinishProperties(0.8, SPLIT_DISTANCE, 100, 60, 3.0, COOLDOWN);
 
     // 점 다섯 개짜리 경로. 인덱스로 잘린 구간을 눈으로 확인하려고 위도를 1씩 띄운다
     private static final List<BoundaryPoint> ROUTE = List.of(
@@ -247,7 +250,7 @@ public class GetRunningSplitResultsHandlerTest {
         when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(OTHER, 1, 0, 2)));
         when(loadRunningResultRecordPort.loadRecord(any(), any())).thenReturn(Optional.empty());
         when(loadPlayerProfilesPort.loadProfiles(any()))
-                .thenReturn(Map.of(OTHER, new PlayerProfile(OTHER, "러닝초보", null)));
+                .thenReturn(Map.of(OTHER, new PlayerProfile(OTHER, "러닝초보", null, null)));
 
         // when
         GetRunningSplitResultsResult result =
@@ -312,8 +315,8 @@ public class GetRunningSplitResultsHandlerTest {
                 new RunningResultRecord(
                         PolylineEncoder.encode(ROUTE), STARTED_AT, FINISHED_AT, 5020, 42)));
         Map<UUID, PlayerProfile> profiles = new HashMap<>();
-        profiles.put(ME, new PlayerProfile(ME, "동완러너", null));
-        profiles.put(OTHER, new PlayerProfile(OTHER, "러닝초보", null));
+        profiles.put(ME, new PlayerProfile(ME, "동완러너", null, null));
+        profiles.put(OTHER, new PlayerProfile(OTHER, "러닝초보", null, null));
         when(loadPlayerProfilesPort.loadProfiles(any())).thenReturn(profiles);
     }
 

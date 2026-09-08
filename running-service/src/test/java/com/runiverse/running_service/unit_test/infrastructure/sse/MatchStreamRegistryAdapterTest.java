@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.infrastructure.sse;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.port.out.MatchStreamConnection;
+import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.sse.MatchStreamRegistryAdapter;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,6 +109,11 @@ class MatchStreamRegistryAdapterTest {
 
         @Override
         public void closeSuperseded() {
+        }
+
+        // 이 테스트는 연결 수명만 다룬다 — 이벤트 전송은 검증 대상이 아니다
+        @Override
+        public void send(MatchStreamEvent event) {
         }
     }
 }

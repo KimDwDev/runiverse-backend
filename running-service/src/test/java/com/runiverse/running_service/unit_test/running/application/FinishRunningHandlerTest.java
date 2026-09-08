@@ -19,6 +19,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
@@ -30,6 +31,7 @@ import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
@@ -47,6 +49,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,9 +86,11 @@ public class FinishRunningHandlerTest {
     // 80% 경계 테스트가 엉뚱한 쪽으로 넘어간다
     private static final double METERS_PER_DEGREE = Math.toRadians(1) * 6_371_008.8;
 
+    // 조기 종료 제재로 매칭 신청이 막히는 기간 — 취소 이탈(match.cooldown)과 따로 둔다
+    private static final Duration COOLDOWN = Duration.ofMinutes(20);
     // 운영 설정 그대로 — 페널티 경계는 목표의 80%다
     private static final RunningFinishProperties PROPERTIES = new RunningFinishProperties(
-            0.8, 10, 100, 60, 3.0);
+            0.8, 10, 100, 60, 3.0, COOLDOWN);
 
     @Mock
     private LoadRunningRoomPort loadRunningRoomPort;
@@ -120,6 +125,9 @@ public class FinishRunningHandlerTest {
     @Mock
     private UpdateRunningRoomPort updateRunningRoomPort;
 
+    @Mock
+    private StartMatchCooldownPort startMatchCooldownPort;
+
     @Captor
     private ArgumentCaptor<RunningRecord> recordCaptor;
 
@@ -134,7 +142,7 @@ public class FinishRunningHandlerTest {
         handler = new FinishRunningHandler(loadRunningRoomPort, loadRoomPlayerPort,
                 loadRunningTrackPort, loadUserWeightPort, loadWeatherPort, saveGpsTrackPort,
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
-                existsRunningPlayerPort, updateRunningRoomPort, PROPERTIES);
+                existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort, PROPERTIES);
     }
 
     // 종료 시각이 찍힌 참가자 = 이미 확정이 끝난 참가자다(deleted_at이 곧 종료 표시)
@@ -156,6 +164,12 @@ public class FinishRunningHandlerTest {
 
     private static RunningRoom room(RunningRoomType type, Integer targetDistance,
                                     RunningRoomStatus status) {
+        return room(type, targetDistance, status,
+                type == RunningRoomType.SOLO ? 1 : 2);
+    }
+
+    private static RunningRoom room(RunningRoomType type, Integer targetDistance,
+                                    RunningRoomStatus status, int currentPlayerCount) {
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
                 .type(type)
@@ -165,9 +179,10 @@ public class FinishRunningHandlerTest {
                 .startAt(PAST)
                 .targetDistance(targetDistance)
                 .avgPace(AVG_PACE)
-                .currentPlayerCount(1)
+                .currentPlayerCount(currentPlayerCount)
                 .maxPlayerCount(type == RunningRoomType.SOLO ? 1 : 4)
-                .sessions(List.of(new SessionDraft(new RunningPlayerId(PLAYER_ID), 0, true)))
+                .sessions(List.of(new SessionDraft(
+                        new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true)))
                 .build();
     }
 
@@ -305,6 +320,55 @@ public class FinishRunningHandlerTest {
 
             // then
             assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING_LEFT_PENALTY);
+        }
+
+        @Test
+        @DisplayName("제재 대상이면 매칭 쿨다운을 건다")
+        void startsMatchCooldownOnPenalty() {
+            // given -> 3,990m = 79.8%로 경계 바로 아래. 동료가 있는 방이다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_598, 2.5));
+
+            // when
+            finish();
+
+            // then -> 근거는 status에 남고 "지금 막혀 있나"는 Redis TTL이 답한다.
+            //         기간은 취소 이탈과 따로 설정한다(running-finish.cooldown)
+            verify(startMatchCooldownPort).start(new UserId(USER_ID), COOLDOWN);
+        }
+
+        @Test
+        @DisplayName("1인 확정 방에서는 비율이 미달이어도 제재하지 않는다")
+        void exemptsSoleRunnerFromPenalty() {
+            // given -> 아무도 안 붙어 혼자 확정된 방. 곤란해지는 상대가 없다(feature-spec).
+            //          러닝 시작 후 인원은 줄지 않으므로 이 값이 곧 확정 시점 인원이다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET, RunningRoomStatus.STARTED, 1));
+            givenTrack(track(1_598, 2.5));
+
+            // when
+            finish();
+
+            // then
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
+            verifyNoInteractions(startMatchCooldownPort);
+        }
+
+        @Test
+        @DisplayName("완주하면 쿨다운을 걸지 않는다")
+        void doesNotStartCooldownOnComplete() {
+            // given -> 목표를 채운 러닝
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(2_001, 2.5));
+
+            // when
+            finish();
+
+            // then
+            verifyNoInteractions(startMatchCooldownPort);
         }
 
         @Test
@@ -500,6 +564,14 @@ public class FinishRunningHandlerTest {
             return room;
         }
 
+        // 러닝이 끝나면 자리를 비운다 — 인원은 그대로 두고 is_connected만 내린다(erd)
+        private RoomSession sessionOf(RunningRoom room) {
+            return room.getSessions().stream()
+                    .filter(session -> session.isSameUser(new UserId(USER_ID)))
+                    .findFirst()
+                    .orElseThrow();
+        }
+
         @Test
         @DisplayName("아직 뛰는 참가자가 있으면 방을 닫지 않는다")
         void keepsRoomOpenWhileOthersRun() {
@@ -510,9 +582,10 @@ public class FinishRunningHandlerTest {
             // when
             RunningRoom room = finishIn(room(RunningRoomType.MATCH, TARGET));
 
-            // then
+            // then -> 방은 열려 있지만 내 세션은 끊겨 저장돼야 한다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-            verifyNoInteractions(updateRunningRoomPort);
+            assertThat(sessionOf(room).isConnected()).isFalse();
+            verify(updateRunningRoomPort).update(room);
         }
 
         @Test
@@ -546,9 +619,12 @@ public class FinishRunningHandlerTest {
             RunningRoom room = finishIn(
                     room(RunningRoomType.MATCH, TARGET, RunningRoomStatus.FINISHED));
 
-            // then -> finish()를 다시 부르면 도메인 예외라 조회조차 하지 않는다
+            // then -> finish()를 다시 부르면 도메인 예외라 남은 사람을 세지도 않는다.
+            //         다만 세션 종료는 저장돼야 한다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
-            verifyNoInteractions(existsRunningPlayerPort, updateRunningRoomPort);
+            assertThat(sessionOf(room).isConnected()).isFalse();
+            verifyNoInteractions(existsRunningPlayerPort);
+            verify(updateRunningRoomPort).update(room);
         }
 
         @Test
