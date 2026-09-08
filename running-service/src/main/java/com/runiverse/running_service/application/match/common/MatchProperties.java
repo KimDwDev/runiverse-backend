@@ -16,6 +16,9 @@ public record MatchProperties(
         // 시작 통지 = start_at - 이 값. 정각에 보내면 클라의 발사 시점과 겹쳐 늘 늦게 도착한다 —
         // 클라가 타이머를 걸 여유만 주면 되므로 WS 연결 시간까지 덮을 필요는 없다
         @NotNull Duration readyOffset,
+        // 강제 종료 = start_at + 이 값. 앱이 죽거나 네트워크가 끊겨 종료 메시지가 영영 오지 않는 방을
+        // 서버가 대신 닫는다. 방이 열려 있는 동안 참가자의 신청도 활성이라 다음 러닝이 막힌다
+        @NotNull Duration forceFinishOffset,
         // 페이스 차이가 이 값 이내면 동급으로 보고 leave_count로 순위를 가른다.
         // 후보 자격(±30초)은 Pace.isCloseTo가 판정한다 — 이건 그 안에서의 동점 처리다
         @NotNull @Positive Integer paceTieToleranceSecondsPerKm,

@@ -8,5 +8,7 @@ public enum ScheduledJobType {
     RUNNING_READY,
     // 시작 시각 정각 — 방만 STARTED로 올린다.
     // 참가자 상태는 올리지 않는다. 그건 각자가 보낸 시작 메시지의 몫이다
-    RUNNING_START
+    RUNNING_START,
+    // 시작 시각 + 유예 — 그때까지 닫히지 않은 방과 남은 참가자를 서버가 닫는다
+    RUNNING_FORCE_FINISH
 }
