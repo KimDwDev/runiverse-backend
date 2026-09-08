@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.running.exception.RunningRoomNo
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
@@ -63,6 +64,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -123,6 +125,9 @@ public class FinishRunningHandlerTest {
     private ExistsRunningPlayerPort existsRunningPlayerPort;
 
     @Mock
+    private ExistsRunningRecordPort existsRunningRecordPort;
+
+    @Mock
     private UpdateRunningRoomPort updateRunningRoomPort;
 
     @Mock
@@ -142,7 +147,12 @@ public class FinishRunningHandlerTest {
         handler = new FinishRunningHandler(loadRunningRoomPort, loadRoomPlayerPort,
                 loadRunningTrackPort, loadUserWeightPort, loadWeatherPort, saveGpsTrackPort,
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
-                existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort, PROPERTIES);
+                existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
+                existsRunningRecordPort, PROPERTIES);
+        // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
+        // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
+        lenient().when(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
+                .thenReturn(true);
     }
 
     // 종료 시각이 찍힌 참가자 = 이미 확정이 끝난 참가자다(deleted_at이 곧 종료 표시)
@@ -613,7 +623,7 @@ public class FinishRunningHandlerTest {
         }
 
         @Test
-        @DisplayName("타임아웃이 먼저 닫은 방은 다시 건드리지 않는다")
+        @DisplayName("강제 종료가 먼저 닫은 방은 다시 건드리지 않는다")
         void skipsAlreadyClosedRoom() {
             // given -> 참가자는 아직 RUNNING인데 방만 닫혀 있는 상태
             RunningRoom room = finishIn(
@@ -625,6 +635,21 @@ public class FinishRunningHandlerTest {
             assertThat(sessionOf(room).isConnected()).isFalse();
             verifyNoInteractions(existsRunningPlayerPort);
             verify(updateRunningRoomPort).update(room);
+        }
+
+        @Test
+        @DisplayName("기록이 하나도 없는 방은 CANCELLED로 닫는다")
+        void cancelsRoomWithoutAnyRecord() {
+            // given -> 시작만 눌렀거나 몇십 미터 만에 그만둬 아무도 유효 러닝 판정을 통과하지 못했다
+            given(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
+                    .willReturn(false);
+
+            // when
+            RunningRoom room = finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then -> 완료로 남기지 않는다. 닫힌 시각은 FINISHED와 같게 함께 찍힌다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.getCloseAt()).isPresent();
         }
 
         @Test

@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.running.command.finish.FinishRu
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomCommand;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
@@ -76,6 +77,9 @@ class ForceFinishRunningRoomHandlerTest {
     private StartMatchCooldownPort startMatchCooldownPort;
 
     @Mock
+    private ExistsRunningRecordPort existsRunningRecordPort;
+
+    @Mock
     private FinishRunningUsecase finishRunningUsecase;
 
     private ForceFinishRunningRoomHandler forceFinishRunningRoomHandler;
@@ -85,7 +89,7 @@ class ForceFinishRunningRoomHandlerTest {
         forceFinishRunningRoomHandler = new ForceFinishRunningRoomHandler(
                 lockRunningRoomPort, loadRunningRoomPort, loadRoomPlayerPort,
                 updateRunningRoomPort, updateRunningPlayerPort, startMatchCooldownPort,
-                finishRunningUsecase, PROPERTIES);
+                existsRunningRecordPort, finishRunningUsecase, PROPERTIES);
     }
 
     @Test
@@ -95,6 +99,7 @@ class ForceFinishRunningRoomHandlerTest {
         givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
+        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -111,6 +116,7 @@ class ForceFinishRunningRoomHandlerTest {
         givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
+        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -179,19 +185,39 @@ class ForceFinishRunningRoomHandlerTest {
     }
 
     @Test
-    @DisplayName("뛴 사람이 있으면 방은 러닝 종료가 닫도록 두고 건드리지 않는다")
-    void leavesRoomClosingToFinishRunning() {
+    @DisplayName("러닝 종료가 이미 닫은 방은 다시 닫지 않는다")
+    void leavesRoomClosedByFinishRunning() {
         // given -> 마지막 참가자가 끝나는 순간 러닝 종료 안에서 방이 FINISHED가 된다.
         //          여기서 또 닫으면 그 전이를 덮어써 기록 있는 방이 취소로 남는다
         givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+        givenReloadedRoom(finishedRoom(RUNNER));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
 
-        // then -> 방을 다시 읽지도 않는다
+        // then -> 다시 읽어 이미 닫힌 것을 보고 손을 뗀다. 기록을 세어볼 것도 없다
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-        verifyNoInteractions(loadRunningRoomPort);
+        verifyNoInteractions(existsRunningRecordPort);
+    }
+
+    @Test
+    @DisplayName("러닝 종료가 방을 닫지 못했으면 기록 유무로 닫는다")
+    void closesRoomLeftOpenByRecordExistence() {
+        // given -> 뛴 사람은 확정됐는데 방이 열린 채로 남았다.
+        //          남길 기록이 있으니 취소가 아니라 완료로 닫아야 결과 조회가 이어진다
+        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+        givenReloadedRoom(room(RunningRoomStatus.STARTED, RUNNER));
+        given(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
+                .willReturn(true);
+
+        // when
+        forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then
+        assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        assertThat(lastUpdatedRoom().getCloseAt()).isPresent();
     }
 
     @Test
