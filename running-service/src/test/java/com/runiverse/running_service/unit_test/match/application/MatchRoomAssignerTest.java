@@ -372,6 +372,21 @@ class MatchRoomAssignerTest {
     }
 
     @Test
+    @DisplayName("방을 새로 열면 시작 통지도 함께 예약한다")
+    void schedulesRunningReadyForNewRoom() {
+        // given -> 이 예약이 없으면 클라가 발사 기준을 못 받아 기기 시각에만 의존한다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 정각이 아니라 리드타임만큼 앞이다. 정각에 보내면 클라 발사와 겹쳐 늘 늦는다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.RUNNING_READY, NEW_ROOM_ID, START_AT.minus(READY_OFFSET));
+    }
+
+    @Test
     @DisplayName("기존 방에 합류할 때는 예약하지 않는다")
     void doesNotScheduleWhenJoiningExistingRoom() {
         // given -> 그 방을 연 신청자가 이미 걸어뒀다. 또 걸면 UNIQUE에 부딪힌다
