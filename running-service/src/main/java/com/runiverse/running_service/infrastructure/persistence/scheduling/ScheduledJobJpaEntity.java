@@ -15,6 +15,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Check;
 
 import java.time.LocalDateTime;
 
@@ -30,6 +31,8 @@ import java.time.LocalDateTime;
         // 부팅 복구는 미실행분만 읽는다. is_sent가 선두라 끝난 대다수를 인덱스에서 배제한다
         indexes = @Index(name = "idx_scheduled_job_pending", columnList = "is_sent, execute_at")
 )
+@Check(name = "ck_scheduled_job_type",
+        constraints = "job_type in ('MATCH_CLOSE', 'RUNNING_READY')")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ScheduledJobJpaEntity extends BaseCreatedAtEntity {
 
