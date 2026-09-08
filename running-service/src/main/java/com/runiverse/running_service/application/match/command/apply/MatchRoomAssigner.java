@@ -104,6 +104,9 @@ public class MatchRoomAssigner {
         scheduleJobPort.schedule(
                 ScheduledJobType.RUNNING_READY, roomId,
                 startAt.minus(matchProperties.readyOffset()));
+        // 정각에 방을 올린다 — 아무도 채널에 붙지 않아도 방이 확정 상태에 갇히지 않는다.
+        // 참가자가 먼저 도착하면 그쪽이 올리고 이 예약은 이미 STARTED를 보고 빠진다
+        scheduleJobPort.schedule(ScheduledJobType.RUNNING_START, roomId, startAt);
         return room;
     }
 
