@@ -387,6 +387,21 @@ class MatchRoomAssignerTest {
     }
 
     @Test
+    @DisplayName("방을 새로 열면 정각 시작도 함께 예약한다")
+    void schedulesRunningStartForNewRoom() {
+        // given -> 이 예약이 없으면 아무도 채널에 붙지 않은 방이 확정 상태에 갇힌다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 오프셋 없는 start_at 정각이다. 시작 통지와 달리 앞당기지 않는다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.RUNNING_START, NEW_ROOM_ID, START_AT);
+    }
+
+    @Test
     @DisplayName("기존 방에 합류할 때는 예약하지 않는다")
     void doesNotScheduleWhenJoiningExistingRoom() {
         // given -> 그 방을 연 신청자가 이미 걸어뒀다. 또 걸면 UNIQUE에 부딪힌다
