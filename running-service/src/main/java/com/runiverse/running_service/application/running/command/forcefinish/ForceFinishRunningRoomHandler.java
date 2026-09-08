@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.ForceFinishRunningRoomUsecase;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
@@ -45,6 +46,7 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
     private final UpdateRunningRoomPort updateRunningRoomPort;
     private final UpdateRunningPlayerPort updateRunningPlayerPort;
     private final StartMatchCooldownPort startMatchCooldownPort;
+    private final ExistsRunningRecordPort existsRunningRecordPort;
     private final FinishRunningUsecase finishRunningUsecase;
     private final MatchProperties matchProperties;
 
@@ -93,10 +95,9 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
             finishRunningUsecase.handle(new FinishRunningCommand(
                     roomId.value(), userId.value(), true));
         }
-        // 3. 뛴 사람이 없으면 방을 닫아 줄 사람도 없다. 남길 기록이 없으니 CANCELLED다
-        if (runners.isEmpty()) {
-            closeRoomWithoutRecords(roomId);
-        }
+        // 3. 러닝 종료가 방을 닫지 못했으면 여기서 닫는다.
+        //    아무도 뛰지 않은 방은 닫아 줄 러닝 종료가 아예 없다
+        closeRoomIfStillOpen(roomId);
     }
 
     // 안 나타난 사람은 확정 후 이탈과 같게 다룬다 — 함께 뛰기로 한 사람을 곤란하게 만든 것은 같다.
@@ -109,15 +110,21 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
             startMatchCooldownPort.start(player.getUserId(), matchProperties.cooldown());
         }
     }
-
+    
     // 위에서 들고 있던 방은 러닝 종료가 다시 읽어 고쳤을 수 있다 — 반드시 새로 읽는다.
     // 그 인스턴스로 update를 부르면 방금 닫힌 상태를 되돌린다
-    private void closeRoomWithoutRecords(RunningRoomId roomId) {
+    private void closeRoomIfStillOpen(RunningRoomId roomId) {
         RunningRoom room = loadRunningRoomPort.loadById(roomId).orElseThrow();
         if (room.getStatus().isTerminal()) {
-            return;   // 전원이 제때 끝내 이미 닫힌 방이다
+            return;   // 마지막 참가자의 러닝 종료가 이미 닫았다
         }
-        room.cancel(LocalDateTime.now());
+        LocalDateTime closedAt = LocalDateTime.now();
+        // 러닝 종료와 같은 규칙이다 — 남길 기록이 있으면 FINISHED, 없으면 CANCELLED
+        if (existsRunningRecordPort.existsInRoom(roomId)) {
+            room.finish(closedAt);
+        } else {
+            room.cancel(closedAt);
+        }
         updateRunningRoomPort.update(room);
     }
 
@@ -126,5 +133,6 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
         return room.getType() == RunningRoomType.MATCH
                 && room.getPlayerCount().current() >= PENALTY_MIN_PLAYER_COUNT;
     }
+
 
 }

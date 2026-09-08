@@ -1,15 +1,17 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort {
+public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
@@ -53,6 +55,19 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort 
                         RunningRecordJpaEntity.class, recordEntity.getRunningRecordId());
             }
         }
+    }
+
+    @Override
+    public boolean existsInRoom(RunningRoomId runningRoomId) {
+        // running_room_id 인덱스를 탄다. 같은 트랜잭션에서 방금 만든 기록도
+        // 이 쿼리 앞의 자동 flush로 함께 보인다
+        return entityManager.createQuery("""
+                        select count(record)
+                        from RunningRecordJpaEntity record
+                        where record.room.runningRoomId = :roomId
+                        """, Long.class)
+                .setParameter("roomId", runningRoomId.value())
+                .getSingleResult() > 0;
     }
 
     private RunningSplitJpaEntity toEntity(RunningRecordJpaEntity record, RunningSplit split) {
