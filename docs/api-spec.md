@@ -1184,9 +1184,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
 ```json
-{
-  "runningRoomId": 125
-}
+{}
 ```
 
 - **일시정지 동안 경과 시간과 거리 계산이 멈춘다.** 클라는 좌표 전송도 중단한다 — 멈춰 있는 동안의 좌표는 트랙에 남길 이유가 없고, GPS 흔들림이 거리로 잡히면 기록이 부풀려진다
@@ -1198,7 +1196,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningRoomId": 125,
   "forced": false
 }
 ```
