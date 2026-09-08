@@ -49,6 +49,7 @@ class MatchRoomAssignerTest {
     private static final LocalDateTime START_AT = LocalDateTime.of(2026, 7, 25, 19, 0);
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
+    private static final Duration READY_OFFSET = Duration.ofSeconds(10);
     // 페이스 차가 이 값 이내면 동급으로 보고 leave_count가 순위를 가른다
     private static final int PACE_TIE_TOLERANCE = 10;
     // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
@@ -80,7 +81,7 @@ class MatchRoomAssignerTest {
         matchRoomAssigner = new MatchRoomAssigner(
                 loadMatchCandidatesPort, lockMatchRoomPort, loadMatchPlayersPort,
                 updateMatchRoomPort, createMatchRoomPort, scheduleJobPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
+                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
     @Test

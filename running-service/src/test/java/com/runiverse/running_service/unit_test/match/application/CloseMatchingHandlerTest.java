@@ -94,7 +94,7 @@ class CloseMatchingHandlerTest {
 
         // then
         verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
-                new MatchStreamEvent(MatchEventType.MATCH_STARTED, ROOM_INFO)));
+                MatchStreamEvent.started(ROOM_INFO)));
     }
 
     @Test

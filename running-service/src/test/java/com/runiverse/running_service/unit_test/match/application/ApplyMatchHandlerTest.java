@@ -61,6 +61,7 @@ class ApplyMatchHandlerTest {
     private static final int AVG_PACE = 360;                      // 6분/km
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
+    private static final Duration READY_OFFSET = Duration.ofSeconds(10);
     private static final int PACE_TIE_TOLERANCE = 10;
     // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
@@ -98,7 +99,7 @@ class ApplyMatchHandlerTest {
         applyMatchHandler = new ApplyMatchHandler(
                 matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort,
-                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, READY_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
                 roomInfoAssembler, eventPublisher);
     }
 

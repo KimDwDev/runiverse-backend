@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class RunningReadyExecuter implements ScheduledJobExecutor {
+public class RunningReadyExecutor implements ScheduledJobExecutor {
 
     private final NotifyRunningReadyUsecase notifyRunningReadyUsecase;
 
