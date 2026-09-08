@@ -9,7 +9,7 @@ import com.runiverse.running_service.application.user.exception.PasswordNotSetEx
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.exception.InvalidPasswordHashFormatException;
 import com.runiverse.running_service.domain.common.exception.InvalidUserIdFormatException;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;

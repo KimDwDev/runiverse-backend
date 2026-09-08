@@ -8,8 +8,8 @@ import com.runiverse.running_service.application.user.port.out.CheckNicknameDupl
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.User;
+import com.runiverse.running_service.domain.user.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.domain.user.aggregate;
+package com.runiverse.running_service.domain.user;
 
 import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
 import com.runiverse.running_service.domain.common.vo.UserId;

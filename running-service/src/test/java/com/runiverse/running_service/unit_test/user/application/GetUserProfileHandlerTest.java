@@ -9,7 +9,7 @@ import com.runiverse.running_service.application.user.query.profile.GetUserProfi
 import com.runiverse.running_service.application.user.query.profile.GetUserProfileQuery;
 import com.runiverse.running_service.application.user.query.profile.GetUserProfileResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import org.junit.jupiter.api.DisplayName;

@@ -1,5 +1,6 @@
 package com.runiverse.running_service.domain.user.aggregate;
 
+import com.runiverse.running_service.domain.user.OauthUser;
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
 import com.runiverse.running_service.domain.common.exception.UserIdRequiredException;
