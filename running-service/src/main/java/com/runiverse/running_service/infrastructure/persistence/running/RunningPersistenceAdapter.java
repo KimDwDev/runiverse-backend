@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RunningPersistenceAdapter implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, LockRunningRoomPort, UpdateRunningRoomPort,
-        LoadActiveRunningPlayerPort, LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
+        LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
         ExistsRunningPlayerPort, LoadRunningResultPlayersPort, LoadRunningResultRecordPort, LoadRunningSplitsPort,
         // 매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
