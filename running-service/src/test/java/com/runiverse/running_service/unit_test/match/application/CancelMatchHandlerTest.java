@@ -61,6 +61,7 @@ class CancelMatchHandlerTest {
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
     private static final Duration READY_OFFSET = Duration.ofSeconds(10);
+    private static final Duration FORCE_FINISH_OFFSET = Duration.ofHours(6);
     private static final int PACE_TIE_TOLERANCE = 10;
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
@@ -99,7 +100,8 @@ class CancelMatchHandlerTest {
         cancelMatchHandler = new CancelMatchHandler(
                 lockMatchApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
                 updateMatchApplicationPort, updateMatchRoomPort, matchCooldownPort,
-                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
+                        PACE_TIE_TOLERANCE, COOLDOWN),
                 roomInfoAssembler, eventPublisher);
     }
 
