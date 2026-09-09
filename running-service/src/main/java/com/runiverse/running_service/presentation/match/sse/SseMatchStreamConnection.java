@@ -39,6 +39,11 @@ public class SseMatchStreamConnection implements MatchStreamConnection {
     }
 
     @Override
+    public void closeForAccountDeletion() {
+        complete();
+    }
+
+    @Override
     public void send(MatchStreamEvent event) {
         // 와이어 계약은 presentation이 갖는다 — application 모델을 그대로 흘리지 않는다.
         // data(…, APPLICATION_JSON)은 등록된 메시지 컨버터를 타므로 ObjectMapper가 필요 없다

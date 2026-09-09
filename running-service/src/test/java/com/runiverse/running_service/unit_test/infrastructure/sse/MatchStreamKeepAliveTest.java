@@ -105,6 +105,10 @@ class MatchStreamKeepAliveTest {
         public void closeSuperseded() {
         }
 
+        @Override
+        public void closeForAccountDeletion() {
+        }
+
         // 이 테스트는 연결 수명만 다룬다 — 이벤트 전송은 검증 대상이 아니다
         @Override
         public void send(MatchStreamEvent event) {
