@@ -14,6 +14,8 @@ import com.runiverse.running_service.application.user.command.profileimage.Chang
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlCommand;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlResult;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageCommand;
+import com.runiverse.running_service.application.user.command.accountdeletion.DeleteAccountCommand;
+import com.runiverse.running_service.application.user.port.in.DeleteAccountUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangeNicknameUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangePasswordUsecase;
 import com.runiverse.running_service.application.user.port.in.ChangeProfileImageUsecase;
@@ -95,6 +97,7 @@ public class UserController {
     private final ChangePasswordUsecase changePasswordUsecase;
     private final GetMySettingsUsecase getMySettingsUsecase;
     private final ChangeMySettingsUsecase changeMySettingsUsecase;
+    private final DeleteAccountUsecase deleteAccountUsecase;
 
     @PostMapping("/onboarding")
     public ResponseEntity<OnboardingResponse> completeOnboarding(
@@ -276,5 +279,14 @@ public class UserController {
         ));
         return ResponseEntity.ok(
                 new MySettingsResponse(result.alertConsent(), result.profileVisibility()));
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal Jwt jwt) {
+        deleteAccountUsecase.handle(new DeleteAccountCommand(
+                UUID.fromString(jwt.getSubject()),
+                jwt.getId()
+        ));
+        return ResponseEntity.noContent().build();
     }
 }
