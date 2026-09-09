@@ -11,14 +11,18 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
+import com.runiverse.running_service.application.user.port.out.AccountSnapshot;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
+import com.runiverse.running_service.application.user.port.out.DeleteUserPort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.LoadAccountSnapshotPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadOauthProviderPort;
 import com.runiverse.running_service.application.user.port.out.LoadOnboardingProfilePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.OnboardingProfile;
+import com.runiverse.running_service.application.user.port.out.SaveDeletedUserPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
@@ -28,9 +32,12 @@ import com.runiverse.running_service.application.user.port.out.UpdateProfileImag
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.user.aggregate.DeletedUser;
 import com.runiverse.running_service.domain.user.aggregate.User;
 import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Bmi;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Introduction;
@@ -59,7 +66,8 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
         UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort, LoadUserWeightPort,
-        LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort {
+        LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort,
+        LoadAccountSnapshotPort, SaveDeletedUserPort, DeleteUserPort {
 
     private final EntityManager entityManager;
 
@@ -365,5 +373,54 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 .getResultStream()
                 .findFirst()
                 .map(Pace::new);
+    }
+
+    @Override
+    public Optional<AccountSnapshot> loadAccountSnapshot(UserId userId) {
+        return entityManager.createQuery("""
+                        SELECT new com.runiverse.running_service.application.user.port.out.AccountSnapshot(
+                            u.userId, u.email, u.createdAt,
+                            oauth.provider, oauth.providerId,
+                            o.nickname, o.gender, o.birthday, o.avgPace, o.weight, o.height)
+                        FROM UserJpaEntity u
+                        LEFT JOIN OauthUserJpaEntity oauth ON oauth.userId = u.userId
+                        LEFT JOIN UserOnboardingJpaEntity o ON o.userId = u.userId
+                        WHERE u.userId = :userId
+                        """, AccountSnapshot.class)
+                .setParameter("userId", userId.value())
+                .getResultStream()
+                .findFirst();
+    }
+
+    @Override
+    public void saveDeletedUser(DeletedUser deletedUser) {
+        entityManager.persist(DeleteUserJpaEntity.create(
+                deletedUser.getUserId().value(),
+                deletedUser.getEmail().value(),
+                deletedUser.getNickname().map(Nickname::value).orElse(null),
+                deletedUser.getGender().orElse(null),
+                deletedUser.getBirthYear().orElse(null),
+                deletedUser.getAvgPace().map(AvgPace::secondPerKm).orElse(null),
+                deletedUser.getBmi().map(Bmi::value).orElse(null),
+                deletedUser.getLoginType(),
+                deletedUser.getJoinedAt()
+        ));
+    }
+
+    // 온보딩과 소셜 연동을 앱이 먼저 지운다
+    @Override
+    public void deleteUser(UserId userId) {
+        deleteByUserId("UserOnboardingJpaEntity", userId);
+        deleteByUserId("OauthUserJpaEntity", userId);
+        deleteByUserId("UserJpaEntity", userId);
+    }
+
+    private void deleteByUserId(String entityName, UserId userId) {
+        entityManager.createQuery("""
+                        DELETE FROM %s e
+                        WHERE e.userId = :userId
+                        """.formatted(entityName))
+                .setParameter("userId", userId.value())
+                .executeUpdate();
     }
 }
