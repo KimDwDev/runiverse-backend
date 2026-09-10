@@ -6,7 +6,7 @@ import com.runiverse.running_service.application.auth.port.out.GenerateUserIdPor
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

@@ -6,7 +6,6 @@ import com.runiverse.running_service.application.match.common.MatchRoomChangedEv
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
-import com.runiverse.running_service.application.match.port.out.MatchEventType;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -173,7 +172,7 @@ class SettleRunningForAccountDeletionHandlerTest {
 
         // then
         verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
-                new MatchStreamEvent(MatchEventType.MATCH_ROOM_UPDATED, ROOM_INFO)));
+                MatchStreamEvent.updated(ROOM_INFO)));
     }
 
     @Test

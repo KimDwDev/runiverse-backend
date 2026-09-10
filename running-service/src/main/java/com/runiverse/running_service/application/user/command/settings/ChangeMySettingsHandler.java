@@ -5,7 +5,7 @@ import com.runiverse.running_service.application.user.port.in.ChangeMySettingsUs
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

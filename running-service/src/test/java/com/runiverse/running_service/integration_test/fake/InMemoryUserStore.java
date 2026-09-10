@@ -10,7 +10,7 @@ import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;

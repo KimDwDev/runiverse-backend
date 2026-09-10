@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.user.query.settings.GetMySettin
 import com.runiverse.running_service.application.user.query.settings.GetMySettingsQuery;
 import com.runiverse.running_service.application.user.query.settings.GetMySettingsResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

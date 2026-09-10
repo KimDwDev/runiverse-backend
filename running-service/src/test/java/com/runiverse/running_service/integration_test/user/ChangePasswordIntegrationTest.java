@@ -11,7 +11,7 @@ import com.runiverse.running_service.application.user.command.password.ChangePas
 import com.runiverse.running_service.application.user.exception.InvalidCurrentPasswordException;
 import com.runiverse.running_service.application.user.exception.PasswordNotSetException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;

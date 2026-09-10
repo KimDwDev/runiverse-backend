@@ -1,8 +1,10 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -10,7 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 // RunningRecordPersistenceAdapter를 대신한다
-public class InMemoryRunningRecordStore implements CreateRunningRecordPort {
+public class InMemoryRunningRecordStore
+        implements CreateRunningRecordPort, ExistsRunningRecordPort {
 
     private record Key(Long runningRoomId, UUID userId) {
 
@@ -29,6 +32,12 @@ public class InMemoryRunningRecordStore implements CreateRunningRecordPort {
         if (records.putIfAbsent(key, record) != null) {
             throw new IllegalStateException("이미 이 방의 기록이 있다");
         }
+    }
+
+    @Override
+    public boolean existsInRoom(RunningRoomId runningRoomId) {
+        return records.keySet().stream()
+                .anyMatch(key -> key.runningRoomId().equals(runningRoomId.value()));
     }
 
     // 검증 전용

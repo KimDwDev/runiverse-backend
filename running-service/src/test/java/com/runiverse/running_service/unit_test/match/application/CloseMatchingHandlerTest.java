@@ -34,6 +34,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -94,7 +95,7 @@ class CloseMatchingHandlerTest {
 
         // then
         verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
-                new MatchStreamEvent(MatchEventType.MATCH_STARTED, ROOM_INFO)));
+                MatchStreamEvent.started(ROOM_INFO)));
     }
 
     @Test
@@ -154,6 +155,9 @@ class CloseMatchingHandlerTest {
 
     private void givenRoom(RunningRoom room) {
         given(lockMatchRoomPort.lockById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
+        // 확정되면 이벤트가 나간다 — 조립 결과는 이 테스트의 주제가 아니라 값만 채워둔다.
+        // 확정하지 않고 빠지는 케이스도 있어 lenient다
+        lenient().when(roomInfoAssembler.assemble(any(RunningRoom.class))).thenReturn(ROOM_INFO);
     }
 
     private RunningRoom updatedRoom() {

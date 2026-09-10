@@ -6,7 +6,7 @@ import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPo
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import lombok.RequiredArgsConstructor;

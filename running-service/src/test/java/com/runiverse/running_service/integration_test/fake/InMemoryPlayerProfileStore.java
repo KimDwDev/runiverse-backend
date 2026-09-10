@@ -2,7 +2,7 @@ package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 
 import java.util.Collection;

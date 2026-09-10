@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.running.port.in.FinishRunningUs
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
@@ -58,6 +59,7 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     private final ExistsRunningPlayerPort existsRunningPlayerPort;
     private final UpdateRunningRoomPort updateRunningRoomPort;
     private final StartMatchCooldownPort startMatchCooldownPort;
+    private final ExistsRunningRecordPort existsRunningRecordPort;
     private final RunningFinishProperties properties;
     // 1인 확정 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
     // 시작 전 이탈(CancelMatchHandler)의 면제와 같은 기준이다.
@@ -182,13 +184,21 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     }
 
     // 시작 때 RUNNING이 된 참가자가 전원 종료되면 방도 끝난다.
-    // 1인 방도 같은 규칙이다 — 인원이 0이 됐다고 CANCELLED로 닫지 않는다.
-    // 닫으면 CANCELLED가 terminal이라 FINISHED에 못 가고 결과 조회 경로가 무너진다
+    // 1인 방도 같은 규칙이다 — 인원이 0이 됐다고 닫지 않는다(시작 후 인원은 확정 시점 값으로 고정된다)
     private void closeRoomIfLastPlayer(RunningRoom room) {
-        // 타임아웃이 먼저 닫았을 수 있다 — 끝난 방에 finish()를 다시 부르면 도메인 예외다
+        RunningRoomId roomId = room.getRunningRoomId().orElseThrow();
+        // 강제 종료가 먼저 닫았을 수 있다 — 끝난 방에 다시 부르면 도메인 예외다
         if (room.getStatus() == RunningRoomStatus.STARTED
-                && !existsRunningPlayerPort.existsRunning(room.getRunningRoomId().orElseThrow())) {
-            room.finish(LocalDateTime.now());
+                && !existsRunningPlayerPort.existsRunning(roomId)) {
+            LocalDateTime closedAt = LocalDateTime.now();
+            // 행선지는 유효 기록 유무로 갈린다 — 시작만 눌렀거나 몇십 미터 만에 그만둔 방을
+            // 완료로 남기지 않는다. 반대로 기록이 있으면 CANCELLED로 닫을 수 없다:
+            // terminal이라 FINISHED에 못 가고 결과 조회 경로가 함께 끊긴다
+            if (existsRunningRecordPort.existsInRoom(roomId)) {
+                room.finish(closedAt);
+            } else {
+                room.cancel(closedAt);
+            }
         }
         // 방을 닫지 않아도 세션 변경(is_connected)은 저장돼야 한다
         updateRunningRoomPort.update(room);

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.common.exception.InvalidUserIdFormatException;
 import com.runiverse.running_service.domain.user.exception.LastSignInMethodException;
 import com.runiverse.running_service.domain.user.exception.OauthAlreadyLinkedException;
