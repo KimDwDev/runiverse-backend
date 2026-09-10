@@ -78,8 +78,7 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
         return presigned.url().toString();
     }
 
-    // S3에는 프리픽스 삭제 API가 없다 — 목록을 훑어 페이지마다 일괄 삭제한다.
-    // 조회·삭제 모두 한 번에 1,000개까지 다루므로 사진이 몇 장이든 보통 각 1회다
+    // S3에는 프리픽스 삭제 API가 없다 — 목록을 훑어 페이지마다 일괄 삭제한다
     @Override
     public void deleteAllByPrefix(String keyPrefix) {
         s3Client.listObjectsV2Paginator(ListObjectsV2Request.builder()
