@@ -429,7 +429,8 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 .executeUpdate();
     }
 
-    // email로 거른다 — 온보딩 전에 탈퇴하면 nickname은 원래 null이라 기준이 못 된다
+    // email로 거른다 — 온보딩 전에 탈퇴하면 nickname은 원래 null이라 기준이 못 된다.
+    // 배치가 트랜잭션 없이 부르므로 커서를 여는 getResultStream()을 쓰지 않는다
     @Override
     public List<UserId> loadDeletedBefore(LocalDateTime deletedBefore) {
         return entityManager.createQuery("""
@@ -439,7 +440,8 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                           AND d.email IS NOT NULL
                         """, UUID.class)
                 .setParameter("deletedBefore", deletedBefore)
-                .getResultStream()
+                .getResultList()
+                .stream()
                 .map(UserId::new)
                 .toList();
     }
