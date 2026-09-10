@@ -62,13 +62,14 @@
 | `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동·취소 포함 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
 
-**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
+**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 8종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
 | 카운트 다운 | `RUNNING_START` | C→S | 방의 `STARTED` 확인 후 참가자 시작 통보 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
 | 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | `paused` 포함 — 멈춘 것과 느려진 것을 구분 |
+| 러닝 중 | `RUNNING_COMBO_UPDATED` | S→C | 나란히 달리는 상대와의 콤보 — 참가자 쌍마다 따로 센다 |
 | 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 본인 기록만 멈춘다 |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 조기 종료 의사 포함 — 서버가 상태·기록 확정 |
 | 공통 | `ERROR` | S→C | WS 요청 실패 통지 |
@@ -1212,6 +1213,36 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `currentPaceSecondsPerKm`는 마지막 좌표의 값을 그대로 옮긴다 — 단말이 못 재면 `null`이다
 - `paused`가 없으면 상대가 멈춘 것과 느려진 것을 구분할 수 없다 — 화면에서 갑자기 뒤처진 것처럼 보인다
   - **[미정]** `RUNNING_PAUSE`/`RUNNING_RESUME` 구현 전까지 항상 `false`로 나간다
+
+#### `RUNNING_COMBO_UPDATED` (S→C) — 콤보 갱신
+
+```json
+{
+  "peers": [
+    {
+      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "gapMeters": -18,                 // 양수면 상대가 앞, 음수면 뒤
+      "comboCount": 12,                 // 이 상대와 지금 이어지고 있는 콤보
+      "maxComboCount": 30               // 이번 러닝에서 이 상대와 기록한 최고 콤보
+    }
+  ]
+}
+```
+
+- **콤보는 참가자 쌍마다 따로 센다.** `peers`는 받는 사람이 낀 관계 전부이며, 다른 두 참가자끼리의 콤보는 담기지 않는다
+- **받는 사람의 상태 전체를 담는다.** 콤보가 끊긴 상대는 목록에서 빠지므로 **끊김을 알리는 별도 이벤트가 없다** — 클라는 이 목록으로 화면을 갈아끼운다
+  - 통이 유실돼도 다음 통이 현재 상태를 다시 실어 온다. 놓친 이벤트를 되짚을 필요가 없다
+  - 아무와도 겹치지 않으면 `peers`는 빈 배열이다
+- **위치 배치를 받을 때마다 나간다.** 보낸 참가자와 **그와 관계가 얽힌 참가자**(지금 겹친 사람·방금 끊긴 사람)에게 보내며, 무관한 참가자에게는 보내지 않는다
+  - 방금 끊긴 상대에게도 보내야 한다 — 안 보내면 그쪽 화면에 끊긴 콤보가 남는다
+  - 같은 관계를 두고 양쪽의 배치가 각각 통을 만들어 내용이 겹칠 수 있다. `comboCount`는 콤보 시작 시각에서 계산하므로 두 통의 값이 같고, 화면은 같은 값으로 덮여 바뀌지 않는다
+- **`gapMeters`는 누적 주행 거리의 차이다** — 좌표상 거리가 아니다. 참가자들이 각자 다른 장소에서 뛰기 때문이다
+- **`comboCount`는 서버가 시각에서 계산한 값이다.** 클라가 자체적으로 세지 않는다 — 배치 도착 수로 세면 인원과 전송 빈도에 따라 값이 달라진다
+- `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
+- `profileImageUrl`·닉네임을 싣지 않는다 — 고빈도 메시지라 `userId`로만 지목하고 표시 정보는 진입 시 받은 참가자 목록에서 찾는다
+- **ack 없음** — 실패는 `ERROR`로 통지
+- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과·기록 상세 응답에 콤보 필드가 없다
+- 판정 규칙(붙는 거리·봐주는 횟수·신선도·보정)은 [feature-spec.md](feature-spec.md)의 러닝 콤보 절이 정본이다
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
