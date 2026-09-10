@@ -40,6 +40,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 ## 물리량 단위
 
-- 단위 접미사는 `...Meters` / `...Seconds` / `...SecondsPerKm` / `...MetersPerSecond` / `...Degrees` / `...Bytes` / `...Kg` / `...Cm` / `...Kcal` / `...Spm`으로 명시한다. 위도·경도는 표준 필드명 `latitude`/`longitude`를 쓴다.
+- 단위 접미사는 `...Meters` / `...Seconds` / `...Ms` / `...SecondsPerKm` / `...MetersPerSecond` / `...Degrees` / `...Bytes` / `...Kg` / `...Cm` / `...Kcal` / `...Spm`으로 명시한다. 위도·경도는 표준 필드명 `latitude`/`longitude`를 쓴다.
+- 시간 간격은 초(`...Seconds`)가 기본이고, **초 단위로는 정밀도가 모자라는 짧은 간격만 `...Ms`를 쓴다**(예: `startsInMs`). 시각 포맷이 초 단위까지라 밀리초가 필요한 값은 시각이 아니라 간격으로 내려보낸다.
 - 거리는 전부 미터로 통일하고(km 표시는 프론트 포맷팅), 페이스는 초/km 정수로 쓴다(`390` → "6:30" 표시).
 - 예: `totalDistanceMeters`, `averagePaceSecondsPerKm`, `speedMetersPerSecond`, `weightKg`, `caloriesKcal`

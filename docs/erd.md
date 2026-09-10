@@ -34,8 +34,8 @@
 | user_id | UUID | PK | |
 | email | varchar | UNIQUE, NOT NULL | 로컬·소셜 공통 |
 | password_hash | varchar | nullable | 소셜 전용 유저는 null. 원문 미보관 |
-| alert_consent | boolean | NOT NULL, default true | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-2/12-3) |
-| profile_visibility | enum | NOT NULL, default PUBLIC | 지인 마스킹 on/off |
+| alert_consent | boolean | NOT NULL | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-2/12-3) |
+| profile_visibility | enum | NOT NULL | 지인 마스킹 on/off |
 | profile_image_key | varchar | nullable | S3 key(Presigned 업로드). 미등록이면 null |
 | introduction | varchar(100) | nullable | 소개글. 비우면 null |
 | created_at / updated_at | timestamp | NOT NULL | |
@@ -91,7 +91,7 @@
 |---|---|---|---|
 | running_room_id | bigint | PK | API `runningRoomId`(Long)가 이 값을 가리킴. **신규 방은 신청·개시 시 1인으로 생성** — 매칭은 `MATCHING`, 모집 단계가 없는 솔로는 `MATCHED`로 시작한다 |
 | type | enum | NOT NULL | `SOLO` / `MATCH` / `INVITE` — [§6](#6-enum-사전). 생성 시 확정·불변. `INVITE`는 **[MVP 제외]** 예약값 |
-| status | enum | NOT NULL, default MATCHING | 진행 단계 — [§6 enum 사전](#6-enum-사전) |
+| status | enum | NOT NULL | 진행 단계 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | **방이 닫힌 시각.** `FINISHED`·`CANCELLED`로 갈 때 찍고, 그 전까지는 null이다 — 종류와 무관하게 열려 있는 방은 전부 null. 모집 마감 시각이 아니다(그건 `start_at - 오프셋`으로 계산한다) |
 | target_distance | int | nullable | 방의 목표 거리(미터). **솔로 방은 null** — 목표가 없어야 조기 종료 페널티 판정을 건너뛴다. 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 가져 후보 방 조회가 단일 테이블에서 끝난다 |
@@ -110,7 +110,7 @@
 |---|---|---|---|
 | running_player_id | bigint | PK | 매칭 신청·솔로 참가 단위 |
 | user_id | UUID | → users, NOT NULL | 논리 참조(FK 제약 없음). 탈퇴 시 조건부 유지·삭제 — [§0](#0-공통-규칙) |
-| status | enum | NOT NULL, default JOINED | 참가·진행 상태 — [§6 enum 사전](#6-enum-사전) |
+| status | enum | NOT NULL | 참가·진행 상태 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`). 솔로는 목표가 없어 도달 불가능한 상한(500000)으로 "끝은 유저가 정한다"를 표현한다 — 판정 기준은 이 값이 아니라 방(`running_rooms.target_distance`)이다. `running_records.total_distance`(실제 이동 거리)와 이름으로 갈린다 |
 | avg_pace | int | NOT NULL | 신청 시점의 사용자 평균 페이스(초/km). **입력받지 않는다** — 매칭 조건에 페이스 항목이 없어(5-A) 서버가 `user_onboardings.avg_pace`에서 복사한다. 배정 시 방 평균과의 근접도 판정에 쓴다 |
@@ -131,9 +131,9 @@
 |---|---|---|---|
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | user_id | UUID | PK2, → users | 논리 참조(FK 제약 없음). **키를 신청이 아니라 유저로 잡는다** — 취소 후 같은 방에 다시 신청해도 행이 늘지 않고 기존 행을 되살린다 |
-| running_player_id | bigint | NOT NULL, FK → running_players, ON DELETE CASCADE | **현재 이 방에 들어와 있는 신청.** PK가 아니라 재배정 시 새 신청으로 갱신된다. 참가자의 상태·페이스·기록을 읽는 조인 경로이며, 지우고 `user_id`로 우회하면 유저의 과거 신청까지 딸려 오거나 완주(`deleted_at` 기록) 후 조인이 끊긴다 |
-| leave_count | int | NOT NULL, default 0 | 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
-| is_connected | boolean | NOT NULL, default true | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈·**완주** 후에는 모두 false다. **"이 유저가 이 방에서 뛰었나"를 판정하지 않는다** — 그건 `running_players.status`가 답하며, 결과 조회는 이 컬럼을 보지 않는다 |
+| running_player_id | bigint | NOT NULL, → running_players | 논리 참조(FK 제약 없음) — 무결성은 앱이 관리한다. 탈퇴 정리 때 세션도 `user_id`로 함께 지운다. **현재 이 방에 들어와 있는 신청.** PK가 아니라 재배정 시 새 신청으로 갱신된다. 참가자의 상태·페이스·기록을 읽는 조인 경로이며, 지우고 `user_id`로 우회하면 유저의 과거 신청까지 딸려 오거나 완주(`deleted_at` 기록) 후 조인이 끊긴다 |
+| leave_count | int | NOT NULL | 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
+| is_connected | boolean | NOT NULL | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈·**완주** 후에는 모두 false다. **"이 유저가 이 방에서 뛰었나"를 판정하지 않는다** — 그건 `running_players.status`가 답하며, 결과 조회는 이 컬럼을 보지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 이탈, 그리고 향후 재배정·복귀로 갱신되는 테이블이다 |
 
 > **지금은 배정이 신청당 한 번이다** — 신청하면 방 하나에 배정되고, 현재 구현·명세에는 배정을 바꾸는 흐름이 없다. 나가면 그 행이 `is_connected=false`로 남는다.
@@ -200,7 +200,7 @@
 | job_type | varchar(50) | NOT NULL | 무엇을 할 것인가 — [§6 enum 사전](#6-enum-사전) |
 | target_id | varchar(100) | NOT NULL | 대상 식별자. 타입마다 가리키는 테이블이 달라(`MATCH_CLOSE`면 `running_room_id`) FK 없이 문자열로 둔다 |
 | execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋` |
-| is_sent | boolean | NOT NULL, default false | 실행 완료 여부. 여러 인스턴스가 같은 예약을 들고 있어도 여기서 하나만 이긴다 |
+| is_sent | boolean | NOT NULL | 실행 완료 여부. 여러 인스턴스가 같은 예약을 들고 있어도 여기서 하나만 이긴다 |
 | sent_at | timestamp | nullable | 실제 실행 시각. `execute_at`과의 차이가 곧 지연이라 운영 지표로 쓴다 |
 | created_at | timestamp | NOT NULL | |
 
@@ -385,7 +385,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 방이 빔 — 시작 전이면 항상, 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO | |
-| scheduled_jobs.job_type | MATCH_CLOSE | 모집 마감 확정(`MATCHING`→`MATCHED`). 러닝 강제 종료·시작 리마인더는 붙일 때 값을 추가한다 |
+| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다). 러닝 강제 종료는 붙일 때 값을 추가한다 |
 | delete_users.login_type | LOCAL / GOOGLE / KAKAO | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
 
 ---

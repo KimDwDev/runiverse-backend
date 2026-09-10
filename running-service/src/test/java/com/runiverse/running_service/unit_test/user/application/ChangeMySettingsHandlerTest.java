@@ -8,7 +8,7 @@ import com.runiverse.running_service.application.user.exception.UserNotFoundExce
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.exception.UnsupportedProfileVisibilityException;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import org.junit.jupiter.api.DisplayName;

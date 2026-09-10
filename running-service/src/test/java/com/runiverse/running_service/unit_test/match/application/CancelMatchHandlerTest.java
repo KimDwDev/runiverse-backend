@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -59,6 +60,7 @@ class CancelMatchHandlerTest {
     private static final int AVG_PACE = 360;
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
+    private static final Duration READY_OFFSET = Duration.ofSeconds(10);
     private static final int PACE_TIE_TOLERANCE = 10;
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
@@ -97,7 +99,7 @@ class CancelMatchHandlerTest {
         cancelMatchHandler = new CancelMatchHandler(
                 lockMatchApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
                 updateMatchApplicationPort, updateMatchRoomPort, matchCooldownPort,
-                new MatchProperties(CLOSE_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
+                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN),
                 roomInfoAssembler, eventPublisher);
     }
 
@@ -259,6 +261,9 @@ class CancelMatchHandlerTest {
         given(loadMatchRoomPort.findAssignedRoom(new UserId(USER_ID)))
                 .willReturn(Optional.of(new RunningRoomId(ROOM_ID)));
         given(lockMatchRoomPort.lockById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
+        // 남은 사람이 있으면 이벤트가 나간다 — 조립 결과는 이 테스트의 주제가 아니라 값만 채워둔다.
+        // 방이 비어 발행하지 않는 케이스도 있어 lenient다
+        lenient().when(roomInfoAssembler.assemble(any(RunningRoom.class))).thenReturn(ROOM_INFO);
     }
 
     private RunningPlayer leftPlayer() {
@@ -332,7 +337,7 @@ class CancelMatchHandlerTest {
 
         // then -> 커밋 후에 나가도록 스프링 이벤트로 넘긴다
         verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
-                new MatchStreamEvent(MatchEventType.MATCH_ROOM_UPDATED, ROOM_INFO)));
+                MatchStreamEvent.updated(ROOM_INFO)));
     }
 
     @Test

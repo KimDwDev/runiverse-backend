@@ -54,12 +54,13 @@
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
-**매칭 SSE** — 이벤트 2종. 연결 직후 현재 상태 스냅샷을 받는다.
+**매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
 | 이벤트 | 비고 |
 |--------|------|
 | `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
-| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 취소·러닝 시작 포함 |
+| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동·취소 포함 |
+| `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
 
 **러닝 WebSocket** — `/api/v1/ws/running`, 메시지 7종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
@@ -1006,14 +1007,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
-- `data` = `RoomInfo` 전체 재전송. **모집 중 인원 변동, 방 취소, `STARTED` 전환, 그리고 연결 직후 스냅샷이 전부 이 이벤트로 나간다**
+- `data` = `RoomInfo` 전체 재전송. **모집 중 인원 변동, 방 취소, 그리고 연결 직후 스냅샷이 이 이벤트로 나간다**
+- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
 - 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`와 `players`가 말해주므로 이벤트를 더 쪼개지 않는다
 
 | `status` | 클라가 할 일 |
 |---|---|
 | `MATCHING` | 대기 화면 — 인원·마감 시각 갱신 |
 | `MATCHED` | 대기방 |
-| `STARTED` | 러닝 화면으로 전환하고 WS `RUNNING_START`를 보낸다 |
+| `STARTED` | 이미 시작된 방이다(재연결 스냅샷 등) — 러닝 화면으로 이어가고 WS `RUNNING_START`를 보낸다 |
 | `CANCELLED` | 홈으로 |
 
 - **`MATCH_STARTED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_STARTED`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
@@ -1033,14 +1035,44 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 5-C. 러닝 카운트 다운 — SSE에서 WebSocket으로
 
-**3-2-1 카운트다운은 클라이언트가 기기 시각으로 표시한다.** 실제 시작 가능 여부는 서버 방 상태가 결정한다.
+**출발 순간은 서버가 준 기준으로 맞추고, 3-2-1 표시는 클라가 한다.** 발화 신호를 정각에 보내면 네트워크 지연만큼 참가자마다 출발이 어긋나므로, 서버는 **미리** 알리고 클라가 타이머로 정각을 맞춘다.
 
 절차는 다음과 같다.
 
-1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다
-2. 기기 시각으로 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱)을 표시하고 뒤로가기를 차단한다
-3. 서버가 `scheduledStartAt`에 방을 `STARTED`로 바꾸고 `MATCH_ROOM_UPDATED`를 보낸다. 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다. 클라는 이를 받은 뒤 러닝 화면으로 전환해 `RUNNING_START`를 보낸다
-4. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
+1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다. **`RUNNING_READY`를 기다리지 않는다** — `scheduledStartAt`은 이미 `RoomInfo`로 알고 있고, 연결이 늦으면 정각에 보낼 수 없다
+2. 서버가 `scheduledStartAt - 리드타임`(운영값)에 `RUNNING_READY`를 보낸다. 클라는 `startsInMs`로 발사 타이머를 건다
+3. 타이머에서 파생해 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱)을 표시하고 뒤로가기를 차단한다
+4. `scheduledStartAt`에 타이머가 만료되면 러닝 화면으로 전환해 `RUNNING_START`를 보낸다. 이 메시지가 방을 `STARTED`로 올리고, 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다
+5. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
+
+**`RUNNING_READY`를 못 받아도 러닝은 시작한다** — SSE가 끊겼거나 앱이 백그라운드였으면 이벤트가 오지 않는다. 그때는 기기 시각으로 `scheduledStartAt`을 넘겼는지 보고 그냥 `RUNNING_START`를 보낸다. 서버가 방 상태로 판정하므로 틀린 요청이면 거절될 뿐이다.
+
+#### `RUNNING_READY` (SSE) — 곧 시작 통지
+
+- **발화 시점은 `scheduledStartAt - 리드타임`이다**(리드타임은 운영값). 방이 `MATCHED`로 확정될 때 이 시각으로 예약을 걸어둔다. **정각이 아니라 미리 보내는 것이 요점이다** — 정각에 보내면 클라의 발사 시점과 겹쳐 이벤트가 늘 늦게 도착한다
+- 이 이벤트는 방 상태를 바꾸지 않는다. `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다
+
+```json
+{
+  "runningRoomId": 125,
+  "scheduledStartAt": "2026-07-25T19:00:00",
+  "startsInMs": 10000
+}
+```
+
+- **`startsInMs`는 이 이벤트를 보낸 시점 기준으로 시작까지 남은 시간이다.** 클라는 이 값으로 타이머를 걸면 되고, 기기 시각을 믿지 않아도 된다
+- **남은 시간이 짧으면 연출만 줄이고 발사 시각은 그대로 둔다.** 서버 재시작 복구나 늦은 재연결로 `startsInMs`가 카운트다운 길이보다 짧게 올 수 있다. 이때 `RUNNING_START`를 앞당겨 보내면 `scheduledStartAt` 이전이라 거절된다
+
+| `startsInMs` | 3-2-1 연출 | `RUNNING_START` 발사 |
+|---|---|---|
+| 3,000 초과 | 전부 표시 | `startsInMs` 후 |
+| 0 초과 ~ 3,000 이하 | 남은 만큼 축약하거나 생략 | **`startsInMs` 후 (앞당기지 않는다)** |
+| 0 | 없음 | 즉시 |
+
+- **`0`은 "시작 시각이 이미 지났다"는 서버의 신호다** — 서버가 음수를 0으로 눌러 보낸다. 이 값일 때만 즉시 발사가 안전하다
+- **기기 시계가 어긋나 있어도 이 둘로 보정할 수 있다** — `scheduledStartAt - startsInMs`가 서버의 현재 시각이므로, 수신 시점의 로컬 시각과 비교하면 오차가 나온다. 보정한 시계로 발사 시각을 잡으면 로컬 타이머를 쓰면서도 기준은 서버에 맞는다
+- **시각이 아니라 간격으로 내려보내는 이유**는 시각 포맷이 초 단위까지라(`api-convention.md`) 밀리초를 실을 수 없기 때문이다. 서버 시각을 초 단위로 주면 보정 오차가 최대 1초가 되는데, `RUNNING_START`는 `scheduledStartAt`보다 이르면 거절되므로 그 오차를 감당할 수 없다
+- **솔로 러닝에는 오지 않는다** — 솔로는 SSE를 쓰지 않고, `POST /running-rooms/solo` 응답을 받은 즉시 WS로 붙는다
 
 #### WebSocket 연결 — `/api/v1/ws/running`
 
