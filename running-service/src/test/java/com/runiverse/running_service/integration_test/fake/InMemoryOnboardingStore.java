@@ -13,7 +13,7 @@ import com.runiverse.running_service.application.user.port.out.UpdateNicknamePor
 import com.runiverse.running_service.application.user.port.out.UpdateOnboardingPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
-import com.runiverse.running_service.domain.user.aggregate.UserOnboarding;
+import com.runiverse.running_service.domain.user.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
 import com.runiverse.running_service.domain.user.vo.Gender;

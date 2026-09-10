@@ -4,7 +4,7 @@ import com.runiverse.running_service.application.user.exception.UserNotFoundExce
 import com.runiverse.running_service.application.user.port.in.GetMySettingsUsecase;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

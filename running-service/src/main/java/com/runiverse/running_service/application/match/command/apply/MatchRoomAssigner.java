@@ -96,10 +96,21 @@ public class MatchRoomAssigner {
         RunningRoom room = createMatchRoomPort.create(RunningRoom.openMatch(
                 userId, playerId, pace.secondsPerKm(), targetDistanceMeters, startAt));
         // 방이 새로 생길 때만 건다 — 기존 방에 합류하면 그 방 예약이 이미 있다
+        Long roomId = room.getRunningRoomId().orElseThrow().value();
         scheduleJobPort.schedule(
-                ScheduledJobType.MATCH_CLOSE,
-                room.getRunningRoomId().orElseThrow().value(),
+                ScheduledJobType.MATCH_CLOSE, roomId,
                 startAt.minus(matchProperties.closeOffset()));
+        // 확정 시점이 아니라 여기서 함께 건다 — 어차피 방이 취소·시작됐는지는 발화 때 다시 봐야 한다
+        scheduleJobPort.schedule(
+                ScheduledJobType.RUNNING_READY, roomId,
+                startAt.minus(matchProperties.readyOffset()));
+        // 정각에 방을 올린다 — 아무도 채널에 붙지 않아도 방이 확정 상태에 갇히지 않는다.
+        // 참가자가 먼저 도착하면 그쪽이 올리고 이 예약은 이미 STARTED를 보고 빠진다
+        scheduleJobPort.schedule(ScheduledJobType.RUNNING_START, roomId, startAt);
+        // 여기서 함께 건다 — 6시간 뒤에 방을 훑는 대신 방마다 그 시각에만 깨운다
+        scheduleJobPort.schedule(
+                ScheduledJobType.RUNNING_FORCE_FINISH, roomId,
+                startAt.plus(matchProperties.forceFinishOffset()));
         return room;
     }
 

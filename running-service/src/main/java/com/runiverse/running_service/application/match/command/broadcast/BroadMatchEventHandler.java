@@ -21,7 +21,8 @@ public class BroadMatchEventHandler implements BroadcastMatchEventUsecase {
 
     @Override
     public void handle(BroadcastMatchEventCommand command) {
-        loadMatchRoomMembersPort.usersIn(command.event().room().runningRoomId()).stream()
+        // 방 ID는 이벤트 최상위에 있다 — 페이로드가 RoomInfo가 아닌 이벤트도 있어서다
+        loadMatchRoomMembersPort.usersIn(command.event().runningRoomId()).stream()
                 .map(matchStreamPort::find)
                 .flatMap(Optional::stream)
                 .forEach(connection -> send(connection, command.event()));

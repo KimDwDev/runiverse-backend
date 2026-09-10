@@ -14,7 +14,7 @@ import com.runiverse.running_service.application.user.port.out.DeleteUserPort;
 import com.runiverse.running_service.application.user.port.out.LoadAccountSnapshotPort;
 import com.runiverse.running_service.application.user.port.out.SaveDeletedUserPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.user.aggregate.DeletedUser;
+import com.runiverse.running_service.domain.user.DeletedUser;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.LoginType;
 import com.runiverse.running_service.domain.user.vo.Provider;

@@ -4,7 +4,7 @@ import com.runiverse.running_service.application.user.exception.ProfileNotFoundE
 import com.runiverse.running_service.application.user.port.in.GetProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;

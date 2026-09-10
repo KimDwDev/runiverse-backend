@@ -75,7 +75,7 @@ class OpenMatchStreamHandlerTest {
         InOrder order = inOrder(matchRoomMembershipPort, newConnection);
         order.verify(matchRoomMembershipPort).join(new UserId(USER_ID), ROOM_ID);
         order.verify(newConnection)
-                .send(new MatchStreamEvent(MatchEventType.MATCH_ROOM_UPDATED, ROOM_INFO));
+                .send(MatchStreamEvent.updated(ROOM_INFO));
     }
 
     @Test

@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPo
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
 import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenHashPort;
 import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
-import com.runiverse.running_service.domain.user.aggregate.User;
+import com.runiverse.running_service.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

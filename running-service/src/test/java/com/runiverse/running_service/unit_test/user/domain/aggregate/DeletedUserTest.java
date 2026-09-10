@@ -1,7 +1,7 @@
 package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.domain.user.aggregate.DeletedUser;
+import com.runiverse.running_service.domain.user.DeletedUser;
 import com.runiverse.running_service.domain.user.exception.BmiOutOfRangeException;
 import com.runiverse.running_service.domain.user.exception.BmiRequiredException;
 import com.runiverse.running_service.domain.user.exception.GenderRequiredException;
