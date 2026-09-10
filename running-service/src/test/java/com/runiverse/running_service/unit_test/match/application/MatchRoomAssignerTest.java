@@ -50,6 +50,7 @@ class MatchRoomAssignerTest {
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
     private static final Duration READY_OFFSET = Duration.ofSeconds(10);
+    private static final Duration FORCE_FINISH_OFFSET = Duration.ofHours(6);
     // 페이스 차가 이 값 이내면 동급으로 보고 leave_count가 순위를 가른다
     private static final int PACE_TIE_TOLERANCE = 10;
     // 이 테스트가 다루는 흐름은 아니지만 프로퍼티가 요구한다
@@ -81,7 +82,8 @@ class MatchRoomAssignerTest {
         matchRoomAssigner = new MatchRoomAssigner(
                 loadMatchCandidatesPort, lockMatchRoomPort, loadMatchPlayersPort,
                 updateMatchRoomPort, createMatchRoomPort, scheduleJobPort,
-                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN));
+                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
+                        PACE_TIE_TOLERANCE, COOLDOWN));
     }
 
     @Test
@@ -384,6 +386,37 @@ class MatchRoomAssignerTest {
         // then -> 정각이 아니라 리드타임만큼 앞이다. 정각에 보내면 클라 발사와 겹쳐 늘 늦는다
         verify(scheduleJobPort).schedule(
                 ScheduledJobType.RUNNING_READY, NEW_ROOM_ID, START_AT.minus(READY_OFFSET));
+    }
+
+    @Test
+    @DisplayName("방을 새로 열면 정각 시작도 함께 예약한다")
+    void schedulesRunningStartForNewRoom() {
+        // given -> 이 예약이 없으면 아무도 채널에 붙지 않은 방이 확정 상태에 갇힌다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 오프셋 없는 start_at 정각이다. 시작 통지와 달리 앞당기지 않는다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.RUNNING_START, NEW_ROOM_ID, START_AT);
+    }
+
+    @Test
+    @DisplayName("방을 새로 열면 강제 종료도 함께 예약한다")
+    void schedulesForceFinishForNewRoom() {
+        // given -> 이 예약이 없으면 종료 메시지가 오지 않은 방이 영영 열린 채로 남는다
+        givenCandidates();
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(NEW_ROOM_ID));
+
+        // when
+        assign();
+
+        // then -> 마감·통지와 달리 유일하게 start_at 뒤다
+        verify(scheduleJobPort).schedule(
+                ScheduledJobType.RUNNING_FORCE_FINISH, NEW_ROOM_ID,
+                START_AT.plus(FORCE_FINISH_OFFSET));
     }
 
     @Test

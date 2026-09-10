@@ -107,6 +107,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 // 쿨다운 발급은 이 테스트의 주제가 아니다 — 아무것도 하지 않는다
                 (userId, cooldown) -> {
                 },                  // StartMatchCooldownPort
+                runningRecordStore, // ExistsRunningRecordPort
                 PROPERTIES
         );
     }
@@ -437,12 +438,14 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         // when
         finish(userId, runningRoomId);
 
-        // then -> 솔로는 목표가 없어 거리 0이어도 완주로 확정된다
+        // then -> 솔로는 목표가 없어 거리 0이어도 개인 상태는 완주로 확정된다
         assertThat(runningRecordStore.size()).isZero();
         assertThat(gpsTrackUploader.isEmpty()).isTrue();
         assertThat(storedPlayer(runningRoomId).getStatus())
                 .isEqualTo(RunningPlayerStatus.COMPLETED);
-        assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        // 방은 갈린다 — 남길 기록이 하나도 없으면 완료로 남기지 않는다.
+        // 개인 종료 상태와 방 행선지는 별개 판정이다
+        assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
     }
 
     @Test

@@ -123,7 +123,7 @@
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 쿨다운이 잘못 계산된다.
 > **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록(마감 전이라 언제나 미제재다) / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. **시작 전** 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 `CANCELLED`로 닫는다. **러닝이 시작된 뒤에는 인원이 줄지 않는다** — 완주든 조기 종료든 배정 행만 `is_connected=false`로 내리고 `leave_count`도 올리지 않는다. 그래서 `current_player_count`는 시작 이후 "이 방이 몇 명으로 확정됐나"로 고정되며, 그 값이 1이면 1인 확정 러닝이라 조기 종료 제재가 면제된다. 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버리기도 한다 — 시작 후 방을 닫는 건 전원 종료를 확인하는 별도 경로이고, 유효 기록이 있으면 `FINISHED`, 하나도 없으면 `CANCELLED`다. 친구 초대 생명주기는 MVP에서 정의하지 않는다.
 > **활성 신청 판정**: `deleted_at IS NULL AND status='JOINED'`.
-> **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·타임아웃·러닝 중 탈퇴에 같은 규칙을 적용하고, 유효 러닝 판정(거리·시간·경로 산출 가능 + 최소 거리·최소 시간 통과)을 지난 트랙만 기록으로 만든다. 산출할 수 없으면 실제 거리를 0으로 판정한다. **미달이어도 `status`는 그대로 남는다** — 기록 유무와 개인 종료 상태는 별개다.
+> **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다. 종료 신호·강제 종료·러닝 중 탈퇴에 같은 규칙을 적용하고, 유효 러닝 판정(거리·시간·경로 산출 가능 + 최소 거리·최소 시간 통과)을 지난 트랙만 기록으로 만든다. 산출할 수 없으면 실제 거리를 0으로 판정한다. **미달이어도 `status`는 그대로 남는다** — 기록 유무와 개인 종료 상태는 별개다.
 
 ### running_room_sessions (참가자 ↔ 방 배정)
 
@@ -158,7 +158,7 @@
 | weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
-| created_at | timestamp | NOT NULL | 종료 메시지·타임아웃·탈퇴로 기록을 확정할 때 일괄 INSERT. 진행 중 PATCH 없음(write-once) |
+| created_at | timestamp | NOT NULL | 종료 메시지·강제 종료·탈퇴로 기록을 확정할 때 일괄 INSERT. 진행 중 PATCH 없음(write-once) |
 
 > UNIQUE (running_room_id, user_id) — 유저당 방별 1기록. 솔로도 방을 가지므로 부분 인덱스 조건이 필요 없다.
 > **개인 단위 진행 상태는 `running_players.status`가 갖는다.** 기록은 `COMPLETED`뿐 아니라 `RUNNING_LEFT_*`와도 함께 생성될 수 있으며, 기록 생성 가능한 트랙이 없으면 종료 상태만 남는다.
@@ -192,14 +192,14 @@
 
 ### scheduled_jobs (예약 작업)
 
-> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감만 쓰지만 러닝 강제 종료·시작 리마인더가 같은 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
+> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감·시작 통지·정각 시작·강제 종료 넷이 이 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | scheduled_job_id | bigint | PK | |
 | job_type | varchar(50) | NOT NULL | 무엇을 할 것인가 — [§6 enum 사전](#6-enum-사전) |
 | target_id | varchar(100) | NOT NULL | 대상 식별자. 타입마다 가리키는 테이블이 달라(`MATCH_CLOSE`면 `running_room_id`) FK 없이 문자열로 둔다 |
-| execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋` |
+| execute_at | timestamp | NOT NULL | 실행할 시각. `MATCH_CLOSE`는 `running_rooms.start_at - 모집 마감 오프셋`, `RUNNING_READY`는 `start_at - 리드타임`, `RUNNING_START`는 `start_at` 정각, `RUNNING_FORCE_FINISH`는 `start_at + 강제 종료 유예` |
 | is_sent | boolean | NOT NULL | 실행 완료 여부. 여러 인스턴스가 같은 예약을 들고 있어도 여기서 하나만 이긴다 |
 | sent_at | timestamp | nullable | 실제 실행 시각. `execute_at`과의 차이가 곧 지연이라 운영 지표로 쓴다 |
 | created_at | timestamp | NOT NULL | |
@@ -381,11 +381,11 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
-| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소와 확정 후 이탈을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
+| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 방이 빔 — 시작 전이면 항상, 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO | |
-| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다). 러닝 강제 종료는 붙일 때 값을 추가한다 |
+| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY / RUNNING_START / RUNNING_FORCE_FINISH | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다) / 정각 시작(`start_at`에 `MATCHED`→`STARTED`. 매칭 방에만 걸고, 참가자 상태는 바꾸지 않는다) / 강제 종료(`start_at + 유예`에 남은 참가자와 방을 닫는다. 매칭 방에만 건다) |
 | delete_users.login_type | LOCAL / GOOGLE / KAKAO | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
 
 ---

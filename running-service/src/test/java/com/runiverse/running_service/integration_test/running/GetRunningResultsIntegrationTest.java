@@ -113,6 +113,7 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
                 // 쿨다운 발급은 이 테스트의 주제가 아니다 — 아무것도 하지 않는다
                 (userId, cooldown) -> {
                 },                  // StartMatchCooldownPort
+                runningRecordStore, // ExistsRunningRecordPort
                 PROPERTIES
         );
 

@@ -1008,7 +1008,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
 - `data` = `RoomInfo` 전체 재전송. **모집 중 인원 변동, 방 취소, 그리고 연결 직후 스냅샷이 이 이벤트로 나간다**
-- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
+- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 `start_at` 정각의 시작 스케줄러가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
 - 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`와 `players`가 말해주므로 이벤트를 더 쪼개지 않는다
 
 | `status` | 클라가 할 일 |
@@ -1042,7 +1042,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 1. `scheduledStartAt` 직전(리드타임은 운영값)에 클라가 WS를 연결한다. **`RUNNING_READY`를 기다리지 않는다** — `scheduledStartAt`은 이미 `RoomInfo`로 알고 있고, 연결이 늦으면 정각에 보낼 수 없다
 2. 서버가 `scheduledStartAt - 리드타임`(운영값)에 `RUNNING_READY`를 보낸다. 클라는 `startsInMs`로 발사 타이머를 건다
 3. 타이머에서 파생해 **시작 3초 전부터 3-2-1 카운트다운**(화면·음성·햅틱)을 표시하고 뒤로가기를 차단한다
-4. `scheduledStartAt`에 타이머가 만료되면 러닝 화면으로 전환해 `RUNNING_START`를 보낸다. 이 메시지가 방을 `STARTED`로 올리고, 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다
+4. `scheduledStartAt`에 타이머가 만료되면 러닝 화면으로 전환해 `RUNNING_START`를 보낸다. 방은 같은 시각의 시작 스케줄러가 이미 `STARTED`로 올려놨고, 참가자의 `RUNNING` 전환은 각자의 `RUNNING_START` 몫이다
 5. `RUNNING_STARTED` ack를 받으면 SSE 스트림을 닫는다
 
 **`RUNNING_READY`를 못 받아도 러닝은 시작한다** — SSE가 끊겼거나 앱이 백그라운드였으면 이벤트가 오지 않는다. 그때는 기기 시각으로 `scheduledStartAt`을 넘겼는지 보고 그냥 `RUNNING_START`를 보낸다. 서버가 방 상태로 판정하므로 틀린 요청이면 거절될 뿐이다.
@@ -1050,7 +1050,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `RUNNING_READY` (SSE) — 곧 시작 통지
 
 - **발화 시점은 `scheduledStartAt - 리드타임`이다**(리드타임은 운영값). 방이 `MATCHED`로 확정될 때 이 시각으로 예약을 걸어둔다. **정각이 아니라 미리 보내는 것이 요점이다** — 정각에 보내면 클라의 발사 시점과 겹쳐 이벤트가 늘 늦게 도착한다
-- 이 이벤트는 방 상태를 바꾸지 않는다. `STARTED` 전환은 첫 참가자의 `RUNNING_START`가 일으킨다
+- 이 이벤트는 방 상태를 바꾸지 않는다. `STARTED` 전환은 `scheduledStartAt` 정각에 따로 걸린 시작 스케줄러가 일으킨다
 
 ```json
 {
@@ -1081,7 +1081,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길 수 있어 중간에 끊으면 트랙이 갈린다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
 - **중복 연결은 마지막 것만 남긴다** — 같은 사용자의 새 연결이 들어오면 서버가 기존 연결을 close code `4001`로 닫는다. 기기 전환·앱 재시작 때 이전 소켓이 남아 있을 수 있는데 둘 다 살려두면 같은 `(runningRoomId, userId, sequence)`에 서로 다른 트랙이 섞인다. `4001`을 받은 클라는 재연결하지 않는다 — 다른 기기가 이어받은 것이다
 - **keep-alive**: 클라가 주기적으로 `HEALTH_CHECK`(C→S)를 보내고 서버가 `HEALTH_CHECKED`(S→C)로 응답한다. 둘 다 `data`는 비운다. **유휴 상태가 서버 설정 시간(운영값)을 넘으면 서버가 연결을 닫는다** — 좌표를 계속 보내는 러닝 중에는 별도 신호가 필요 없고, 시작 전 대기 구간에서 의미가 있다. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
-- **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 5-D의 종료 타임아웃은 **마지막 좌표 수신 시각** 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
+- **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 서버의 강제 종료는 **`start_at`부터 잰 유예**(운영값) 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
 - **메시지 공통 형식**
 
 ```json
@@ -1237,13 +1237,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
-- 종료 신호나 타임아웃에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
+- 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 거리·시간·경로를 산출할 수 있는 트랙이 있으면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 그렇지 않으면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 마지막 10m 경계까지로 확정한다(10m 미만 꼬리는 버린다)
 - **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
-- `RUNNING_FINISH`는 멱등이다. 타임아웃이나 이전 요청으로 이미 확정됐으면 기록을 덮어쓰지 않고 `RUNNING_FINISHED`를 다시 보내 로컬 트랙을 정리하게 한다
-- 방 시작 때 `RUNNING`으로 전환된 참가자 전원이 종료 상태가 되고 기록 확정이 끝나면 방을 `FINISHED`로 바꾼다. 타임아웃에는 남은 참가자를 먼저 같은 규칙으로 종료 처리한다
+- `RUNNING_FINISH`는 멱등이다. 강제 종료나 이전 요청으로 이미 확정됐으면 기록을 덮어쓰지 않고 `RUNNING_FINISHED`를 다시 보내 로컬 트랙을 정리하게 한다
+- 방 시작 때 `RUNNING`으로 전환된 참가자 전원이 종료 상태가 되고 기록 확정이 끝나면 방을 `FINISHED`로 바꾼다. 강제 종료 시각(`start_at + 유예`)에는 남은 참가자를 먼저 같은 규칙으로 종료 처리하고, 한 번도 붙지 않아 `JOINED`로 남은 참가자는 확정 후 이탈로 닫는다
 - **부수효과 — 기록을 확정할 때 시작 좌표가 외부로 나간다.** 서버가 날씨를 조회하려고 `api.open-meteo.com`(`OpenMeteo GmbH`, 스위스)에 위도·경도와 시각을 보낸다. 개인위치정보의 국외 이전이라 개인정보처리방침 고지 대상이고 Google Play 데이터 보안에는 `공유됨`으로 신고한다. 상세는 `feature-spec.md`의 날씨 절에 있다
 
 ## 6. 러닝 중 / 러닝 후 대시보드 (REST)
