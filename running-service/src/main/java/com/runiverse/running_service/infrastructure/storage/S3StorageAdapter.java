@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
@@ -96,8 +97,14 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
         List<ObjectIdentifier> keys = objects.stream()
                 .map(object -> ObjectIdentifier.builder().key(object.key()).build())
                 .toList();
-        s3Client.deleteObjects(request -> request
+        DeleteObjectsResponse response = s3Client.deleteObjects(request -> request
                 .bucket(properties.userAssetBucket())
                 .delete(Delete.builder().objects(keys).build()));
+        // 개별 객체 실패는 예외가 아니라 200 응답의 errors로 온다 — 여기서 막지 않으면
+        // 사진이 남은 채 기록만 비워져 다음 실행에서 다시 걸리지 않는다
+        if (!response.errors().isEmpty()) {
+            throw new IllegalStateException("프로필 사진 삭제 실패 — %d건, 첫 사유 %s"
+                    .formatted(response.errors().size(), response.errors().getFirst().code()));
+        }
     }
 }
