@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.running.command.accountdeletion
 import com.runiverse.running_service.application.running.port.in.SettleRunningForAccountDeletionUsecase;
 import com.runiverse.running_service.application.user.command.accountdeletion.DeleteAccountCommand;
 import com.runiverse.running_service.application.user.command.accountdeletion.DeleteAccountHandler;
+import com.runiverse.running_service.application.user.command.accountdeletion.KakaoUnlinkRequestedEvent;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.AccountSnapshot;
 import com.runiverse.running_service.application.user.port.out.DeleteUserPort;
@@ -17,6 +18,7 @@ import com.runiverse.running_service.domain.user.aggregate.DeletedUser;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.LoginType;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.domain.user.vo.ProviderId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +27,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -59,6 +62,8 @@ public class DeleteAccountHandlerTest {
     private DeleteRefreshTokenPort deleteRefreshTokenPort;
     @Mock
     private BlockAccessTokenPort blockAccessTokenPort;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private DeleteAccountHandler handler;
@@ -152,6 +157,37 @@ public class DeleteAccountHandlerTest {
         // then -> 액세스 토큰은 남은 유효 기간 동안 살아 있어 따로 막아야 한다
         verify(deleteRefreshTokenPort).delete(new UserId(userId));
         verify(blockAccessTokenPort).block(ACCESS_TOKEN_ID);
+    }
+
+    @Test
+    @DisplayName("카카오 계정이면 연동 해제를 요청한다")
+    void requestsKakaoUnlinkWhenKakaoAccount() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(loadAccountSnapshotPort.loadAccountSnapshot(new UserId(userId)))
+                .thenReturn(Optional.of(onboardedSnapshot(userId)));
+
+        // when
+        handler.handle(new DeleteAccountCommand(userId, ACCESS_TOKEN_ID));
+
+        // then -> 커밋 뒤에 끊는다. oauth_users를 지우기 전에 확보한 provider_id를 쓴다
+        verify(eventPublisher).publishEvent(
+                new KakaoUnlinkRequestedEvent(new ProviderId("kakao-1")));
+    }
+
+    @Test
+    @DisplayName("로컬 계정이면 연동 해제를 요청하지 않는다")
+    void skipsKakaoUnlinkWhenLocalAccount() {
+        // given -> 소셜 연동이 없으면 끊을 대상도 없다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(loadAccountSnapshotPort.loadAccountSnapshot(new UserId(userId)))
+                .thenReturn(Optional.of(notOnboardedSnapshot(userId)));
+
+        // when
+        handler.handle(new DeleteAccountCommand(userId, ACCESS_TOKEN_ID));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(KakaoUnlinkRequestedEvent.class));
     }
 
     @Test
