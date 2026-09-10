@@ -13,7 +13,10 @@ import com.runiverse.running_service.application.user.port.out.SaveDeletedUserPo
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.aggregate.DeletedUser;
 import com.runiverse.running_service.domain.user.vo.LoginType;
+import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.domain.user.vo.ProviderId;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +31,7 @@ public class DeleteAccountHandler implements DeleteAccountUsecase {
     private final DeleteUserPort deleteUserPort;
     private final DeleteRefreshTokenPort deleteRefreshTokenPort;
     private final BlockAccessTokenPort blockAccessTokenPort;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public void handle(DeleteAccountCommand command) {
@@ -44,6 +48,11 @@ public class DeleteAccountHandler implements DeleteAccountUsecase {
         // 4. 토큰을 폐기한다 — 로그아웃과 같은 두 단계
         deleteRefreshTokenPort.delete(userId);
         blockAccessTokenPort.block(command.accessTokenId());
+        // 5. 카카오 연동은 커밋 뒤에 끊는다 — 여기서 끊으면 탈퇴가 롤백돼도 되살릴 수 없다
+        if (snapshot.provider() == Provider.KAKAO) {
+            eventPublisher.publishEvent(
+                    new KakaoUnlinkRequestedEvent(new ProviderId(snapshot.providerId())));
+        }
     }
 
     private DeletedUser toDeletedUser(AccountSnapshot snapshot) {
