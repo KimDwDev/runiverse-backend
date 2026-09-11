@@ -26,14 +26,12 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
 
     @Override
     public Optional<RunningRoomId> findAssignedRoom(UserId userId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT s.room.runningRoomId
-                                FROM RunningRoomSessionJpaEntity s
-                                WHERE s.userId = :userId
-                                  AND s.connected = true
-                                """, Long.class
-                )
+        return entityManager.createQuery("""
+                        SELECT s.room.runningRoomId
+                        FROM RunningRoomSessionJpaEntity s
+                        WHERE s.userId = :userId
+                          AND s.connected = TRUE
+                        """, Long.class)
                 .setParameter("userId", userId.value())
                 // 현재 배정된 행은 하나다(erd) — 어긋나도 깨지지 않게 첫 건만 쓴다
                 .getResultStream()
@@ -43,40 +41,36 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
 
     @Override
     public List<MatchPlayer> loadPlayers(RunningRoomId runningRoomId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT new com.runiverse.running_service.application.match.port.out.MatchPlayer(
-                                    p.userId, p.avgPace)
-                                FROM RunningRoomSessionJpaEntity s
-                                JOIN RunningPlayerJpaEntity p
-                                    ON p.runningPlayerId = s.runningPlayerId
-                                WHERE s.room.runningRoomId = :runningRoomId
-                                  AND s.connected = true
-                                ORDER BY p.runningPlayerId
-                                """, MatchPlayer.class
-                )
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.match.port.out.MatchPlayer(
+                            p.userId, p.avgPace)
+                        FROM RunningRoomSessionJpaEntity s
+                        JOIN RunningPlayerJpaEntity p
+                            ON p.runningPlayerId = s.runningPlayerId
+                        WHERE s.room.runningRoomId = :runningRoomId
+                          AND s.connected = TRUE
+                        ORDER BY p.runningPlayerId
+                        """, MatchPlayer.class)
                 .setParameter("runningRoomId", runningRoomId.value())
                 .getResultList();
     }
 
     @Override
     public List<MatchCandidate> loadCandidates(LocalDateTime startAt, int targetDistanceMeters) {
-        return entityManager.createQuery(
-                        """
-                                SELECT new com.runiverse.running_service.application.match.port.out.MatchCandidate(
-                                    r.runningRoomId, r.avgPace, COALESCE(SUM(s.leaveCount), 0))
-                                FROM RunningRoomJpaEntity r
-                                LEFT JOIN RunningRoomSessionJpaEntity s ON s.room = r
-                                WHERE r.deletedAt IS NULL
-                                  AND r.type = :type
-                                  AND r.status = :status
-                                  AND r.startAt = :startAt
-                                  AND r.targetDistance = :targetDistance
-                                  AND r.currentPlayerCount < r.maxPlayerCount
-                                  AND r.avgPace IS NOT NULL
-                                GROUP BY r.runningRoomId, r.avgPace
-                                """, MatchCandidate.class
-                )
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.match.port.out.MatchCandidate(
+                            r.runningRoomId, r.avgPace, COALESCE(SUM(s.leaveCount), 0))
+                        FROM RunningRoomJpaEntity r
+                        LEFT JOIN RunningRoomSessionJpaEntity s ON s.room = r
+                        WHERE r.deletedAt IS NULL
+                          AND r.type = :type
+                          AND r.status = :status
+                          AND r.startAt = :startAt
+                          AND r.targetDistance = :targetDistance
+                          AND r.currentPlayerCount < r.maxPlayerCount
+                          AND r.avgPace IS NOT NULL
+                        GROUP BY r.runningRoomId, r.avgPace
+                        """, MatchCandidate.class)
                 // 솔로·초대 방을 인덱스 단계에서 배제한다(erd 후보 방 조회 인덱스)
                 .setParameter("type", RunningRoomType.MATCH)
                 .setParameter("status", RunningRoomStatus.MATCHING)

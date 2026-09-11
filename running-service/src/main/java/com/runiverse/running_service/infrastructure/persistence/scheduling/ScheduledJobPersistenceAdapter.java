@@ -43,10 +43,10 @@ public class ScheduledJobPersistenceAdapter implements SaveScheduledJobPort,
     @Override
     public List<ScheduledJob> loadPending() {
         return entityManager.createQuery("""
-                        select job
-                        from ScheduledJobJpaEntity job
-                        where job.sent = false
-                        order by job.executeAt asc
+                        SELECT job
+                        FROM ScheduledJobJpaEntity job
+                        WHERE job.sent = FALSE
+                        ORDER BY job.executeAt ASC
                         """, ScheduledJobJpaEntity.class)
                 .getResultList().stream()
                 .map(ScheduledJobPersistenceAdapter::toDomain)
@@ -73,9 +73,9 @@ public class ScheduledJobPersistenceAdapter implements SaveScheduledJobPort,
 
     private Optional<ScheduledJob> findBy(JobTarget target) {
         return entityManager.createQuery("""
-                        select job
-                        from ScheduledJobJpaEntity job
-                        where job.jobType = :type and job.targetId = :targetId
+                        SELECT job
+                        FROM ScheduledJobJpaEntity job
+                        WHERE job.jobType = :type AND job.targetId = :targetId
                         """, ScheduledJobJpaEntity.class)
                 .setParameter("type", target.type())
                 .setParameter("targetId", target.id())

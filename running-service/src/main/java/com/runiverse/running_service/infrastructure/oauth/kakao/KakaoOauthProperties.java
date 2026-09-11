@@ -7,8 +7,10 @@ public record KakaoOauthProperties(
         String clientId,
         String clientSecret,
         String redirectUri,
+        String unlinkAdminKey,
         String tokenUri,
-        String userInfoUri
+        String userInfoUri,
+        String unlinkUri
 ) {
 
 }

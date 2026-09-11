@@ -3,7 +3,9 @@ package com.runiverse.running_service.infrastructure.oauth.kakao;
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
+import com.runiverse.running_service.application.user.port.out.UnlinkKakaoPort;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.domain.user.vo.ProviderId;
 import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
@@ -25,10 +27,12 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
-public class KakaoOauthClient implements OauthClient {
+public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
 
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String KAKAO_AK_PREFIX = "KakaoAK ";
+    private static final String TARGET_ID_TYPE = "user_id";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
 
@@ -102,6 +106,30 @@ public class KakaoOauthClient implements OauthClient {
             throw new OauthCodeExchangeFailedException();
         }
         return response;
+    }
+
+    // 탈퇴가 커밋된 뒤에 부른다. 실패해도 던지지 않는다 — 되돌릴 수 없고,
+    // 남는 피해는 카카오 앱 목록에 이름이 남는 것뿐이다
+    @Override
+    public void unlink(ProviderId providerId) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("target_id_type", TARGET_ID_TYPE);
+        form.add("target_id", providerId.value());
+        try {
+            restClient.post()
+                    .uri(properties.unlinkUri())
+                    .header(HttpHeaders.AUTHORIZATION, KAKAO_AK_PREFIX + properties.unlinkAdminKey())
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form)
+                    .retrieve()
+                    // 본문을 남기지 않는다 — 카카오 오류 메시지에 어드민 키가 섞여 온다
+                    .onStatus(HttpStatusCode::isError, (request, res) ->
+                            log.warn("카카오 연동 해제 실패 — status={}", res.getStatusCode()))
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            // 예외 메시지에도 응답 본문이 섞이므로 종류만 남긴다
+            log.warn("카카오 연동 해제 통신 실패 — {}", e.getClass().getSimpleName());
+        }
     }
 
     private OauthProfile toProfile(KakaoUserResponse response) {

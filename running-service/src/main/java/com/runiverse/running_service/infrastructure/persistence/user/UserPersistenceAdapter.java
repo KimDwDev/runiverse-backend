@@ -11,14 +11,18 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
+import com.runiverse.running_service.application.user.port.out.AccountSnapshot;
 import com.runiverse.running_service.application.user.port.out.CheckNicknameDuplicatePort;
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
+import com.runiverse.running_service.application.user.port.out.DeleteUserPort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
+import com.runiverse.running_service.application.user.port.out.LoadAccountSnapshotPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadOauthProviderPort;
 import com.runiverse.running_service.application.user.port.out.LoadOnboardingProfilePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.OnboardingProfile;
+import com.runiverse.running_service.application.user.port.out.SaveDeletedUserPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdateNicknamePort;
@@ -28,9 +32,12 @@ import com.runiverse.running_service.application.user.port.out.UpdateProfileImag
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.user.DeletedUser;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.UserOnboarding;
+import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
+import com.runiverse.running_service.domain.user.vo.Bmi;
 import com.runiverse.running_service.domain.user.vo.Gender;
 import com.runiverse.running_service.domain.user.vo.Height;
 import com.runiverse.running_service.domain.user.vo.Introduction;
@@ -59,19 +66,18 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         LoadUserByProviderPort, LoadUserByIdPort, ExistsOnboardingPort, CheckNicknameDuplicatePort, SaveOnboardingPort,
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
         UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort, LoadUserWeightPort,
-        LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort {
+        LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort,
+        LoadAccountSnapshotPort, SaveDeletedUserPort, DeleteUserPort {
 
     private final EntityManager entityManager;
 
     @Override
     public boolean existsByEmail(String email) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(u)
-                                FROM UserJpaEntity u
-                                WHERE u.email = :email
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(u)
+                        FROM UserJpaEntity u
+                        WHERE u.email = :email
+                        """, Long.class)
                 .setParameter("email", email)
                 .getSingleResult();
 
@@ -113,13 +119,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public Optional<User> loadByEmail(String email) {
-        return entityManager.createQuery(
-                        """
-                                SELECT u
-                                FROM UserJpaEntity u
-                                WHERE u.email = :email
-                                """, UserJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT u
+                        FROM UserJpaEntity u
+                        WHERE u.email = :email
+                        """, UserJpaEntity.class)
                 .setParameter("email", email)
                 .getResultStream()
                 .findFirst()
@@ -208,9 +212,9 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<BigDecimal> loadWeightKg(UserId userId) {
         return entityManager.createQuery("""
-                        select onboarding.weight
-                        from UserOnboardingJpaEntity onboarding
-                        where onboarding.userId = :userId
+                        SELECT onboarding.weight
+                        FROM UserOnboardingJpaEntity onboarding
+                        WHERE onboarding.userId = :userId
                         """, BigDecimal.class)
                 .setParameter("userId", userId.value())
                 .getResultStream()
@@ -226,12 +230,12 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         // 닉네임은 users가 아니라 user_onboarding에 있다.
         // 탈퇴자는 users 행이 지워져 결과에서 빠지고, 호출자가 그것으로 탈퇴를 판정한다
         return entityManager.createQuery("""
-                        select new com.runiverse.running_service.application.common.port.out.PlayerProfile(
+                        SELECT NEW com.runiverse.running_service.application.common.port.out.PlayerProfile(
                             userEntity.userId, onboarding.nickname, userEntity.profileImageKey, userEntity.introduction)
-                        from UserJpaEntity userEntity
-                        join UserOnboardingJpaEntity onboarding
-                            on onboarding.userId = userEntity.userId
-                        where userEntity.userId in :userIds
+                        FROM UserJpaEntity userEntity
+                        JOIN UserOnboardingJpaEntity onboarding
+                            ON onboarding.userId = userEntity.userId
+                        WHERE userEntity.userId IN :userIds
                         """, PlayerProfile.class)
                 .setParameter("userIds", userIds)
                 .getResultStream()
@@ -252,15 +256,13 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public Optional<User> loadByProvider(Provider provider, String providerId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT u
-                                FROM UserJpaEntity u, OauthUserJpaEntity o
-                                WHERE o.userId = u.userId
-                                    AND o.provider = :provider
-                                    AND o.providerId = :providerId
-                                """, UserJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT u
+                        FROM UserJpaEntity u, OauthUserJpaEntity o
+                        WHERE o.userId = u.userId
+                            AND o.provider = :provider
+                            AND o.providerId = :providerId
+                        """, UserJpaEntity.class)
                 .setParameter("provider", provider)
                 .setParameter("providerId", providerId)
                 .getResultStream()
@@ -270,13 +272,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public boolean existsByUserId(UserId userId) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(o)
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.userId = :userId
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(o)
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.userId = :userId
+                        """, Long.class)
                 .setParameter("userId", userId.value())
                 .getSingleResult();
         return count > 0;
@@ -284,13 +284,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public boolean existsByNickname(Nickname nickname) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(o)
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.nickname = :nickname
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(o)
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.nickname = :nickname
+                        """, Long.class)
                 .setParameter("nickname", nickname.value())
                 .getSingleResult();
         return count > 0;
@@ -354,16 +352,63 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     public Optional<Pace> loadAvgPace(UserId userId) {
         // 온보딩 완료 = user_onboardings row 존재.
         // row가 없으면 빈 Optional — 핸들러가 ONBOARDING_NOT_COMPLETED로 바꾼다
-        return entityManager.createQuery(
-                        """
-                                SELECT o.avgPace
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.userId = :userId
-                                """, Integer.class
-                )
+        return entityManager.createQuery("""
+                        SELECT o.avgPace
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.userId = :userId
+                        """, Integer.class)
                 .setParameter("userId", userId.value())
                 .getResultStream()
                 .findFirst()
                 .map(Pace::new);
+    }
+
+    @Override
+    public Optional<AccountSnapshot> loadAccountSnapshot(UserId userId) {
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.user.port.out.AccountSnapshot(
+                            u.userId, u.email, u.createdAt,
+                            oauth.provider, oauth.providerId,
+                            o.nickname, o.gender, o.birthday, o.avgPace, o.weight, o.height)
+                        FROM UserJpaEntity u
+                        LEFT JOIN OauthUserJpaEntity oauth ON oauth.userId = u.userId
+                        LEFT JOIN UserOnboardingJpaEntity o ON o.userId = u.userId
+                        WHERE u.userId = :userId
+                        """, AccountSnapshot.class)
+                .setParameter("userId", userId.value())
+                .getResultStream()
+                .findFirst();
+    }
+
+    @Override
+    public void saveDeletedUser(DeletedUser deletedUser) {
+        entityManager.persist(DeleteUserJpaEntity.create(
+                deletedUser.getUserId().value(),
+                deletedUser.getEmail().value(),
+                deletedUser.getNickname().map(Nickname::value).orElse(null),
+                deletedUser.getGender().orElse(null),
+                deletedUser.getBirthYear().orElse(null),
+                deletedUser.getAvgPace().map(AvgPace::secondPerKm).orElse(null),
+                deletedUser.getBmi().map(Bmi::value).orElse(null),
+                deletedUser.getLoginType(),
+                deletedUser.getJoinedAt()
+        ));
+    }
+
+    // 온보딩과 소셜 연동을 앱이 먼저 지운다
+    @Override
+    public void deleteUser(UserId userId) {
+        deleteByUserId("UserOnboardingJpaEntity", userId);
+        deleteByUserId("OauthUserJpaEntity", userId);
+        deleteByUserId("UserJpaEntity", userId);
+    }
+
+    private void deleteByUserId(String entityName, UserId userId) {
+        entityManager.createQuery("""
+                        DELETE FROM %s e
+                        WHERE e.userId = :userId
+                        """.formatted(entityName))
+                .setParameter("userId", userId.value())
+                .executeUpdate();
     }
 }

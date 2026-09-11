@@ -33,6 +33,12 @@ public class RecordingMatchStreamConnection implements MatchStreamConnection {
         closed = true;
     }
 
+    // 닫는 이유를 구분하지 않는다 — 실제 구현도 둘 다 complete()로 끝난다
+    @Override
+    public void closeForAccountDeletion() {
+        closed = true;
+    }
+
     @Override
     public void send(MatchStreamEvent event) {
         received.add(event);
