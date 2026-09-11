@@ -30,8 +30,10 @@ public class KakaoOauthClientTest {
     private static final String CLIENT_ID = "kakao-rest-api-key";
     private static final String CLIENT_SECRET = "kakao-client-secret";
     private static final String REDIRECT_URI = "http://localhost:5173";
+    private static final String UNLINK_ADMIN_KEY = "unlink-admin-key";
     private static final String TOKEN_URI = "https://kauth.kakao.com/oauth/token";
     private static final String USER_INFO_URI = "https://kapi.kakao.com/v2/user/me";
+    private static final String UNLINK_URI = "https://kapi.kakao.com/v1/user/unlink";
 
     private static final String AUTHORIZATION_CODE = "kakao-authorization-code";
     private static final String CODE_VERIFIER = "pkce-code-verifier";
@@ -96,8 +98,10 @@ public class KakaoOauthClientTest {
                 CLIENT_ID,
                 clientSecret,
                 REDIRECT_URI,
+                UNLINK_ADMIN_KEY,
                 TOKEN_URI,
-                USER_INFO_URI
+                USER_INFO_URI,
+                UNLINK_URI
         );
 
         return new KakaoOauthClient(builder.build(), properties);

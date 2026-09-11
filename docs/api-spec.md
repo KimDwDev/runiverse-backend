@@ -1078,7 +1078,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **연결**: `wss://.../api/v1/ws/running` + `Authorization: Bearer {accessToken}`
 - **인증 실패**: 업그레이드를 거부하고 **HTTP 401**로 응답한다 — 연결이 서기 전이라 `ERROR` 프레임을 쓸 수 없다. 본문은 REST 에러 포맷과 같다. 클라는 `POST /auth/refresh` 후 재연결하고, 다시 실패하면 재로그인으로 보낸다. 같은 이유로 아래 `ERROR`의 code 목록에는 인증 코드가 없다
-- **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길 수 있어 중간에 끊으면 트랙이 갈린다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
+- **토큰은 핸드셰이크에서 한 번만 검증한다** — 연결 유지 중 `accessToken`이 만료돼도 끊지 않는다. 러닝 구간이 토큰 수명보다 길어 만료마다 끊으면 좌표 전달이 그때마다 멈추고 갱신·재연결·재전송 비용이 든다. 재연결은 같은 러닝으로 이어지므로 기록이 갈리지는 않는다. 단 로그아웃·탈퇴로 토큰이 차단되면 서버가 연결을 닫는다. 클라는 REST용 토큰을 평소대로 갱신하고, 새 토큰은 재연결할 때만 쓴다
 - **중복 연결은 마지막 것만 남긴다** — 같은 사용자의 새 연결이 들어오면 서버가 기존 연결을 close code `4001`로 닫는다. 기기 전환·앱 재시작 때 이전 소켓이 남아 있을 수 있는데 둘 다 살려두면 같은 `(runningRoomId, userId, sequence)`에 서로 다른 트랙이 섞인다. `4001`을 받은 클라는 재연결하지 않는다 — 다른 기기가 이어받은 것이다
 - **keep-alive**: 클라가 주기적으로 `HEALTH_CHECK`(C→S)를 보내고 서버가 `HEALTH_CHECKED`(S→C)로 응답한다. 둘 다 `data`는 비운다. **유휴 상태가 서버 설정 시간(운영값)을 넘으면 서버가 연결을 닫는다** — 좌표를 계속 보내는 러닝 중에는 별도 신호가 필요 없고, 시작 전 대기 구간에서 의미가 있다. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
 - **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 서버의 강제 종료는 **`start_at`부터 잰 유예**(운영값) 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
@@ -1216,9 +1216,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
 ```json
-{
-  "runningRoomId": 125
-}
+{}
 ```
 
 - **일시정지 동안 경과 시간과 거리 계산이 멈춘다.** 클라는 좌표 전송도 중단한다 — 멈춰 있는 동안의 좌표는 트랙에 남길 이유가 없고, GPS 흔들림이 거리로 잡히면 기록이 부풀려진다
@@ -1230,7 +1228,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "runningRoomId": 125,
   "forced": false
 }
 ```
@@ -2602,8 +2599,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - `delete_users` 스냅샷 후 `users`를 하드 삭제한다. `delete_users.created_at`은 스냅샷 시각이다.
   - **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요. 이미 시작한 방의 `running_players`와 `running_room_sessions`도 기록 없는 참가자를 결과에 남기기 위해 유지한다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
   - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`friendships`/`user_colors`.
-  - **명시적 삭제**: 시작 전 신청의 `running_players`; 연결된 `running_room_sessions`는 CASCADE 삭제한다.
-  - **DB 밖**: Redis 토큰 즉시 삭제, S3 프로필 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
+  - **명시적 삭제**: 시작 전 신청의 `running_players`; 연결된 `running_room_sessions`도 함께 지운다 — `running_player_id`에 FK가 없어 DB가 연쇄 삭제하지 않는다.
+  - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **인증**: 필요

@@ -41,6 +41,11 @@ public class SseMatchStreamConnection implements MatchStreamConnection {
     }
 
     @Override
+    public void closeForAccountDeletion() {
+        complete();
+    }
+
+    @Override
     public void send(MatchStreamEvent event) {
         // 와이어 계약은 presentation이 갖는다 — application 모델을 그대로 흘리지 않는다.
         // 이벤트 이름마다 data 형태가 다르므로 여기서 가른다

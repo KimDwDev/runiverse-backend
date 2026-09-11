@@ -115,4 +115,21 @@ public class RunningRoomStatusTest {
         // when & then -> 이미 끝난 방은 어떤 상태로도 움직이지 않는다
         assertThat(current.canTransitionTo(RunningRoomStatus.CANCELLED)).isFalse();
     }
+
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"MATCHING", "MATCHED"})
+    @DisplayName("모집·확정 단계는 시작 전이다")
+    void matchingAndMatchedAreBeforeStart(RunningRoomStatus current) {
+        // when & then
+        assertThat(current.isBeforeStart()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"MATCHING", "MATCHED"},
+            mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("시작했거나 끝난 상태는 시작 전이 아니다")
+    void startedAndTerminalAreNotBeforeStart(RunningRoomStatus current) {
+        // when & then -> 시작 후에는 신청을 지우지 않고 종료 경로로 보낸다
+        assertThat(current.isBeforeStart()).isFalse();
+    }
 }
