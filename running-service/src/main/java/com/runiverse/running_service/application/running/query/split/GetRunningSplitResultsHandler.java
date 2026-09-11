@@ -127,7 +127,7 @@ public class GetRunningSplitResultsHandler implements GetRunningSplitResultsUsec
                 .findFirst();
         // 구간 경계는 방 전체가 공유하는 고정 경계라 번호로 계산된다 — DB에 없는 값이다
         int startDistanceMeters = (splitNumber - 1) * properties.splitDistanceMeters();
-        // 마지막 구간은 총거리에서 끊겨 기본 구간 거리보다 짧을 수 있다
+        // 구간 거리는 참가자와 무관하게 같다 — 내 행이 없으면 아무 행에서 가져와도 된다
         int distanceMeters = mine.map(RunningSplitRow::distanceMeters)
                 .orElseGet(() -> rows.get(0).distanceMeters());
         return new GetRunningSplitResultsResult.Split(
