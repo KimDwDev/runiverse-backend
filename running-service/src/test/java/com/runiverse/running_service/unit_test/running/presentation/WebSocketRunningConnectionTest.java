@@ -1,5 +1,6 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
+import com.runiverse.running_service.application.running.port.out.RunningComboPeer;
 import com.runiverse.running_service.application.running.port.out.RunningProgress;
 import com.runiverse.running_service.presentation.running.websocket.WebSocketRunningConnection;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
