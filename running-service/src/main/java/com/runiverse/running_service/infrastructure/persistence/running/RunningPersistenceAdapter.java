@@ -111,14 +111,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
 
     @Override
     public boolean existsActive(UserId userId) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(p)
-                                FROM RunningPlayerJpaEntity p
-                                WHERE p.userId = :userId
-                                  AND p.deletedAt IS NULL
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(p)
+                        FROM RunningPlayerJpaEntity p
+                        WHERE p.userId = :userId
+                          AND p.deletedAt IS NULL
+                        """, Long.class)
                 .setParameter("userId", userId.value())
                 .getSingleResult();
         return count > 0;
@@ -126,14 +124,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
 
     @Override
     public Optional<RunningRoom> loadById(RunningRoomId runningRoomId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT r
-                                FROM RunningRoomJpaEntity r
-                                WHERE r.runningRoomId = :runningRoomId
-                                  AND r.deletedAt IS NULL
-                                """, RunningRoomJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT r
+                        FROM RunningRoomJpaEntity r
+                        WHERE r.runningRoomId = :runningRoomId
+                          AND r.deletedAt IS NULL
+                        """, RunningRoomJpaEntity.class)
                 .setParameter("runningRoomId", runningRoomId.value())
                 .getResultStream()
                 .findFirst()
@@ -143,14 +139,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
 
     @Override
     public Optional<RunningPlayer> loadActive(UserId userId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT p
-                                FROM RunningPlayerJpaEntity p
-                                WHERE p.userId = :userId
-                                  AND p.deletedAt IS NULL
-                                """, RunningPlayerJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT p
+                        FROM RunningPlayerJpaEntity p
+                        WHERE p.userId = :userId
+                          AND p.deletedAt IS NULL
+                        """, RunningPlayerJpaEntity.class)
                 .setParameter("userId", userId.value())
                 // 앱이 한 개만 보장하고 DB는 강제하지 않는다 — 여럿이어도 깨지지 않게 첫 건만 쓴다
                 .getResultStream()
@@ -207,12 +201,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     @Override
     public Optional<RunningPlayer> load(RunningRoomId runningRoomId, UserId userId) {
         return entityManager.createQuery("""
-                        select player
-                        from RunningRoomSessionJpaEntity session
-                        join RunningPlayerJpaEntity player
-                            on player.runningPlayerId = session.runningPlayerId
-                        where session.room.runningRoomId = :roomId
-                          and player.userId = :userId
+                        SELECT player
+                        FROM RunningRoomSessionJpaEntity session
+                        JOIN RunningPlayerJpaEntity player
+                            ON player.runningPlayerId = session.runningPlayerId
+                        WHERE session.room.runningRoomId = :roomId
+                          AND player.userId = :userId
                         """, RunningPlayerJpaEntity.class)
                 .setParameter("roomId", runningRoomId.value())
                 .setParameter("userId", userId.value())
@@ -226,12 +220,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     @Override
     public boolean existsRunning(RunningRoomId runningRoomId) {
         return entityManager.createQuery("""
-                        select count(player)
-                        from RunningRoomSessionJpaEntity session
-                        join RunningPlayerJpaEntity player
-                            on player.runningPlayerId = session.runningPlayerId
-                        where session.room.runningRoomId = :roomId
-                          and player.status = :status
+                        SELECT COUNT(player)
+                        FROM RunningRoomSessionJpaEntity session
+                        JOIN RunningPlayerJpaEntity player
+                            ON player.runningPlayerId = session.runningPlayerId
+                        WHERE session.room.runningRoomId = :roomId
+                          AND player.status = :status
                         """, Long.class)
                 .setParameter("roomId", runningRoomId.value())
                 .setParameter("status", RunningPlayerStatus.RUNNING)
@@ -243,15 +237,15 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         // 세션이 방과 참가자를 잇는다. 기록은 아직 없을 수 있어 LEFT JOIN이다.
         // player.deletedAt은 걸지 않는다 — 완주·이탈에도 찍혀서 끝난 참가자가 통째로 빠진다
         List<Object[]> rows = entityManager.createQuery("""
-                        select player, record
-                        from RunningRoomSessionJpaEntity session
-                        join RunningPlayerJpaEntity player
-                            on player.runningPlayerId = session.runningPlayerId
-                        left join RunningRecordJpaEntity record
-                            on record.room.runningRoomId = session.room.runningRoomId
-                           and record.userId = player.userId
-                        where session.room.runningRoomId = :roomId
-                        order by player.runningPlayerId
+                        SELECT player, record
+                        FROM RunningRoomSessionJpaEntity session
+                        JOIN RunningPlayerJpaEntity player
+                            ON player.runningPlayerId = session.runningPlayerId
+                        LEFT JOIN RunningRecordJpaEntity record
+                            ON record.room.runningRoomId = session.room.runningRoomId
+                           AND record.userId = player.userId
+                        WHERE session.room.runningRoomId = :roomId
+                        ORDER BY player.runningPlayerId
                         """, Object[].class)
                 .setParameter("roomId", runningRoomId.value())
                 .getResultList();
@@ -264,14 +258,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     // loadActive와 조건이 같고 잠그는 것만 다르다 — 같은 행을 고치는 취소·시작이 이걸 쓴다
     @Override
     public Optional<RunningPlayer> lockActive(UserId userId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT p
-                                FROM RunningPlayerJpaEntity p
-                                WHERE p.userId = :userId
-                                  AND p.deletedAt IS NULL
-                                """, RunningPlayerJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT p
+                        FROM RunningPlayerJpaEntity p
+                        WHERE p.userId = :userId
+                          AND p.deletedAt IS NULL
+                        """, RunningPlayerJpaEntity.class)
                 .setParameter("userId", userId.value())
                 // 상대가 커밋할 때까지 기다렸다 읽는다 — 기다리지 않으면 취소된 신청을
                 // 활성으로 오인해 deleted_at을 null로 되돌린다
@@ -285,11 +277,11 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     public Optional<RunningResultRecord> loadRecord(RunningRoomId runningRoomId, UserId userId) {
         // 엔티티를 통째로 읽지 않는다 — 응답에 필요한 컬럼만 가져온다
         return entityManager.createQuery("""
-                        select new com.runiverse.running_service.application.running.port.out.RunningResultRecord(
+                        SELECT NEW com.runiverse.running_service.application.running.port.out.RunningResultRecord(
                             record.routePolyline, record.startAt, record.endAt, record.totalDistance, record.totalElevationGain)
-                        from RunningRecordJpaEntity record
-                        where record.room.runningRoomId = :roomId
-                          and record.userId = :userId
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.room.runningRoomId = :roomId
+                          AND record.userId = :userId
                         """, RunningResultRecord.class)
                 .setParameter("roomId", runningRoomId.value())
                 .setParameter("userId", userId.value())
@@ -302,14 +294,14 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         // 방의 모든 기록에 딸린 구간을 한 번에 긁는다 — 참가자·구간별로 나눠 부르면 수백 번 나간다.
         // 참가자 구분은 record.userId로 하고, 묶는 것은 핸들러가 splitNumber로 한다
         return entityManager.createQuery("""
-                        select new com.runiverse.running_service.application.running.port.out.RunningSplitRow(
+                        SELECT NEW com.runiverse.running_service.application.running.port.out.RunningSplitRow(
                             record.userId, split.splitNumber, split.distance, split.duration,
                             split.avgPace, split.avgCadence, split.elevationChange, split.calories,
                             split.routeStartIndex, split.routeEndIndex)
-                        from RunningSplitJpaEntity split
-                        join split.record record
-                        where record.room.runningRoomId = :roomId
-                        order by split.splitNumber, record.userId
+                        FROM RunningSplitJpaEntity split
+                        JOIN split.record record
+                        WHERE record.room.runningRoomId = :roomId
+                        ORDER BY split.splitNumber, record.userId
                         """, RunningSplitRow.class)
                 .setParameter("roomId", runningRoomId.value())
                 .getResultList();
@@ -317,14 +309,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
 
     @Override
     public Optional<RunningRoom> lockById(RunningRoomId runningRoomId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT r
-                                FROM RunningRoomJpaEntity r
-                                WHERE r.runningRoomId = :runningRoomId
-                                  AND r.deletedAt IS NULL
-                                """, RunningRoomJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT r
+                        FROM RunningRoomJpaEntity r
+                        WHERE r.runningRoomId = :runningRoomId
+                          AND r.deletedAt IS NULL
+                        """, RunningRoomJpaEntity.class)
                 .setParameter("runningRoomId", runningRoomId.value())
                 // 방 행만 잠근다 — 인원 갱신이 겹치면 정원을 넘길 수 있다.
                 // 세션은 별도 조회라 잠기지 않는다(같은 방의 다른 신청과만 경쟁한다)
@@ -338,14 +328,12 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     // 세션까지 함께 복원한다(방 애그리거트는 세션 없이는 판정할 수 없다)
     @Override
     public Optional<RunningRoom> loadDetailById(RunningRoomId runningRoomId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT r
-                                FROM RunningRoomJpaEntity r
-                                WHERE r.runningRoomId = :runningRoomId
-                                  AND r.deletedAt IS NULL
-                                """, RunningRoomJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT r
+                        FROM RunningRoomJpaEntity r
+                        WHERE r.runningRoomId = :runningRoomId
+                          AND r.deletedAt IS NULL
+                        """, RunningRoomJpaEntity.class)
                 .setParameter("runningRoomId", runningRoomId.value())
                 .getResultStream()
                 .findFirst()
@@ -371,13 +359,11 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     }
 
     private List<RunningRoomSessionJpaEntity> loadSessions(RunningRoomJpaEntity room) {
-        return entityManager.createQuery(
-                        """
-                                SELECT s
-                                FROM RunningRoomSessionJpaEntity s
-                                WHERE s.room = :room
-                                """, RunningRoomSessionJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT s
+                        FROM RunningRoomSessionJpaEntity s
+                        WHERE s.room = :room
+                        """, RunningRoomSessionJpaEntity.class)
                 .setParameter("room", room)
                 .getResultList();
     }

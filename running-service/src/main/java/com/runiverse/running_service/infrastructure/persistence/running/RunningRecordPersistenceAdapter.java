@@ -62,9 +62,9 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
         // running_room_id 인덱스를 탄다. 같은 트랜잭션에서 방금 만든 기록도
         // 이 쿼리 앞의 자동 flush로 함께 보인다
         return entityManager.createQuery("""
-                        select count(record)
-                        from RunningRecordJpaEntity record
-                        where record.room.runningRoomId = :roomId
+                        SELECT COUNT(record)
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.room.runningRoomId = :roomId
                         """, Long.class)
                 .setParameter("roomId", runningRoomId.value())
                 .getSingleResult() > 0;
