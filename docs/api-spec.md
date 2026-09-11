@@ -68,7 +68,7 @@
 |------|--------|------|------|
 | 카운트 다운 | `RUNNING_START` | C→S | 방의 `STARTED` 확인 후 참가자 시작 통보 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음 |
-| 러닝 중 | `PLAYER_RUNNING_PROGRESS_UPDATED` | S→C | `paused` 포함 — 멈춘 것과 느려진 것을 구분 |
+| 러닝 중 | `RUNNING_PROGRESS_UPDATED` | S→C | `paused` 포함 — 멈춘 것과 느려진 것을 구분 |
 | 러닝 중 | `RUNNING_COMBO_UPDATED` | S→C | 나란히 달리는 상대와의 콤보 — 참가자 쌍마다 따로 센다 |
 | 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 본인 기록만 멈춘다 |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 조기 종료 의사 포함 — 서버가 상태·기록 확정 |
@@ -1191,7 +1191,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 장애가 이어지면 배치마다 `ERROR`가 나간다. 클라는 건별 알림 대신 "저장 실패 중" 상태 표시 하나로 다룬다
 - 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED` ack 뒤 삭제한다
 
-#### `PLAYER_RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
+#### `RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
 
 ```json
 {
@@ -1254,7 +1254,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **일시정지 동안 경과 시간과 거리 계산이 멈춘다.** 클라는 좌표 전송도 중단한다 — 멈춰 있는 동안의 좌표는 트랙에 남길 이유가 없고, GPS 흔들림이 거리로 잡히면 기록이 부풀려진다
 - **다른 참가자는 계속 진행한다.** 일시정지는 본인 기록에만 영향을 주며 다른 참가자를 멈추지 않는다
-- 서버는 상태를 다른 참가자에게 `PLAYER_RUNNING_PROGRESS_UPDATED`의 `paused` 필드로 알린다
+- 서버는 상태를 다른 참가자에게 `RUNNING_PROGRESS_UPDATED`의 `paused` 필드로 알린다
 - **ack 없음** — 실패는 `ERROR`로 통지
 
 #### `RUNNING_FINISH` (C→S) — 러닝 종료 (정상/강제 통합)
