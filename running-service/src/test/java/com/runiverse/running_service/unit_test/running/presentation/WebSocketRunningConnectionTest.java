@@ -74,6 +74,58 @@ class WebSocketRunningConnectionTest {
     }
 
     @Test
+    @DisplayName("콤보 통지는 RUNNING_COMBO_UPDATED 이벤트로 나간다")
+    void sendCombo_sendsContractEventName() throws IOException {
+        // given -> 상대가 18m 앞서 있다
+        UUID peerId = UUID.randomUUID();
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.sendCombo(List.of(new RunningComboPeer(peerId, 18, 12, 30)));
+
+        // then
+        JsonNode sent = jsonMapper.readTree(captureSent().getPayload());
+        assertThat(sent.get("event").asString()).isEqualTo("RUNNING_COMBO_UPDATED");
+
+        JsonNode peer = sent.get("data").get("peers").get(0);
+        assertThat(peer.get("userId").asString()).isEqualTo(peerId.toString());
+        assertThat(peer.get("gapMeters").asInt()).isEqualTo(18);
+        assertThat(peer.get("comboCount").asInt()).isEqualTo(12);
+        assertThat(peer.get("maxComboCount").asInt()).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("상대가 뒤처져 있으면 gapMeters가 음수로 실린다")
+    void sendCombo_carriesNegativeGap() throws IOException {
+        // given
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.sendCombo(List.of(new RunningComboPeer(UUID.randomUUID(), -18, 3, 9)));
+
+        // then
+        JsonNode peer = jsonMapper.readTree(captureSent().getPayload())
+                .get("data").get("peers").get(0);
+        assertThat(peer.get("gapMeters").asInt()).isEqualTo(-18);
+    }
+
+    @Test
+    @DisplayName("아무와도 겹치지 않으면 빈 목록으로 나간다")
+    void sendCombo_sendsEmptyPeers() throws IOException {
+        // given -> 끊긴 상대가 목록에서 빠지는 것이 곧 끊김 통지다.
+        // 목록 자체가 생략되면 클라가 화면을 지울 근거를 잃는다
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.sendCombo(List.of());
+
+        // then
+        JsonNode peers = jsonMapper.readTree(captureSent().getPayload()).get("data").get("peers");
+        assertThat(peers.isArray()).isTrue();
+        assertThat(peers.size()).isZero();
+    }
+
+    @Test
     @DisplayName("전송에 실패해도 던지지 않는다")
     void sendProgress_swallowsSendFailure() throws IOException {
         // given -> 한 명에게 못 보냈다고 나머지 참가자의 브로드캐스트가 멈추면 안 된다
