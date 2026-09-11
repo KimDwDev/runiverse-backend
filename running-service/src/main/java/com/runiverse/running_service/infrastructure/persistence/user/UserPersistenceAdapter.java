@@ -65,13 +65,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public boolean existsByEmail(String email) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(u)
-                                FROM UserJpaEntity u
-                                WHERE u.email = :email
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(u)
+                        FROM UserJpaEntity u
+                        WHERE u.email = :email
+                        """, Long.class)
                 .setParameter("email", email)
                 .getSingleResult();
 
@@ -113,13 +111,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public Optional<User> loadByEmail(String email) {
-        return entityManager.createQuery(
-                        """
-                                SELECT u
-                                FROM UserJpaEntity u
-                                WHERE u.email = :email
-                                """, UserJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT u
+                        FROM UserJpaEntity u
+                        WHERE u.email = :email
+                        """, UserJpaEntity.class)
                 .setParameter("email", email)
                 .getResultStream()
                 .findFirst()
@@ -208,9 +204,9 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<BigDecimal> loadWeightKg(UserId userId) {
         return entityManager.createQuery("""
-                        select onboarding.weight
-                        from UserOnboardingJpaEntity onboarding
-                        where onboarding.userId = :userId
+                        SELECT onboarding.weight
+                        FROM UserOnboardingJpaEntity onboarding
+                        WHERE onboarding.userId = :userId
                         """, BigDecimal.class)
                 .setParameter("userId", userId.value())
                 .getResultStream()
@@ -226,12 +222,12 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         // 닉네임은 users가 아니라 user_onboarding에 있다.
         // 탈퇴자는 users 행이 지워져 결과에서 빠지고, 호출자가 그것으로 탈퇴를 판정한다
         return entityManager.createQuery("""
-                        select new com.runiverse.running_service.application.common.port.out.PlayerProfile(
+                        SELECT NEW com.runiverse.running_service.application.common.port.out.PlayerProfile(
                             userEntity.userId, onboarding.nickname, userEntity.profileImageKey, userEntity.introduction)
-                        from UserJpaEntity userEntity
-                        join UserOnboardingJpaEntity onboarding
-                            on onboarding.userId = userEntity.userId
-                        where userEntity.userId in :userIds
+                        FROM UserJpaEntity userEntity
+                        JOIN UserOnboardingJpaEntity onboarding
+                            ON onboarding.userId = userEntity.userId
+                        WHERE userEntity.userId IN :userIds
                         """, PlayerProfile.class)
                 .setParameter("userIds", userIds)
                 .getResultStream()
@@ -252,15 +248,13 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public Optional<User> loadByProvider(Provider provider, String providerId) {
-        return entityManager.createQuery(
-                        """
-                                SELECT u
-                                FROM UserJpaEntity u, OauthUserJpaEntity o
-                                WHERE o.userId = u.userId
-                                    AND o.provider = :provider
-                                    AND o.providerId = :providerId
-                                """, UserJpaEntity.class
-                )
+        return entityManager.createQuery("""
+                        SELECT u
+                        FROM UserJpaEntity u, OauthUserJpaEntity o
+                        WHERE o.userId = u.userId
+                            AND o.provider = :provider
+                            AND o.providerId = :providerId
+                        """, UserJpaEntity.class)
                 .setParameter("provider", provider)
                 .setParameter("providerId", providerId)
                 .getResultStream()
@@ -270,13 +264,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public boolean existsByUserId(UserId userId) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(o)
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.userId = :userId
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(o)
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.userId = :userId
+                        """, Long.class)
                 .setParameter("userId", userId.value())
                 .getSingleResult();
         return count > 0;
@@ -284,13 +276,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
 
     @Override
     public boolean existsByNickname(Nickname nickname) {
-        Long count = entityManager.createQuery(
-                        """
-                                SELECT COUNT(o)
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.nickname = :nickname
-                                """, Long.class
-                )
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(o)
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.nickname = :nickname
+                        """, Long.class)
                 .setParameter("nickname", nickname.value())
                 .getSingleResult();
         return count > 0;
@@ -354,13 +344,11 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     public Optional<Pace> loadAvgPace(UserId userId) {
         // 온보딩 완료 = user_onboardings row 존재.
         // row가 없으면 빈 Optional — 핸들러가 ONBOARDING_NOT_COMPLETED로 바꾼다
-        return entityManager.createQuery(
-                        """
-                                SELECT o.avgPace
-                                FROM UserOnboardingJpaEntity o
-                                WHERE o.userId = :userId
-                                """, Integer.class
-                )
+        return entityManager.createQuery("""
+                        SELECT o.avgPace
+                        FROM UserOnboardingJpaEntity o
+                        WHERE o.userId = :userId
+                        """, Integer.class)
                 .setParameter("userId", userId.value())
                 .getResultStream()
                 .findFirst()

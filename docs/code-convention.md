@@ -4,6 +4,7 @@
 
 - 포맷팅은 루트 `.editorconfig`를 기준으로 한다.
 - `.editorconfig`와 프로젝트 문서에 없는 Java 규칙은 Google Java Style을 따른다.
+- JPQL은 키워드·표준 함수명을 대문자로 쓰고(`SELECT NEW`, `TRUE`, `COUNT`), 식별자는 원래 표기를 유지한다. 텍스트 블록은 `createQuery("""`처럼 여는 괄호 바로 뒤에서 시작한다.
 - 커밋·브랜치·PR 규칙은 [git-convention.md](git-convention.md)를 따른다.
 - API 표면(엔드포인트·DTO 필드) 규칙은 [api-convention.md](api-convention.md)를 따른다.
 
