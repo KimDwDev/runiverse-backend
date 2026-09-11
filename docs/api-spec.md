@@ -771,7 +771,8 @@
 - **마감이 지난 `MATCHING` 방은 `READY`로 답한다.** 확정 예약이 아직 깨지 않은 틈에 조회하면 방은 `MATCHING`이지만 곧 확정될 자리다 — 대기 화면을 그리게 두면 잠시 뒤 화면이 다시 바뀐다. 매칭 취소가 방 상태가 아니라 마감 시각으로 분기하는 것과 같은 이유다
 - **참가자 상태(`running_players.status`)는 보지 않는다.** 방이 `STARTED`인데 본인은 아직 `JOINED`(WS 미접속)일 수 있으나 클라이언트가 할 일은 같고 `RUNNING_START`가 멱등이라 구분할 이유가 없다
 - **방 정보를 담지 않는다.** 참가자 목록·팀 평균 페이스·모집 마감 시각은 방의 속성이고, 매칭 중에는 스트림이 `RoomInfo`로, 러닝 중에는 `RUNNING_STARTED` ack가 나른다. 여기 실으면 같은 값이 두 경로로 내려가 어긋날 여지가 생긴다
-  - 다만 `scheduledStartAt`·`targetDistanceMeters`는 **본인 신청의 속성**(`running_players.start_at`·`target_distance`)이라 담는다. 러닝 중 복구에서 경과 시간·목표를 그리는 데 필요하다
+  - 다만 `scheduledStartAt`·`targetDistanceMeters`는 담는다 — 러닝 중 복구에서 경과 시간·목표를 그리는 데 필요하고, 방 정보를 조립하지 않고도 한 행에서 나온다
+  - 두 값 모두 **`running_rooms` 쪽이 정본이다.** `running_players.target_distance`는 NOT NULL이라 목표 없는 솔로에도 값이 들어가므로, `null`을 그대로 보내려면 방의 값을 써야 한다
 - **`type`에 `INVITE`는 나가지 않는다** — 미래 예약값이라 계약에 포함하지 않는다
 - **`WAITING`은 `MATCH`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
 - **인증**: 필요
