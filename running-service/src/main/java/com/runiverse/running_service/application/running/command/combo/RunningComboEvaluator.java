@@ -55,8 +55,11 @@ public final class RunningComboEvaluator {
                 RunningComboPair after = sent
                         ? judge(before, corrected, fresh, now, properties)
                         : before;
-                pairs.add(after);
-                // 방금 끊긴 상대에게도 보내야 한다 — 안 보내면 그쪽 화면에 끊긴 콤보가 남는다
+                if (sent) {
+                    // 저장은 상태가 바뀐 관계만 — 남의 관계를 내가 읽은 옛 값으로 덮으면,
+                    // 그 사이 다른 인스턴스가 갱신한 콤보가 되돌아간다
+                    pairs.add(after);
+                }
                 if (sent && (before.inCombo() || after.inCombo())) {
                     recipients.add(after.partnerOf(sender).value());
                 }
