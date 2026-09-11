@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -19,7 +20,11 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "delete_users")
+@Table(
+        name = "delete_users",
+        // 보관 기간 만료 배치가 탄다 — email이 남은 행만 훑어 처리 끝난 대다수를 배제한다
+        indexes = @Index(name = "idx_delete_user_pending", columnList = "email, created_at")
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DeleteUserJpaEntity extends BaseCreatedAtEntity {
 

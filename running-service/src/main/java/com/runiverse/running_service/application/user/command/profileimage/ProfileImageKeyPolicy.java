@@ -19,7 +19,7 @@ public final class ProfileImageKeyPolicy {
         return key.startsWith(prefixOf(userId));
     }
 
-    private static String prefixOf(UUID userId) {
+    public static String prefixOf(UUID userId) {
         return "%s/%s/".formatted(KEY_PREFIX, userId);
     }
 }
