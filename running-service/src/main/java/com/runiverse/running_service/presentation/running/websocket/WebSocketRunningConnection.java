@@ -37,7 +37,7 @@ public record WebSocketRunningConnection(WebSocketSession session, JsonMapper js
     public void sendProgress(RunningProgress progress) {
         try {
             session.sendMessage(new TextMessage(jsonMapper.writeValueAsString(
-                    RunningMessageType.PLAYER_RUNNING_PROGRESS_UPDATED.message(
+                    RunningMessageType.RUNNING_PROGRESS_UPDATED.message(
                             PlayerRunningProgressPayload.from(progress)))));
         } catch (IOException | RuntimeException e) {
             // 한 명에게 못 보냈다고 나머지 참가자의 브로드캐스트가 멈추면 안 된다
