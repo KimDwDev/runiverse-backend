@@ -17,11 +17,13 @@ import com.runiverse.running_service.application.user.port.out.ClearProfileImage
 import com.runiverse.running_service.application.user.port.out.DeleteUserPort;
 import com.runiverse.running_service.application.user.port.out.ExistsOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.LoadAccountSnapshotPort;
+import com.runiverse.running_service.application.user.port.out.LoadDeletedUserIdsPort;
 import com.runiverse.running_service.application.user.port.out.LoadNicknamePort;
 import com.runiverse.running_service.application.user.port.out.LoadOauthProviderPort;
 import com.runiverse.running_service.application.user.port.out.LoadOnboardingProfilePort;
 import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.OnboardingProfile;
+import com.runiverse.running_service.application.user.port.out.RedactDeletedUserPort;
 import com.runiverse.running_service.application.user.port.out.SaveDeletedUserPort;
 import com.runiverse.running_service.application.user.port.out.SaveOnboardingPort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
@@ -53,7 +55,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -67,7 +71,8 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         UpdateProfileImagePort, ClearProfileImagePort, LoadNicknamePort, UpdateNicknamePort,
         UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort, LoadUserWeightPort,
         LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort,
-        LoadAccountSnapshotPort, SaveDeletedUserPort, DeleteUserPort {
+        LoadAccountSnapshotPort, SaveDeletedUserPort, DeleteUserPort,
+        LoadDeletedUserIdsPort, RedactDeletedUserPort {
 
     private final EntityManager entityManager;
 
@@ -408,6 +413,34 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                         DELETE FROM %s e
                         WHERE e.userId = :userId
                         """.formatted(entityName))
+                .setParameter("userId", userId.value())
+                .executeUpdate();
+    }
+
+    // email로 거른다 — 온보딩 전에 탈퇴하면 nickname은 원래 null이라 기준이 못 된다.
+    // 배치가 트랜잭션 없이 부르므로 커서를 여는 getResultStream()을 쓰지 않는다
+    @Override
+    public List<UserId> loadDeletedBefore(LocalDateTime deletedBefore) {
+        return entityManager.createQuery("""
+                        SELECT d.userId
+                        FROM DeleteUserJpaEntity d
+                        WHERE d.createdAt < :deletedBefore
+                          AND d.email IS NOT NULL
+                        """, UUID.class)
+                .setParameter("deletedBefore", deletedBefore)
+                .getResultList()
+                .stream()
+                .map(UserId::new)
+                .toList();
+    }
+
+    @Override
+    public void redact(UserId userId) {
+        entityManager.createQuery("""
+                        UPDATE DeleteUserJpaEntity d
+                        SET d.email = NULL, d.nickname = NULL
+                        WHERE d.userId = :userId
+                        """)
                 .setParameter("userId", userId.value())
                 .executeUpdate();
     }
