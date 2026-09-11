@@ -126,9 +126,9 @@ public class GetRunningSplitResultsHandlerTest {
     void 같은_구간에_참가자가_묶인다() {
         // given -> 둘 다 1·2번 구간을 뛰었다
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(
+        givenSplits(
                 split(ME, 1, 0, 2), split(OTHER, 1, 0, 1),
-                split(ME, 2, 2, 4), split(OTHER, 2, 1, 3)));
+                split(ME, 2, 2, 4), split(OTHER, 2, 1, 3));
         givenRecordAndProfiles();
 
         // when
@@ -149,8 +149,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 구간_경계를_번호로_계산한다() {
         // given
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(
-                split(ME, 1, 0, 2), split(ME, 2, 2, 4)));
+        givenSplits(split(ME, 1, 0, 2), split(ME, 2, 2, 4));
         givenRecordAndProfiles();
 
         // when
@@ -170,8 +169,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 본인_인덱스로_끝점까지_자른다() {
         // given -> 같은 구간인데 본인은 0~2, 상대는 0~1로 인덱스가 다르다
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(
-                split(ME, 1, 0, 2), split(OTHER, 1, 0, 1)));
+        givenSplits(split(ME, 1, 0, 2), split(OTHER, 1, 0, 1));
         givenRecordAndProfiles();
 
         // when
@@ -189,8 +187,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 경계점이_겹친다() {
         // given
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(
-                split(ME, 1, 0, 2), split(ME, 2, 2, 4)));
+        givenSplits(split(ME, 1, 0, 2), split(ME, 2, 2, 4));
         givenRecordAndProfiles();
 
         // when
@@ -209,8 +206,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 도달하지_못한_구간은_경로가_없다() {
         // given -> 상대만 3번 구간까지 갔다
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(
-                split(ME, 1, 0, 2), split(OTHER, 1, 0, 2), split(OTHER, 2, 2, 4)));
+        givenSplits(split(ME, 1, 0, 2), split(OTHER, 1, 0, 2), split(OTHER, 2, 2, 4));
         givenRecordAndProfiles();
 
         // when
@@ -229,7 +225,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 기록이_없으면_양쪽에서_뺀다() {
         // given -> 상대는 아직 뛰는 중이라 구간이 하나도 없다
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(ME, 1, 0, 2)));
+        givenSplits(split(ME, 1, 0, 2));
         givenRecordAndProfiles();
 
         // when
@@ -247,7 +243,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 본인_기록이_없어도_남의_구간은_남는다() {
         // given -> 본인은 아직 뛰는 중이고 상대만 끝냈다
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(OTHER, 1, 0, 2)));
+        givenSplits(split(OTHER, 1, 0, 2));
         when(loadRunningResultRecordPort.loadRecord(any(), any())).thenReturn(Optional.empty());
         when(loadPlayerProfilesPort.loadProfiles(any()))
                 .thenReturn(Map.of(OTHER, new PlayerProfile(OTHER, "러닝초보", null, null)));
@@ -269,7 +265,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 구간_지표가_자리_그대로_옮겨진다() {
         // given
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(ME, 1, 0, 2)));
+        givenSplits(split(ME, 1, 0, 2));
         givenRecordAndProfiles();
 
         // when
@@ -291,7 +287,7 @@ public class GetRunningSplitResultsHandlerTest {
     void 구간_거리_설정이_실린다() {
         // given
         givenRoomAndPlayers();
-        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(split(ME, 1, 0, 2)));
+        givenSplits(split(ME, 1, 0, 2));
         givenRecordAndProfiles();
 
         // when & then
@@ -308,6 +304,11 @@ public class GetRunningSplitResultsHandlerTest {
         when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
                 player(ME, RunningPlayerStatus.COMPLETED),
                 player(OTHER, RunningPlayerStatus.COMPLETED)));
+    }
+
+    // 어떤 구간을 누가 뛰었는지는 테스트마다 다르다 — 값은 호출부가 정하고 배선만 감춘다
+    private void givenSplits(RunningSplitRow... rows) {
+        when(loadRunningSplitsPort.loadSplits(any())).thenReturn(List.of(rows));
     }
 
     private void givenRecordAndProfiles() {

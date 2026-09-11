@@ -95,8 +95,7 @@ public class GetRunningResultHandlerTest {
     void 참가자가_아니면_403이다() {
         // given -> 남의 방을 조회한다
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any()))
-                .thenReturn(List.of(finished(OTHER, RunningPlayerStatus.COMPLETED)));
+        givenPlayers(finished(OTHER, RunningPlayerStatus.COMPLETED));
 
         // when & then
         assertThatThrownBy(() -> handler.handle(new GetRunningResultsQuery(ROOM_ID, ME)))
@@ -110,9 +109,9 @@ public class GetRunningResultHandlerTest {
     void 시작_전_이탈자는_403이다() {
         // given
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
+        givenPlayers(
                 withoutRecord(ME, RunningPlayerStatus.MATCHED_LEFT_NO_PENALTY),
-                finished(OTHER, RunningPlayerStatus.COMPLETED)));
+                finished(OTHER, RunningPlayerStatus.COMPLETED));
 
         // when & then
         assertThatThrownBy(() -> handler.handle(new GetRunningResultsQuery(ROOM_ID, ME)))
@@ -124,9 +123,9 @@ public class GetRunningResultHandlerTest {
     void 최상위_값은_본인_기록_기준이다() {
         // given -> 상대도 기록이 있지만 최상위 값은 본인 것이어야 한다
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
+        givenPlayers(
                 finished(ME, RunningPlayerStatus.COMPLETED),
-                finished(OTHER, RunningPlayerStatus.COMPLETED)));
+                finished(OTHER, RunningPlayerStatus.COMPLETED));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
                 .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", IMAGE_KEY), profile(OTHER, "러닝초보", null));
@@ -149,8 +148,7 @@ public class GetRunningResultHandlerTest {
     void 본인_기록이_없으면_최상위가_null이다() {
         // given
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any()))
-                .thenReturn(List.of(withoutRecord(ME, RunningPlayerStatus.RUNNING)));
+        givenPlayers(withoutRecord(ME, RunningPlayerStatus.RUNNING));
         when(loadRunningResultRecordPort.loadRecord(any(), any())).thenReturn(Optional.empty());
         givenProfiles(profile(ME, "동완러너", null));
 
@@ -168,9 +166,9 @@ public class GetRunningResultHandlerTest {
     void 기록이_없으면_지표가_null이다() {
         // given
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
+        givenPlayers(
                 finished(ME, RunningPlayerStatus.COMPLETED),
-                withoutRecord(OTHER, RunningPlayerStatus.RUNNING)));
+                withoutRecord(OTHER, RunningPlayerStatus.RUNNING));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
                 .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null), profile(OTHER, "러닝초보", null));
@@ -195,9 +193,9 @@ public class GetRunningResultHandlerTest {
     void 이탈자도_COMPLETED다() {
         // given
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
+        givenPlayers(
                 finished(ME, RunningPlayerStatus.COMPLETED),
-                finished(OTHER, RunningPlayerStatus.RUNNING_LEFT_PENALTY)));
+                finished(OTHER, RunningPlayerStatus.RUNNING_LEFT_PENALTY));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
                 .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null), profile(OTHER, "러닝초보", null));
@@ -215,9 +213,9 @@ public class GetRunningResultHandlerTest {
     void 탈퇴자는_공통_형식이다() {
         // given -> users 행이 지워져 프로필 조회에서 빠진다
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(
+        givenPlayers(
                 finished(ME, RunningPlayerStatus.COMPLETED),
-                finished(OTHER, RunningPlayerStatus.COMPLETED)));
+                finished(OTHER, RunningPlayerStatus.COMPLETED));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
                 .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null));
@@ -239,8 +237,7 @@ public class GetRunningResultHandlerTest {
     void 사진이_없으면_URL도_없다() {
         // given
         givenRoomExists();
-        when(loadRunningResultPlayersPort.loadPlayers(any()))
-                .thenReturn(List.of(finished(ME, RunningPlayerStatus.COMPLETED)));
+        givenPlayers(finished(ME, RunningPlayerStatus.COMPLETED));
         when(loadRunningResultRecordPort.loadRecord(any(), any()))
                 .thenReturn(Optional.of(record()));
         givenProfiles(profile(ME, "동완러너", null));
@@ -258,6 +255,11 @@ public class GetRunningResultHandlerTest {
 
     private void givenRoomExists() {
         when(loadRunningRoomPort.loadById(any())).thenReturn(Optional.of(mock(RunningRoom.class)));
+    }
+
+    // 누가 이 방에 있었는지는 테스트마다 다르다 — 값은 호출부가 정하고 배선만 감춘다
+    private void givenPlayers(RunningResultPlayer... players) {
+        when(loadRunningResultPlayersPort.loadPlayers(any())).thenReturn(List.of(players));
     }
 
     private void givenProfiles(PlayerProfile... profiles) {
