@@ -31,6 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -249,11 +251,13 @@ class SettleRunningForAccountDeletionHandlerTest {
         verifyNoInteractions(startMatchCooldownPort);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"FINISHED", "CANCELLED"})
     @DisplayName("이미 닫힌 방에 남은 미출석자도 같은 규칙으로 닫는다")
-    void closesNoShowLeftBehindInClosedRoom() {
-        // given -> 뛰던 사람이 전원 끝내면 방은 그 시점에 닫히고 미출석자만 JOINED로 남는다
-        givenActiveApplication(room(RunningRoomStatus.FINISHED, 2), RunningPlayerStatus.JOINED);
+    void closesNoShowLeftBehindInClosedRoom(RunningRoomStatus status) {
+        // given -> 뛰던 사람이 전원 끝내면 방은 그 시점에 닫히고 미출석자만 JOINED로 남는다.
+        //          남길 기록이 있었으면 FINISHED, 없었으면 CANCELLED다
+        givenActiveApplication(room(status, 2), RunningPlayerStatus.JOINED);
 
         // when
         handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
