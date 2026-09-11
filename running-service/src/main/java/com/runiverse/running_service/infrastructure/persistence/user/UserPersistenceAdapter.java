@@ -383,7 +383,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     @Override
     public Optional<AccountSnapshot> loadAccountSnapshot(UserId userId) {
         return entityManager.createQuery("""
-                        SELECT new com.runiverse.running_service.application.user.port.out.AccountSnapshot(
+                        SELECT NEW com.runiverse.running_service.application.user.port.out.AccountSnapshot(
                             u.userId, u.email, u.createdAt,
                             oauth.provider, oauth.providerId,
                             o.nickname, o.gender, o.birthday, o.avgPace, o.weight, o.height)
