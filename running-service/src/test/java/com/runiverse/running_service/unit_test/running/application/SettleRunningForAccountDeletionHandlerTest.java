@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
@@ -15,6 +16,8 @@ import com.runiverse.running_service.application.running.command.finish.FinishRu
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
@@ -24,11 +27,13 @@ import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,6 +48,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -56,6 +62,11 @@ class SettleRunningForAccountDeletionHandlerTest {
     private static final long ROOM_ID = 125L;
     private static final int AVG_PACE = 360;
     private static final int TARGET_DISTANCE = 5_000;
+    private static final Duration MATCH_COOLDOWN = Duration.ofMinutes(20);
+    // 탈퇴는 오프셋을 보지 않는다 — 쿨다운 길이만 쓴다
+    private static final MatchProperties MATCH_PROPERTIES = new MatchProperties(
+            Duration.ofMinutes(10), Duration.ofSeconds(10), Duration.ofHours(6),
+            10, MATCH_COOLDOWN);
     // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
     private static final RoomInfo ROOM_INFO = new RoomInfo(
             ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
@@ -72,14 +83,26 @@ class SettleRunningForAccountDeletionHandlerTest {
     @Mock
     private DeleteRunningPlayerPort deleteRunningPlayerPort;
     @Mock
+    private UpdateRunningPlayerPort updateRunningPlayerPort;
+    @Mock
+    private StartMatchCooldownPort startMatchCooldownPort;
+    @Mock
     private FinishRunningUsecase finishRunningUsecase;
     @Mock
     private RoomInfoAssembler roomInfoAssembler;
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
     private SettleRunningForAccountDeletionHandler handler;
+
+    @BeforeEach
+    void setUp() {
+        handler = new SettleRunningForAccountDeletionHandler(
+                lockMatchApplicationPort, loadMatchRoomPort, lockRunningRoomPort,
+                updateMatchRoomPort, deleteRunningPlayerPort, updateRunningPlayerPort,
+                startMatchCooldownPort, finishRunningUsecase, roomInfoAssembler,
+                MATCH_PROPERTIES, eventPublisher);
+    }
 
     @Test
     @DisplayName("활성 신청이 없어도 매칭 스트림 종료는 요청한다")
@@ -176,10 +199,10 @@ class SettleRunningForAccountDeletionHandlerTest {
     }
 
     @Test
-    @DisplayName("시작한 방이면 종료 경로로 보내고 신청을 남긴다")
-    void finishesRunningWhenRoomStarted() {
-        // given -> 기록이 없는 참가자도 과거 결과에 남아야 한다
-        givenActiveApplication(room(RunningRoomStatus.STARTED, 2));
+    @DisplayName("뛰던 참가자는 종료 경로로 보내고 신청을 남긴다")
+    void finishesRunningWhenPlayerWasRunning() {
+        // given
+        givenActiveApplication(room(RunningRoomStatus.STARTED, 2), RunningPlayerStatus.RUNNING);
 
         // when
         handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
@@ -188,20 +211,61 @@ class SettleRunningForAccountDeletionHandlerTest {
         verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, true));
         verify(deleteRunningPlayerPort, never()).delete(any());
         verify(updateMatchRoomPort, never()).update(any());
+        verifyNoInteractions(updateRunningPlayerPort);
     }
 
     @Test
-    @DisplayName("방이 시작됐으면 참가자 상태가 JOINED여도 종료 경로로 간다")
-    void finishesRunningEvenWhenPlayerStillJoined() {
-        // given -> 시작 시각에 앱을 켜지 않은 참가자는 status가 JOINED로 남는다
+    @DisplayName("시작된 방의 미출석자는 확정 후 이탈로 닫는다")
+    void closesNoShowAsMatchedLeft() {
+        // given -> 시작 시각에 앱을 켜지 않으면 방만 STARTED가 되고 참가자는 JOINED로 남는다.
+        //          종료 경로로 보내면 확정할 러닝이 없어 거절당한다
         givenActiveApplication(room(RunningRoomStatus.STARTED, 2), RunningPlayerStatus.JOINED);
 
         // when
         handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
 
-        // then -> 참가자 status로 갈랐다면 신청을 지웠을 것이다
-        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, true));
+        // then
+        assertThat(updatedPlayer().getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_PENALTY);
+        assertThat(updatedPlayer().getDeletedAt()).isPresent();
+        verify(startMatchCooldownPort).start(new UserId(USER_ID), MATCH_COOLDOWN);
+        verifyNoInteractions(finishRunningUsecase);
+        // 신청 행은 남고 인원도 그대로다
         verify(deleteRunningPlayerPort, never()).delete(any());
+        assertThat(updatedRoom().getPlayerCount().current()).isEqualTo(2);
+        assertThat(updatedRoom().getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("1인 확정 방의 미출석은 제재하지 않는다")
+    void doesNotPenalizeNoShowInSinglePlayerRoom() {
+        // given -> 안 나타나도 곤란해지는 상대가 없다
+        givenActiveApplication(room(RunningRoomStatus.STARTED, 1), RunningPlayerStatus.JOINED);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        assertThat(updatedPlayer().getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_NO_PENALTY);
+        verifyNoInteractions(startMatchCooldownPort);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RunningRoomStatus.class, names = {"FINISHED", "CANCELLED"})
+    @DisplayName("이미 닫힌 방에 남은 미출석자도 같은 규칙으로 닫는다")
+    void closesNoShowLeftBehindInClosedRoom(RunningRoomStatus status) {
+        // given -> 뛰던 사람이 전원 끝내면 방은 그 시점에 닫히고 미출석자만 JOINED로 남는다.
+        //          남길 기록이 있었으면 FINISHED, 없었으면 CANCELLED다
+        givenActiveApplication(room(status, 2), RunningPlayerStatus.JOINED);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        assertThat(updatedPlayer().getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_PENALTY);
+        verifyNoInteractions(finishRunningUsecase);
     }
 
     private void givenActiveApplication(RunningRoom room) {
@@ -219,6 +283,12 @@ class SettleRunningForAccountDeletionHandlerTest {
     private RunningRoom updatedRoom() {
         ArgumentCaptor<RunningRoom> captor = ArgumentCaptor.forClass(RunningRoom.class);
         verify(updateMatchRoomPort).update(captor.capture());
+        return captor.getValue();
+    }
+
+    private RunningPlayer updatedPlayer() {
+        ArgumentCaptor<RunningPlayer> captor = ArgumentCaptor.forClass(RunningPlayer.class);
+        verify(updateRunningPlayerPort, atLeastOnce()).update(captor.capture());
         return captor.getValue();
     }
 
@@ -248,6 +318,8 @@ class SettleRunningForAccountDeletionHandlerTest {
                 .type(RunningRoomType.MATCH)
                 .status(status)
                 .startAt(LocalDateTime.now().plus(Duration.ofHours(2)))
+                // 닫힌 시각은 종료 상태와 짝이라 어긋나면 복원이 막힌다
+                .closeAt(status.isTerminal() ? LocalDateTime.now() : null)
                 .targetDistance(TARGET_DISTANCE)
                 .avgPace(AVG_PACE)
                 .currentPlayerCount(currentPlayerCount)

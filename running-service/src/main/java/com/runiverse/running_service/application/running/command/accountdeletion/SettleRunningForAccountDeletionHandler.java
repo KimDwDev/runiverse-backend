@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.running.command.accountdeletion;
 
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
+import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
@@ -12,10 +13,14 @@ import com.runiverse.running_service.application.running.port.in.FinishRunningUs
 import com.runiverse.running_service.application.running.port.in.SettleRunningForAccountDeletionUsecase;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
+import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -29,13 +34,19 @@ import java.time.LocalDateTime;
 public class SettleRunningForAccountDeletionHandler
         implements SettleRunningForAccountDeletionUsecase {
 
+    // 확정 인원이 1이면 안 나타나도 곤란해지는 상대가 없다 — 강제 종료의 면제 기준과 같다
+    private static final int PENALTY_MIN_PLAYER_COUNT = 2;
+
     private final LockMatchApplicationPort lockMatchApplicationPort;
     private final LoadMatchRoomPort loadMatchRoomPort;
     private final LockRunningRoomPort lockRunningRoomPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
     private final DeleteRunningPlayerPort deleteRunningPlayerPort;
+    private final UpdateRunningPlayerPort updateRunningPlayerPort;
+    private final StartMatchCooldownPort startMatchCooldownPort;
     private final FinishRunningUsecase finishRunningUsecase;
     private final RoomInfoAssembler roomInfoAssembler;
+    private final MatchProperties matchProperties;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -57,16 +68,39 @@ public class SettleRunningForAccountDeletionHandler
                 .orElseThrow(() -> new IllegalStateException(
                         "배정된 방을 찾을 수 없다 — runningRoomId=" + roomId.value()));
 
-        // 시작 여부는 참가자가 아니라 방이 답한다 —
-        // 방이 시작된 뒤에 앱을 켜지 않은 참가자는 status가 JOINED로 남아 있다
         if (room.getStatus().isBeforeStart()) {
             leaveBeforeStart(userId, player, room);
             return;
         }
-        // 시작한 방은 기존 종료 경로가 마지막 좌표까지로 기록을 확정한다.
-        // 신청·세션 행은 남긴다 — 기록이 없는 참가자도 결과에 남아야 한다
+        // 방이 시작됐다고 다 뛴 것은 아니다 — 앱을 한 번도 켜지 않으면 JOINED로 남는다
+        if (player.getStatus() == RunningPlayerStatus.JOINED) {
+            leaveWithoutRunning(userId, player, room);
+            return;
+        }
+        // 살아 있는 신청은 JOINED 아니면 RUNNING이다 — 그 밖이면 데이터 사고라 드러낸다
+        if (player.getStatus() != RunningPlayerStatus.RUNNING) {
+            throw new IllegalStateException(
+                    "활성 신청이 뛸 수 없는 상태다 — userId=" + userId.value()
+                            + ", status=" + player.getStatus());
+        }
+        // 기존 종료 경로가 마지막 좌표까지로 기록을 확정한다. 신청·세션 행은 남긴다
         finishRunningUsecase.handle(
                 new FinishRunningCommand(roomId.value(), command.userId(), true));
+    }
+
+    // 강제 종료가 유예 뒤에 할 일을 앞당겨 한다 — 탈퇴 시점 때문에 판정이 달라지면 안 되므로
+    // 제재 조건도 그쪽과 같다
+    private void leaveWithoutRunning(UserId userId, RunningPlayer player, RunningRoom room) {
+        boolean penalty = room.getType() == RunningRoomType.MATCH
+                && room.getPlayerCount().current() >= PENALTY_MIN_PLAYER_COUNT;
+        player.leave(penalty, LocalDateTime.now());
+        updateRunningPlayerPort.update(player);
+        if (penalty) {
+            startMatchCooldownPort.start(userId, matchProperties.cooldown());
+        }
+        // 인원은 줄이지 않는다. 방도 닫지 않는다 — 강제 종료가 기록 유무로 판정한다
+        room.finishSession(userId);
+        updateMatchRoomPort.update(room);
     }
 
     private void leaveBeforeStart(UserId userId, RunningPlayer player, RunningRoom room) {
