@@ -368,6 +368,9 @@ jobs:
           echo "Application health check passed."
           docker ps --filter "name=${CONTAINER_NAME}"
 
+          # 사용하지 않는 이미지 정리
+          docker image prune -f
+
           echo "===== Runiverse deployment completed ====="
           REMOTE_SCRIPT
           )
