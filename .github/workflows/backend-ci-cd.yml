@@ -272,6 +272,13 @@ jobs:
               --username AWS \
               --password-stdin "${ECR_REGISTRY}"
 
+          # 이전 배포가 남긴 이미지 정리
+          # pull 전에 둔다 — 디스크를 비우고 받아야 쌓인 이미지 때문에 pull이 먼저 죽지 않는다.
+          # 배포가 실패하면 뒤쪽 단계에 닿지 못하는 것도 같은 이유로 앞이어야 하는 근거다.
+          # -a로 걷어도 롤백 대상은 안전하다 — 이전 컨테이너가 아직 떠 있어 그 이미지를 물고 있다.
+          # 이 줄을 아래 docker rm 뒤로 옮기면 롤백 이미지가 같이 지워진다
+          docker image prune -a -f || true
+
           # 이미지 Pull
           echo "Pulling Docker image..."
           docker pull "${IMAGE_URI}"
@@ -360,9 +367,6 @@ jobs:
 
           echo "Application health check passed."
           docker ps --filter "name=${CONTAINER_NAME}"
-
-          # 사용하지 않는 이미지 정리
-          docker image prune -f
 
           echo "===== Runiverse deployment completed ====="
           REMOTE_SCRIPT
