@@ -48,7 +48,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_ALREADY_IN_PROGRESS`·`MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN` |
+| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
 | 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
@@ -885,15 +885,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `scheduledStartAt` | String | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`). 필수 |
+| `targetDistanceMeters` | Integer | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나. 필수 |
+
 - **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다
-
-| 필드 | 허용값 |
-|---|---|
-| `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
-| `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
-
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 마감이 지난 `MATCHING` 방은 먼저 `MATCHED`로 확정 처리하며, 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
-- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
+- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용. 그 값이 없으면(온보딩 미완료) `409 ONBOARDING_NOT_COMPLETED`
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredPlayerCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생긴다. 같은 조건에 모집 중인 방이 있으면 거기 배정되고, 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`)이 새로 생긴다
 
@@ -903,9 +902,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `runningRoomId` | Long | 배정된 방 ID. 이 값으로 SSE 스트림에 연결한다 |
+
+- **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각(`closeAt`)은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
-- **에러 (400 Bad Request)**: 허용 범위 밖의 값
+- **에러 (400 Bad Request)**: 허용 범위 밖의 값 — 요청 검증 단계에서 걸린다
 
 ```json
 {
@@ -919,16 +922,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (409 Conflict)**: `MATCH_ALREADY_IN_PROGRESS` — 이미 활성 신청이나 확정된 방이 있다
+- 두 조건이 동시에 어긋나면 `message`에 두 문장이 공백으로 이어붙어 한 번에 나간다
 
-```json
-{
-  "code": "MATCH_ALREADY_IN_PROGRESS",
-  "message": "이미 진행 중인 매칭이 있습니다."
-}
-```
-
-- **에러 (409 Conflict)**: `MATCH_SLOT_CLOSED` — 모집 마감(`start_at - 오프셋`)이 지난 슬롯이다
+- **에러 (409 Conflict)** — 아래 순서로 검사하며, 먼저 걸린 것 하나만 응답한다
+- **`MATCH_SLOT_CLOSED`** — 모집 마감(`start_at - 오프셋`)이 지난 슬롯이다
 
 ```json
 {
@@ -940,7 +937,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
 - 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
 
-- **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
+- **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
 
 ```json
 {
@@ -951,6 +948,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 솔로 러닝(`POST /running-rooms/solo`)은 이 제한을 받지 않는다
+
+- **`MATCH_ALREADY_IN_PROGRESS`** — 이미 활성 신청이나 확정된 방이 있다
+
+```json
+{
+  "code": "MATCH_ALREADY_IN_PROGRESS",
+  "message": "이미 진행 중인 매칭이 있습니다."
+}
+```
+
+- 대기 중·확정된 방뿐 아니라 **러닝 중에도** 여기 걸린다 — 활성 판정이 `deleted_at`만 보기 때문이다
+
+- **`ONBOARDING_NOT_COMPLETED`** — 매칭 조건에 쓸 온보딩 평균 페이스가 없다
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- 페이스를 입력받지 않고 온보딩 값을 쓰기 때문에, 값이 없으면 매칭 조건을 만들 수 없어 신청을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/running-matches` — 매칭 취소·방 나가기 (겸용)
