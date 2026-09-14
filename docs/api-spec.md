@@ -1337,6 +1337,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 6-1. `GET /api/v1/running-rooms/{runningRoomId}/results` — 러닝 결과 (참가자 전원 요약)
 
 - **화면**: 러닝 후 - 대시보드 (참가자 공통 정보). `RUNNING_FINISHED` 수신 후 진입
+- **Request**: 본문 없음
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+
+- **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - 방이 아직 `STARTED`면 종료하지 않은 참가자는 `status='RUNNING'`, 기록 지표는 null인 현재 스냅샷을 반환한다. 다시 조회하면 최신 상태를 받고 방이 `FINISHED`면 최종 결과가 된다
 - **Response `200 OK`**
 
@@ -1382,9 +1389,33 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 러닝 방 ID |
+| `startedAt` | String | X | 현재 사용자 기록의 시작 시각. 기록이 없으면 null |
+| `finishedAt` | String | X | 현재 사용자 기록의 종료 시각. 기록이 없으면 null |
+| `routes` | Number[][] | X | 현재 사용자 경로. `[[위도, 경도], …]`를 달린 순서대로 담는다. 안쪽 배열은 길이 2, 위도가 먼저다(GeoJSON과 반대). 좌표는 소수점 5자리(약 1m)까지. 첫 원소가 시작 지점, 끝 원소가 종료 지점이라 마커용 좌표를 따로 싣지 않는다. 본인 기록이 없으면 null(빈 배열이 아니다) |
+| `players` | Array | O | 러닝 단계에 들어간 참가자 전원의 결과 |
+
+**`players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID |
+| `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
+| `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
+| `status` | String | O | 참가자 상태 — `RUNNING`(진행 중)·`COMPLETED`(종료) 두 값뿐. 중도 이탈도 종료 뒤에는 `COMPLETED`다 |
+| `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
+| `isMe` | Boolean | O | 현재 사용자 여부 |
+| `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초). 기록이 없으면 null |
+| `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
+| `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
+| `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+
 - **`status`는 `COMPLETED`·`RUNNING` 두 값뿐이다** — 러닝을 끝낸 사람은 완주든 중도이탈이든 `COMPLETED`, 아직 뛰는 중이면 `RUNNING`이다. DB의 `running_players.status`(`RUNNING_LEFT_PENALTY` 등, `erd.md` §6)를 그대로 노출하지 않는다: **페널티 여부는 본인 매칭 쿨다운 판정에 쓰는 내부 값이라 남의 화면에 실을 이유가 없다.** 얼마나 뛰었는지는 `totalDistanceMeters`로 드러난다
-- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 시작 전 이탈자는 제외한다. 기록이 없으면 사용자 정보와 `status`만 채우고 `totalDistanceMeters`·`totalDurationSeconds`·`totalCaloriesKcal`·`averagePaceSecondsPerKm`·`averageCadenceSpm`·`totalElevationGainMeters`는 null로 내려 화면에 "기록 없음"으로 표시한다
-- 기록이 있어도 케이던스·유효 고도 표본이 부족하면 `averageCadenceSpm`·`totalElevationGainMeters`는 null일 수 있다
+- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 **시작 전 이탈자는 제외한다**. 기록이 없는 참가자는 사용자 정보와 `status`만 채워 내려가므로 화면에 "기록 없음"으로 표시한다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
 
 - **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
@@ -1392,16 +1423,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
 - **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2·7-2)에만 쓴다
 
-- **에러 (403 Forbidden — 같은 방 참가자만 열람)**
-
-```json
-{
-  "code": "NOT_ROOM_PLAYER",
-  "message": "이 방의 참가자가 아닙니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
 ```json
 {
@@ -1410,6 +1432,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **에러 (403 Forbidden)**: 방은 있지만 러닝 단계에 들어간 참가자가 아니다
+
+```json
+{
+  "code": "NOT_ROOM_PLAYER",
+  "message": "이 방의 참가자가 아닙니다."
+}
+```
+
+- **방 존재 여부를 먼저 본다** — 없으면 404, 있는데 참가자가 아니면 403이다. 순서를 뒤집으면 없는 방에 403이 나가면서 방의 존재 여부가 새어 나간다
 - **인증**: 필요 (같은 방 참가자)
 
 ### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + 경로
