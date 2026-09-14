@@ -1447,6 +1447,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + 경로
 
 - **화면**: 러닝 후 - 대시보드 (본인 경로 확인 + 참가자 상세·구간별 비교)
+- **Request**: 본문 없음
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+
+- **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - **Response `200 OK`** (구조 요약)
 
 ```json
@@ -1492,12 +1499,55 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 러닝 방 ID |
+| `splitDistanceMeters` | Integer | O | 고정 구간 거리(m). 항상 10 |
+| `totalDistanceMeters` | Integer | X | 현재 사용자 총 거리(m). 목표를 넘겨 뛰었으면 목표 지점에서, 목표 미달이면 마지막 10m 경계에서 끊은 값이다. 기록이 없으면 null |
+| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `startedAt` | String | X | 현재 사용자 기록 시작 시각. 기록이 없으면 null |
+| `finishedAt` | String | X | 현재 사용자 기록 종료 시각. 기록이 없으면 null |
+| `players` | Array | O | **기록이 있는** 참가자 목록. 참가자 메타데이터는 여기에만 담는다 |
+| `splits` | Array | O | 구간별 참가자 기록. 구간 번호 오름차순. 본인 기록이 없어도 다른 참가자의 행은 유지된다 |
+
+**`players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID |
+| `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
+| `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
+| `status` | String | O | 참가자 상태 — `RUNNING`·`COMPLETED` 두 값뿐 (6-1과 같은 규칙) |
+| `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
+| `isMe` | Boolean | O | 현재 사용자 여부 |
+
+**`splits[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `splitNumber` | Integer | O | 1부터 시작하는 구간 번호 |
+| `startDistanceMeters` | Integer | O | 구간 시작 누적 거리(m) |
+| `endDistanceMeters` | Integer | O | 구간 종료 누적 거리(m) |
+| `distanceMeters` | Integer | O | 구간 거리(m). 고정 10m — 마지막 자투리 구간은 생기지 않는다 |
+| `routes` | Number[][] | X | 이 구간의 **본인** 경로. `[[위도, 경도], …]` 형식이며 구간 N의 끝 원소는 구간 N+1의 첫 원소와 같다. 본인 기록이 없거나 본인이 이 구간에 도달하지 못했으면 null |
+| `players` | Array | O | 이 구간 기록이 있는 참가자 목록 |
+
+**`splits[].players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) |
+| `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
+| `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
+| `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
+| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
+
 - **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
 - **구간 경계는 방 전체가 공유한다** — 0m부터 10m씩 자르는 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
-- `running_records` 행이 없는 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
-- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다 — **10m 구간의 `elevationChangeMeters`는 대체로 null이다**(GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다)
-- 최상위 `totalElevationGainMeters`도 유효 고도 표본이 부족하면 null이다
-- 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`는 null이고 `splits[].routes`도 null이다 — 자를 폴리라인이 없다. **다른 참가자의 구간 기록은 그대로 내려간다** — 본인 기록이 없어도 다른 참가자의 결과는 보이는 6-1과 같은 규칙이다
+- **최상위 `players`는 6-1과 달리 기록이 있는 참가자만이다** — 구간은 기록(`running_records`)에 딸린 행이라, 기록이 없으면 보여줄 구간 자체가 없다. 그런 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 빠진다. 6-1은 기록이 없어도 목록에 남기고 지표만 null로 내리므로 **두 API의 참가자 수가 다를 수 있다**. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
+- **10m 구간의 `elevationChangeMeters`는 대체로 null이다** — GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다
+- 조회하는 본인의 기록이 없어도 **다른 참가자의 구간 기록은 그대로 내려간다** — 본인 기록이 없어도 다른 참가자의 결과는 보이는 6-1과 같은 규칙이다
 - **경로는 최상위가 아니라 구간마다 실린다.** 이 화면은 구간별로 색을 달리해 그리므로 자른 조각이 곧 그리는 단위다. 전체 경로 하나가 필요하면 6-1의 `routes`를 쓴다 — 같은 값을 두 응답에 중복해 싣지 않는다
 - **`splits[].routes`는 조회하는 본인의 경로다.** 같은 객체의 `players`가 참가자 전원인 것과 다르다 — `running_splits.route_start_index`·`route_end_index`가 각자 자기 `route_polyline`의 위치를 가리키므로 남의 구간 좌표는 이 배열에 섞이지 않는다
 - **이어붙일 때 경계점이 겹친다.** N번 구간의 끝 원소와 N+1번의 첫 원소는 같은 점이다 — 전체 경로를 만들려면 두 번째 구간부터 첫 원소를 건너뛴다
@@ -1505,16 +1555,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 점별 고도·정확도·순간 페이스·케이던스·시각은 반환하지 않고 구간 단위 값만 제공한다.
 - **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
 
-- **에러 (403 Forbidden)**
-
-```json
-{
-  "code": "NOT_ROOM_PLAYER",
-  "message": "이 방의 참가자가 아닙니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
 ```json
 {
@@ -1523,6 +1564,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **에러 (403 Forbidden)**: 방은 있지만 러닝 단계에 들어간 참가자가 아니다
+
+```json
+{
+  "code": "NOT_ROOM_PLAYER",
+  "message": "이 방의 참가자가 아닙니다."
+}
+```
+
+- **방 존재 여부를 먼저 본다** — 6-1과 같은 순서다
 - **인증**: 필요 (같은 방 참가자)
 
 ## 7. 기록 화면
