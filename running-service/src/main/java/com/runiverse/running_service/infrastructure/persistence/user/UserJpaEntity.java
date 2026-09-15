@@ -8,16 +8,25 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.DynamicUpdate;
 
 import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_users_email",
+                columnNames = "email"
+        )
+)
+@Check(name = "ck_users_profile_visibility", constraints = "profile_visibility in ('PUBLIC', 'FRIENDS')")
 // 소개글·프로필 사진·비밀번호가 이 행에 각각 쓴다. 전체 컬럼을 실으면 서로의 변경을 옛 값으로 덮는다
 @DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // 다른 객체에서 생성되지 않도록 하는 속성
