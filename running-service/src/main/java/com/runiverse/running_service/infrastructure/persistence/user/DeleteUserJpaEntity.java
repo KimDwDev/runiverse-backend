@@ -23,8 +23,8 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "delete_users",
-        // 보관 기간 만료 배치가 탄다 — email이 선두라 이미 비운 행을 스캔에서 배제한다.
-        // 범위 조건이라 created_at은 좁히지 못하고 필터로만 쓰인다
+        // 탈퇴자 신원 조회(email 등가)와 보관 기간 만료 배치가 함께 탄다.
+        // 배포 스키마는 WHERE email IS NOT NULL 부분 인덱스다 — @Index로는 표현할 수 없다
         indexes = @Index(name = "idx_delete_user_pending", columnList = "email, created_at")
 )
 @Check(name = "ck_delete_user_gender", constraints = "gender is null or gender in ('MALE', 'FEMALE')")
