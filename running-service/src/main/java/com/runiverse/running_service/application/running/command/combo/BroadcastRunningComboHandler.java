@@ -22,7 +22,6 @@ public class BroadcastRunningComboHandler implements BroadcastRunningComboUsecas
     // 이 인스턴스에 붙어 있는 수신자에게만 보낸다 — 다른 서버의 참가자는 그쪽이 같은 메시지를 받아 처리한다.
     // 진행 통지와 달리 보낸 사람도 받는다: 본인 콤보는 서버가 시각에서 계산한 값이라 클라가 스스로 못 만든다
     // 이 인스턴스에 붙어 있는 수신자에게만 보낸다 — 다른 서버의 참가자는 그쪽이 같은 메시지를 받아 처리한다.
-    // 진행 통지와 달리 보낸 사람도 받는다: 본인 콤보는 서버가 시각에서 계산한 값이라 클라가 스스로 못 만든다
     @Override
     public void handle(BroadcastRunningComboCommand command) {
         Set<UserId> members = loadRunningRoomMembersPort.usersIn(command.runningRoomId());

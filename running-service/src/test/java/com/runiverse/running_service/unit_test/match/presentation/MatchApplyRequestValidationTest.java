@@ -25,9 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MatchApplyRequestValidationTest {
 
     // ApplyMatchRequest의 상수와 짝이다 — 거기를 바꾸면 여기 셋도 같이 바꾼다
-    private static final LocalTime EARLIEST = LocalTime.of(0, 0);
+    private static final LocalTime EARLIEST = LocalTime.of(18, 0);
     private static final LocalTime LATEST = LocalTime.of(22, 0);
-    private static final int SLOT_MINUTES = 5;
+    private static final int SLOT_MINUTES = 30;
 
     private static final LocalDate DATE = LocalDate.of(2026, 9, 11);
     private static final int DISTANCE = 5_000;

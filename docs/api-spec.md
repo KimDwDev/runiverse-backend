@@ -48,7 +48,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_ALREADY_IN_PROGRESS`·`MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN` |
+| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
 | 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
@@ -771,7 +771,8 @@
 - **마감이 지난 `MATCHING` 방은 `READY`로 답한다.** 확정 예약이 아직 깨지 않은 틈에 조회하면 방은 `MATCHING`이지만 곧 확정될 자리다 — 대기 화면을 그리게 두면 잠시 뒤 화면이 다시 바뀐다. 매칭 취소가 방 상태가 아니라 마감 시각으로 분기하는 것과 같은 이유다
 - **참가자 상태(`running_players.status`)는 보지 않는다.** 방이 `STARTED`인데 본인은 아직 `JOINED`(WS 미접속)일 수 있으나 클라이언트가 할 일은 같고 `RUNNING_START`가 멱등이라 구분할 이유가 없다
 - **방 정보를 담지 않는다.** 참가자 목록·팀 평균 페이스·모집 마감 시각은 방의 속성이고, 매칭 중에는 스트림이 `RoomInfo`로, 러닝 중에는 `RUNNING_STARTED` ack가 나른다. 여기 실으면 같은 값이 두 경로로 내려가 어긋날 여지가 생긴다
-  - 다만 `scheduledStartAt`·`targetDistanceMeters`는 **본인 신청의 속성**(`running_players.start_at`·`target_distance`)이라 담는다. 러닝 중 복구에서 경과 시간·목표를 그리는 데 필요하다
+  - 다만 `scheduledStartAt`·`targetDistanceMeters`는 담는다 — 러닝 중 복구에서 경과 시간·목표를 그리는 데 필요하고, 방 정보를 조립하지 않고도 한 행에서 나온다
+  - 두 값 모두 **`running_rooms` 쪽이 정본이다.** `running_players.target_distance`는 NOT NULL이라 목표 없는 솔로에도 값이 들어가므로, `null`을 그대로 보내려면 방의 값을 써야 한다
 - **`type`에 `INVITE`는 나가지 않는다** — 미래 예약값이라 계약에 포함하지 않는다
 - **`WAITING`은 `MATCH`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
 - **인증**: 필요
@@ -884,15 +885,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `scheduledStartAt` | String | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`). 필수 |
+| `targetDistanceMeters` | Integer | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나. 필수 |
+
 - **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다
-
-| 필드 | 허용값 |
-|---|---|
-| `scheduledStartAt` | **18:00~22:00**, **30분 간격** (`18:00`, `18:30`, … `22:00`) |
-| `targetDistanceMeters` | **3000 / 5000 / 10000** 셋 중 하나 |
-
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 마감이 지난 `MATCHING` 방은 먼저 `MATCHED`로 확정 처리하며, 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
-- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용
+- 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용. 그 값이 없으면(온보딩 미완료) `409 ONBOARDING_NOT_COMPLETED`
 - **모집 인원도 입력받지 않음** — 서버가 2~4명 범위에서 자동 편성 (`desiredPlayerCount` 필드 없음)
 - **Response `201 Created`** — 신청이 접수되면 `running_players` row와 `running_room_sessions` 배정 row가 생긴다. 같은 조건에 모집 중인 방이 있으면 거기 배정되고, 없으면 **1인 방**(`running_rooms`, `type='MATCH'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`)이 새로 생긴다
 
@@ -902,9 +902,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `runningRoomId` | Long | 배정된 방 ID. 이 값으로 SSE 스트림에 연결한다 |
+
+- **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각(`closeAt`)은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
-- **에러 (400 Bad Request)**: 허용 범위 밖의 값
+- **에러 (400 Bad Request)**: 허용 범위 밖의 값 — 요청 검증 단계에서 걸린다
 
 ```json
 {
@@ -918,16 +922,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (409 Conflict)**: `MATCH_ALREADY_IN_PROGRESS` — 이미 활성 신청이나 확정된 방이 있다
+- 두 조건이 동시에 어긋나면 `message`에 두 문장이 공백으로 이어붙어 한 번에 나간다
 
-```json
-{
-  "code": "MATCH_ALREADY_IN_PROGRESS",
-  "message": "이미 진행 중인 매칭이 있습니다."
-}
-```
-
-- **에러 (409 Conflict)**: `MATCH_SLOT_CLOSED` — 모집 마감(`start_at - 오프셋`)이 지난 슬롯이다
+- **에러 (409 Conflict)** — 아래 순서로 검사하며, 먼저 걸린 것 하나만 응답한다
+- **`MATCH_SLOT_CLOSED`** — 모집 마감(`start_at - 오프셋`)이 지난 슬롯이다
 
 ```json
 {
@@ -939,7 +937,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
 - 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
 
-- **에러 (409 Conflict)**: `MATCH_COOLDOWN` — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
+- **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
 
 ```json
 {
@@ -950,6 +948,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 솔로 러닝(`POST /running-rooms/solo`)은 이 제한을 받지 않는다
+
+- **`MATCH_ALREADY_IN_PROGRESS`** — 이미 활성 신청이나 확정된 방이 있다
+
+```json
+{
+  "code": "MATCH_ALREADY_IN_PROGRESS",
+  "message": "이미 진행 중인 매칭이 있습니다."
+}
+```
+
+- 대기 중·확정된 방뿐 아니라 **러닝 중에도** 여기 걸린다 — 활성 판정이 `deleted_at`만 보기 때문이다
+
+- **`ONBOARDING_NOT_COMPLETED`** — 매칭 조건에 쓸 온보딩 평균 페이스가 없다
+
+```json
+{
+  "code": "ONBOARDING_NOT_COMPLETED",
+  "message": "온보딩을 먼저 완료해 주세요."
+}
+```
+
+- 페이스를 입력받지 않고 온보딩 값을 쓰기 때문에, 값이 없으면 매칭 조건을 만들 수 없어 신청을 받지 않는다
 - **인증**: 필요
 
 #### `DELETE /api/v1/running-matches` — 매칭 취소·방 나가기 (겸용)
@@ -1317,6 +1337,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 6-1. `GET /api/v1/running-rooms/{runningRoomId}/results` — 러닝 결과 (참가자 전원 요약)
 
 - **화면**: 러닝 후 - 대시보드 (참가자 공통 정보). `RUNNING_FINISHED` 수신 후 진입
+- **Request**: 본문 없음
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+
+- **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - 방이 아직 `STARTED`면 종료하지 않은 참가자는 `status='RUNNING'`, 기록 지표는 null인 현재 스냅샷을 반환한다. 다시 조회하면 최신 상태를 받고 방이 `FINISHED`면 최종 결과가 된다
 - **Response `200 OK`**
 
@@ -1362,9 +1389,33 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 러닝 방 ID |
+| `startedAt` | String | X | 현재 사용자 기록의 시작 시각. 기록이 없으면 null |
+| `finishedAt` | String | X | 현재 사용자 기록의 종료 시각. 기록이 없으면 null |
+| `routes` | Number[][] | X | 현재 사용자 경로. `[[위도, 경도], …]`를 달린 순서대로 담는다. 안쪽 배열은 길이 2, 위도가 먼저다(GeoJSON과 반대). 좌표는 소수점 5자리(약 1m)까지. 첫 원소가 시작 지점, 끝 원소가 종료 지점이라 마커용 좌표를 따로 싣지 않는다. 본인 기록이 없으면 null(빈 배열이 아니다) |
+| `players` | Array | O | 러닝 단계에 들어간 참가자 전원의 결과 |
+
+**`players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID |
+| `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
+| `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
+| `status` | String | O | 참가자 상태 — `RUNNING`(진행 중)·`COMPLETED`(종료) 두 값뿐. 중도 이탈도 종료 뒤에는 `COMPLETED`다 |
+| `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
+| `isMe` | Boolean | O | 현재 사용자 여부 |
+| `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초). 기록이 없으면 null |
+| `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
+| `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
+| `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+
 - **`status`는 `COMPLETED`·`RUNNING` 두 값뿐이다** — 러닝을 끝낸 사람은 완주든 중도이탈이든 `COMPLETED`, 아직 뛰는 중이면 `RUNNING`이다. DB의 `running_players.status`(`RUNNING_LEFT_PENALTY` 등, `erd.md` §6)를 그대로 노출하지 않는다: **페널티 여부는 본인 매칭 쿨다운 판정에 쓰는 내부 값이라 남의 화면에 실을 이유가 없다.** 얼마나 뛰었는지는 `totalDistanceMeters`로 드러난다
-- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 시작 전 이탈자는 제외한다. 기록이 없으면 사용자 정보와 `status`만 채우고 `totalDistanceMeters`·`totalDurationSeconds`·`totalCaloriesKcal`·`averagePaceSecondsPerKm`·`averageCadenceSpm`·`totalElevationGainMeters`는 null로 내려 화면에 "기록 없음"으로 표시한다
-- 기록이 있어도 케이던스·유효 고도 표본이 부족하면 `averageCadenceSpm`·`totalElevationGainMeters`는 null일 수 있다
+- `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 **시작 전 이탈자는 제외한다**. 기록이 없는 참가자는 사용자 정보와 `status`만 채워 내려가므로 화면에 "기록 없음"으로 표시한다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
 
 - **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
@@ -1372,16 +1423,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
 - **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2·7-2)에만 쓴다
 
-- **에러 (403 Forbidden — 같은 방 참가자만 열람)**
-
-```json
-{
-  "code": "NOT_ROOM_PLAYER",
-  "message": "이 방의 참가자가 아닙니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
 ```json
 {
@@ -1390,11 +1432,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **에러 (403 Forbidden)**: 방은 있지만 러닝 단계에 들어간 참가자가 아니다
+
+```json
+{
+  "code": "NOT_ROOM_PLAYER",
+  "message": "이 방의 참가자가 아닙니다."
+}
+```
+
+- **방 존재 여부를 먼저 본다** — 없으면 404, 있는데 참가자가 아니면 403이다. 순서를 뒤집으면 없는 방에 403이 나가면서 방의 존재 여부가 새어 나간다
 - **인증**: 필요 (같은 방 참가자)
 
 ### 6-2. `GET /api/v1/running-rooms/{runningRoomId}/split-results` — 구간별 상세 + 경로
 
 - **화면**: 러닝 후 - 대시보드 (본인 경로 확인 + 참가자 상세·구간별 비교)
+- **Request**: 본문 없음
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+
+- **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - **Response `200 OK`** (구조 요약)
 
 ```json
@@ -1440,12 +1499,55 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Long | O | 러닝 방 ID |
+| `splitDistanceMeters` | Integer | O | 고정 구간 거리(m). 항상 10 |
+| `totalDistanceMeters` | Integer | X | 현재 사용자 총 거리(m). 목표를 넘겨 뛰었으면 목표 지점에서, 목표 미달이면 마지막 10m 경계에서 끊은 값이다. 기록이 없으면 null |
+| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `startedAt` | String | X | 현재 사용자 기록 시작 시각. 기록이 없으면 null |
+| `finishedAt` | String | X | 현재 사용자 기록 종료 시각. 기록이 없으면 null |
+| `players` | Array | O | **기록이 있는** 참가자 목록. 참가자 메타데이터는 여기에만 담는다 |
+| `splits` | Array | O | 구간별 참가자 기록. 구간 번호 오름차순. 본인 기록이 없어도 다른 참가자의 행은 유지된다 |
+
+**`players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID |
+| `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
+| `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
+| `status` | String | O | 참가자 상태 — `RUNNING`·`COMPLETED` 두 값뿐 (6-1과 같은 규칙) |
+| `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
+| `isMe` | Boolean | O | 현재 사용자 여부 |
+
+**`splits[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `splitNumber` | Integer | O | 1부터 시작하는 구간 번호 |
+| `startDistanceMeters` | Integer | O | 구간 시작 누적 거리(m) |
+| `endDistanceMeters` | Integer | O | 구간 종료 누적 거리(m) |
+| `distanceMeters` | Integer | O | 구간 거리(m). 고정 10m — 마지막 자투리 구간은 생기지 않는다 |
+| `routes` | Number[][] | X | 이 구간의 **본인** 경로. `[[위도, 경도], …]` 형식이며 구간 N의 끝 원소는 구간 N+1의 첫 원소와 같다. 본인 기록이 없거나 본인이 이 구간에 도달하지 못했으면 null |
+| `players` | Array | O | 이 구간 기록이 있는 참가자 목록 |
+
+**`splits[].players[]`**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) |
+| `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
+| `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
+| `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
+| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
+
 - **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
 - **구간 경계는 방 전체가 공유한다** — 0m부터 10m씩 자르는 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
-- `running_records` 행이 없는 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 제외한다. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
-- 구간의 `averageCadenceSpm`·`elevationChangeMeters`도 유효 표본이 부족하면 null이다 — **10m 구간의 `elevationChangeMeters`는 대체로 null이다**(GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다)
-- 최상위 `totalElevationGainMeters`도 유효 고도 표본이 부족하면 null이다
-- 조회하는 본인의 기록이 없으면 `totalDistanceMeters`·`totalElevationGainMeters`·`startedAt`·`finishedAt`는 null이고 `splits[].routes`도 null이다 — 자를 폴리라인이 없다. **다른 참가자의 구간 기록은 그대로 내려간다** — 본인 기록이 없어도 다른 참가자의 결과는 보이는 6-1과 같은 규칙이다
+- **최상위 `players`는 6-1과 달리 기록이 있는 참가자만이다** — 구간은 기록(`running_records`)에 딸린 행이라, 기록이 없으면 보여줄 구간 자체가 없다. 그런 참가자는 `splits[].players`와 최상위 `players` 양쪽에서 빠진다. 6-1은 기록이 없어도 목록에 남기고 지표만 null로 내리므로 **두 API의 참가자 수가 다를 수 있다**. 탈퇴한 참가자는 공통 탈퇴 유저 형식과 `isDeleted=true`로 표시한다
+- **10m 구간의 `elevationChangeMeters`는 대체로 null이다** — GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다
+- 조회하는 본인의 기록이 없어도 **다른 참가자의 구간 기록은 그대로 내려간다** — 본인 기록이 없어도 다른 참가자의 결과는 보이는 6-1과 같은 규칙이다
 - **경로는 최상위가 아니라 구간마다 실린다.** 이 화면은 구간별로 색을 달리해 그리므로 자른 조각이 곧 그리는 단위다. 전체 경로 하나가 필요하면 6-1의 `routes`를 쓴다 — 같은 값을 두 응답에 중복해 싣지 않는다
 - **`splits[].routes`는 조회하는 본인의 경로다.** 같은 객체의 `players`가 참가자 전원인 것과 다르다 — `running_splits.route_start_index`·`route_end_index`가 각자 자기 `route_polyline`의 위치를 가리키므로 남의 구간 좌표는 이 배열에 섞이지 않는다
 - **이어붙일 때 경계점이 겹친다.** N번 구간의 끝 원소와 N+1번의 첫 원소는 같은 점이다 — 전체 경로를 만들려면 두 번째 구간부터 첫 원소를 건너뛴다
@@ -1453,16 +1555,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 점별 고도·정확도·순간 페이스·케이던스·시각은 반환하지 않고 구간 단위 값만 제공한다.
 - **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
 
-- **에러 (403 Forbidden)**
-
-```json
-{
-  "code": "NOT_ROOM_PLAYER",
-  "message": "이 방의 참가자가 아닙니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
 ```json
 {
@@ -1471,6 +1564,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **에러 (403 Forbidden)**: 방은 있지만 러닝 단계에 들어간 참가자가 아니다
+
+```json
+{
+  "code": "NOT_ROOM_PLAYER",
+  "message": "이 방의 참가자가 아닙니다."
+}
+```
+
+- **방 존재 여부를 먼저 본다** — 6-1과 같은 순서다
 - **인증**: 필요 (같은 방 참가자)
 
 ## 7. 기록 화면
