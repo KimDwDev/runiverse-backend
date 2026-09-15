@@ -4,7 +4,7 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.exception.GenderRequiredException;
 import com.runiverse.running_service.domain.user.exception.JoinedAtRequiredException;
 import com.runiverse.running_service.domain.user.exception.LoginTypeRequiredException;
-import com.runiverse.running_service.domain.user.exception.OnboardingSnapshotInCompleteException;
+import com.runiverse.running_service.domain.user.exception.OnboardingSnapshotIncompleteException;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import com.runiverse.running_service.domain.user.vo.Birthday;
 import com.runiverse.running_service.domain.user.vo.Bmi;
@@ -67,7 +67,7 @@ public class DeletedUser {
         boolean allPresent = nickname != null && gender != null && birthYear != null
                 && avgPace != null && bmi != null;
         if (anyPresent && !allPresent) {
-            throw new OnboardingSnapshotInCompleteException();
+            throw new OnboardingSnapshotIncompleteException();
         }
     }
 
