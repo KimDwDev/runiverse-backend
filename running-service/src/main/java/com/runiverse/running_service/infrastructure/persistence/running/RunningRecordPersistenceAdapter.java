@@ -2,7 +2,7 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
-import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacePort;
+import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
@@ -17,7 +17,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort,
-        LoadRecentRunningPacePort {
+        LoadRecentRunningPacesPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
