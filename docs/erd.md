@@ -132,13 +132,13 @@
 | running_room_id | bigint | PK1, FK → running_rooms | 배정된 방 |
 | user_id | UUID | PK2, → users | 논리 참조(FK 제약 없음). **키를 신청이 아니라 유저로 잡는다** — 취소 후 같은 방에 다시 신청해도 행이 늘지 않고 기존 행을 되살린다 |
 | running_player_id | bigint | NOT NULL, → running_players | 논리 참조(FK 제약 없음) — 무결성은 앱이 관리한다. 탈퇴 정리 때 세션도 `user_id`로 함께 지운다. **현재 이 방에 들어와 있는 신청.** PK가 아니라 재배정 시 새 신청으로 갱신된다. 참가자의 상태·페이스·기록을 읽는 조인 경로이며, 지우고 `user_id`로 우회하면 유저의 과거 신청까지 딸려 오거나 완주(`deleted_at` 기록) 후 조인이 끊긴다 |
-| leave_count | int | NOT NULL | 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스가 같은 방들의 순위를 가르는 데 쓴다** — 사람들이 잘 떠나지 않은 방이 매칭 품질이 좋다는 신호다 |
+| leave_count | int | NOT NULL | **이 유저가** 이 방에서 이탈한 **누적** 횟수 — 방 이동(향후 매칭 알고리즘)이 생기면 같은 방을 다시 거쳐 2 이상이 될 수 있다. 배정 시 **페이스 구간이 같은 방들의 순위를 가르는 데 쓴다** — 신청자 본인이 등지고 나왔던 방으로 되돌리지 않기 위한 것이다. **방 전체의 이탈 합이 아니다**: 후보를 훑을 때 `user_id`가 신청자인 행만 읽고, 거쳐 간 적 없는 방은 행이 없어 0으로 본다 |
 | is_connected | boolean | NOT NULL | 현재 방 배정 여부이며 WebSocket 연결 상태와 무관하다. 현재 배정 중인 참가자는 행 하나만 true이고, 취소·이탈·**완주** 후에는 모두 false다. **"이 유저가 이 방에서 뛰었나"를 판정하지 않는다** — 그건 `running_players.status`가 답하며, 결과 조회는 이 컬럼을 보지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 배정 변동 시각(`is_connected` 전환·`leave_count` 증가). **write-once가 아니라 두 컬럼 다 둔다** — 이탈, 그리고 향후 재배정·복귀로 갱신되는 테이블이다 |
 
 > **지금은 배정이 신청당 한 번이다** — 신청하면 방 하나에 배정되고, 현재 구현·명세에는 배정을 바꾸는 흐름이 없다. 나가면 그 행이 `is_connected=false`로 남는다.
 > **스키마는 방 이동을 담을 수 있게 미리 설계돼 있다** — 매칭 알고리즘이 고도화되면 서버가 활성 신청을 더 맞는 방으로 옮겨 다니게 한다. 그때 신청이 방을 옮기면 row가 쌓여 참여 이력이 되고, 거쳐 간 방으로 돌아오면 복합 PK가 같으므로 기존 행의 `is_connected`를 되살리고 `leave_count`만 누적한다(그래서 2 이상이 될 수 있다). 이동 시 두 방의 `current_player_count`는 한 트랜잭션에서 같이 갱신한다.
-> **취소 후 재신청은 같은 행을 쓴다** — 키가 유저라 이전에 나갔던 방에 다시 배정되면 행을 새로 만들지 않고 `is_connected`를 되살리며 `running_player_id`를 새 신청으로 갱신한다. 후보에서 막지는 않으며 `leave_count`가 방 순위를 낮춰 되도록 피할 뿐이다. 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
+> **취소 후 재신청은 같은 행을 쓴다** — 키가 유저라 이전에 나갔던 방에 다시 배정되면 행을 새로 만들지 않고 `is_connected`를 되살리며 `running_player_id`를 새 신청으로 갱신한다. 후보에서 막지는 않으며 `leave_count`가 그 방의 순위를 낮춰 되도록 피할 뿐이다 — **그 방이 유일한 후보면 몇 번을 나왔든 다시 들어간다.** 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
 
 ### running_records
 
@@ -407,7 +407,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.user_id | 내 기록 조회 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.user_id | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 탄다 |
-| running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중인 방(`type='MATCH' AND status='MATCHING'`) + 페이스 근접(±30초/km) 판정. 솔로 방·초대방을 인덱스 단계에서 배제한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |
+| running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |
 | scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작. 페널티 판정(최근 제재 이탈 조회)도 이 인덱스를 탄다 |
 | delete_users.(email, created_at) | 보관 기간 만료 정리 — 아직 신원 정보가 남은 행 조회. `email`이 선두라 정리가 끝난 대다수를 인덱스 단계에서 배제한다. 행을 지우지 않는 테이블이라 시간이 갈수록 `created_at` 단독으로는 거의 전부를 읽게 된다 |
