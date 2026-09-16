@@ -113,7 +113,7 @@
 | status | enum | NOT NULL | 참가·진행 상태 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 희망 시작 시각 |
 | target_distance | int | NOT NULL | 목표 거리(미터, API `targetDistanceMeters`). 솔로는 목표가 없어 도달 불가능한 상한(500000)으로 "끝은 유저가 정한다"를 표현한다 — 판정 기준은 이 값이 아니라 방(`running_rooms.target_distance`)이다. `running_records.total_distance`(실제 이동 거리)와 이름으로 갈린다 |
-| avg_pace | int | NOT NULL | 신청 시점의 사용자 평균 페이스(초/km). **입력받지 않는다** — 매칭 조건에 페이스 항목이 없어(5-A) 서버가 `user_onboardings.avg_pace`에서 복사한다. 배정 시 방 평균과의 근접도 판정에 쓴다 |
+| avg_pace | int | NOT NULL | 신청 시점의 사용자 평균 페이스(초/km). **입력받지 않는다** — 매칭 조건에 페이스 항목이 없어(5-A) 서버가 `user_onboardings.avg_pace`에서 복사한다. 배정 시 방 평균과의 차이로 **후보 순위를 매기는 데 쓴다 — 자격을 가르지는 않는다**(feature-spec 방 배정 기준). 신청 시점 스냅샷이라 이후 원본이 갱신돼도 소급하지 않는다 |
 | desired_player_count | int | nullable | **[MVP 제외]** 향후 사용자가 선택할 희망 매칭 인원 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **신청이 끝난 시각** — 대기 취소·이탈·완주 공통. 완주도 그 신청이 끝난 것이라 찍는다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다. 한 번 찍히면 바뀌지 않는다 |
