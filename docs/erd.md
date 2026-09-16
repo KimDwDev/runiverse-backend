@@ -48,7 +48,7 @@
 | nickname | varchar | UNIQUE, NOT NULL | 중복 시 409. 프로필 표시명(닉네임 변경도 이 컬럼 갱신) |
 | gender | enum | NOT NULL |  |
 | birthday | date | NOT NULL | |
-| avg_pace | int | NOT NULL | 초/km. 온보딩 입력이 초기값 → 이후 서버가 러닝 기록 기반 자동 갱신 |
+| avg_pace | int | NOT NULL | 초/km. 온보딩 입력이 초기값 → 러닝 종료마다 서버가 최근 기록으로 다시 낸다(feature-spec 평균 페이스 갱신). 표본이 덜 차면 갱신하지 않고 온보딩 입력값이 그대로 남는다. **페이스를 읽는 쪽은 전부 이 컬럼 하나를 본다** — `running_players.avg_pace`·`running_rooms.avg_pace`는 신청 시점에 여기서 복사해 가므로 소급 갱신 경로가 없다 |
 | weight | numeric(4,1) | NOT NULL | kg |
 | height | numeric(4,1) | NOT NULL | cm |
 | created_at / updated_at | timestamp | NOT NULL | created_at = 온보딩 완료 시각 |
