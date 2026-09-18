@@ -165,10 +165,11 @@ public final class RunningComboEvaluator {
                 pair.maxComboCount());
     }
 
-    // 유지 횟수는 저장하지 않고 시작 이후 경과 시간을 1회 길이로 나눈 몫에 1을 더해 센다 —
-    // 누가 몇 번 보내든 같은 답이 나온다
+    // 유지 횟수는 저장하지 않고 시작 이후 경과 시간을 1회 길이로 나눈 몫으로 센다 —
+    // 누가 몇 번 보내든 같은 답이 나온다.
+    // 붙는 순간은 0이다: 출발선에 나란히 선 것만으로 1을 주면 아직 함께 달리지도 않은 구간을 세게 된다
     private static int comboCount(Instant startedAt, Instant now, Duration tick) {
         long elapsedMillis = Math.max(0, Duration.between(startedAt, now).toMillis());
-        return (int) (elapsedMillis / tick.toMillis()) + 1;
+        return (int) (elapsedMillis / tick.toMillis());
     }
 }

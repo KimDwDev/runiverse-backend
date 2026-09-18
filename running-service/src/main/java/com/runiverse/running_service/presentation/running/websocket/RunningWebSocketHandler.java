@@ -2,6 +2,7 @@ package com.runiverse.running_service.presentation.running.websocket;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.running.command.combo.StartRunningComboCommand;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionCommand;
@@ -12,6 +13,7 @@ import com.runiverse.running_service.application.running.port.in.FinishRunningUs
 import com.runiverse.running_service.application.running.port.in.GetRunningSnapshotUsecase;
 import com.runiverse.running_service.application.running.port.in.RegisterRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.RemoveRunningSessionUsecase;
+import com.runiverse.running_service.application.running.port.in.StartRunningComboUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
@@ -52,6 +54,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final UpdateRunningLocationUsecase updateRunningLocationUsecase;
     private final FinishRunningUsecase finishRunningUsecase;
     private final GetRunningSnapshotUsecase getRunningSnapshotUsecase;
+    private final StartRunningComboUsecase startRunningComboUsecase;
     // attribute에 저장할 runningRoomId
     public static final String RUNNING_ROOM_ID = "runningRoomId";
     // 좌표 배치마다 방을 다시 읽지 않으려고 세션에 새겨 둔다 — 시작 뒤 바뀌지 않는 값이다
@@ -133,14 +136,18 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
                     userId.value(), request.runningRoomId(),
                     new WebSocketRunningConnection(session, jsonMapper)));
-            // 세션 등록 뒤에 읽는다 — 먼저 읽으면 등록되기 전에 도착한 갱신을
-            // 스냅샷도 브로드캐스트도 놓쳐 그 구간이 화면에서 통째로 빈다
+            // 세션 등록 뒤에 세운다 — 먼저 세우면 자기가 만든 콤보의 브로드캐스트를 놓친다
+            startRunningComboUsecase.handle(new StartRunningComboCommand(
+                    request.runningRoomId(), userId.value()));
+            // 콤보를 세운 뒤에 읽는다 — 순서가 뒤집히면 방금 붙은 콤보가 ack에서 빠져
+            // 다음 좌표 배치까지 화면이 빈다
             snapshot = getRunningSnapshotUsecase.handle(
                     new GetRunningSnapshotQuery(userId.value(), request.runningRoomId()));
         } catch (BusinessException e) {
             sendError(session, e.getErrorCode(), envelope.event());
             return;
         }
+
         session.getAttributes().put(RUNNING_ROOM_ID, request.runningRoomId());
         // 세션 attribute는 ConcurrentHashMap이라 null을 못 담는다.
         // 목표 없는 솔로 방은 키 자체를 비워 두면 읽는 쪽이 null로 받는다
