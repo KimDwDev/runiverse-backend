@@ -9,11 +9,14 @@ import com.runiverse.running_service.application.running.command.session.RemoveR
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
+import com.runiverse.running_service.application.running.port.in.GetRunningSnapshotUsecase;
 import com.runiverse.running_service.application.running.port.in.RegisterRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.RemoveRunningSessionUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
+import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotQuery;
+import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
@@ -22,6 +25,7 @@ import com.runiverse.running_service.presentation.running.websocket.message.Runn
 import com.runiverse.running_service.presentation.running.websocket.message.RunningLocationUpdateRequest;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningStartRequest;
+import com.runiverse.running_service.presentation.running.websocket.message.RunningStartedPayload;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningWebSocketErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +51,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final RemoveRunningSessionUsecase removeRunningSessionUsecase;
     private final UpdateRunningLocationUsecase updateRunningLocationUsecase;
     private final FinishRunningUsecase finishRunningUsecase;
+    private final GetRunningSnapshotUsecase getRunningSnapshotUsecase;
     // attribute에 저장할 runningRoomId
     public static final String RUNNING_ROOM_ID = "runningRoomId";
     // 좌표 배치마다 방을 다시 읽지 않으려고 세션에 새겨 둔다 — 시작 뒤 바뀌지 않는 값이다
@@ -121,12 +126,17 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         }
         UserId userId = userId(session);
         StartRunningResult result;
+        GetRunningSnapshotResult snapshot;
         try {
             result = startRunningUsecase.handle(
                     new StartRunningCommand(userId.value(), request.runningRoomId()));
             registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
                     userId.value(), request.runningRoomId(),
                     new WebSocketRunningConnection(session, jsonMapper)));
+            // 세션 등록 뒤에 읽는다 — 먼저 읽으면 등록되기 전에 도착한 갱신을
+            // 스냅샷도 브로드캐스트도 놓쳐 그 구간이 화면에서 통째로 빈다
+            snapshot = getRunningSnapshotUsecase.handle(
+                    new GetRunningSnapshotQuery(userId.value(), request.runningRoomId()));
         } catch (BusinessException e) {
             sendError(session, e.getErrorCode(), envelope.event());
             return;
@@ -140,7 +150,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         } else {
             session.getAttributes().put(TARGET_DISTANCE_METERS, targetDistanceMeters);
         }
-        send(session, RunningMessageType.RUNNING_STARTED.message());
+        send(session, RunningMessageType.RUNNING_STARTED.message(
+                RunningStartedPayload.from(snapshot)));
     }
 
     // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다
