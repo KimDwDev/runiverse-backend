@@ -24,9 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("매칭 신청 요청 DTO 검증 단위 테스트")
 class MatchApplyRequestValidationTest {
 
-    // ApplyMatchRequest가 테스트용으로 창(18:00~22:00)·간격(30분) 제한을 풀어둔 상태와 짝이다.
-    // 거기 상수를 운영값으로 되돌리면 아래 anyTimeOfDayPasses·unalignedMinutePasses가 깨진다 — 그게 신호다
-    private static final LocalTime VALID = LocalTime.of(1, 54);
+    private static final LocalTime VALID = LocalTime.of(19, 0);
 
     private static final LocalDate DATE = LocalDate.of(2026, 9, 11);
     private static final int DISTANCE = 5_000;
@@ -46,25 +44,33 @@ class MatchApplyRequestValidationTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {"00:00", "01:54", "13:07", "18:00", "22:00", "23:59"})
-    @DisplayName("하루 중 어느 시각이든 통과한다")
-    void anyTimeOfDayPasses(String time) {
-        // when & then -> 창 제한이 풀린 상태다. 옛 창(18:00~22:00)으로 되돌리면 00:00·01:54·23:59가 깨진다
+    @ValueSource(strings = {"18:00", "18:30", "19:00", "21:30", "22:00"})
+    @DisplayName("18:00~22:00 30분 간격 슬롯은 통과한다")
+    void allowedSlotsPass(String time) {
+        // when & then -> 양 끝 경계도 선택지에 들어간다
         assertThat(validate(LocalTime.parse(time), DISTANCE)).isEmpty();
     }
 
-    @Test
-    @DisplayName("30분 간격이 아닌 분도 통과한다")
-    void unalignedMinutePasses() {
-        // given & when & then -> 옛 간격(30분)으로 되돌리면 여기가 깨진다
-        assertThat(validate(LocalTime.of(1, 54), DISTANCE)).isEmpty();
-        assertThat(validate(LocalTime.of(18, 1), DISTANCE)).isEmpty();
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"00:00", "17:30", "17:59", "22:01", "23:59"})
+    @DisplayName("창 밖 시각은 거절한다")
+    void outOfWindowFails(String time) {
+        // when & then -> 자유 입력이 아니라 정해진 선택지다
+        assertThat(validate(LocalTime.parse(time), DISTANCE)).hasSize(1);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"18:01", "19:15", "21:45"})
+    @DisplayName("창 안이어도 30분 간격이 아니면 거절한다")
+    void unalignedMinuteFails(String time) {
+        // when & then
+        assertThat(validate(LocalTime.parse(time), DISTANCE)).hasSize(1);
     }
 
     @Test
     @DisplayName("초·나노가 붙으면 거절한다")
     void secondsAndNanosFail() {
-        // given -> 분만 보면 통과하지만 슬롯이 아니다. 제한을 푼 뒤에도 남는 유일한 시각 검사다
+        // given -> 분만 보면 통과하지만 슬롯이 아니다
         LocalTime withSeconds = VALID.withSecond(30);
         LocalTime withNanos = VALID.withNano(1);
 
