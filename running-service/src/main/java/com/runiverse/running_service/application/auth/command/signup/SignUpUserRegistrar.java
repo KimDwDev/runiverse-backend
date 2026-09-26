@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 import com.runiverse.running_service.domain.user.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class SignUpUserRegistrar {
 
     private final CheckEmailDuplicatePort checkEmailDuplicatePort;
@@ -26,6 +28,7 @@ public class SignUpUserRegistrar {
         // 1. 이메일 중복 확인
         boolean emailExists = checkEmailDuplicatePort.existsByEmail(email);
         if (emailExists) {
+            log.info("[인증] 회원가입 실패: 이미 가입된 이메일");
             throw new EmailAlreadyExistsException();
         }
 
