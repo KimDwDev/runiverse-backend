@@ -2,6 +2,8 @@ package com.runiverse.running_service.infrastructure.weather;
 
 import com.runiverse.running_service.application.running.port.out.Weather;
 import com.sun.net.httpserver.HttpServer;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -98,12 +100,18 @@ public class OpenMeteoWeatherClientTest {
     void hourly가_없으면_비운다() throws IOException {
         // given
         OpenMeteoWeatherClient client = createClient(200, "{}");
+        LogCapture log = LogCapture.of(OpenMeteoWeatherClient.class);
 
-        // when
-        Optional<Weather> weather = client.fetch(37.5, 127.0, AT);
+        try {
+            // when
+            Optional<Weather> weather = client.fetch(37.5, 127.0, AT);
 
-        // then
-        assertThat(weather).isEmpty();
+            // then
+            assertThat(weather).isEmpty();
+            assertThat(log.messages(Level.WARN)).containsExactly("[러닝] 날씨 조회 실패: 응답 비어 있음");
+        } finally {
+            log.stop();
+        }
     }
 
     @Test
@@ -111,12 +119,19 @@ public class OpenMeteoWeatherClientTest {
     void 값이_null이면_비운다() throws IOException {
         // given
         OpenMeteoWeatherClient client = createClient(200, NULL_VALUE_RESPONSE);
+        LogCapture log = LogCapture.of(OpenMeteoWeatherClient.class);
 
-        // when
-        Optional<Weather> weather = client.fetch(37.5, 127.0, AT);
+        try {
+            // when
+            Optional<Weather> weather = client.fetch(37.5, 127.0, AT);
 
-        // then
-        assertThat(weather).isEmpty();
+            // then -> 응답 객체를 통째로 찍지 않고 어느 값이 빠졌는지만 남긴다
+            assertThat(weather).isEmpty();
+            assertThat(log.messages(Level.WARN))
+                    .containsExactly("[러닝] 날씨 조회 실패: 날씨 값 누락 - hasCode=false, hasTemperature=false");
+        } finally {
+            log.stop();
+        }
     }
 
     @Test

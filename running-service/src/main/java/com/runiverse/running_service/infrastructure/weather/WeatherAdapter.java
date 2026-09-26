@@ -34,7 +34,12 @@ public class WeatherAdapter implements LoadWeatherPort {
                 log.warn("[러닝] 날씨 조회 실패: 날씨 API 요청 거부 - status={}", e.getStatusCode().value());
                 break;
             } catch (RestClientException e) {
-                log.warn("날씨 조회 실패 {}/{}", attempt, properties.maxAttempts(), e);
+                if (attempt < properties.maxAttempts()) {
+                    log.warn("[러닝] 날씨 조회 실패: 날씨 API 통신 오류 - attempt={}, maxAttempts={}, cause={}",
+                            attempt, properties.maxAttempts(), e.getClass().getSimpleName());
+                    continue;
+                }
+                log.error("[러닝] 날씨 조회 실패: 재시도 소진 - maxAttempts={}", properties.maxAttempts(), e);
             }
         }
         // 한 시간짜리 러닝 기록이 외부 API 하나 때문에 날아가면 안 된다
