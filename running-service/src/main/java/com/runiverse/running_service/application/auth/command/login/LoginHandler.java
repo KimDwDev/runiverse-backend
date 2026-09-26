@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenH
 import com.runiverse.running_service.application.common.port.out.PasswordHashPort;
 import com.runiverse.running_service.domain.user.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class LoginHandler implements LoginUsecase {
 
     private final LoadUserByEmailPort loadUserByEmailPort;
@@ -30,6 +32,7 @@ public class LoginHandler implements LoginUsecase {
         // 1. 이메일 확인 — 대소문자를 구분한다. 가입 때 소문자로 정규화해 저장하므로 클라이언트가 소문자로 보낸다
         Optional<User> foundUser = loadUserByEmailPort.loadByEmail(command.email());
         if (foundUser.isEmpty()) {
+            log.info("[인증] 로그인 실패: 가입되지 않은 이메일");
             throw new InvalidCredentialsException();
         }
         User user = foundUser.get();
@@ -39,6 +42,7 @@ public class LoginHandler implements LoginUsecase {
                 command.password(),
                 user.getPasswordHash().value());
         if (!passwordChecked) {
+            log.info("[인증] 로그인 실패: 비밀번호 불일치 - userId={}", user.getUserId().value());
             throw new InvalidCredentialsException();
         }
 
@@ -51,6 +55,7 @@ public class LoginHandler implements LoginUsecase {
 
         // 5. refresh token redis 저장
         saveRefreshTokenPort.save(user.getUserId(), hashedRefreshToken);
+        log.info("[인증] 로그인 성공 - userId={}", user.getUserId().value());
 
         // 6. 반환
         return new LoginResult(user.getUserId().value(), accessToken, refreshToken);
