@@ -14,6 +14,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.charset.StandardCharsets;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,7 +33,8 @@ public class RunningRoomListener implements MessageListener {
             envelope = jsonMapper.readValue(message.getBody(), RunningRoomMessage.class);
         } catch (JacksonException e) {
             // 깨진 메시지 한 건 때문에 이후 수신이 막히면 안 된다
-            log.warn("방 채널 메시지 파싱 실패");
+            log.error("[러닝] 방 채널 메시지 파싱 실패: 메시지 형식 불일치 - channel={}",
+                    new String(message.getChannel(), StandardCharsets.UTF_8), e);
             return;
         }
         switch (envelope.type()) {

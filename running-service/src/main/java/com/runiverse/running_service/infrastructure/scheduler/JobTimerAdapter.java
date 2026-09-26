@@ -44,7 +44,7 @@ public class JobTimerAdapter implements RegisterJobTimerPort {
             runScheduledJobUsecase.handle(new RunScheduledJobCommand(jobId));
         } catch (RuntimeException e) {
             // 스케줄러 스레드로 예외가 올라가면 아무도 못 보고 조용히 사라진다
-            log.error("예약 실행 실패 — scheduledJobId={}", jobId, e);
+            log.error("[예약] 예약 실행 실패: 처리하지 못한 예외 - scheduledJobId={}", jobId, e);
         }
     }
 }

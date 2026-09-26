@@ -30,7 +30,7 @@ public class ScheduledJobRedisAdapter implements PublishScheduledJobPort {
             // 던지지 않는다 — 이미 커밋된 뒤라 되돌릴 것이 없고,
             // 내 타이머는 이미 걸려 있어 최소 한 대는 깬다.
             // 정본은 DB라 다른 인스턴스도 다음 부팅에 되살린다
-            log.warn("예약 전파 실패 — scheduledJobId={}",
+            log.error("[예약] 예약 전파 실패: Redis 오류 - scheduledJobId={}",
                     job.getScheduledJobId().orElse(null), e);
         }
     }

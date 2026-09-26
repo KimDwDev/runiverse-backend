@@ -21,15 +21,15 @@ public class RunningRoomSubscriber {
             runningChannelContainer.addMessageListener(
                     runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
         } catch (RuntimeException e) {
-            log.warn("러닝 방 채널 구독 실패 - roomId={}", runningRoomId, e);
+            log.error("[러닝] 방 채널 구독 실패: Redis 오류 - roomId={}", runningRoomId, e);
             throw new RunningSessionUnavailableException();
         }
-        log.debug("러닝 방 채널 구독 — roomId={}", runningRoomId);
+        log.debug("[러닝] 방 채널 구독 성공 - roomId={}", runningRoomId);
     }
 
     public void unsubscribe(Long runningRoomId) {
         runningChannelContainer.removeMessageListener(
                 runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
-        log.debug("러닝 방 채널 구독 해제 — roomId={}", runningRoomId);
+        log.debug("[러닝] 방 채널 구독 해제 성공 - roomId={}", runningRoomId);
     }
 }
