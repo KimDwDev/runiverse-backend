@@ -47,16 +47,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.error("{} 도메인 검증 실패 - code={}", LogTag.of(request), e.getErrorCode().getCode(), e);
-        // handleDomainException — log.error 다음 줄에
         markReason(request, e.getErrorCode().getCode());
-        // handleValidationException — log.info 다음 줄에
-        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
-        // handleMessageNotReadable — log.info 다음 줄에
-        markReason(request, CommonErrorCode.MALFORMED_REQUEST_BODY.getCode());
-        // handleUnexpectedException — log.error 다음 줄에
-        markReason(request, CommonErrorCode.INTERNAL_SERVER_ERROR.getCode());
-        // handleTypeMismatch — log.info 다음 줄에
-        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 e.getErrorCode().getCode(),
@@ -79,6 +70,7 @@ public class GlobalExceptionHandler {
                 .distinct()
                 .toList();
         log.info("{} 요청 검증 실패 - fields={}", LogTag.of(request), fields);
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.INVALID_REQUEST.getCode(),
@@ -95,6 +87,7 @@ public class GlobalExceptionHandler {
         // 예외 메시지에는 잘못 보낸 입력값이 그대로 들어가 원인 예외의 종류만 남긴다
         log.info("{} 요청 본문 파싱 실패 - cause={}",
                 LogTag.of(request), e.getMostSpecificCause().getClass().getSimpleName());
+        markReason(request, CommonErrorCode.MALFORMED_REQUEST_BODY.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
@@ -106,6 +99,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e, HttpServletRequest request) {
         log.error("{} 처리하지 못한 예외", LogTag.of(request), e);
+        markReason(request, CommonErrorCode.INTERNAL_SERVER_ERROR.getCode());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
@@ -120,6 +114,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.info("{} 경로 변수 변환 실패 - param={}", LogTag.of(request), e.getName());
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.INVALID_REQUEST.getCode(),
