@@ -7,6 +7,9 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.InvalidCredentialsException;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.integration_test.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,7 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
     private static final String PASSWORD = "Password123!";
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
+    private LogCapture loginLog;
 
     @BeforeEach
     void setUp() {
@@ -34,6 +38,12 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
                 tokenProvider,
                 refreshTokenStore
         );
+        loginLog = LogCapture.of(LoginHandler.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        loginLog.stop();
     }
 
     private UUID signUp() {
@@ -103,5 +113,43 @@ public class LoginIntegrationTest extends IntegrationTestSupport {
         String secondHash = refreshTokenStore.loadById(userId).orElseThrow();
         assertThat(secondHash).isNotEqualTo(firstHash);
         assertThat(tokenProvider.matches(first.refreshToken(), secondHash)).isFalse();
+    }
+
+    @Test
+    @DisplayName("로그인에 성공하면 userId를 담아 성공 로그를 남긴다")
+    void loginLogsSuccess() {
+        // given
+        UUID userId = signUp();
+        // when
+        loginHandler.handle(new LoginCommand(EMAIL, PASSWORD));
+        // then
+        assertThat(loginLog.messages(Level.INFO))
+                .containsExactly("[인증] 로그인 성공 - userId=" + userId);
+    }
+
+    @Test
+    @DisplayName("가입하지 않은 이메일이면 원인을 남기되 이메일 원문은 남기지 않는다")
+    void loginWithUnknownEmailLogsFailure() {
+        // when
+        assertThatThrownBy(() -> loginHandler.handle(new LoginCommand(EMAIL, PASSWORD)))
+                .isInstanceOf(InvalidCredentialsException.class);
+        // then
+        assertThat(loginLog.messages(Level.INFO))
+                .containsExactly("[인증] 로그인 실패: 가입되지 않은 이메일");
+    }
+
+    @Test
+    @DisplayName("비밀번호가 틀리면 응답과 달리 로그에는 원인을 구분해 userId와 함께 남긴다")
+    void loginWithWrongPasswordLogsFailure() {
+        // given
+        UUID userId = signUp();
+        String wrongPassword = "WrongPassword1!";
+        // when
+        assertThatThrownBy(() -> loginHandler.handle(new LoginCommand(EMAIL, wrongPassword)))
+                .isInstanceOf(InvalidCredentialsException.class);
+        // then -> 틀린 비밀번호는 대개 진짜 비밀번호의 오타라 남기지 않는다
+        assertThat(loginLog.messages(Level.INFO))
+                .containsExactly("[인증] 로그인 실패: 비밀번호 불일치 - userId=" + userId);
+        assertThat(loginLog.messages(Level.INFO)).noneMatch(message -> message.contains(wrongPassword));
     }
 }
