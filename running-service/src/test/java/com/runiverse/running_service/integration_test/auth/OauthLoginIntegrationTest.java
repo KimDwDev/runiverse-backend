@@ -13,6 +13,9 @@ import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.integration_test.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,8 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     private static final String KAKAO_EMAIL = "runner@kakao.com";
     private SignUpHandler signUpHandler;
     private OauthLoginHandler oauthLoginHandler;
+    private LogCapture handlerLog;
+    private LogCapture resolverLog;
 
     @BeforeEach
     void setUp() {
@@ -47,6 +52,14 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 refreshTokenStore   // SaveRefreshTokenHashPort
         );
         oauthClient.register(AUTH_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
+        handlerLog = LogCapture.of(OauthLoginHandler.class);
+        resolverLog = LogCapture.of(OauthUserResolver.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        handlerLog.stop();
+        resolverLog.stop();
     }
 
     private OauthLoginResult login() {
@@ -150,5 +163,44 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
         assertThat(userStore.size()).isZero();
         assertThat(refreshTokenStore.isEmpty()).isTrue();
+    }
+
+    @Test
+    @DisplayName("소셜 로그인에 성공하면 userId와 provider를 담아 성공 로그를 남긴다")
+    void oauthLoginLogsSuccess() {
+        // when
+        OauthLoginResult result = login();
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 성공 - userId=" + result.userId() + ", provider=KAKAO");
+    }
+
+    @Test
+    @DisplayName("로컬 계정과 이메일이 겹치면 실패 원인을 남기되 이메일과 소셜 회원번호는 남기지 않는다")
+    void oauthLoginWithExistingLocalEmailLogsFailure() {
+        // given
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(KAKAO_EMAIL), "Password123!"));
+        // when
+        assertThatThrownBy(this::login)
+                .isInstanceOf(EmailAlreadyExistsException.class);
+        // then
+        assertThat(resolverLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 이미 가입된 이메일 - provider=KAKAO");
+        assertThat(resolverLog.messages(Level.INFO))
+                .noneMatch(message -> message.contains(KAKAO_EMAIL) || message.contains(KAKAO_ID));
+        assertThat(handlerLog.messages(Level.INFO)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 provider면 요청한 provider 이름을 담아 실패 로그를 남긴다")
+    void oauthLoginWithUnsupportedProviderLogsFailure() {
+        // when
+        assertThatThrownBy(() -> oauthLoginHandler.handle(
+                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
+                .isInstanceOf(UnsupportedProviderException.class);
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=naver");
     }
 }
