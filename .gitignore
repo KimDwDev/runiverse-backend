@@ -17,3 +17,6 @@ CLAUDE.local.md
 !e2e_test/.env.test
 *.pem
 *.key
+
+# log
+logs/
