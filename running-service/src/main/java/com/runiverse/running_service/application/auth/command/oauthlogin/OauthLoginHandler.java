@@ -11,10 +11,12 @@ import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OauthLoginHandler implements OauthLoginUsecase {
 
     private final ExchangeOauthCodePort exchangeOauthCodePort;
@@ -44,6 +46,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
 
         // 5. refresh token 해시 후 저장
         saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
+        log.info("[인증] 소셜 로그인 성공 - userId={}, provider={}", user.getUserId().value(), provider);
 
         // 6. 반환
         return new OauthLoginResult(user.getUserId().value(), accessToken, refreshToken);
@@ -53,6 +56,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
         try {
             return Provider.from(value);
         } catch (ProviderNotSupportedException e) {
+            log.info("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider={}", value);
             throw new UnsupportedProviderException();
         }
     }
