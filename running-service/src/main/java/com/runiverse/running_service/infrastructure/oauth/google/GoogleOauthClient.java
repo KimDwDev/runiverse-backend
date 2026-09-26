@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.auth.exception.OauthEmailNotPro
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.infrastructure.oauth.OauthClient;
+import com.runiverse.running_service.infrastructure.oauth.OauthErrorCode;
 import com.runiverse.running_service.infrastructure.oauth.google.dto.GoogleTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.google.dto.GoogleUserResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -15,13 +16,12 @@ import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
@@ -31,13 +31,16 @@ public class GoogleOauthClient implements OauthClient {
     private static final String BEARER_PREFIX = "Bearer ";
     private final RestClient restClient;
     private final GoogleOauthProperties properties;
+    private final JsonMapper jsonMapper;
 
     GoogleOauthClient(
             RestClient restClient,
-            GoogleOauthProperties properties
+            GoogleOauthProperties properties,
+            JsonMapper jsonMapper
     ) {
         this.restClient = restClient;
         this.properties = properties;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -52,7 +55,7 @@ public class GoogleOauthClient implements OauthClient {
             GoogleUserResponse user = fetchUser(googleAccessToken);
             return toProfile(user);
         } catch (RestClientException e) {
-            log.warn("구글 통신 실패", e);
+            log.error("[인증] 구글 로그인 실패: 구글 통신 오류", e);
             throw new OauthCodeExchangeFailedException();
         }
     }
@@ -75,12 +78,12 @@ public class GoogleOauthClient implements OauthClient {
                 .body(form)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("토큰 요청", res);
+                    logFailure("[인증] 구글 토큰 요청 실패: 구글 응답 오류", res);
                     throw new OauthCodeExchangeFailedException();
                 })
                 .body(GoogleTokenResponse.class);
         if (response == null || !StringUtils.hasText(response.accessToken())) {
-            log.warn("구글 토큰 응답에 access_token이 없다");
+            log.error("[인증] 구글 토큰 요청 실패: access_token 누락");
             throw new OauthCodeExchangeFailedException();
         }
         return response.accessToken();
@@ -93,12 +96,12 @@ public class GoogleOauthClient implements OauthClient {
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + googleAccessToken)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("사용자 정보 조회", res);
+                    logFailure("[인증] 구글 사용자 조회 실패: 구글 응답 오류", res);
                     throw new OauthCodeExchangeFailedException();
                 })
                 .body(GoogleUserResponse.class);
         if (response == null || !StringUtils.hasText(response.sub())) {
-            log.warn("구글 사용자 응답에 sub가 없다");
+            log.error("[인증] 구글 사용자 조회 실패: sub 누락");
             throw new OauthCodeExchangeFailedException();
         }
         return response;
@@ -112,11 +115,14 @@ public class GoogleOauthClient implements OauthClient {
         return new OauthProfile(Provider.GOOGLE, response.sub(), response.email());
     }
 
-    private void logFailure(String step, ClientHttpResponse response) throws IOException {
-        log.warn("구글 {} 실패: status={}, body={}",
-                step,
-                response.getStatusCode(),
-                StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8)
-        );
+    // 문구는 호출하는 곳에서 고정 문자열로 넘긴다 — 변하는 값은 key=value로만 붙인다
+    private void logFailure(String message, ClientHttpResponse response) throws IOException {
+        HttpStatusCode status = response.getStatusCode();
+        String errorCode = OauthErrorCode.of(jsonMapper, response);
+        if (status.is5xxServerError()) {
+            log.error(message + " - status={}, errorCode={}", status.value(), errorCode);
+            return;
+        }
+        log.warn(message + " - status={}, errorCode={}", status.value(), errorCode);
     }
 }
