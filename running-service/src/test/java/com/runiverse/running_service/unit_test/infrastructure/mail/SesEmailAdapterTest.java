@@ -3,6 +3,9 @@ package com.runiverse.running_service.unit_test.infrastructure.mail;
 import com.runiverse.running_service.application.auth.exception.EmailSendFailedException;
 import com.runiverse.running_service.infrastructure.mail.SesEmailAdapter;
 import com.runiverse.running_service.infrastructure.mail.SesProperties;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,7 +13,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.services.sesv2.model.SesV2Exception;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
 import software.amazon.awssdk.services.sesv2.model.SendEmailRequest;
 
@@ -34,8 +40,16 @@ public class SesEmailAdapterTest {
 
     private SesEmailAdapter adapter;
 
+    private LogCapture log;
+
+    @AfterEach
+    void tearDown() {
+        log.stop();
+    }
+
     @BeforeEach
     void setUp() {
+        log = LogCapture.of(SesEmailAdapter.class);
         // 자격증명은 비워 둔다. 실제 배포에서는 IAM Role을 쓴다
         adapter = new SesEmailAdapter(sesV2Client, new SesProperties("ap-northeast-2", FROM, FROM_NAME, null, null));
     }
@@ -84,5 +98,64 @@ public class SesEmailAdapterTest {
         // when & then
         assertThatThrownBy(() -> adapter.send(TO, SUBJECT, BODY))
                 .isInstanceOf(EmailSendFailedException.class);
+    }
+
+    @Test
+    @DisplayName("SES가 거부하면 오류 코드만 ERROR로 남기고 메시지에 담긴 수신 주소는 남기지 않는다")
+    void logsServiceErrorWithoutRecipient() {
+        // given -> 샌드박스의 미인증 주소 거부는 오류 메시지에 수신 주소를 담아 온다
+        when(sesV2Client.sendEmail(any(SendEmailRequest.class)))
+                .thenThrow(SesV2Exception.builder()
+                        .statusCode(400)
+                        .message("Email address is not verified: " + TO)
+                        .awsErrorDetails(AwsErrorDetails.builder()
+                                .errorCode("MessageRejected")
+                                .errorMessage("Email address is not verified: " + TO)
+                                .build())
+                        .build());
+
+        // when
+        assertThatThrownBy(() -> adapter.send(TO, SUBJECT, BODY))
+                .isInstanceOf(EmailSendFailedException.class);
+
+        // then -> 예외 객체를 넘기면 스택트레이스 메시지로 주소가 샌다
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 인증 메일 발송 실패: SES 응답 오류 - status=400, errorCode=MessageRejected");
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNull();
+        assertThat(log.messages(Level.ERROR)).noneMatch(message -> message.contains(TO));
+    }
+
+    @Test
+    @DisplayName("SES에 닿기 전에 실패하면 원인 예외를 담아 ERROR로 남긴다")
+    void logsClientErrorWithCause() {
+        // given
+        when(sesV2Client.sendEmail(any(SendEmailRequest.class)))
+                .thenThrow(SdkClientException.builder().message("Unable to execute HTTP request").build());
+
+        // when
+        assertThatThrownBy(() -> adapter.send(TO, SUBJECT, BODY))
+                .isInstanceOf(EmailSendFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 인증 메일 발송 실패: SES 통신 오류");
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("어느 쪽으로도 갈리지 않는 SDK 예외는 종류만 ERROR로 남긴다")
+    void logsUnclassifiedSdkErrorWithoutThrowable() {
+        // given
+        when(sesV2Client.sendEmail(any(SendEmailRequest.class)))
+                .thenThrow(SdkException.builder().message("ses down").build());
+
+        // when
+        assertThatThrownBy(() -> adapter.send(TO, SUBJECT, BODY))
+                .isInstanceOf(EmailSendFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 인증 메일 발송 실패: SES 처리 오류 - cause=SdkException");
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNull();
     }
 }

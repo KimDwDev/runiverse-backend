@@ -6,6 +6,9 @@ import com.runiverse.running_service.application.running.port.out.RunningComboSn
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.running.RunningComboRedisAdapter;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,8 +60,16 @@ class RunningComboRedisAdapterTest {
     private UserId one;
     private UserId other;
 
+    private LogCapture log;
+
+    @AfterEach
+    void tearDown() {
+        log.stop();
+    }
+
     @BeforeEach
     void setUp() {
+        log = LogCapture.of(RunningComboRedisAdapter.class);
         adapter = new RunningComboRedisAdapter(redisTemplate, new RunningTrackProperties(TTL));
         one = new UserId(UuidCreator.getTimeOrderedEpoch());
         other = new UserId(UuidCreator.getTimeOrderedEpoch());
@@ -208,5 +219,71 @@ class RunningComboRedisAdapterTest {
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(hashOperations).putAll(anyString(), captor.capture());
         return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("읽기에 실패하면 방과 대상 해시를 담아 ERROR로 남긴다")
+    void logsLoadFailureAsError() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        willThrow(new RedisConnectionFailureException("down"))
+                .given(hashOperations).entries(anyString());
+
+        // when
+        assertThatThrownBy(() -> adapter.loadPairs(ROOM_ID))
+                .isInstanceOf(RedisConnectionFailureException.class);
+
+        // then -> 문구는 고정하고 어느 해시인지는 target 값으로 가른다
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[러닝] 콤보 상태 조회 실패: Redis 오류 - roomId=" + ROOM_ID + ", target=pair");
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("저장에 실패하면 던지지 않고 방과 대상 해시를 담아 ERROR로 남긴다")
+    void logsSaveFailureAsError() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        willThrow(new RedisConnectionFailureException("down"))
+                .given(hashOperations).putAll(anyString(), anyMap());
+
+        // when
+        adapter.saveSnapshot(ROOM_ID, new RunningComboSnapshot(one, 100, RECORDED_AT, 1));
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[러닝] 콤보 상태 저장 실패: Redis 오류 - roomId=" + ROOM_ID + ", target=snapshot");
+    }
+
+    @Test
+    @DisplayName("깨진 스냅샷 칸은 건너뛰고 그 필드를 담아 WARN으로 남긴다")
+    void logsSkippedSnapshotAsWarn() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        given(hashOperations.entries(anyString())).willReturn(Map.of(
+                other.value().toString(), "망가진|값"));
+
+        // when
+        adapter.loadSnapshots(ROOM_ID);
+
+        // then
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[러닝] 콤보 스냅샷 복원 건너뜀: 저장 형식 불일치 - field=" + other.value());
+    }
+
+    @Test
+    @DisplayName("숫자가 깨진 관계 칸은 건너뛰고 값 손상으로 WARN을 남긴다")
+    void logsCorruptedPairAsWarn() {
+        // given
+        String field = one.value() + "|" + other.value();
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        given(hashOperations.entries(anyString())).willReturn(Map.of(field, "null|셋|0"));
+
+        // when
+        adapter.loadPairs(ROOM_ID);
+
+        // then
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[러닝] 콤보 관계 복원 건너뜀: 저장 값 손상 - field=" + field);
     }
 }
