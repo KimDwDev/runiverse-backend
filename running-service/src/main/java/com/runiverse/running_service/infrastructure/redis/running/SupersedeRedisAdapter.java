@@ -28,7 +28,7 @@ public class SupersedeRedisAdapter implements PublishSupersedePort {
         } catch (RuntimeException e) {
             // Redis가 닿지 않으면 좌표 저장(RunningTrackRedisAdapter)도 못 한다.
             // 시작시켜봐야 기록이 통째로 유실되므로 여기서 끊고 클라의 재시도를 기다린다
-            log.warn("supersede 통지 실패 — roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 이전 세션 종료 통지 발행 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId, e);
             throw new RunningSessionUnavailableException();
         }
     }

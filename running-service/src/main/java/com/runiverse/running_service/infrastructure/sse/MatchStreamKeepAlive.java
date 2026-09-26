@@ -22,8 +22,9 @@ public class MatchStreamKeepAlive {
                 // 끊긴 단말은 keepAlive가 스스로 닫고, onCompletion이 레지스트리에서 지운다
                 connection.keepAlive();
             } catch (RuntimeException e) {
-                // 한 연결의 실패가 나머지 ping을 막으면 그 뒤 연결들이 통째로 프록시에 끊긴다
-                log.warn("매칭 스트림 keep-alive 실패 — id={}", connection.id(), e);
+                // 한 연결의 실패가 나머지 ping을 막으면 그 뒤 연결들이 통째로 프록시에 끊긴다.
+                // 끊긴 단말은 연결이 스스로 닫으므로 여기까지 온 예외는 예상 밖이다
+                log.error("[매칭] 스트림 keep-alive 실패: 처리하지 못한 예외 - connectionId={}", connection.id(), e);
             }
         }
     }

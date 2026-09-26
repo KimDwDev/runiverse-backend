@@ -20,7 +20,7 @@ public class DeletedUserRedactionRunner {
             redactDeletedUsersUsecase.redactAfterRetention();
         } catch (RuntimeException e) {
             // 배치가 죽어도 앱은 계속 돈다 — 못 지운 건은 다음 실행에 다시 걸린다
-            log.error("탈퇴 기록 신원 정보 제거 배치 실패", e);
+            log.error("[회원] 탈퇴 기록 신원 정보 제거 실패: 처리하지 못한 예외", e);
         }
     }
 }

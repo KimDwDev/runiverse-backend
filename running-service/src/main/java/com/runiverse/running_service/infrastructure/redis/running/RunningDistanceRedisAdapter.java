@@ -34,7 +34,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         } catch (RuntimeException e) {
             // 읽기 실패를 빈 값으로 위장하면 안 된다 — 이어지는 저장이 성공하는 순간
             // 살아 있는 누적이 이번 배치 값으로 덮이고, 순번 스킵 때문에 이후 배치가 되돌리지 못한다
-            log.warn("러닝 누적 거리 조회 실패 — roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 누적 거리 조회 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
             throw e;
         }
         if (raw == null) {
@@ -44,7 +44,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         String[] fields = raw.split("\\" + SEPARATOR, -1);
         if (fields.length != FIELD_COUNT && fields.length != LEGACY_FIELD_COUNT) {
             // 포맷이 바뀐 옛 값이 TTL 안에 남아 있을 수 있다 — 거리를 틀리게 세느니 처음부터 센다
-            log.warn("러닝 누적 거리 형식 불일치 — roomId={}, userId={}", runningRoomId, userId);
+            log.warn("[러닝] 누적 거리 복원 건너뜀: 저장 형식 불일치 - roomId={}, userId={}", runningRoomId, userId.value());
             return RunningDistance.empty();
         }
         try {
@@ -57,7 +57,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
                     fields.length == FIELD_COUNT ? toInteger(fields[4]) : null);
         } catch (NumberFormatException e) {
             // 깨진 값은 다시 읽어도 같다 — 형식 불일치와 같은 폴백으로 처음부터 센다
-            log.warn("러닝 누적 거리 값 손상 — roomId={}, userId={}", runningRoomId, userId);
+            log.warn("[러닝] 누적 거리 복원 건너뜀: 저장 값 손상 - roomId={}, userId={}", runningRoomId, userId.value());
             return RunningDistance.empty();
         }
     }
@@ -77,7 +77,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         } catch (RuntimeException e) {
             // 저장에 실패하면 다음 배치가 이전 누적에서 이어 간다 — 실패 배치의 곡선은
             // 라이브 표시에서 빠지고(다음 배치가 직선으로 잇는다) 최종 기록이 바로잡는다
-            log.warn("러닝 누적 거리 저장 실패 — roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 누적 거리 저장 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
         }
     }
 

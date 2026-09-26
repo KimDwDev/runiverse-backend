@@ -26,7 +26,7 @@ public class RunningComboUpdateRedisAdapter implements PublishRunningComboPort {
         } catch (RuntimeException e) {
             // supersede와 달리 던지지 않는다 — 콤보는 화면 표시일 뿐이고
             // 다음 배치가 현재 상태를 통째로 다시 나른다
-            log.warn("러닝 콤보 통지 발행 실패 — roomId={}, 수신자={}명",
+            log.error("[러닝] 콤보 통지 발행 실패: Redis 오류 - roomId={}, recipientCount={}",
                     runningRoomId, update.recipients().size(), e);
         }
     }
