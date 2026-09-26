@@ -46,7 +46,7 @@ public class RunningComboRedisAdapter implements
 
     @Override
     public List<RunningComboSnapshot> loadSnapshots(Long runningRoomId) {
-        return load(runningRoomId, snapshotKey(runningRoomId), SNAPSHOT, this::toSnapshot);
+        return load(snapshotKey(runningRoomId), this::toSnapshot);
     }
 
     @Override
@@ -61,7 +61,7 @@ public class RunningComboRedisAdapter implements
 
     @Override
     public List<RunningComboPair> loadPairs(Long runningRoomId) {
-        return load(runningRoomId, pairKey(runningRoomId), PAIR, this::toPair);
+        return load(pairKey(runningRoomId), this::toPair);
     }
 
     @Override
@@ -75,18 +75,11 @@ public class RunningComboRedisAdapter implements
                 PAIR, runningRoomId);
     }
 
-    private <T> List<T> load(
-            Long runningRoomId, String key, String target,
-            Function<Map.Entry<String, String>, Optional<T>> mapper) {
-        Map<String, String> entries;
-        try {
-            entries = redisTemplate.<String, String>opsForHash().entries(key);
-        } catch (RuntimeException e) {
-            // 읽기 실패를 빈 목록으로 위장하면 안 된다 — 비교 상대가 사라져
-            // 살아 있던 콤보와 최고 기록이 이번 배치의 저장으로 지워진다
-            log.error("[러닝] 콤보 상태 조회 실패: Redis 오류 - roomId={}, target={}", runningRoomId, target, e);
-            throw e;
-        }
+    private <T> List<T> load(String key, Function<Map.Entry<String, String>, Optional<T>> mapper) {
+        // 읽기 실패를 빈 목록으로 위장하면 안 된다 — 비교 상대가 사라져
+        // 살아 있던 콤보와 최고 기록이 이번 배치의 저장으로 지워진다.
+        // 그대로 던지고 로그는 받는 쪽이 남긴다
+        Map<String, String> entries = redisTemplate.<String, String>opsForHash().entries(key);
         return entries.entrySet().stream()
                 .map(mapper)
                 .flatMap(Optional::stream)

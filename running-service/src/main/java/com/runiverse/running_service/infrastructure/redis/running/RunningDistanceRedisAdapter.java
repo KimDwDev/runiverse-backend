@@ -28,15 +28,10 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
 
     @Override
     public RunningDistance loadDistance(Long runningRoomId, UserId userId) {
-        String raw;
-        try {
-            raw = redisTemplate.opsForValue().get(distanceKey(runningRoomId, userId));
-        } catch (RuntimeException e) {
-            // 읽기 실패를 빈 값으로 위장하면 안 된다 — 이어지는 저장이 성공하는 순간
-            // 살아 있는 누적이 이번 배치 값으로 덮이고, 순번 스킵 때문에 이후 배치가 되돌리지 못한다
-            log.error("[러닝] 누적 거리 조회 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
-            throw e;
-        }
+        // 읽기 실패를 빈 값으로 위장하면 안 된다 — 이어지는 저장이 성공하는 순간
+        // 살아 있는 누적이 이번 배치 값으로 덮이고, 순번 스킵 때문에 이후 배치가 되돌리지 못한다.
+        // 그대로 던지고 로그는 받는 쪽이 남긴다
+        String raw = redisTemplate.opsForValue().get(distanceKey(runningRoomId, userId));
         if (raw == null) {
             return RunningDistance.empty();   // 첫 배치
         }

@@ -14,6 +14,8 @@ import com.runiverse.running_service.application.running.port.out.RunningProgres
 import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -287,6 +289,27 @@ public class UpdateRunningLocationHandlerTest {
         verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
         verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
         verify(publishRunningProgressPort, never()).publish(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("누적 거리 읽기 실패를 삼키는 곳이라 여기서 원인 예외를 담아 ERROR로 남긴다")
+    void logsDistanceLoadFailureWhereSwallowed() {
+        // given -> 어댑터는 던지기만 하고 찍지 않는다. 받는 쪽이 한 번만 찍는다
+        LogCapture log = LogCapture.of(UpdateRunningLocationHandler.class);
+        given(loadRunningDistancePort.loadDistance(anyLong(), any()))
+                .willThrow(new RuntimeException("redis down"));
+
+        try {
+            // when
+            updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+
+            // then
+            assertThat(log.messages(Level.ERROR)).containsExactly(
+                    "[러닝] 누적 거리 조회 실패: 처리하지 못한 예외 - roomId=" + ROOM_ID + ", userId=" + USER_ID);
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 
     // 페이스는 발행만 하고 흘려보내면 RUNNING_STARTED 스냅샷이 남의 페이스를 복구할 길이 없다.

@@ -159,8 +159,8 @@ class RunningDistanceRedisAdapterTest {
     }
 
     @Test
-    @DisplayName("읽기에 실패하면 원인 예외를 담아 ERROR로 남긴다")
-    void logsReadFailureAsError() {
+    @DisplayName("읽기에 실패하면 던지기만 하고 로그는 받는 쪽에 맡긴다")
+    void doesNotLogWhenRethrowing() {
         // given
         given(valueOperations.get(anyString()))
                 .willThrow(new RedisConnectionFailureException("redis down"));
@@ -169,10 +169,8 @@ class RunningDistanceRedisAdapterTest {
         assertThatThrownBy(() -> adapter.loadDistance(ROOM_ID, userId))
                 .isInstanceOf(RedisConnectionFailureException.class);
 
-        // then -> 위치 갱신 핸들러는 이 예외를 로그 없이 삼킨다. 흔적은 여기에만 남는다
-        assertThat(log.messages(Level.ERROR))
-                .containsExactly("[러닝] 누적 거리 조회 실패: Redis 오류 - roomId=" + ROOM_ID + ", userId=" + userId.value());
-        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        // then -> 여기서도 찍으면 받는 쪽 로그와 같은 실패가 두 줄로 남는다
+        assertThat(log.events(Level.ERROR)).isEmpty();
     }
 
     @Test

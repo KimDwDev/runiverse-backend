@@ -222,8 +222,8 @@ class RunningComboRedisAdapterTest {
     }
 
     @Test
-    @DisplayName("읽기에 실패하면 방과 대상 해시를 담아 ERROR로 남긴다")
-    void logsLoadFailureAsError() {
+    @DisplayName("읽기에 실패하면 던지기만 하고 로그는 받는 쪽에 맡긴다")
+    void doesNotLogWhenRethrowing() {
         // given
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
         willThrow(new RedisConnectionFailureException("down"))
@@ -233,10 +233,8 @@ class RunningComboRedisAdapterTest {
         assertThatThrownBy(() -> adapter.loadPairs(ROOM_ID))
                 .isInstanceOf(RedisConnectionFailureException.class);
 
-        // then -> 문구는 고정하고 어느 해시인지는 target 값으로 가른다
-        assertThat(log.messages(Level.ERROR))
-                .containsExactly("[러닝] 콤보 상태 조회 실패: Redis 오류 - roomId=" + ROOM_ID + ", target=pair");
-        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        // then -> 여기서도 찍으면 받는 쪽 로그와 같은 실패가 두 줄로 남는다
+        assertThat(log.events(Level.ERROR)).isEmpty();
     }
 
     @Test
