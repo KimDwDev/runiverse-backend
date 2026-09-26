@@ -56,7 +56,7 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
         // 남은 참가자의 종료와 같은 행을 고친다 — 잠그고 읽는다
         Optional<RunningRoom> locked = lockRunningRoomPort.lockById(roomId);
         if (locked.isEmpty()) {
-            log.warn("강제 종료할 방이 없다 — roomId={}", roomId.value());
+            log.warn("[러닝] 강제 종료 건너뜀: 방 없음 - roomId={}", roomId.value());
             return;
         }
         RunningRoom room = locked.get();

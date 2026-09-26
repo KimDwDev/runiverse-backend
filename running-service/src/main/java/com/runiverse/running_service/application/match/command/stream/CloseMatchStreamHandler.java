@@ -26,7 +26,7 @@ public class CloseMatchStreamHandler implements CloseMatchStreamUsecase {
             // 그 방의 마지막 참가자였으면 채널 구독도 끊긴다
             matchRoomMembershipPort.leave(userId);
         }
-        log.info("매칭 스트림 종료 — userId={}, connectionId={}, 레지스트리제거={}",
+        log.info("[매칭] 스트림 종료 성공 - userId={}, connectionId={}, removed={}",
                 command.userId(), command.connection().id(), removed);
     }
 }

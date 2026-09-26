@@ -34,7 +34,7 @@ public class StartRunningRoomHandler implements StartRunningRoomUsecase {
         Optional<RunningRoom> locked = lockRunningRoomPort.lockById(roomId);
         if (locked.isEmpty()) {
             // 예약은 남았는데 방이 사라진 경우 — 예약을 소비한 것으로 보고 조용히 끝낸다
-            log.warn("시작할 방이 없다 — roomId={}", roomId.value());
+            log.warn("[러닝] 방 시작 건너뜀: 방 없음 - roomId={}", roomId.value());
             return;
         }
         RunningRoom room = locked.get();
@@ -45,7 +45,7 @@ public class StartRunningRoomHandler implements StartRunningRoomUsecase {
             // 모집 마감 예약이 실패해야만 나오는 상태다. 조용히 지나가면 그 방은
             // 영영 모집 중으로 남아 참가자의 다음 러닝까지 막는다 — 사람이 봐야 한다
             if (room.getStatus() == RunningRoomStatus.MATCHING) {
-                log.error("시작 시각인데 아직 모집 중이다 — roomId={}", roomId.value());
+                log.error("[러닝] 방 시작 실패: 모집 마감 누락 - roomId={}", roomId.value());
             }
             return;
         }

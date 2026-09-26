@@ -39,7 +39,7 @@ public class CloseMatchingHandler implements CloseMatchingUsecase {
         Optional<RunningRoom> locked = lockMatchRoomPort.lockById(roomId);
         if (locked.isEmpty()) {
             // 예약은 남았는데 방이 사라진 경우 — 예약을 소비한 것으로 보고 조용히 끝낸다
-            log.warn("마감할 방이 없다 — roomId={}", roomId.value());
+            log.warn("[매칭] 모집 마감 건너뜀: 방 없음 - roomId={}", roomId.value());
             return;
         }
         RunningRoom room = locked.get();

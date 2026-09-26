@@ -44,8 +44,8 @@ public class StartRunningComboHandler implements StartRunningComboUsecase {
         } catch (RuntimeException e) {
             // 콤보는 곁가지다 — 못 세웠다고 러닝 시작을 막지 않는다.
             // 첫 좌표 배치가 도착하면 원래 경로로 콤보가 붙는다
-            log.warn("러닝 콤보 시작 판정 실패 — roomId={}, userId={}",
-                    command.runningRoomId(), starter, e);
+            log.error("[러닝] 콤보 시작 판정 실패: 처리하지 못한 예외 - roomId={}, userId={}",
+                    command.runningRoomId(), starter.value(), e);
         }
     }
 }

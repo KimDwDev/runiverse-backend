@@ -57,7 +57,7 @@ public class MatchRoomAssigner {
                 room.join(userId, playerId);
             } catch (RoomNotJoinableException e) {
                 // 스캔과 합류 사이에 마감됐거나 자리가 찼다 — 다음 후보로 넘어간다
-                log.debug("후보 방 합류 실패 — roomId={}", roomId.value());
+                log.debug("[매칭] 후보 방 합류 건너뜀: 자리 없음 또는 마감 - roomId={}", roomId.value());
                 continue;
             }
             room.recalculateAvgPace(pacesAfterJoin(roomId, pace));

@@ -29,7 +29,7 @@ public class RedactDeletedUsersHandler implements RedactDeletedUsersUsecase {
                 deletedUserRedactor.redact(userId);
             } catch (RuntimeException e) {
                 // 한 건이 터져도 나머지는 지운다. 실패한 행은 신원 정보가 남아 다음 실행에 다시 걸린다
-                log.warn("탈퇴 기록 신원 정보 제거 실패 — userId={}", userId.value(), e);
+                log.error("[회원] 탈퇴 기록 신원 정보 제거 실패: 처리하지 못한 예외 - userId={}", userId.value(), e);
             }
         }
     }
