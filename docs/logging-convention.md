@@ -78,6 +78,7 @@
 - `=` 양옆에 공백을 넣지 않고, 항목 사이는 `, `로 구분한다 — 수집 단계의 key=value 파싱이 공백을 기준으로 자른다.
 - key는 도메인에서 쓰는 이름을 camelCase로 쓴다(`roomId`, `userId`, `scheduledJobId`). 같은 대상을 파일마다 다른 이름(`room_id`, `rid`)으로 쓰지 않는다.
 - 수치에는 단위 접미사를 붙인다(`distanceM`, `elapsedMs`, `thresholdMs`).
+- 값이 여러 개면 대괄호로 묶는다(`fields=[email, password]`). 수집 단계의 key=value 파싱이 괄호 안을 값 하나로 읽는다. `List`를 그대로 넘기면 이 형태로 찍힌다.
 
 ## 레벨
 

@@ -38,11 +38,13 @@ public class GlobalExceptionHandler {
     }
 
     // 도메인 검증 예외
+    // 여기까지 왔다면 Request DTO 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(
-            com.runiverse.running_service.domain.common.exception.BusinessException e
+            com.runiverse.running_service.domain.common.exception.BusinessException e,
+            HttpServletRequest request
     ) {
-        log.warn("도메인 예외: {} - {}", e.getErrorCode().getCode(), e.getErrorCode().getMessage());
+        log.error("{} 도메인 검증 실패 - code={}", LogTag.of(request), e.getErrorCode().getCode(), e);
         return respond(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 e.getErrorCode().getCode(),
