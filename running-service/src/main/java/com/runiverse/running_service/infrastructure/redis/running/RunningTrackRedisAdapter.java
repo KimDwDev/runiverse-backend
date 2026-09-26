@@ -83,7 +83,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
         } catch (RuntimeException e) {
             // 이 배치는 못 담았지만 원본은 클라 로컬 트랙에 남아 있다.
             // 재연결하면 처음 sequence부터 다시 오므로 러닝을 끊지 않고 통지만 한다
-            log.error("[러닝] 트랙 저장 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 트랙 저장 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
             throw new RunningTrackUnavailableException();
         }
     }
@@ -120,7 +120,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
             batches = redisTemplate.opsForStream()
                     .range(trackKey(runningRoomId, userId), Range.unbounded());
         } catch (RuntimeException e) {
-            log.error("[러닝] 트랙 조회 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 트랙 조회 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
             throw new RunningTrackUnavailableException();
         }
         if (batches == null || batches.isEmpty()) {
@@ -185,7 +185,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
             redisTemplate.delete(List.of(
                     trackKey(runningRoomId, userId), seenKey(runningRoomId, userId)));
         } catch (RuntimeException e) {
-            log.error("[러닝] 트랙 삭제 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId, e);
+            log.error("[러닝] 트랙 삭제 실패: Redis 오류 - roomId={}, userId={}", runningRoomId, userId.value(), e);
         }
     }
 

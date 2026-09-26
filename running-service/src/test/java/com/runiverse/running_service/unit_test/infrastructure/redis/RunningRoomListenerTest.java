@@ -13,6 +13,8 @@ import com.runiverse.running_service.infrastructure.redis.running.ProgressMessag
 import com.runiverse.running_service.infrastructure.redis.running.RunningRoomListener;
 import com.runiverse.running_service.infrastructure.redis.running.RunningRoomMessage;
 import com.runiverse.running_service.infrastructure.redis.running.RunningRoomMessageType;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -134,6 +136,28 @@ class RunningRoomListenerTest {
         // when & then
         assertThatCode(() -> listener.onMessage(broken, null)).doesNotThrowAnyException();
         verifyNoInteractions(broadcastRunningComboUsecase, broadcastRunningProgressUsecase);
+    }
+
+    @Test
+    @DisplayName("깨진 메시지는 보낸 쪽도 우리 서버라 채널과 원인 예외를 담아 ERROR로 남긴다")
+    void logsBrokenMessageAsError() {
+        // given
+        LogCapture log = LogCapture.of(RunningRoomListener.class);
+        Message broken = new DefaultMessage(
+                ("running:room:" + ROOM_ID).getBytes(StandardCharsets.UTF_8),
+                "{ 이건 JSON이 아니다".getBytes(StandardCharsets.UTF_8));
+
+        try {
+            // when
+            listener.onMessage(broken, null);
+
+            // then -> 배포 중 버전이 섞였거나 직렬화 버그다
+            assertThat(log.messages(Level.ERROR))
+                    .containsExactly("[러닝] 방 채널 메시지 파싱 실패: 메시지 형식 불일치 - channel=running:room:" + ROOM_ID);
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 
     // 발행 어댑터가 채널에 실어 보내는 것과 같은 형태의 메시지

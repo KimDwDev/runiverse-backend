@@ -12,7 +12,7 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpResul
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import com.runiverse.running_service.integration_test.LogCapture;
+import com.runiverse.running_service.support.LogCapture;
 import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

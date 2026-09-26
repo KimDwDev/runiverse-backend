@@ -13,7 +13,7 @@ import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
-import com.runiverse.running_service.integration_test.LogCapture;
+import com.runiverse.running_service.support.LogCapture;
 import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

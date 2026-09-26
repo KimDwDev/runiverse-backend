@@ -6,6 +6,8 @@ import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 import com.runiverse.running_service.domain.scheduling.vo.JobTarget;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import com.runiverse.running_service.infrastructure.scheduler.JobTimerAdapter;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -124,6 +126,30 @@ class JobTimerAdapterTest {
 
         // when & then
         assertThatCode(() -> firedTask().run()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("실행이 터지면 예약 ID와 원인 예외를 담아 ERROR로 남긴다")
+    void logsFailureOnFire() {
+        // given -> 요청 스레드가 아니라 중앙 예외 핸들러가 없다. 여기서 안 찍으면 흔적이 없다
+        LogCapture log = LogCapture.of(JobTimerAdapter.class);
+        givenSchedulable();
+        jobTimerAdapter.register(job(JOB_ID));
+        willThrow(new IllegalStateException("확정 실패"))
+                .given(runScheduledJobUsecase).handle(any(RunScheduledJobCommand.class));
+
+        try {
+            // when
+            firedTask().run();
+
+            // then
+            assertThat(log.messages(Level.ERROR))
+                    .containsExactly("[예약] 예약 실행 실패: 처리하지 못한 예외 - scheduledJobId=" + JOB_ID);
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy().getClassName())
+                    .isEqualTo(IllegalStateException.class.getName());
+        } finally {
+            log.stop();
+        }
     }
 
     @Test

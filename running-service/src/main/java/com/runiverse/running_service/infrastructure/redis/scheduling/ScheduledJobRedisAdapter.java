@@ -20,9 +20,9 @@ public class ScheduledJobRedisAdapter implements PublishScheduledJobPort {
     @Override
     public void publish(ScheduledJob job) {
         JobTarget target = job.getTarget();
+        Long scheduledJobId = job.getScheduledJobId().orElseThrow().value();
         ScheduledJobMessage message = new ScheduledJobMessage(
-                job.getScheduledJobId().orElseThrow().value(),
-                target.type(), target.id(), job.getExecuteAt());
+                scheduledJobId, target.type(), target.id(), job.getExecuteAt());
         try {
             redisTemplate.convertAndSend(
                     ScheduleChannel.JOB, jsonMapper.writeValueAsString(message));
@@ -30,8 +30,7 @@ public class ScheduledJobRedisAdapter implements PublishScheduledJobPort {
             // 던지지 않는다 — 이미 커밋된 뒤라 되돌릴 것이 없고,
             // 내 타이머는 이미 걸려 있어 최소 한 대는 깬다.
             // 정본은 DB라 다른 인스턴스도 다음 부팅에 되살린다
-            log.error("[예약] 예약 전파 실패: Redis 오류 - scheduledJobId={}",
-                    job.getScheduledJobId().orElse(null), e);
+            log.error("[예약] 예약 전파 실패: Redis 오류 - scheduledJobId={}", scheduledJobId, e);
         }
     }
 }

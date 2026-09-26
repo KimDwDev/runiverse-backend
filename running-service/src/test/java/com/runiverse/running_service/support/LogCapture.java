@@ -1,4 +1,4 @@
-package com.runiverse.running_service.integration_test;
+package com.runiverse.running_service.support;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -29,6 +29,13 @@ public class LogCapture {
         return appender.list.stream()
                 .filter(event -> event.getLevel() == level)
                 .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+    }
+
+    // 함께 넘긴 예외까지 봐야 할 때 쓴다 — ERROR는 스택트레이스가 필수다
+    public List<ILoggingEvent> events(Level level) {
+        return appender.list.stream()
+                .filter(event -> event.getLevel() == level)
                 .toList();
     }
 
