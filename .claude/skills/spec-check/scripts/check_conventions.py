@@ -31,18 +31,27 @@ FORBIDDEN = {
         (f"{BASE_PKG}.application", "바깥 레이어 참조"),
         (f"{BASE_PKG}.infrastructure", "바깥 레이어 참조"),
         (f"{BASE_PKG}.presentation", "바깥 레이어 참조"),
+        (f"{BASE_PKG}.observability", "관측성 참조 — 도메인은 순수 모델"),
     ],
     "application": [
         ("jakarta.persistence", "JPA 의존 — 영속성은 어댑터 책임"),
         ("org.hibernate", "하이버네이트 의존"),
         (f"{BASE_PKG}.infrastructure", "바깥 레이어 참조"),
         (f"{BASE_PKG}.presentation", "바깥 레이어 참조"),
+        (f"{BASE_PKG}.observability", "관측성 참조 — 로그는 SLF4J만으로 충분"),
     ],
     "infrastructure": [
         (f"{BASE_PKG}.presentation", "presentation 참조 — 순환 의존"),
     ],
     "presentation": [
         (f"{BASE_PKG}.infrastructure", "infrastructure 참조 — port/in만 통해야 함"),
+    ],
+    # 레이어 바깥 교차 관심사 — 어떤 레이어도 참조하지 않는 말단이어야 한다
+    "observability": [
+        (f"{BASE_PKG}.domain", "레이어 참조 — 관측성은 말단"),
+        (f"{BASE_PKG}.application", "레이어 참조 — 관측성은 말단"),
+        (f"{BASE_PKG}.infrastructure", "레이어 참조 — 관측성은 말단"),
+        (f"{BASE_PKG}.presentation", "레이어 참조 — 관측성은 말단"),
     ],
 }
 

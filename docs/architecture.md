@@ -14,6 +14,7 @@ presentation ──▶ [port/in] application [port/out] ◀── infrastructure
 - `domain`은 어떤 레이어도 import하지 않는다 — Spring·JPA에도 의존하지 않는다.
 - `application`이 포트를 소유하고, `presentation`은 `port/in`을 호출하며 `infrastructure`는 `port/out`을 구현한다.
 - 그림은 코드 의존 방향이다.
+- `observability`는 레이어 바깥의 교차 관심사(로그 추적 등)다. 어떤 레이어도 import하지 않는 말단이며, `presentation`·`infrastructure`만 참조한다 — `domain`·`application`은 참조하지 않는다. 유스케이스의 로그는 SLF4J 호출만으로 MDC 값이 붙으므로 import가 필요 없다.
 
 ## 패키지 구조
 
@@ -37,6 +38,9 @@ presentation/
   common/exception/     GlobalExceptionHandler · *ErrorCode · ErrorExposurePolicy
   common/response/      ErrorResponse
   common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler
+
+observability/
+  logging/              RequestIdFilter · MDC 키 상수 · 로그 태그
 ```
 
 ## 요청 흐름

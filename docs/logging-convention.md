@@ -29,6 +29,7 @@
 ## 요청 ID
 
 - HTTP 요청마다 UUIDv4(`UUID.randomUUID()`)를 하나 발급해 MDC `requestId`에 넣는다. 요청이 끝나면 제거한다.
+- 발급·MDC 키·태그 같은 로그 추적 코드는 `observability/logging/`에 둔다. 참조 규칙은 [architecture.md](architecture.md)의 의존 방향을 따른다.
 - 메시지에 requestId를 직접 쓰지 않는다 — 콘솔 패턴과 JSON 필드가 자동으로 붙인다.
 - 추적은 식별자로 문제의 줄을 찾고(`userId`, `roomId`), 그 줄의 requestId로 요청 흐름 전체를 모아 보는 순서로 한다.
 
