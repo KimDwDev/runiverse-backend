@@ -45,3 +45,6 @@ out/
 
 ### Misc ###
 api.http
+
+# logs
+logs/
