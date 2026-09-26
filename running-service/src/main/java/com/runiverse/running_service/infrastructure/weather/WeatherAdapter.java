@@ -31,7 +31,7 @@ public class WeatherAdapter implements LoadWeatherPort {
             } catch (HttpClientErrorException e) {
                 // 잘못된 좌표·파라미터는 400으로 온다 — 같은 요청을 되풀이할 이유가 없다
                 // 좌표는 러닝 시작 지점(위치 개인정보)이라 로그에 남기지 않는다 — 원인은 예외 본문이 말해준다
-                log.warn("날씨 요청이 거부됐다", e);
+                log.warn("[러닝] 날씨 조회 실패: 날씨 API 요청 거부 - status={}", e.getStatusCode().value());
                 break;
             } catch (RestClientException e) {
                 log.warn("날씨 조회 실패 {}/{}", attempt, properties.maxAttempts(), e);

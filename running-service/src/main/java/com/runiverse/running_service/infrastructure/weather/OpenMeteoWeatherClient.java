@@ -56,14 +56,15 @@ public class OpenMeteoWeatherClient {
 
     private Optional<Weather> toWeather(OpenMeteoResponse response) {
         if (response == null || response.hourly() == null) {
-            log.warn("날씨 응답이 비어 있다");
+            log.warn("[러닝] 날씨 조회 실패: 응답 비어 있음");
             return Optional.empty();
         }
         Integer code = first(response.hourly().weatherCode());
         BigDecimal temperature = first(response.hourly().temperature());
         // 반쪽 값을 기록에 넣느니 폴백 기본값이 낫다 — 두 값은 함께 판정에 쓰인다
         if (code == null || temperature == null) {
-            log.warn("날씨 응답에 값이 없다: {}", response);
+            log.warn("[러닝] 날씨 조회 실패: 날씨 값 누락 - hasCode={}, hasTemperature={}",
+                    code != null, temperature != null);
             return Optional.empty();
         }
         return Optional.of(new Weather(code, temperature));
