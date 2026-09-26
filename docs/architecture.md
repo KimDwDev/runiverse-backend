@@ -15,6 +15,7 @@ presentation ──▶ [port/in] application [port/out] ◀── infrastructure
 - `application`이 포트를 소유하고, `presentation`은 `port/in`을 호출하며 `infrastructure`는 `port/out`을 구현한다.
 - 그림은 코드 의존 방향이다.
 - `observability`는 레이어 바깥의 교차 관심사(로그 추적 등)다. 어떤 레이어도 import하지 않는 말단이며, `presentation`·`infrastructure`만 참조한다 — `domain`·`application`은 참조하지 않는다. 유스케이스의 로그는 SLF4J 호출만으로 MDC 값이 붙으므로 import가 필요 없다.
+- 메트릭은 application이 Micrometer를 import하지 않는다 — 업무 결과는 `port/out`의 기록 포트로 남기고 infrastructure가 구현한다([metrics-convention.md](metrics-convention.md)).
 
 ## 패키지 구조
 
