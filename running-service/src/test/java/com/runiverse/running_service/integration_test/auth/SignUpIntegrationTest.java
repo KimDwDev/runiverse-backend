@@ -3,10 +3,14 @@ package com.runiverse.running_service.integration_test.auth;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.command.signup.SignUpResult;
+import com.runiverse.running_service.application.auth.command.signup.SignUpUserRegistrar;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.exception.EmailNotVerifiedException;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.integration_test.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,10 +24,20 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
     private static final String EMAIL = "runner@runiverse.com";
     private static final String PASSWORD = "Password123!";
     private SignUpHandler signUpHandler;
+    private LogCapture handlerLog;
+    private LogCapture registrarLog;
 
     @BeforeEach
     void setUp() {
         signUpHandler = newSignUpHandler();
+        handlerLog = LogCapture.of(SignUpHandler.class);
+        registrarLog = LogCapture.of(SignUpUserRegistrar.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        handlerLog.stop();
+        registrarLog.stop();
     }
 
     @Test
@@ -151,5 +165,44 @@ public class SignUpIntegrationTest extends IntegrationTestSupport {
         assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(ticket, PASSWORD)))
                 .isInstanceOf(EmailNotVerifiedException.class);
         assertThat(userStore.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("가입에 성공하면 userId를 담아 성공 로그를 남긴다")
+    void signUpLogsSuccess() {
+        // when
+        SignUpResult result = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 회원가입 성공 - userId=" + result.userId());
+    }
+
+    @Test
+    @DisplayName("티켓이 없으면 실패 원인을 남기고 성공 로그는 남기지 않는다")
+    void signUpWithUnknownTicketLogsFailure() {
+        // when
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand("not-a-ticket", PASSWORD)))
+                .isInstanceOf(EmailNotVerifiedException.class);
+        // then -> 티켓은 토큰류라 로그에 남기지 않는다
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 회원가입 실패: 인증 티켓 없음 또는 만료");
+    }
+
+    @Test
+    @DisplayName("이미 가입된 이메일이면 실패 원인을 남기되 이메일 원문은 남기지 않는다")
+    void signUpWithDuplicateEmailLogsFailure() {
+        // given
+        signUpHandler.handle(new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        String secondTicket = issueVerificationTicket(EMAIL);
+        // when
+        assertThatThrownBy(() -> signUpHandler.handle(new SignUpCommand(secondTicket, PASSWORD)))
+                .isInstanceOf(EmailAlreadyExistsException.class);
+        // then
+        assertThat(registrarLog.messages(Level.INFO))
+                .containsExactly("[인증] 회원가입 실패: 이미 가입된 이메일");
+        // 성공 로그는 첫 가입 한 번뿐이다
+        assertThat(handlerLog.messages(Level.INFO)).hasSize(1);
+        assertThat(registrarLog.messages(Level.INFO)).noneMatch(message -> message.contains(EMAIL));
     }
 }
