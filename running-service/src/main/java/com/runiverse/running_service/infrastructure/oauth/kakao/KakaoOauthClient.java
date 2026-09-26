@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.user.port.out.UnlinkKakaoPort;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
 import com.runiverse.running_service.infrastructure.oauth.OauthClient;
+import com.runiverse.running_service.infrastructure.oauth.OauthErrorCode;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -17,13 +18,12 @@ import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
@@ -35,13 +35,15 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
     private static final String TARGET_ID_TYPE = "user_id";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
+    private final JsonMapper jsonMapper;
 
     KakaoOauthClient(
             RestClient restClient,
-            KakaoOauthProperties properties
-    ) {
+            KakaoOauthProperties properties,
+            JsonMapper jsonMapper) {
         this.restClient = restClient;
         this.properties = properties;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -56,7 +58,7 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
             KakaoUserResponse user = fetchUser(kakaoAccessToken);
             return toProfile(user);
         } catch (RestClientException e) {
-            log.warn("카카오 통신 실패", e);
+            log.error("[인증] 카카오 로그인 실패: 카카오 통신 오류", e);
             throw new OauthCodeExchangeFailedException();
         }
     }
@@ -79,12 +81,12 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
                 .body(form)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("토큰 요청", res);
+                    logFailure("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류", res);
                     throw new OauthCodeExchangeFailedException();
                 })
                 .body(KakaoTokenResponse.class);
         if (response == null || !StringUtils.hasText(response.accessToken())) {
-            log.warn("카카오 토큰 응답에 access_token이 없다");
+            log.error("[인증] 카카오 토큰 요청 실패: access_token 누락");
             throw new OauthCodeExchangeFailedException();
         }
         return response.accessToken();
@@ -97,12 +99,12 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + kakaoAccessToken)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("사용자 정보 조회", res);
+                    logFailure("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류", res);
                     throw new OauthCodeExchangeFailedException();
                 })
                 .body(KakaoUserResponse.class);
         if (response == null || response.id() == null) {
-            log.warn("카카오 사용자 응답에 id가 없다");
+            log.error("[인증] 카카오 사용자 조회 실패: id 누락");
             throw new OauthCodeExchangeFailedException();
         }
         return response;
@@ -124,11 +126,11 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
                     .retrieve()
                     // 본문을 남기지 않는다 — 카카오 오류 메시지에 어드민 키가 섞여 온다
                     .onStatus(HttpStatusCode::isError, (request, res) ->
-                            log.warn("카카오 연동 해제 실패 — status={}", res.getStatusCode()))
+                            log.warn("[회원] 카카오 연동 해제 실패: 카카오 응답 오류 - status={}", res.getStatusCode().value()))
                     .toBodilessEntity();
         } catch (RestClientException e) {
-            // 예외 메시지에도 응답 본문이 섞이므로 종류만 남긴다
-            log.warn("카카오 연동 해제 통신 실패 — {}", e.getClass().getSimpleName());
+            // 예외 메시지에 어드민 키가 섞여 오므로 예외 객체 대신 종류만 남긴다
+            log.error("[회원] 카카오 연동 해제 실패: 카카오 통신 오류 - cause={}", e.getClass().getSimpleName());
         }
     }
 
@@ -142,11 +144,14 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
         return new OauthProfile(Provider.KAKAO, String.valueOf(response.id()), email);
     }
 
-    private void logFailure(String step, ClientHttpResponse response) throws IOException {
-        log.warn("카카오 {} 실패: status={}, body={}",
-                step,
-                response.getStatusCode(),
-                StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8)
-        );
+    // 문구는 호출하는 곳에서 고정 문자열로 넘긴다 — 변하는 값은 key=value로만 붙인다
+    private void logFailure(String message, ClientHttpResponse response) throws IOException {
+        HttpStatusCode status = response.getStatusCode();
+        String errorCode = OauthErrorCode.of(jsonMapper, response);
+        if (status.is5xxServerError()) {
+            log.error(message + " - status={}, errorCode={}", status.value(), errorCode);
+            return;
+        }
+        log.warn(message + " - status={}, errorCode={}", status.value(), errorCode);
     }
 }
