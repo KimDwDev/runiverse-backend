@@ -8,6 +8,8 @@ import com.runiverse.running_service.application.scheduling.port.out.RegisterJob
 import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 import com.runiverse.running_service.domain.scheduling.vo.JobTarget;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -112,5 +115,30 @@ class RecoverScheduledJobsHandlerTest {
                 .target(JobTarget.of(ScheduledJobType.MATCH_CLOSE, ROOM_ID))
                 .executeAt(executeAt)
                 .build();
+    }
+
+    @Test
+    @DisplayName("복구 시작은 건수를 key=value로, 실패한 건은 예약 ID 값을 담아 ERROR로 남긴다")
+    void logsRecoveryWithParsableValues() {
+        // given
+        LogCapture log = LogCapture.of(RecoverScheduledJobsHandler.class);
+        ScheduledJob failing = job(1L, LocalDateTime.now().plusHours(2));
+        ScheduledJob healthy = job(2L, LocalDateTime.now().plusHours(3));
+        given(loadPendingJobsPort.loadPending()).willReturn(List.of(failing, healthy));
+        willThrow(new IllegalStateException("등록 실패"))
+                .given(registerJobTimerPort).register(failing);
+
+        try {
+            // when
+            recoverScheduledJobsHandler.recover();
+
+            // then -> "미실행 2건"이나 ScheduledJobId[value=1]은 수집 단계에서 값으로 읽히지 않는다
+            assertThat(log.messages(Level.INFO)).containsExactly("[예약] 복구 시작 - pendingCount=2");
+            assertThat(log.messages(Level.ERROR))
+                    .containsExactly("[예약] 예약 복구 실패: 처리하지 못한 예외 - scheduledJobId=1");
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 }
