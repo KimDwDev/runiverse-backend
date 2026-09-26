@@ -42,6 +42,7 @@ presentation/
 
 observability/
   logging/              RequestIdFilter · MDC 키 상수 · 로그 태그
+  metrics/              진입점 메트릭 수집 · 요청 속성 키 상수
 ```
 
 ## 요청 흐름
