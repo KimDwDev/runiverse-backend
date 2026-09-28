@@ -8,6 +8,7 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -180,6 +181,17 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 아무것도 저장되지 않는다")
+    void oauthLoginWithUnsupportedProvider() {
+        // when & then
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+                .isInstanceOf(UnsupportedProviderException.class);
+
+        assertThat(userStore.size()).isZero();
+        assertThat(refreshTokenStore.isEmpty()).isTrue();
+    }
+
+    @Test
     @DisplayName("소셜 로그인에 성공하면 userId와 provider를 담아 성공 로그를 남긴다")
     void oauthLoginLogsSuccess() {
         // when
@@ -204,6 +216,17 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         assertThat(resolverLog.messages(Level.INFO))
                 .noneMatch(message -> message.contains(KAKAO_EMAIL) || message.contains(KAKAO_ID));
         assertThat(handlerLog.messages(Level.INFO)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 provider면 요청한 provider 이름을 담아 실패 로그를 남긴다")
+    void oauthLoginWithUnsupportedProviderLogsFailure() {
+        // when
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+                .isInstanceOf(UnsupportedProviderException.class);
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=naver");
     }
 
     private Counter oauthLoginCounter(String provider, String result, String reason) {
@@ -259,5 +282,17 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(oauthLoginCounter("kakao", "failure", "EMAIL_ALREADY_EXISTS")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 provider는 요청 값 대신 unknown으로 센다")
+    void oauthLoginCountsUnsupportedProviderAsUnknown() {
+        // when
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+                .isInstanceOf(UnsupportedProviderException.class);
+
+        // then -> 요청 값을 태그로 쓰면 값의 종류가 무한히 늘어난다
+        assertThat(oauthLoginCounter("unknown", "failure", "UNSUPPORTED_PROVIDER")).isNotNull();
+        assertThat(meterRegistry.find("runiverse.auth.oauthlogin").tag("provider", "naver").counter()).isNull();
     }
 }
