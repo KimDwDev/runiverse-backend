@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.running.port.in.ForceFinishRunn
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
@@ -40,6 +41,7 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
 
     // 확정 인원이 1이면 안 나타나도 곤란해지는 상대가 없다 — 시작 전 이탈 면제와 같은 기준이다
     private static final int PENALTY_MIN_PLAYER_COUNT = 2;
+    private final LockRunningPlayerPort lockRunningPlayerPort;
     private final LockRunningRoomPort lockRunningRoomPort;
     private final LoadRunningRoomPort loadRunningRoomPort;
     private final LoadRoomPlayerPort loadRoomPlayerPort;
@@ -53,6 +55,9 @@ public class ForceFinishRunningRoomHandler implements ForceFinishRunningRoomUsec
     @Override
     public void handle(ForceFinishRunningRoomCommand command) {
         RunningRoomId roomId = new RunningRoomId(command.runningRoomId());
+        // 참가자를 방보다 먼저 잠근다 — 시작·취소·탈퇴 정산이 모두 참가자 → 방 순이라,
+        // 방을 먼저 잡으면 같은 순간 들어온 RUNNING_START와 서로의 잠금을 기다리다 교착에 빠진다
+        lockRunningPlayerPort.lockActiveInRoom(roomId);
         // 남은 참가자의 종료와 같은 행을 고친다 — 잠그고 읽는다
         Optional<RunningRoom> locked = lockRunningRoomPort.lockById(roomId);
         if (locked.isEmpty()) {
