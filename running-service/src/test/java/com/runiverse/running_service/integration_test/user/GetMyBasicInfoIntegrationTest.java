@@ -62,7 +62,7 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
                 userStore         // SaveUserPort
         );
         oauthLoginHandler = new OauthLoginHandler(
-                oauthClient,       // ExchangeOauthCodePort
+                oauthClient,       // LoadKakaoProfilePort
                 oauthClient,       // LoadGoogleProfilePort
                 oauthUserResolver,
                 tokenProvider,     // GenerateTokenPort

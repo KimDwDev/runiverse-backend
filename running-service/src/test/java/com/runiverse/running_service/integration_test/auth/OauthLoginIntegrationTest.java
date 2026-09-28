@@ -52,7 +52,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         );
         meterRegistry = new SimpleMeterRegistry();
         oauthLoginHandler = new OauthLoginHandler(
-                oauthClient,        // ExchangeOauthCodePort
+                oauthClient,        // LoadKakaoProfilePort
                 oauthClient,        // LoadGoogleProfilePort
                 oauthUserResolver,
                 tokenProvider,      // GenerateTokenPort

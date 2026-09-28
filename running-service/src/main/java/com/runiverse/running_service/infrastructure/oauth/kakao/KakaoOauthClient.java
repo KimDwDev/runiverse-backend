@@ -2,11 +2,11 @@ package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.user.port.out.UnlinkKakaoPort;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
-import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.OauthErrorCode;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
@@ -27,7 +27,7 @@ import java.io.IOException;
 
 @Slf4j
 @Component
-public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
+public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
 
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -47,12 +47,7 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
     }
 
     @Override
-    public Provider provider() {
-        return Provider.KAKAO;
-    }
-
-    @Override
-    public OauthProfile exchange(String authorizationCode, String codeVerifier) {
+    public OauthProfile load(String authorizationCode, String codeVerifier) {
         try {
             String kakaoAccessToken = requestAccessToken(authorizationCode, codeVerifier);
             KakaoUserResponse user = fetchUser(kakaoAccessToken);

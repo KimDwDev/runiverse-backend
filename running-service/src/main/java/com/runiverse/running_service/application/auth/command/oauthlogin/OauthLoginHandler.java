@@ -1,9 +1,9 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
-import com.runiverse.running_service.application.auth.port.out.ExchangeOauthCodePort;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
+import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.auth.port.out.RecordAuthMetricPort;
 import com.runiverse.running_service.application.auth.port.out.RefreshTokenHashPort;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class OauthLoginHandler implements OauthLoginUsecase {
 
-    private final ExchangeOauthCodePort exchangeOauthCodePort;
+    private final LoadKakaoProfilePort loadKakaoProfilePort;
     private final LoadGoogleProfilePort loadGoogleProfilePort;
     private final OauthUserResolver oauthUserResolver;
     private final GenerateTokenPort generateTokenPort;
@@ -35,7 +35,7 @@ public class OauthLoginHandler implements OauthLoginUsecase {
             // 1. provider 자격 증명으로 프로필 확인
             OauthProfile oauthProfile = switch (command) {
                 case OauthLoginCommand.Kakao kakao ->
-                        exchangeOauthCodePort.exchange(provider, kakao.authorizationCode(), kakao.codeVerifier());
+                        loadKakaoProfilePort.load(kakao.authorizationCode(), kakao.codeVerifier());
                 case OauthLoginCommand.Google google ->
                         loadGoogleProfilePort.load(google.idToken());
             };

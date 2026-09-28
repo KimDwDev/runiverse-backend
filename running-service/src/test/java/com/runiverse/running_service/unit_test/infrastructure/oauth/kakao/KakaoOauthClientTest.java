@@ -130,12 +130,6 @@ public class KakaoOauthClientTest {
     }
 
     @Test
-    @DisplayName("provider는 KAKAO를 반환한다")
-    void providerReturnsKakao() {
-        assertThat(createClient(CLIENT_SECRET).provider()).isEqualTo(Provider.KAKAO);
-    }
-
-    @Test
     @DisplayName("인가 코드를 교환해 카카오 프로필을 반환한다")
     void exchangeReturnsProfile() {
         // given
@@ -161,7 +155,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        OauthProfile profile = client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
+        OauthProfile profile = client.load(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         assertThat(profile.provider()).isEqualTo(Provider.KAKAO);
@@ -193,7 +187,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
+        client.load(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         mockServer.verify();
@@ -214,7 +208,7 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         mockServer.verify();
@@ -230,7 +224,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         mockServer.verify();
@@ -249,7 +243,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withUnauthorizedRequest());
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         mockServer.verify();
@@ -268,7 +262,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE_WITHOUT_EMAIL, MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthEmailNotProvidedException.class);
 
         mockServer.verify();
@@ -287,7 +281,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE_WITHOUT_ACCOUNT, MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthEmailNotProvidedException.class);
 
         mockServer.verify();
@@ -306,7 +300,7 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then -> 오류 설명에 되돌아온 인가 코드는 남기지 않는다
@@ -325,7 +319,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withServerError().body("<html>bad gateway</html>").contentType(MediaType.TEXT_HTML));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then
@@ -348,7 +342,7 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then
@@ -365,7 +359,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then
@@ -384,7 +378,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then
@@ -401,7 +395,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withException(new IOException("connection reset")));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then

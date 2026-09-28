@@ -1,15 +1,15 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
-import com.runiverse.running_service.application.auth.port.out.ExchangeOauthCodePort;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
+import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class FakeOauthClient implements ExchangeOauthCodePort, LoadGoogleProfilePort {
+public class FakeOauthClient implements LoadKakaoProfilePort, LoadGoogleProfilePort {
 
     private final Map<String, OauthProfile> profiles = new HashMap<>();
 
@@ -19,8 +19,8 @@ public class FakeOauthClient implements ExchangeOauthCodePort, LoadGoogleProfile
     }
 
     @Override
-    public OauthProfile exchange(Provider provider, String authorizationCode, String codeVerifier) {
-        return find(authorizationCode, provider);
+    public OauthProfile load(String authorizationCode, String codeVerifier) {
+        return find(authorizationCode, Provider.KAKAO);
     }
 
     @Override
