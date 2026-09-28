@@ -35,6 +35,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withTooManyRequests;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 public class KakaoOauthClientTest {
@@ -442,6 +443,66 @@ public class KakaoOauthClientTest {
         // then
         assertThat(log.messages(Level.WARN))
                 .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=401, errorCode=-401");
+    }
+
+    @Test
+    @DisplayName("사용자 조회가 5xx로 실패하면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void userInfoServerErrorIsProviderUnavailable() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withServerError());
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=500, errorCode=unknown");
+    }
+
+    @Test
+    @DisplayName("사용자 조회가 호출 한도 초과(400 + code -10)면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void userInfoApiLimitExceededIsProviderUnavailable() {
+        // given -> 카카오는 한도 초과를 429가 아니라 400에 code -10으로 준다
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withBadRequest()
+                        .body("""
+                                {"msg":"API limit has been exceeded.","code":-10}
+                                """)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=400, errorCode=-10");
+        assertThat(log.messages(Level.WARN)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("토큰 요청이 429로 거부되면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void tokenTooManyRequestsIsProviderUnavailable() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withTooManyRequests());
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류 - status=429, errorCode=unknown");
     }
 
     @Test

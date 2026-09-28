@@ -33,6 +33,14 @@ public class ErrorExposurePolicyTest {
     }
 
     @Test
+    @DisplayName("소셜 로그인 제공자 장애는 503 그대로 노출한다")
+    void oauthProviderUnavailableIsExposed() {
+        // 가려지면 500으로 바뀌어 클라가 "잠시 후 다시"와 서버 오류를 구분할 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.SERVICE_UNAVAILABLE, AuthErrorCode.OAUTH_PROVIDER_UNAVAILABLE.getCode())).isTrue();
+    }
+
+    @Test
     @DisplayName("본인이 아닌 요청 거부는 403 그대로 노출한다")
     void accessDeniedIsExposed() {
         // 노출 목록에서 빠지면 아무 경고 없이 500으로 바뀌어 클라가 원인을 알 수 없다
