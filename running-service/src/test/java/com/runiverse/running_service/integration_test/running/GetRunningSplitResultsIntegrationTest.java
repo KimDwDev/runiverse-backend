@@ -4,6 +4,8 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
@@ -79,10 +81,7 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningStore, onboardingStore, runningStore, runningStore);
         startRunningHandler = new StartRunningHandler(
                 runningStore, runningStore, runningStore, runningStore);
-        updateRunningLocationHandler = new UpdateRunningLocationHandler(
-                runningTrackStore, runningDistanceStore, runningDistanceStore,
-                runningProgressPublisher, newUpdateRunningComboJudge());
-        finishRunningHandler = new FinishRunningHandler(
+        RunningFinisher runningFinisher = new RunningFinisher(
                 runningStore, runningStore, runningTrackStore, onboardingStore, weatherProvider,
                 gpsTrackUploader, runningRecordStore, runningStore, runningTrackStore,
                 runningStore, runningStore,
@@ -92,6 +91,11 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningRecordStore,
                 runningRecordStore, onboardingStore,
                 PROPERTIES);
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                runningTrackStore, runningDistanceStore, runningDistanceStore,
+                runningProgressPublisher, newUpdateRunningComboJudge(),
+                new UpdateRunningFinishJudge(runningFinisher));
+        finishRunningHandler = new FinishRunningHandler(runningFinisher);
 
         InMemoryRunningResultStore resultStore =
                 new InMemoryRunningResultStore(runningStore, runningRecordStore);

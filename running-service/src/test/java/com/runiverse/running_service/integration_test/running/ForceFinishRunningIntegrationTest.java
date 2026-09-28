@@ -4,6 +4,8 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishExecutor;
@@ -91,14 +93,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,  // CheckNicknameDuplicatePort
                 onboardingStore   // SaveOnboardingPort
         );
-        updateRunningLocationHandler = new UpdateRunningLocationHandler(
-                runningTrackStore,       // AppendRunningTrackPort
-                runningDistanceStore,    // LoadRunningDistancePort
-                runningDistanceStore,    // SaveRunningDistancePort
-                runningProgressPublisher, // PublishRunningProgressPort
-                newUpdateRunningComboJudge()
-        );
-        FinishRunningHandler finishRunningHandler = new FinishRunningHandler(
+        RunningFinisher runningFinisher = new RunningFinisher(
                 runningStore,       // LoadRunningRoomPort
                 runningStore,       // LoadRoomPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
@@ -116,6 +111,15 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 FINISH_PROPERTIES
         );
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                runningTrackStore,       // AppendRunningTrackPort
+                runningDistanceStore,    // LoadRunningDistancePort
+                runningDistanceStore,    // SaveRunningDistancePort
+                runningProgressPublisher, // PublishRunningProgressPort
+                newUpdateRunningComboJudge(),
+                new UpdateRunningFinishJudge(runningFinisher)
+        );
+        FinishRunningHandler finishRunningHandler = new FinishRunningHandler(runningFinisher);
         ForceFinishRunningRoomHandler forceFinishRunningRoomHandler =
                 new ForceFinishRunningRoomHandler(
                         runningStore,         // LockRunningRoomPort

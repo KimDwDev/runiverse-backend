@@ -3,7 +3,9 @@ package com.runiverse.running_service.unit_test.running.presentation;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
@@ -124,6 +126,10 @@ class RunningWebSocketHandlerTest {
     @Mock
     private FinishRunningUsecase finishRunningUsecase;
 
+    // 목표 도달 자동 종료도 같은 확정을 탄다 — 판정기는 실제로 두고 확정만 가짜로 둔다
+    @Mock
+    private RunningFinisher runningFinisher;
+
     // 스냅샷 조립은 DB와 Redis를 함께 읽는다 — 여기서는 ack에 실려 나가는지만 본다
     @Mock
     private GetRunningSnapshotUsecase getRunningSnapshotUsecase;
@@ -145,7 +151,8 @@ class RunningWebSocketHandlerTest {
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
                 new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
                 new UpdateRunningLocationHandler(appendRunningTrackPort, loadRunningDistancePort,
-                        saveRunningDistancePort, publishRunningProgressPort, updateRunningComboJudge),
+                        saveRunningDistancePort, publishRunningProgressPort, updateRunningComboJudge,
+                        new UpdateRunningFinishJudge(runningFinisher)),
                 finishRunningUsecase,
                 getRunningSnapshotUsecase,
                 startRunningComboUsecase);
@@ -808,6 +815,80 @@ class RunningWebSocketHandlerTest {
         assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
         verify(finishRunningUsecase, times(2))
                 .handle(new FinishRunningCommand(ROOM_ID, USER_ID, false));
+    }
+
+    @Test
+    @DisplayName("좌표 배치로 목표를 채우면 요청 없이도 러닝을 끝내고 RUNNING_FINISHED를 보낸다")
+    void finishesWhenLocationReachesTarget() throws Exception {
+        // given -> 이번 배치를 반영한 누적이 목표에 닿는다
+        started();
+        givenStoredDistance(TARGET_DISTANCE_METERS);
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then -> 클라는 RUNNING_FINISH의 ack와 똑같이 받아 로컬 트랙을 지우고 결과로 간다
+        verify(runningFinisher).finish(ROOM_ID, USER_ID);
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
+    }
+
+    @Test
+    @DisplayName("목표에 못 미친 좌표 배치는 끝내지 않고 아무것도 보내지 않는다")
+    void doesNotFinishBelowTarget() throws Exception {
+        // given
+        started();
+        givenStoredDistance(TARGET_DISTANCE_METERS - 1);
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then -> 위치 배치에는 ack가 없다. 마지막으로 나간 것은 RUNNING_STARTED 그대로다
+        verifyNoInteractions(runningFinisher);
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("목표 없는 솔로 방은 얼마를 뛰어도 좌표 배치로 끝내지 않는다")
+    void doesNotFinishRoomWithoutTarget() throws Exception {
+        // given -> 솔로는 사용자가 RUNNING_FINISH를 보내야 끝난다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, null));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+        givenStoredDistance(42_195);
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then
+        verifyNoInteractions(runningFinisher);
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("자동 종료가 튕겨내면 좌표 배치의 ERROR로 돌려준다")
+    void respondsErrorWhenAutoFinishFails() throws Exception {
+        // given
+        started();
+        givenStoredDistance(TARGET_DISTANCE_METERS);
+        willThrow(new NotRoomPlayerException()).given(runningFinisher).finish(anyLong(), any());
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then -> 끝났다고 알리면 클라가 로컬 트랙을 지운다. 끝나지 않았으니 코드만 나간다
+        assertThatError(captureLastSent(session), "NOT_ROOM_PLAYER", "RUNNING_LOCATION_UPDATE");
+        verify(session, never()).close(any());
+    }
+
+    // 직전 배치가 point()와 같은 자리에서 끝났다 — 이번 배치의 좌표가 거리를 더하지 않아
+    // 누적이 주어진 값 그대로 판정에 쓰인다
+    private void givenStoredDistance(double meters) {
+        given(loadRunningDistancePort.loadDistance(anyLong(), any()))
+                .willReturn(new RunningDistance(meters, 0L, 35.1795543, 129.0756416, 345));
     }
 
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다
