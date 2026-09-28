@@ -11,8 +11,8 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.support.LogCapture;
@@ -139,7 +139,7 @@ public class GoogleOauthClientTest {
     }
 
     @Test
-    @DisplayName("다른 앱용으로 발급된 토큰(aud 불일치)이면 OauthCodeExchangeFailedException을 던지고 원인을 WARN으로 남긴다")
+    @DisplayName("다른 앱용으로 발급된 토큰(aud 불일치)이면 OauthLoginFailedException을 던지고 원인을 WARN으로 남긴다")
     void loadRejectsOtherAudience() {
         // given
         respondWithGoogleKeys();
@@ -147,13 +147,13 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
         assertThat(log.messages(Level.WARN))
                 .containsExactly("[인증] 구글 로그인 실패: ID 토큰 검증 실패 - reasons=[토큰의 aud 클레임이 이 API를 가리키지 않습니다]");
     }
 
     @Test
-    @DisplayName("구글이 아닌 발급자면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("구글이 아닌 발급자면 OauthLoginFailedException을 던진다")
     void loadRejectsOtherIssuer() {
         // given
         respondWithGoogleKeys();
@@ -161,11 +161,11 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
     }
 
     @Test
-    @DisplayName("만료된 토큰이면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("만료된 토큰이면 OauthLoginFailedException을 던진다")
     void loadRejectsExpiredToken() {
         // given -> 기본 허용 오차(60초)를 넘겨 만료시킨다
         respondWithGoogleKeys();
@@ -173,11 +173,11 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
     }
 
     @Test
-    @DisplayName("구글 키로 서명하지 않은 토큰이면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("구글 키로 서명하지 않은 토큰이면 OauthLoginFailedException을 던진다")
     void loadRejectsForgedSignature() {
         // given -> kid는 같지만 다른 키로 서명했다
         respondWithGoogleKeys();
@@ -186,15 +186,15 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
     }
 
     @Test
-    @DisplayName("JWT 형식이 아니면 OauthCodeExchangeFailedException을 던지고 토큰 원문은 남기지 않는다")
+    @DisplayName("JWT 형식이 아니면 OauthLoginFailedException을 던지고 토큰 원문은 남기지 않는다")
     void loadRejectsMalformedToken() {
         // when & then
         assertThatThrownBy(() -> client.load("not-a-jwt"))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
         assertThat(log.messages(Level.WARN))
                 .hasSize(1)
                 .noneMatch(message -> message.contains("not-a-jwt"));
@@ -225,7 +225,7 @@ public class GoogleOauthClientTest {
     }
 
     @Test
-    @DisplayName("구글 공개키를 받아 오지 못하면 OauthCodeExchangeFailedException을 던지고 ERROR를 예외와 함께 남긴다")
+    @DisplayName("구글 공개키를 받아 오지 못하면 OauthLoginFailedException을 던지고 ERROR를 예외와 함께 남긴다")
     void loadFailsWhenJwkSetUnavailable() {
         // given
         mockServer.expect(requestTo(JWK_SET_URI)).andRespond(withServerError());
@@ -234,7 +234,7 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
         assertThat(log.events(Level.ERROR))
                 .singleElement()
                 .satisfies(event -> {

@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.oauth.google;
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -63,10 +63,10 @@ public class GoogleOauthClient implements LoadGoogleProfilePort {
         } catch (BadJwtException e) {
             // 서명·만료·iss·aud가 맞지 않는다 — aud 불일치는 앱의 serverClientId 설정을 먼저 본다
             log.warn("[인증] 구글 로그인 실패: ID 토큰 검증 실패 - reasons={}", reasonsOf(e));
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         } catch (JwtException e) {
             log.error("[인증] 구글 로그인 실패: 구글 공개키 조회 오류", e);
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
     }
 

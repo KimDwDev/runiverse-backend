@@ -1,6 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
 import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
@@ -32,7 +32,7 @@ public class FakeOauthClient implements LoadKakaoProfilePort, LoadGoogleProfileP
     private OauthProfile find(String credential, Provider provider) {
         OauthProfile profile = profiles.get(credential);
         if (profile == null || profile.provider() != provider) {
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
         return profile;
     }

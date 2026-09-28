@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.user.port.out.UnlinkKakaoPort;
@@ -54,7 +54,7 @@ public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
             return toProfile(user);
         } catch (RestClientException e) {
             log.error("[인증] 카카오 로그인 실패: 카카오 통신 오류", e);
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
     }
 
@@ -77,12 +77,12 @@ public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
                     logFailure("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류", res);
-                    throw new OauthCodeExchangeFailedException();
+                    throw new OauthLoginFailedException();
                 })
                 .body(KakaoTokenResponse.class);
         if (response == null || !StringUtils.hasText(response.accessToken())) {
             log.error("[인증] 카카오 토큰 요청 실패: access_token 누락");
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
         return response.accessToken();
     }
@@ -95,12 +95,12 @@ public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
                     logFailure("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류", res);
-                    throw new OauthCodeExchangeFailedException();
+                    throw new OauthLoginFailedException();
                 })
                 .body(KakaoUserResponse.class);
         if (response == null || response.id() == null) {
             log.error("[인증] 카카오 사용자 조회 실패: id 누락");
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
         return response;
     }

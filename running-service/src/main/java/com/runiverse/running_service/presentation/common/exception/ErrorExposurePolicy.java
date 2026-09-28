@@ -24,7 +24,7 @@ public final class ErrorExposurePolicy {
             ResourceErrorCode.NOT_FOUND.getCode(),
             UserErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             AuthErrorCode.INVALID_CREDENTIALS.getCode(),
-            AuthErrorCode.OAUTH_CODE_EXCHANGE_FAILED.getCode(),
+            AuthErrorCode.OAUTH_LOGIN_FAILED.getCode(),
             AuthErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),
             AuthErrorCode.UNSUPPORTED_PROVIDER.getCode(),
             AuthErrorCode.INVALID_REFRESH_TOKEN.getCode(),

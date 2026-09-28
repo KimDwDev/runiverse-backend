@@ -1,8 +1,8 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import ch.qos.logback.classic.Level;
@@ -194,7 +194,7 @@ public class KakaoOauthClientTest {
     }
 
     @Test
-    @DisplayName("토큰 요청이 실패하면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("토큰 요청이 실패하면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenTokenRequestRejected() {
         // given -> 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -209,13 +209,13 @@ public class KakaoOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("토큰 응답에 access_token이 없으면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("토큰 응답에 access_token이 없으면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenAccessTokenMissing() {
         // given -> 200이지만 본문이 비어 있는 경우를 방어한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -225,13 +225,13 @@ public class KakaoOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("사용자 정보 조회가 실패하면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("사용자 정보 조회가 실패하면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenUserRequestRejected() {
         // given
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -244,7 +244,7 @@ public class KakaoOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
@@ -301,7 +301,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then -> 오류 설명에 되돌아온 인가 코드는 남기지 않는다
         assertThat(log.messages(Level.WARN))
@@ -320,7 +320,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -343,7 +343,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.WARN))
@@ -360,7 +360,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -379,7 +379,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -396,7 +396,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))

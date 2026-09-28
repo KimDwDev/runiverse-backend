@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.auth.command.oauthlogin.OauthUs
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -145,12 +145,12 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("인가 코드 교환에 실패하면 OauthCodeExchangeFailedException이 발생하고 아무것도 저장되지 않는다")
+    @DisplayName("인가 코드 교환에 실패하면 OauthLoginFailedException이 발생하고 아무것도 저장되지 않는다")
     void oauthLoginWithInvalidAuthorizationCode() {
         // when & then
         assertThatThrownBy(() -> oauthLoginHandler.handle(
                 new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         assertThat(userStore.size()).isZero();
         assertThat(refreshTokenStore.isEmpty()).isTrue();
@@ -169,11 +169,11 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("구글 ID 토큰 검증에 실패하면 OauthCodeExchangeFailedException이 발생하고 아무것도 저장되지 않는다")
+    @DisplayName("구글 ID 토큰 검증에 실패하면 OauthLoginFailedException이 발생하고 아무것도 저장되지 않는다")
     void googleLoginWithInvalidIdToken() {
         // when & then
         assertThatThrownBy(() -> googleLogin("forged-id-token"))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         assertThat(userStore.size()).isZero();
         assertThat(refreshTokenStore.isEmpty()).isTrue();
@@ -230,10 +230,10 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         // when -> 예외는 infra(OAuth 클라이언트)에서 던져져 핸들러를 통과한다
         assertThatThrownBy(() -> oauthLoginHandler.handle(
                 new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
-        assertThat(oauthLoginCounter("kakao", "failure", "OAUTH_CODE_EXCHANGE_FAILED")).isNotNull();
+        assertThat(oauthLoginCounter("kakao", "failure", "OAUTH_LOGIN_FAILED")).isNotNull();
     }
 
     @Test
@@ -241,10 +241,10 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     void googleLoginCountsVerificationFailure() {
         // when
         assertThatThrownBy(() -> googleLogin("forged-id-token"))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
-        assertThat(oauthLoginCounter("google", "failure", "OAUTH_CODE_EXCHANGE_FAILED")).isNotNull();
+        assertThat(oauthLoginCounter("google", "failure", "OAUTH_LOGIN_FAILED")).isNotNull();
     }
 
     @Test

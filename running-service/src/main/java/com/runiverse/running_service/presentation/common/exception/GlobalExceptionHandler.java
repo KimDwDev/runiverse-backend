@@ -200,7 +200,7 @@ public class GlobalExceptionHandler {
             case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN,
-                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
+                 OAUTH_LOGIN_FAILED -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED,
                  EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER,
