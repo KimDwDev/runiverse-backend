@@ -22,7 +22,7 @@ public class MatchRoomSubscriber {
         } catch (RuntimeException e) {
             // 러닝과 달리 던지지 않는다 — 구독에 실패해도 스트림 연결 자체는 살려 둔다.
             // 재연결 때 다시 붙고, 그 사이 놓친 것은 스냅샷이 복구한다
-            log.warn("매칭 방 채널 구독 실패 — roomId={}", runningRoomId, e);
+            log.error("[매칭] 방 채널 구독 실패: Redis 오류 - roomId={}", runningRoomId, e);
         }
     }
 

@@ -6,6 +6,8 @@ import com.runiverse.running_service.application.match.port.out.MatchStreamEvent
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.sse.MatchStreamKeepAlive;
 import com.runiverse.running_service.infrastructure.sse.MatchStreamRegistryAdapter;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -112,6 +114,26 @@ class MatchStreamKeepAliveTest {
         // 이 테스트는 연결 수명만 다룬다 — 이벤트 전송은 검증 대상이 아니다
         @Override
         public void send(MatchStreamEvent event) {
+        }
+    }
+
+    @Test
+    @DisplayName("연결이 스스로 처리하지 못한 예외는 연결 ID와 원인 예외를 담아 ERROR로 남긴다")
+    void logsUnexpectedFailureAsError() {
+        // given -> 끊긴 단말은 연결이 안에서 닫는다. 여기까지 올라온 예외는 예상 밖이다
+        LogCapture log = LogCapture.of(MatchStreamKeepAlive.class);
+        register("conn-1").failOnKeepAlive = true;
+
+        try {
+            // when
+            matchStreamKeepAlive.pingAll();
+
+            // then
+            assertThat(log.messages(Level.ERROR))
+                    .containsExactly("[매칭] 스트림 keep-alive 실패: 처리하지 못한 예외 - connectionId=conn-1");
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
         }
     }
 }

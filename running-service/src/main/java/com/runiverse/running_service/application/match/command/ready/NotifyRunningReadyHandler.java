@@ -36,7 +36,7 @@ public class NotifyRunningReadyHandler implements NotifyRunningReadyUsecase {
         Optional<RunningRoom> found = loadRunningRoomPort.loadById(roomId);
         if (found.isEmpty()) {
             // 예약은 남았는데 방이 사라진 경우 — 마감 핸들러와 같은 규칙으로 조용히 끝낸다
-            log.warn("통지할 방이 없다 — roomId={}", roomId.value());
+            log.warn("[매칭] 러닝 준비 통지 건너뜀: 방 없음 - roomId={}", roomId.value());
             return;
         }
         RunningRoom room = found.get();

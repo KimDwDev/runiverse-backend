@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers(RegexRequestMatcher.regexMatcher(
                                 HttpMethod.GET,
                                 "/users/[0-9a-fA-F-]{36}/profile-image")).permitAll() // uuid일때만 jwt 검증 생략

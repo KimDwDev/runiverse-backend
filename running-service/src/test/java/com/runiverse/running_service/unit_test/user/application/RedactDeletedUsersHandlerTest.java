@@ -6,6 +6,8 @@ import com.runiverse.running_service.application.user.command.accountdeletion.De
 import com.runiverse.running_service.application.user.command.accountdeletion.RedactDeletedUsersHandler;
 import com.runiverse.running_service.application.user.port.out.LoadDeletedUserIdsPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,5 +108,27 @@ class RedactDeletedUsersHandlerTest {
 
         // then
         verify(deletedUserRedactor, never()).redact(any());
+    }
+
+    @Test
+    @DisplayName("한 건이 실패하면 그 userId와 원인 예외를 담아 [회원] ERROR로 남긴다")
+    void logsFailedRecordAsError() {
+        // given -> 스케줄러 스레드라 중앙 예외 핸들러가 없다. 여기서 안 찍으면 흔적이 없다
+        LogCapture log = LogCapture.of(RedactDeletedUsersHandler.class);
+        UserId failing = new UserId(UuidCreator.getTimeOrderedEpoch());
+        given(loadDeletedUserIdsPort.loadDeletedBefore(any())).willReturn(List.of(failing));
+        doThrow(new IllegalStateException("S3 삭제 실패")).when(deletedUserRedactor).redact(failing);
+
+        try {
+            // when
+            handler.redactAfterRetention();
+
+            // then
+            assertThat(log.messages(Level.ERROR)).containsExactly(
+                    "[회원] 탈퇴 기록 신원 정보 제거 실패: 처리하지 못한 예외 - userId=" + failing.value());
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 }

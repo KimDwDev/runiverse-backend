@@ -1,5 +1,6 @@
 package com.runiverse.running_service.presentation.common.security;
 
+import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFilter;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
 import com.runiverse.running_service.presentation.common.exception.SecurityErrorCode;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
@@ -31,6 +32,8 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
             AccessDeniedException accessDeniedException
     ) throws IOException {
         SecurityErrorCode errorCode = SecurityErrorCode.ACCESS_DENIED;
+        // 메트릭의 실패 원인 — 보안 필터에서 끝나 중앙 예외 핸들러를 거치지 않는다
+        request.setAttribute(HttpRequestMetricsFilter.REASON, errorCode.getCode());
         HttpStatus status = HttpStatus.FORBIDDEN;
         ErrorResponse body = new ErrorResponse(errorCode.getCode(), errorCode.getMessage());
         if (!ErrorExposurePolicy.isExposed(status, errorCode.getCode())) {
@@ -42,4 +45,5 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(), body);
     }
+
 }

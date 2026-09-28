@@ -11,6 +11,8 @@ import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.RunningReady;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -127,6 +130,29 @@ class BroadMatchEventHandlerTest {
         }
         if (users.length > 1) {
             given(matchStreamPort.find(USER_B)).willReturn(Optional.of(connectionB));
+        }
+    }
+
+    @Test
+    @DisplayName("연결이 스스로 처리하지 못한 전송 실패는 연결 ID와 원인 예외를 담아 ERROR로 남긴다")
+    void logsUnexpectedSendFailureAsError() {
+        // given -> 끊긴 단말은 연결이 안에서 닫는다. 여기까지 올라온 예외는 예상 밖이다
+        LogCapture log = LogCapture.of(BroadMatchEventHandler.class);
+        MatchStreamEvent event = MatchStreamEvent.updated(ROOM_INFO);
+        givenMembers(USER_A);
+        doThrow(new IllegalStateException("전송 실패")).when(connectionA).send(event);
+        given(connectionA.id()).willReturn("conn-a");
+
+        try {
+            // when
+            broadMatchEventHandler.handle(new BroadcastMatchEventCommand(event));
+
+            // then
+            assertThat(log.messages(Level.ERROR))
+                    .containsExactly("[매칭] 이벤트 전송 실패: 처리하지 못한 예외 - connectionId=conn-a");
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
         }
     }
 }

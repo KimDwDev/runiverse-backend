@@ -12,7 +12,9 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 RUN groupadd --system spring \
-    && useradd --system --gid spring spring
+    && useradd --system --gid spring spring \
+    && mkdir -p /app/logs \
+    && chown spring:spring /app/logs
 
 COPY --from=builder --chown=spring:spring /builder/extracted/dependencies/ ./
 COPY --from=builder --chown=spring:spring /builder/extracted/spring-boot-loader/ ./

@@ -10,8 +10,10 @@ import com.runiverse.running_service.application.running.port.out.RunningProgres
 import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecase {
@@ -33,6 +35,8 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
         } catch (RuntimeException e) {
             // 누적을 못 읽으면 이번 배치의 진행 표시만 거른다 — 좌표는 이미 저장됐고 저장된 누적도 그대로다.
             // 건너뛴 배치의 곡선은 다음 배치가 직선으로 이어 라이브 표시에서만 빠진다 — 최종 기록이 바로잡는다
+            log.error("[러닝] 누적 거리 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}",
+                    command.runningRoomId(), userId.value(), e);
             return;
         }
         RunningDistance updated = RunningDistanceAccumulator.accumulate(stored, command.points());

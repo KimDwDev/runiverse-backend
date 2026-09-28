@@ -10,6 +10,8 @@ import com.runiverse.running_service.application.running.port.out.RunningComboUp
 import com.runiverse.running_service.application.running.port.out.SaveRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.SaveRunningComboSnapshotPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -197,5 +199,26 @@ class UpdateRunningComboJudgeTest {
                 ArgumentCaptor.forClass(RunningComboUpdate.class);
         verify(publishRunningComboPort).publish(eq(ROOM_ID), captor.capture());
         return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("판정이 실패하면 userId를 레코드가 아닌 값으로 담아 ERROR로 남긴다")
+    void judge_logsFailureAsError() {
+        // given
+        LogCapture log = LogCapture.of(UpdateRunningComboJudge.class);
+        willThrow(new IllegalStateException("redis down"))
+                .given(loadRunningComboSnapshotsPort).loadSnapshots(ROOM_ID);
+
+        try {
+            // when
+            judge.judge(ROOM_ID, SENDER, 1_000);
+
+            // then -> UserId[value=...]로 찍히면 수집 단계의 userId 검색에 걸리지 않는다
+            assertThat(log.messages(Level.ERROR)).containsExactly(
+                    "[러닝] 콤보 판정 실패: 처리하지 못한 예외 - roomId=" + ROOM_ID + ", userId=" + SENDER.value());
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 }

@@ -7,6 +7,9 @@ import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackRedisAdapter;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -53,10 +57,18 @@ class RunningTrackRedisAdapterTest {
     private RunningTrackRedisAdapter adapter;
     private UserId userId;
 
+    private LogCapture log;
+
     @BeforeEach
     void setUp() {
         adapter = new RunningTrackRedisAdapter(redisTemplate, new RunningTrackProperties(TTL));
         userId = new UserId(UuidCreator.getTimeOrderedEpoch());
+        log = LogCapture.of(RunningTrackRedisAdapter.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        log.stop();
     }
 
     // 단말이 모두 측정한 좌표 — 인자 순서는 [순번,위도,경도,고도,정확도,속도,방위,케이던스,페이스,시각]
@@ -177,6 +189,40 @@ class RunningTrackRedisAdapterTest {
                 .isInstanceOf(RunningTrackUnavailableException.class);
     }
 
+    @Test
+    @DisplayName("저장 중 Redis가 닿지 않으면 원래 예외를 담아 ERROR로 남긴다")
+    void logsRedisFailureOnAppend() {
+        // given
+        given(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any(), any()))
+                .willThrow(new RedisConnectionFailureException("redis down"));
+
+        // when
+        assertThatThrownBy(() -> adapter.append(ROOM_ID, userId, List.of(point(0))))
+                .isInstanceOf(RunningTrackUnavailableException.class);
+
+        // then -> 업무 예외로 갈아끼우면 원래 원인은 여기서만 보인다
+        assertErrorLogged("[러닝] 트랙 저장 실패: Redis 오류 - roomId=" + ROOM_ID + ", userId=" + userId.value());
+    }
+
+    @Test
+    @DisplayName("삭제 중 Redis가 닿지 않으면 종료를 막지 않고 ERROR로 남긴다")
+    void logsRedisFailureOnDelete() {
+        // given
+        given(redisTemplate.delete(anyList())).willThrow(new RedisConnectionFailureException("redis down"));
+
+        // when -> 기록은 이미 DB에 있고 TTL이 결국 지운다
+        assertThatCode(() -> adapter.delete(ROOM_ID, userId)).doesNotThrowAnyException();
+
+        // then -> 삼켜도 Redis 장애는 서버 문제다
+        assertErrorLogged("[러닝] 트랙 삭제 실패: Redis 오류 - roomId=" + ROOM_ID + ", userId=" + userId.value());
+    }
+
+    private void assertErrorLogged(String message) {
+        assertThat(log.messages(Level.ERROR)).containsExactly(message);
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy().getClassName())
+                .isEqualTo(RedisConnectionFailureException.class.getName());
+    }
+
     // 스트림에 배치가 이렇게 쌓여 있다고 둔다 — 배치 하나가 XADD 항목 하나다
     private void givenStoredBatches(String... batches) {
         List<MapRecord<String, Object, Object>> records = Arrays.stream(batches)
@@ -294,6 +340,7 @@ class RunningTrackRedisAdapterTest {
         // when & then
         assertThatThrownBy(() -> adapter.load(ROOM_ID, userId))
                 .isInstanceOf(RunningTrackUnavailableException.class);
+        assertErrorLogged("[러닝] 트랙 조회 실패: Redis 오류 - roomId=" + ROOM_ID + ", userId=" + userId.value());
     }
 
     @Test

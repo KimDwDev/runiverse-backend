@@ -1,6 +1,8 @@
 package com.runiverse.running_service.integration_test.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.infrastructure.metrics.AuthMetricAdapter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginCommand;
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthLoginHandler;
 import com.runiverse.running_service.application.auth.command.oauthlogin.OauthUserResolver;
@@ -64,7 +66,8 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
                 oauthUserResolver,
                 tokenProvider,     // GenerateTokenPort
                 tokenProvider,     // RefreshTokenHashPort
-                refreshTokenStore  // SaveRefreshTokenHashPort
+                refreshTokenStore, // SaveRefreshTokenHashPort
+                new AuthMetricAdapter(new SimpleMeterRegistry())  // RecordAuthMetricPort
         );
         completeOnboardingHandler = new CompleteOnboardingHandler(
                 userStore,        // LoadUserByIdPort

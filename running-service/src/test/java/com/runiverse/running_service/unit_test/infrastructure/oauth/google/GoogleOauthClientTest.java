@@ -4,6 +4,10 @@ import com.runiverse.running_service.application.auth.exception.OauthCodeExchang
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import ch.qos.logback.classic.Level;
+import com.runiverse.running_service.support.LogCapture;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -13,6 +17,9 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,6 +28,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
@@ -72,6 +81,17 @@ public class GoogleOauthClientTest {
                     """;
 
     private MockRestServiceServer mockServer;
+    private LogCapture log;
+
+    @BeforeEach
+    void startLogCapture() {
+        log = LogCapture.of(GoogleOauthClient.class);
+    }
+
+    @AfterEach
+    void stopLogCapture() {
+        log.stop();
+    }
 
     // 실제 네트워크 없이 구글 응답을 흉내내기 위해 빌더에 MockRestServiceServer를 바인딩한다
     private GoogleOauthClient createClient(String clientSecret) {
@@ -86,7 +106,7 @@ public class GoogleOauthClientTest {
                 USER_INFO_URI
         );
 
-        return new GoogleOauthClient(builder.build(), properties);
+        return new GoogleOauthClient(builder.build(), properties, JsonMapper.builder().build());
     }
 
     @Test
@@ -253,4 +273,119 @@ public class GoogleOauthClientTest {
         mockServer.verify();
     }
 
+    @Test
+    @DisplayName("토큰 요청이 4xx로 거부되면 본문 대신 오류 코드만 담아 WARN으로 남긴다")
+    void logsTokenRejectionAsWarnWithErrorCode() {
+        // given -> 인가 코드 재사용·만료가 대부분이지만 우리 설정 오류일 수도 있어 INFO로 묻지 않는다
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withBadRequest()
+                        .body("""
+                                {"error":"invalid_grant","error_description":"Bad Request"}
+                                """)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then -> 공백이 섞인 error_description은 key=value 파싱을 깨므로 남기지 않는다
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[인증] 구글 토큰 요청 실패: 구글 응답 오류 - status=400, errorCode=invalid_grant");
+        assertThat(log.events(Level.ERROR)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("토큰 요청이 5xx로 실패하면 외부 장애라 ERROR로 남긴다")
+    void logsTokenServerErrorAsError() {
+        // given
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withServerError().body("<html>bad gateway</html>").contentType(MediaType.TEXT_HTML));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 구글 토큰 요청 실패: 구글 응답 오류 - status=500, errorCode=unknown");
+    }
+
+    @Test
+    @DisplayName("사용자 조회가 거부되면 사용자 조회 문구로 오류 코드를 남긴다")
+    void logsUserRejectionWithErrorCode() {
+        // given
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withUnauthorizedRequest()
+                        .body("""
+                                {"error":"invalid_token","error_description":"Invalid Credentials"}
+                                """)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[인증] 구글 사용자 조회 실패: 구글 응답 오류 - status=401, errorCode=invalid_token");
+    }
+
+    @Test
+    @DisplayName("200인데 access_token이 없으면 구글 계약이 깨진 것이라 ERROR로 남긴다")
+    void logsMissingAccessTokenAsError() {
+        // given
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 구글 토큰 요청 실패: access_token 누락");
+    }
+
+    @Test
+    @DisplayName("200인데 sub가 없으면 구글 계약이 깨진 것이라 ERROR로 남긴다")
+    void logsMissingSubAsError() {
+        // given
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 구글 사용자 조회 실패: sub 누락");
+    }
+
+    @Test
+    @DisplayName("통신 자체가 끊기면 원인 예외를 담아 ERROR로 남긴다")
+    void logsNetworkFailureAsErrorWithCause() {
+        // given
+        GoogleOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withException(new IOException("connection reset")));
+
+        // when
+        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 구글 로그인 실패: 구글 통신 오류");
+        assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+    }
 }

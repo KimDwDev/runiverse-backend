@@ -33,7 +33,7 @@ public class BroadMatchEventHandler implements BroadcastMatchEventUsecase {
             connection.send(event);
         } catch (RuntimeException e) {
             // 한 연결의 실패가 나머지 수신자를 막지 않는다 — 끊긴 단말은 스스로 정리된다
-            log.warn("매칭 이벤트 전송 실패 — connectionId={}", connection.id(), e);
+            log.error("[매칭] 이벤트 전송 실패: 처리하지 못한 예외 - connectionId={}", connection.id(), e);
         }
     }
 }

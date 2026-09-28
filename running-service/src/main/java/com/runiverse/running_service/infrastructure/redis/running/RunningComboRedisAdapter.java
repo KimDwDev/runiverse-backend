@@ -40,10 +40,13 @@ public class RunningComboRedisAdapter implements
     private static final String NULL = "null";
     private static final int FIELD_COUNT = 3;
     private static final int PAIR_USER_COUNT = 2;
+    // 로그의 target 값 — 어느 해시에서 실패했는지 가른다
+    private static final String SNAPSHOT = "snapshot";
+    private static final String PAIR = "pair";
 
     @Override
     public List<RunningComboSnapshot> loadSnapshots(Long runningRoomId) {
-        return load(snapshotKey(runningRoomId), "스냅샷", this::toSnapshot);
+        return load(snapshotKey(runningRoomId), this::toSnapshot);
     }
 
     @Override
@@ -53,12 +56,12 @@ public class RunningComboRedisAdapter implements
                 snapshot.recordedAt().toEpochMilli(),
                 snapshot.speedMetersPerSecond());
         save(snapshotKey(runningRoomId), Map.of(snapshot.userId().value().toString(), value),
-                "스냅샷", runningRoomId);
+                SNAPSHOT, runningRoomId);
     }
 
     @Override
     public List<RunningComboPair> loadPairs(Long runningRoomId) {
-        return load(pairKey(runningRoomId), "관계", this::toPair);
+        return load(pairKey(runningRoomId), this::toPair);
     }
 
     @Override
@@ -69,27 +72,21 @@ public class RunningComboRedisAdapter implements
         save(pairKey(runningRoomId),
                 pairs.stream().collect(Collectors.toMap(
                         RunningComboRedisAdapter::pairField, RunningComboRedisAdapter::pairValue)),
-                "관계", runningRoomId);
+                PAIR, runningRoomId);
     }
 
-    private <T> List<T> load(
-            String key, String label, Function<Map.Entry<String, String>, Optional<T>> mapper) {
-        Map<String, String> entries;
-        try {
-            entries = redisTemplate.<String, String>opsForHash().entries(key);
-        } catch (RuntimeException e) {
-            // 읽기 실패를 빈 목록으로 위장하면 안 된다 — 비교 상대가 사라져
-            // 살아 있던 콤보와 최고 기록이 이번 배치의 저장으로 지워진다
-            log.warn("러닝 콤보 {} 조회 실패 — key={}", label, key, e);
-            throw e;
-        }
+    private <T> List<T> load(String key, Function<Map.Entry<String, String>, Optional<T>> mapper) {
+        // 읽기 실패를 빈 목록으로 위장하면 안 된다 — 비교 상대가 사라져
+        // 살아 있던 콤보와 최고 기록이 이번 배치의 저장으로 지워진다.
+        // 그대로 던지고 로그는 받는 쪽이 남긴다
+        Map<String, String> entries = redisTemplate.<String, String>opsForHash().entries(key);
         return entries.entrySet().stream()
                 .map(mapper)
                 .flatMap(Optional::stream)
                 .toList();
     }
 
-    private void save(String key, Map<String, String> entries, String label, Long runningRoomId) {
+    private void save(String key, Map<String, String> entries, String target, Long runningRoomId) {
         try {
             redisTemplate.<String, String>opsForHash().putAll(key, entries);
             // HSET은 TTL을 건드리지 않는다 — 쓸 때마다 다시 걸지 않으면
@@ -97,14 +94,14 @@ public class RunningComboRedisAdapter implements
             redisTemplate.expire(key, properties.ttl());
         } catch (RuntimeException e) {
             // 저장에 실패하면 다음 배치가 이전 상태에서 이어 판정한다
-            log.warn("러닝 콤보 {} 저장 실패 — roomId={}", label, runningRoomId, e);
+            log.error("[러닝] 콤보 상태 저장 실패: Redis 오류 - roomId={}, target={}", runningRoomId, target, e);
         }
     }
 
     private Optional<RunningComboSnapshot> toSnapshot(Map.Entry<String, String> entry) {
         String[] fields = entry.getValue().split(SEPARATOR_PATTERN);
         if (fields.length != FIELD_COUNT) {
-            log.warn("러닝 콤보 스냅샷 형식 불일치 — field={}", entry.getKey());
+            log.warn("[러닝] 콤보 스냅샷 복원 건너뜀: 저장 형식 불일치 - field={}", entry.getKey());
             return Optional.empty();
         }
         try {
@@ -115,7 +112,7 @@ public class RunningComboRedisAdapter implements
                     Double.parseDouble(fields[2])));
         } catch (IllegalArgumentException e) {
             // 깨진 값은 다시 읽어도 같다 — 이 참가자만 비교에서 빼고 다음 배치가 제 값으로 덮는다
-            log.warn("러닝 콤보 스냅샷 값 손상 — field={}", entry.getKey());
+            log.warn("[러닝] 콤보 스냅샷 복원 건너뜀: 저장 값 손상 - field={}", entry.getKey());
             return Optional.empty();
         }
     }
@@ -124,7 +121,7 @@ public class RunningComboRedisAdapter implements
         String[] users = entry.getKey().split(SEPARATOR_PATTERN);
         String[] fields = entry.getValue().split(SEPARATOR_PATTERN);
         if (users.length != PAIR_USER_COUNT || fields.length != FIELD_COUNT) {
-            log.warn("러닝 콤보 관계 형식 불일치 — field={}", entry.getKey());
+            log.warn("[러닝] 콤보 관계 복원 건너뜀: 저장 형식 불일치 - field={}", entry.getKey());
             return Optional.empty();
         }
         try {
@@ -136,7 +133,7 @@ public class RunningComboRedisAdapter implements
                     Integer.parseInt(fields[2])));
         } catch (IllegalArgumentException e) {
             // 이 관계만 처음부터 다시 센다 — 거리를 틀리게 세느니 1부터가 낫다
-            log.warn("러닝 콤보 관계 값 손상 — field={}", entry.getKey());
+            log.warn("[러닝] 콤보 관계 복원 건너뜀: 저장 값 손상 - field={}", entry.getKey());
             return Optional.empty();
         }
     }

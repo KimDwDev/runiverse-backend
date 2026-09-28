@@ -50,7 +50,7 @@ public class UpdateRunningComboJudge {
             saveRunningComboPairsPort.savePairs(runningRoomId, evaluation.pairs());
             publishRunningComboPort.publish(runningRoomId, evaluation.update());
         } catch (RuntimeException e) {
-            log.warn("러닝 콤보 판정 실패 — roomId={}, userId={}", runningRoomId, sender, e);
+            log.error("[러닝] 콤보 판정 실패: 처리하지 못한 예외 - roomId={}, userId={}", runningRoomId, sender.value(), e);
         }
     }
 

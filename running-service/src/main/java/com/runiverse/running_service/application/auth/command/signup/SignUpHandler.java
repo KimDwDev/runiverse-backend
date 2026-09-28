@@ -9,11 +9,13 @@ import com.runiverse.running_service.application.auth.port.out.SaveRefreshTokenH
 import com.runiverse.running_service.application.auth.port.out.VerificationTicketHashPort;
 import com.runiverse.running_service.domain.user.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SignUpHandler implements SignUpUsecase {
 
     private final VerificationTicketHashPort verificationTicketHashPort;
@@ -29,6 +31,7 @@ public class SignUpHandler implements SignUpUsecase {
         String hashedTicket = verificationTicketHashPort.hash(command.verificationTicket());
         String email = consumeVerificationTicketPort.consume(hashedTicket);
         if (email == null) {
+            log.info("[인증] 회원가입 실패: 인증 티켓 없음 또는 만료");
             throw new EmailNotVerifiedException();
         }
 
@@ -41,6 +44,7 @@ public class SignUpHandler implements SignUpUsecase {
 
         // 4. refresh token해시화 후 refresh token redis 저장
         saveRefreshTokenHashPort.save(user.getUserId(), refreshTokenHashPort.hash(refreshToken));
+        log.info("[인증] 회원가입 성공 - userId={}", user.getUserId().value());
 
         // 5. 결과 반환
         return new SignUpResult(user.getUserId().value(), accessToken, refreshToken);

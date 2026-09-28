@@ -26,7 +26,7 @@ public class RunningProgressRedisAdapter implements PublishRunningProgressPort {
         } catch (RuntimeException e) {
             // supersede와 달리 던지지 않는다 — 이건 남의 화면에 뜨는 표시일 뿐이고
             // 10초 뒤 다음 배치가 최신값을 다시 나른다. 좌표는 이미 저장돼 있다
-            log.warn("러닝 진행 통지 발행 실패 — roomId={}, userId={}",
+            log.error("[러닝] 진행 통지 발행 실패: Redis 오류 - roomId={}, userId={}",
                     runningRoomId, progress.userId(), e);
         }
     }

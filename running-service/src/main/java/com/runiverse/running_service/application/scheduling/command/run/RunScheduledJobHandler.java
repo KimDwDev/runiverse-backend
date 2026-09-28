@@ -47,7 +47,7 @@ public class RunScheduledJobHandler implements RunScheduledJobUsecase {
         Optional<ScheduledJob> locked =
                 lockScheduledJobPort.lockById(new ScheduledJobId(command.scheduledJobId()));
         if (locked.isEmpty()) {
-            log.warn("실행할 예약이 없다 — scheduledJobId={}", command.scheduledJobId());
+            log.warn("[예약] 예약 실행 건너뜀: 예약 없음 - scheduledJobId={}", command.scheduledJobId());
             return;
         }
         ScheduledJob job = locked.get();

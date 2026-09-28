@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.charset.StandardCharsets;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -25,7 +27,8 @@ public class ScheduledJobListener implements MessageListener {
         try {
             payload = jsonMapper.readValue(message.getBody(), ScheduledJobMessage.class);
         } catch (JacksonException e) {
-            log.warn("예약 전파 메시지 파싱 실패");
+            log.error("[예약] 예약 전파 메시지 파싱 실패: 메시지 형식 불일치 - channel={}",
+                    new String(message.getChannel(), StandardCharsets.UTF_8), e);
             return;
         }
         // 발행한 본인도 자기 메시지를 받는다 — 어댑터가 jobId로 중복을 걸러낸다

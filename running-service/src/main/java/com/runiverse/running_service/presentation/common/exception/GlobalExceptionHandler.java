@@ -8,8 +8,11 @@ import com.runiverse.running_service.application.common.exception.ResourceErrorC
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
+import com.runiverse.running_service.observability.logging.LogTag;
+import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFilter;
 import com.runiverse.running_service.presentation.common.response.CooldownErrorResponse;
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,18 +32,22 @@ public class GlobalExceptionHandler {
 
     // 유스케이스 예외
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e, HttpServletRequest request) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
+        markReason(request, errorCode.getCode());
         return respond(toStatus(errorCode), errorCode.getCode(), errorCode.getMessage());
     }
 
     // 도메인 검증 예외
+    // 여기까지 왔다면 Request DTO 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(
-            com.runiverse.running_service.domain.common.exception.BusinessException e
+            com.runiverse.running_service.domain.common.exception.BusinessException e,
+            HttpServletRequest request
     ) {
-        log.warn("도메인 예외: {} - {}", e.getErrorCode().getCode(), e.getErrorCode().getMessage());
+        log.error("{} 도메인 검증 실패 - code={}", LogTag.of(request), e.getErrorCode().getCode(), e);
+        markReason(request, e.getErrorCode().getCode());
         return respond(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 e.getErrorCode().getCode(),
@@ -49,11 +57,20 @@ public class GlobalExceptionHandler {
 
     // @Valid 검증 실패
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
+    public ResponseEntity<ErrorResponse> handleValidationException(
+            MethodArgumentNotValidException e,
+            HttpServletRequest request
+    ) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(" "));
-        log.warn("요청 검증 실패: {}", message);
+        // 입력값에는 개인정보가 섞일 수 있어 필드 이름만 남긴다
+        List<String> fields = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getField)
+                .distinct()
+                .toList();
+        log.info("{} 요청 검증 실패 - fields={}", LogTag.of(request), fields);
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.INVALID_REQUEST.getCode(),
@@ -63,8 +80,14 @@ public class GlobalExceptionHandler {
 
     // JSON 문법 오류 등 본문 자체를 읽지 못한 경우
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException e) {
-        log.warn("요청 본문 파싱 실패: {}", e.getMessage());
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(
+            HttpMessageNotReadableException e,
+            HttpServletRequest request
+    ) {
+        // 예외 메시지에는 잘못 보낸 입력값이 그대로 들어가 원인 예외의 종류만 남긴다
+        log.info("{} 요청 본문 파싱 실패 - cause={}",
+                LogTag.of(request), e.getMostSpecificCause().getClass().getSimpleName());
+        markReason(request, CommonErrorCode.MALFORMED_REQUEST_BODY.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
@@ -74,8 +97,9 @@ public class GlobalExceptionHandler {
 
     // 예상 못한 예외
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e) {
-        log.error("처리하지 못한 예외", e);
+    public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e, HttpServletRequest request) {
+        log.error("{} 처리하지 못한 예외", LogTag.of(request), e);
+        markReason(request, CommonErrorCode.INTERNAL_SERVER_ERROR.getCode());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(
                         CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
@@ -85,8 +109,12 @@ public class GlobalExceptionHandler {
 
     // 경로 변수 타입 변환 실패 (예: userId가 UUID가 아님)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        log.warn("경로 변수 변환 실패: {}", e.getName());
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 경로 변수 변환 실패 - param={}", LogTag.of(request), e.getName());
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.INVALID_REQUEST.getCode(),
@@ -97,10 +125,13 @@ public class GlobalExceptionHandler {
     // BusinessException 핸들러보다 구체적이라 Spring이 이쪽을 고른다.
     // 노출 정책을 타지 않고 바로 내보내지만, 실수로 일반 경로를 타도 마스킹되지 않게
     // EXPOSED_CODES에도 등록해 둔다
+    // 쿨다운
     @ExceptionHandler(MatchCooldownException.class)
-    public ResponseEntity<CooldownErrorResponse> handleMatchCooldown(MatchCooldownException e) {
+    public ResponseEntity<CooldownErrorResponse> handleMatchCooldown(MatchCooldownException e,
+                                                                     HttpServletRequest request) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
+        markReason(request, errorCode.getCode());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new CooldownErrorResponse(
                         errorCode.getCode(), errorCode.getMessage(), e.getCooldownUntil()));
@@ -186,5 +217,10 @@ public class GlobalExceptionHandler {
                  MATCH_SLOT_CLOSED,
                  MATCH_ALREADY_STARTED -> HttpStatus.CONFLICT;
         };
+    }
+
+    // 메트릭의 실패 원인 — 응답에서 500으로 숨기는 코드도 실제 코드를 남긴다
+    private void markReason(HttpServletRequest request, String code) {
+        request.setAttribute(HttpRequestMetricsFilter.REASON, code);
     }
 }

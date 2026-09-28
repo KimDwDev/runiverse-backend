@@ -12,7 +12,13 @@ import com.runiverse.running_service.application.auth.exception.UnsupportedProvi
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
+import com.runiverse.running_service.infrastructure.metrics.AuthMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +35,9 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     private static final String KAKAO_EMAIL = "runner@kakao.com";
     private SignUpHandler signUpHandler;
     private OauthLoginHandler oauthLoginHandler;
+    private LogCapture handlerLog;
+    private SimpleMeterRegistry meterRegistry;
+    private LogCapture resolverLog;
 
     @BeforeEach
     void setUp() {
@@ -39,14 +48,24 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 userIdGenerator,  // GenerateUserIdPort
                 userStore         // SaveUserPort
         );
+        meterRegistry = new SimpleMeterRegistry();
         oauthLoginHandler = new OauthLoginHandler(
                 oauthClient,        // ExchangeOauthCodePort
                 oauthUserResolver,
                 tokenProvider,      // GenerateTokenPort
                 tokenProvider,      // RefreshTokenHashPort
-                refreshTokenStore   // SaveRefreshTokenHashPort
+                refreshTokenStore,  // SaveRefreshTokenHashPort
+                new AuthMetricAdapter(meterRegistry)  // RecordAuthMetricPort
         );
         oauthClient.register(AUTH_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
+        handlerLog = LogCapture.of(OauthLoginHandler.class);
+        resolverLog = LogCapture.of(OauthUserResolver.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        handlerLog.stop();
+        resolverLog.stop();
     }
 
     private OauthLoginResult login() {
@@ -150,5 +169,101 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
         assertThat(userStore.size()).isZero();
         assertThat(refreshTokenStore.isEmpty()).isTrue();
+    }
+
+    @Test
+    @DisplayName("소셜 로그인에 성공하면 userId와 provider를 담아 성공 로그를 남긴다")
+    void oauthLoginLogsSuccess() {
+        // when
+        OauthLoginResult result = login();
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 성공 - userId=" + result.userId() + ", provider=KAKAO");
+    }
+
+    @Test
+    @DisplayName("로컬 계정과 이메일이 겹치면 실패 원인을 남기되 이메일과 소셜 회원번호는 남기지 않는다")
+    void oauthLoginWithExistingLocalEmailLogsFailure() {
+        // given
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(KAKAO_EMAIL), "Password123!"));
+        // when
+        assertThatThrownBy(this::login)
+                .isInstanceOf(EmailAlreadyExistsException.class);
+        // then
+        assertThat(resolverLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 이미 가입된 이메일 - provider=KAKAO");
+        assertThat(resolverLog.messages(Level.INFO))
+                .noneMatch(message -> message.contains(KAKAO_EMAIL) || message.contains(KAKAO_ID));
+        assertThat(handlerLog.messages(Level.INFO)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 provider면 요청한 provider 이름을 담아 실패 로그를 남긴다")
+    void oauthLoginWithUnsupportedProviderLogsFailure() {
+        // when
+        assertThatThrownBy(() -> oauthLoginHandler.handle(
+                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
+                .isInstanceOf(UnsupportedProviderException.class);
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=naver");
+    }
+
+    private Counter oauthLoginCounter(String provider, String result, String reason) {
+        return meterRegistry.find("runiverse.auth.oauthlogin")
+                .tags("provider", provider, "result", result, "reason", reason)
+                .counter();
+    }
+
+    @Test
+    @DisplayName("소셜 로그인에 성공하면 provider별 성공으로 센다")
+    void oauthLoginCountsSuccessByProvider() {
+        // when
+        login();
+
+        // then -> uri 템플릿(/auth/oauth/{provider})에 가려진 provider를 여기서만 볼 수 있다
+        Counter counter = oauthLoginCounter("kakao", "success", "none");
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 provider는 요청 값이 아니라 unknown으로 센다")
+    void oauthLoginCountsUnsupportedProviderAsUnknown() {
+        // when
+        assertThatThrownBy(() -> oauthLoginHandler.handle(
+                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
+                .isInstanceOf(UnsupportedProviderException.class);
+
+        // then -> 요청 문자열을 그대로 태그로 쓰면 값이 무한히 늘어난다
+        assertThat(oauthLoginCounter("unknown", "failure", "UNSUPPORTED_PROVIDER")).isNotNull();
+        assertThat(meterRegistry.find("runiverse.auth.oauthlogin").tag("provider", "naver").counter()).isNull();
+    }
+
+    @Test
+    @DisplayName("외부에서 던진 코드 교환 실패도 provider와 함께 센다")
+    void oauthLoginCountsExchangeFailureWithProvider() {
+        // when -> 예외는 infra(OAuth 클라이언트)에서 던져져 핸들러를 통과한다
+        assertThatThrownBy(() -> oauthLoginHandler.handle(
+                new OauthLoginCommand("kakao", "expired-code", CODE_VERIFIER)))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(oauthLoginCounter("kakao", "failure", "OAUTH_CODE_EXCHANGE_FAILED")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("로컬 계정과 이메일이 겹쳐 실패하면 그 원인을 센다")
+    void oauthLoginCountsEmailConflict() {
+        // given
+        signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(KAKAO_EMAIL), "Password123!"));
+
+        // when -> Resolver 안에서 던진 예외도 핸들러의 한 곳에서 잡힌다
+        assertThatThrownBy(this::login).isInstanceOf(EmailAlreadyExistsException.class);
+
+        // then
+        assertThat(oauthLoginCounter("kakao", "failure", "EMAIL_ALREADY_EXISTS")).isNotNull();
     }
 }

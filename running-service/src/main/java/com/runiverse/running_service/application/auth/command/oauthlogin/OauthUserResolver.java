@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Email;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OauthUserResolver {
 
     private final LoadUserByProviderPort loadUserByProviderPort;
@@ -47,6 +49,7 @@ public class OauthUserResolver {
 
         // 2. 기존 로컬 계정과 이메일이 겹치면 자동 연동하지 않는다
         if (checkEmailDuplicatePort.existsByEmail(email)) {
+            log.info("[인증] 소셜 로그인 실패: 이미 가입된 이메일 - provider={}", oauthProfile.provider());
             throw new EmailAlreadyExistsException();
         }
 

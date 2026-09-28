@@ -12,6 +12,9 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpResul
 import com.runiverse.running_service.application.auth.exception.InvalidRefreshTokenException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +30,7 @@ public class RefreshIntegrationTest extends IntegrationTestSupport {
     private SignUpHandler signUpHandler;
     private LoginHandler loginHandler;
     private RefreshHandler refreshHandler;
+    private LogCapture refreshLog;
 
     @BeforeEach
     void setUp() {
@@ -42,6 +46,12 @@ public class RefreshIntegrationTest extends IntegrationTestSupport {
                 tokenProvider,      // GenerateTokenPort
                 refreshTokenStore   // SaveRefreshTokenHashPort
         );
+        refreshLog = LogCapture.of(RefreshHandler.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        refreshLog.stop();
     }
 
     // 가입 -> 로그인까지 마친 상태를 만든다
@@ -136,5 +146,60 @@ public class RefreshIntegrationTest extends IntegrationTestSupport {
         // when & then
         assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand(neverStored)))
                 .isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    @DisplayName("재발급에 성공하면 userId를 담아 성공 로그를 남긴다")
+    void refreshLogsSuccess() {
+        // given
+        LoginResult login = signUpAndLogin();
+        // when
+        refreshHandler.handle(new RefreshCommand(login.refreshToken()));
+        // then
+        assertThat(refreshLog.messages(Level.INFO))
+                .containsExactly("[인증] 토큰 재발급 성공 - userId=" + login.userId());
+    }
+
+    @Test
+    @DisplayName("토큰 검증에 실패하면 소유자를 알 수 없어 원인만 남기고 토큰 원문은 남기지 않는다")
+    void refreshWithMalformedTokenLogsFailure() {
+        // when
+        assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand("not-a-token")))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+        // then
+        assertThat(refreshLog.messages(Level.INFO))
+                .containsExactly("[인증] 토큰 재발급 실패: 토큰 검증 실패");
+        assertThat(refreshLog.messages(Level.INFO)).noneMatch(message -> message.contains("not-a-token"));
+    }
+
+    @Test
+    @DisplayName("저장된 토큰이 없으면 userId를 담아 실패 로그를 남긴다")
+    void refreshWithoutStoredTokenLogsFailure() {
+        // given
+        SignUpResult signUp = signUpHandler.handle(
+                new SignUpCommand(issueVerificationTicket(EMAIL), PASSWORD));
+        refreshTokenStore.delete(new UserId(signUp.userId()));
+        // when
+        assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand(signUp.refreshToken())))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+        // then
+        assertThat(refreshLog.messages(Level.INFO))
+                .containsExactly("[인증] 토큰 재발급 실패: 저장된 토큰 없음 - userId=" + signUp.userId());
+    }
+
+    @Test
+    @DisplayName("저장된 토큰과 다르면 탈취나 중복 요청을 의심해 WARN으로 남긴다")
+    void reusingOldRefreshTokenLogsWarn() {
+        // given
+        LoginResult login = signUpAndLogin();
+        refreshHandler.handle(new RefreshCommand(login.refreshToken()));
+        // when
+        assertThatThrownBy(() -> refreshHandler.handle(new RefreshCommand(login.refreshToken())))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+        // then -> 사용자 실수가 아니라 따로 모아 봐야 하는 신호라 INFO와 섞지 않는다
+        assertThat(refreshLog.messages(Level.WARN))
+                .containsExactly("[인증] 토큰 재발급 실패: 저장된 토큰과 불일치 - userId=" + login.userId());
+        assertThat(refreshLog.messages(Level.INFO))
+                .containsExactly("[인증] 토큰 재발급 성공 - userId=" + login.userId());
     }
 }

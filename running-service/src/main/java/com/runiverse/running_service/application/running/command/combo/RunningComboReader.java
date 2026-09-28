@@ -32,7 +32,7 @@ public class RunningComboReader {
                     Instant.now(),
                     properties));
         } catch (RuntimeException e) {
-            log.warn("러닝 콤보 스냅샷 조회 실패 — roomId={}, userId={}", runningRoomId, recipient, e);
+            log.error("[러닝] 콤보 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}", runningRoomId, recipient.value(), e);
             return List.of();
         }
     }

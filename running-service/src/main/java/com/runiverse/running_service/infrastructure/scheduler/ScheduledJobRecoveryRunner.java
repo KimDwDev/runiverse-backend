@@ -21,7 +21,7 @@ public class ScheduledJobRecoveryRunner {
         } catch (RuntimeException e) {
             // 복구가 실패해도 앱은 뜬다 — 신규 예약은 정상 동작하고,
             // 못 살린 예약은 다음 인스턴스가 뜰 때 다시 시도된다
-            log.error("부팅 시 예약 복구 실패", e);
+            log.error("[예약] 부팅 복구 실패: 처리하지 못한 예외", e);
         }
     }
 }
