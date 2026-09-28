@@ -35,6 +35,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
+import org.springframework.web.socket.handler.SessionLimitExceededException;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -55,10 +57,13 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final FinishRunningUsecase finishRunningUsecase;
     private final GetRunningSnapshotUsecase getRunningSnapshotUsecase;
     private final StartRunningComboUsecase startRunningComboUsecase;
+    private final RunningWebSocketProperties properties;
     // attribute에 저장할 runningRoomId
     public static final String RUNNING_ROOM_ID = "runningRoomId";
     // 좌표 배치마다 방을 다시 읽지 않으려고 세션에 새겨 둔다 — 시작 뒤 바뀌지 않는 값이다
     public static final String TARGET_DISTANCE_METERS = "targetDistanceMeters";
+    // 전송을 한 줄로 세우는 래퍼를 세션에 하나만 둔다
+    private static final String OUTBOUND = "outbound";
 
     // 웹소켓 연결이 성공한 직후 한번 호출
     @Override
@@ -135,7 +140,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                     new StartRunningCommand(userId.value(), request.runningRoomId()));
             registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
                     userId.value(), request.runningRoomId(),
-                    new WebSocketRunningConnection(session, jsonMapper)));
+                    new WebSocketRunningConnection(outbound(session), jsonMapper)));
             // 세션 등록 뒤에 세운다 — 먼저 세우면 자기가 만든 콤보의 브로드캐스트를 놓친다
             startRunningComboUsecase.handle(new StartRunningComboCommand(
                     request.runningRoomId(), userId.value()));
@@ -258,7 +263,23 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void send(WebSocketSession session, WebSocketEnvelope envelope) throws IOException {
-        session.sendMessage(new TextMessage(jsonMapper.writeValueAsString(envelope)));
+        WebSocketSession outbound = outbound(session);
+        try {
+            outbound.sendMessage(new TextMessage(jsonMapper.writeValueAsString(envelope)));
+        } catch (SessionLimitExceededException e) {
+            // 한도를 넘기면 래퍼는 전송만 막고 소켓은 열어 둔다 — 닫아야 클라가 재연결로 복구한다
+            outbound.close(e.getStatus());
+        }
+    }
+
+    // 한 소켓에 쓰는 주체가 여럿이다 — ack·ERROR는 요청 스레드가, 진행·콤보 통지는 Redis 리스너 스레드가 보낸다.
+    // 동시에 쓰면 컨테이너가 예외를 던지고 통지가 조용히 사라지므로, 모든 전송을 이 래퍼 하나로 모은다.
+    // 명부가 연결을 값으로 비교해 지우므로 등록과 해제도 같은 인스턴스를 써야 한다
+    private WebSocketSession outbound(WebSocketSession session) {
+        return (WebSocketSession) session.getAttributes().computeIfAbsent(OUTBOUND,
+                key -> new ConcurrentWebSocketSessionDecorator(session,
+                        (int) properties.sendTimeLimit().toMillis(),
+                        (int) properties.sendBufferSizeLimit().toBytes()));
     }
 
     // 통신 과정에서 오류가 발생하면 처리
@@ -275,7 +296,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         // 명부는 접속 여부라 여기서 지운다
         removeRunningSessionUsecase.handle(
                 new RemoveRunningSessionCommand(
-                        userId.value(), new WebSocketRunningConnection(session, jsonMapper)));
+                        userId.value(), new WebSocketRunningConnection(outbound(session), jsonMapper)));
         log.info("러닝 WebSocket 종료 — userId={}, status={}", userId(session), status);
     }
 

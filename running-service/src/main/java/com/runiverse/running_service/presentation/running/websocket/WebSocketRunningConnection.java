@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.SessionLimitExceededException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -42,6 +43,8 @@ public record WebSocketRunningConnection(WebSocketSession session, JsonMapper js
             session.sendMessage(new TextMessage(jsonMapper.writeValueAsString(
                     RunningMessageType.RUNNING_PROGRESS_UPDATED.message(
                             RunningProgressPayload.from(progress)))));
+        } catch (SessionLimitExceededException e) {
+            closeUnreliable(e);
         } catch (IOException | RuntimeException e) {
             // 한 명에게 못 보냈다고 나머지 참가자의 브로드캐스트가 멈추면 안 된다
             log.warn("러닝 진행 통지 전송 실패 — sessionId={}", session.getId(), e);
@@ -54,9 +57,21 @@ public record WebSocketRunningConnection(WebSocketSession session, JsonMapper js
             session.sendMessage(new TextMessage(jsonMapper.writeValueAsString(
                     RunningMessageType.RUNNING_COMBO_UPDATED.message(
                             RunningComboUpdatedPayload.from(peers)))));
+        } catch (SessionLimitExceededException e) {
+            closeUnreliable(e);
         } catch (IOException | RuntimeException e) {
             // 한 명에게 못 보냈다고 나머지 참가자의 브로드캐스트가 멈추면 안 된다
             log.warn("러닝 콤보 통지 전송 실패 — sessionId={}", session.getId(), e);
+        }
+    }
+
+    // 전송이 한도를 넘겨 밀렸다 — 래퍼가 이후 전송을 조용히 버리므로 닫아서 재연결을 유도한다
+    private void closeUnreliable(SessionLimitExceededException e) {
+        log.warn("러닝 WebSocket 전송 한도 초과로 연결 종료 — sessionId={}", session.getId());
+        try {
+            session.close(e.getStatus());
+        } catch (IOException closeFailure) {
+            log.warn("러닝 WebSocket 종료 실패 — sessionId={}", session.getId(), closeFailure);
         }
     }
 }
