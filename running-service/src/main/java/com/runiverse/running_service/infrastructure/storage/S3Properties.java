@@ -15,7 +15,7 @@ public record S3Properties(
         @NotBlank String gpsTrackBucket,    // GPS 원본 트랙 (서버 전용)
         @NotNull Duration presignedUrlTtl,
         @NotNull Duration viewUrlTtl,
-        String accessKeyId,
+        String accessKeyId,      // 비우면 기본 자격증명 체인(IAM Role) 사용
         String secretAccessKey
 ) {
 
