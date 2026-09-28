@@ -33,7 +33,7 @@ public sealed interface OauthLoginCommand {
             String rawProvider
     ) implements OauthLoginCommand {
 
-        // 대응하는 Provider가 없다 — 핸들러는 이 커맨드를 받으면 provider()를 쓰기 전에 거절한다
+        // 대응하는 Provider가 없어 null이다 — 핸들러는 이 값을 받아 둔 채 거절하고, 실패 메트릭에 unknown으로 남긴다
         @Override
         public Provider provider() {
             return null;
