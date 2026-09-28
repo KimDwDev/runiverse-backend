@@ -225,6 +225,18 @@ public class GoogleOauthClientTest {
     }
 
     @Test
+    @DisplayName("이메일은 있는데 인증 여부가 오지 않으면 OauthEmailNotProvidedException을 던진다")
+    void loadRejectsEmailWithoutVerifiedClaim() {
+        // given
+        respondWithGoogleKeys();
+        String token = idToken(claims -> claims.claim("email_verified", null));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(token))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+    }
+
+    @Test
     @DisplayName("구글 공개키를 받아 오지 못하면 OauthLoginFailedException을 던지고 ERROR를 예외와 함께 남긴다")
     void loadFailsWhenJwkSetUnavailable() {
         // given

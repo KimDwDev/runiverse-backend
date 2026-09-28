@@ -90,6 +90,42 @@ public class KakaoOauthClientTest {
                     }
                     """;
 
+    // 카카오계정에 등록만 되고 소유가 확인되지 않은 이메일
+    private static final String USER_RESPONSE_UNVERIFIED_EMAIL =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "is_email_valid": true,
+                        "is_email_verified": false,
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
+
+    // 다른 카카오계정에 사용돼 만료된 이메일 — 카카오가 마스킹해서 준다
+    private static final String USER_RESPONSE_INVALID_EMAIL =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "is_email_valid": false,
+                        "is_email_verified": true,
+                        "email": "ka***@example.com"
+                      }
+                    }
+                    """;
+
+    private static final String USER_RESPONSE_WITHOUT_EMAIL_STATUS =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
+
     // 동의 항목이 하나도 없으면 kakao_account 자체가 오지 않는다
     private static final String USER_RESPONSE_WITHOUT_ACCOUNT =
             """
@@ -279,6 +315,63 @@ public class KakaoOauthClientTest {
 
         mockServer.expect(requestTo(USER_INFO_URI))
                 .andRespond(withSuccess(USER_RESPONSE_WITHOUT_ACCOUNT, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 이메일이면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailUnverified() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_UNVERIFIED_EMAIL, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("다른 카카오계정에 사용돼 만료된 이메일이면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailInvalid() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_INVALID_EMAIL, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("이메일의 유효·인증 여부가 오지 않으면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailStatusMissing() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_WITHOUT_EMAIL_STATUS, MediaType.APPLICATION_JSON));
 
         // when & then
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))

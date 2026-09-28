@@ -133,7 +133,11 @@ public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
         // 보낸 데이터 에서 email이 있으면 account로 받아온다
         KakaoUserResponse.KakaoAccount account = response.kakaoAccount();
         String email = (account == null) ? null : account.email();
-        if (!StringUtils.hasText(email)) {
+        // 동의하지 않았거나, 인증되지 않았거나, 다른 카카오계정에 사용돼 만료된 이메일은 가입에 쓰지 않는다
+        // — 만료된 이메일은 카카오가 마스킹(ka***@kakao.com)해서 준다
+        if (!StringUtils.hasText(email)
+                || !Boolean.TRUE.equals(account.isEmailValid())
+                || !Boolean.TRUE.equals(account.isEmailVerified())) {
             throw new OauthEmailNotProvidedException();
         }
         return new OauthProfile(Provider.KAKAO, String.valueOf(response.id()), email);
