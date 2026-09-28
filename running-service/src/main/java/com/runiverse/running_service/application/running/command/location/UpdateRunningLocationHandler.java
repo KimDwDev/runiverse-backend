@@ -38,7 +38,8 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
             // 건너뛴 배치의 곡선은 다음 배치가 직선으로 이어 라이브 표시에서만 빠진다 — 최종 기록이 바로잡는다
             log.error("[러닝] 누적 거리 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}",
                     command.runningRoomId(), userId.value(), e);
-            return;
+            // 누적을 모르면 목표 도달도 판정할 수 없다 — 다음 배치가 다시 판정한다
+            return new UpdateRunningLocationResult(false);
         }
         RunningDistance updated = RunningDistanceAccumulator.accumulate(stored, command.points());
         saveRunningDistancePort.saveDistance(command.runningRoomId(), userId, updated);
@@ -56,11 +57,5 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
         boolean finished = updateRunningFinishJudge.judge(
                 command.runningRoomId(), userId, command.targetDistanceMeters(), updated.meters());
         return new UpdateRunningLocationResult(finished);
-    }
-
-    // 솔로 방은 목표가 없다 — 사용자가 끝내야 끝난다.
-    // 넘은 순간만이 아니라 넘어 있는 동안 계속 참이다 — 종료가 한 번 실패해도 다음 배치가 다시 시도한다
-    private boolean isTargetReached(Integer targetDistanceMeters, RunningDistance distance) {
-        return targetDistanceMeters != null && distance.meters() >= targetDistanceMeters;
     }
 }
