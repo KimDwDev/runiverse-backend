@@ -20,8 +20,9 @@ import com.runiverse.running_service.application.auth.port.in.SendEmailVerificat
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
 import com.runiverse.running_service.presentation.auth.request.EmailVerificationRequest;
+import com.runiverse.running_service.presentation.auth.request.GoogleLoginRequest;
+import com.runiverse.running_service.presentation.auth.request.KakaoLoginRequest;
 import com.runiverse.running_service.presentation.auth.request.LoginRequest;
-import com.runiverse.running_service.presentation.auth.request.OauthLoginRequest;
 import com.runiverse.running_service.presentation.auth.request.RefreshRequest;
 import com.runiverse.running_service.presentation.auth.request.SignUpRequest;
 import com.runiverse.running_service.presentation.auth.request.VerifyEmailCodeRequest;
@@ -36,7 +37,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -131,16 +131,24 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/oauth/{provider}")
-    public ResponseEntity<OauthLoginResponse> oauthLogin(
-            @PathVariable String provider,
-            @Valid @RequestBody OauthLoginRequest request
+    @PostMapping("/oauth/google")
+    public ResponseEntity<OauthLoginResponse> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest request
     ) {
-        OauthLoginCommand command = new OauthLoginCommand(
-                provider,
+        return oauthLogin(new OauthLoginCommand.Google(request.idToken()));
+    }
+
+    @PostMapping("/oauth/kakao")
+    public ResponseEntity<OauthLoginResponse> kakaoLogin(
+            @Valid @RequestBody KakaoLoginRequest request
+    ) {
+        return oauthLogin(new OauthLoginCommand.Kakao(
                 request.authorizationCode(),
                 request.codeVerifier()
-        );
+        ));
+    }
+
+    private ResponseEntity<OauthLoginResponse> oauthLogin(OauthLoginCommand command) {
         OauthLoginResult result = oauthLoginUsecase.handle(command);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(new OauthLoginResponse(

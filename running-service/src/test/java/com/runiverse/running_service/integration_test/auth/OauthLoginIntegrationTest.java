@@ -8,7 +8,6 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.auth.exception.EmailAlreadyExistsException;
 import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
-import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -51,6 +50,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         meterRegistry = new SimpleMeterRegistry();
         oauthLoginHandler = new OauthLoginHandler(
                 oauthClient,        // ExchangeOauthCodePort
+                oauthClient,        // LoadGoogleProfilePort
                 oauthUserResolver,
                 tokenProvider,      // GenerateTokenPort
                 tokenProvider,      // RefreshTokenHashPort
@@ -69,7 +69,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     private OauthLoginResult login() {
-        return oauthLoginHandler.handle(new OauthLoginCommand("kakao", AUTH_CODE, CODE_VERIFIER));
+        return oauthLoginHandler.handle(new OauthLoginCommand.Kakao(AUTH_CODE, CODE_VERIFIER));
     }
 
     @Test
@@ -137,34 +137,11 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 코드 교환을 시도하지 않는다")
-    void oauthLoginWithUnsupportedProvider() {
-        // when & then
-        assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
-                .isInstanceOf(UnsupportedProviderException.class);
-        // provider 검증이 먼저이므로 외부 호출이 일어나지 않는다
-        assertThat(oauthClient.exchangeCount()).isZero();
-        assertThat(userStore.size()).isZero();
-    }
-
-    @Test
-    @DisplayName("provider 이름은 대소문자를 가리지 않는다")
-    void providerIsCaseInsensitive() {
-        // when
-        OauthLoginResult result = oauthLoginHandler.handle(
-                new OauthLoginCommand("KaKaO", AUTH_CODE, CODE_VERIFIER));
-        // then
-        assertThat(result.userId()).isNotNull();
-        assertThat(userStore.size()).isEqualTo(1);
-    }
-
-    @Test
     @DisplayName("인가 코드 교환에 실패하면 OauthCodeExchangeFailedException이 발생하고 아무것도 저장되지 않는다")
     void oauthLoginWithInvalidAuthorizationCode() {
         // when & then
         assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand("kakao", "expired-code", CODE_VERIFIER)))
+                new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         assertThat(userStore.size()).isZero();
@@ -198,18 +175,6 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         assertThat(handlerLog.messages(Level.INFO)).isEmpty();
     }
 
-    @Test
-    @DisplayName("지원하지 않는 provider면 요청한 provider 이름을 담아 실패 로그를 남긴다")
-    void oauthLoginWithUnsupportedProviderLogsFailure() {
-        // when
-        assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
-                .isInstanceOf(UnsupportedProviderException.class);
-        // then
-        assertThat(handlerLog.messages(Level.INFO))
-                .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=naver");
-    }
-
     private Counter oauthLoginCounter(String provider, String result, String reason) {
         return meterRegistry.find("runiverse.auth.oauthlogin")
                 .tags("provider", provider, "result", result, "reason", reason)
@@ -222,23 +187,10 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
         // when
         login();
 
-        // then -> uri 템플릿(/auth/oauth/{provider})에 가려진 provider를 여기서만 볼 수 있다
+        // then
         Counter counter = oauthLoginCounter("kakao", "success", "none");
         assertThat(counter).isNotNull();
         assertThat(counter.count()).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("지원하지 않는 provider는 요청 값이 아니라 unknown으로 센다")
-    void oauthLoginCountsUnsupportedProviderAsUnknown() {
-        // when
-        assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand("naver", AUTH_CODE, CODE_VERIFIER)))
-                .isInstanceOf(UnsupportedProviderException.class);
-
-        // then -> 요청 문자열을 그대로 태그로 쓰면 값이 무한히 늘어난다
-        assertThat(oauthLoginCounter("unknown", "failure", "UNSUPPORTED_PROVIDER")).isNotNull();
-        assertThat(meterRegistry.find("runiverse.auth.oauthlogin").tag("provider", "naver").counter()).isNull();
     }
 
     @Test
@@ -246,7 +198,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     void oauthLoginCountsExchangeFailureWithProvider() {
         // when -> 예외는 infra(OAuth 클라이언트)에서 던져져 핸들러를 통과한다
         assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand("kakao", "expired-code", CODE_VERIFIER)))
+                new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
                 .isInstanceOf(OauthCodeExchangeFailedException.class);
 
         // then
