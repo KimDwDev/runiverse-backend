@@ -5,11 +5,14 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
@@ -150,7 +153,7 @@ public class GoogleOauthClientTest {
         assertThatThrownBy(() -> client.load(token))
                 .isInstanceOf(OauthLoginFailedException.class);
         assertThat(log.messages(Level.WARN))
-                .containsExactly("[인증] 구글 로그인 실패: ID 토큰 검증 실패 - reasons=[토큰의 aud 클레임이 이 API를 가리키지 않습니다]");
+                .containsExactly("[인증] 구글 로그인 실패: ID 토큰 규칙 위반 - reasons=[토큰의 aud 클레임이 이 API를 가리키지 않습니다]");
     }
 
     @Test
@@ -177,8 +180,15 @@ public class GoogleOauthClientTest {
                 .isInstanceOf(OauthLoginFailedException.class);
     }
 
+    // 해석·서명 검증 실패는 원인 예외의 종류만 남긴다 — 토큰·이메일이 로그에 섞이지 않는다
+    private void assertLoggedCause(String causeName) {
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[인증] 구글 로그인 실패: ID 토큰 해석·서명 검증 실패 - cause=" + causeName);
+        assertThat(log.events(Level.WARN).getFirst().getThrowableProxy()).isNull();
+    }
+
     @Test
-    @DisplayName("구글 키로 서명하지 않은 토큰이면 OauthLoginFailedException을 던진다")
+    @DisplayName("구글 키로 서명하지 않은 토큰이면 OauthLoginFailedException을 던지고 원인 예외 종류만 남긴다")
     void loadRejectsForgedSignature() {
         // given -> kid는 같지만 다른 키로 서명했다
         respondWithGoogleKeys();
@@ -188,17 +198,49 @@ public class GoogleOauthClientTest {
         // when & then
         assertThatThrownBy(() -> client.load(token))
                 .isInstanceOf(OauthLoginFailedException.class);
+        assertLoggedCause("BadJWSException");
     }
 
     @Test
-    @DisplayName("JWT 형식이 아니면 OauthLoginFailedException을 던지고 토큰 원문은 남기지 않는다")
+    @DisplayName("JWT 형식이 아니면 OauthLoginFailedException을 던지고 원인 예외 종류만 남긴다")
     void loadRejectsMalformedToken() {
         // when & then
         assertThatThrownBy(() -> client.load("not-a-jwt"))
                 .isInstanceOf(OauthLoginFailedException.class);
-        assertThat(log.messages(Level.WARN))
-                .hasSize(1)
-                .noneMatch(message -> message.contains("not-a-jwt"));
+        assertLoggedCause("ParseException");
+    }
+
+    @Test
+    @DisplayName("페이로드가 JSON 객체가 아니면 OauthLoginFailedException을 던지고 원인 예외 종류만 남긴다")
+    void loadRejectsNonJsonPayload() throws JOSEException {
+        // given -> 구글 키로 서명했지만 페이로드가 JSON 객체가 아니다
+        respondWithGoogleKeys();
+        JWSObject jws = new JWSObject(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(googleKey.getKeyID()).build(),
+                new Payload("not-json " + EMAIL));
+        jws.sign(new RSASSASigner(googleKey));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(jws.serialize()))
+                .isInstanceOf(OauthLoginFailedException.class);
+        assertLoggedCause("BadJWTException");
+    }
+
+    @Test
+    @DisplayName("서명 없는 토큰(alg=none)이면 OauthLoginFailedException을 던지고 예외 종류만 남긴다")
+    void loadRejectsUnsignedToken() {
+        // given
+        String token = new PlainJWT(new JWTClaimsSet.Builder()
+                .issuer(ISSUER)
+                .audience(CLIENT_ID)
+                .subject(PROVIDER_ID)
+                .claim("email", EMAIL)
+                .build()).serialize();
+
+        // when & then
+        assertThatThrownBy(() -> client.load(token))
+                .isInstanceOf(OauthLoginFailedException.class);
+        assertLoggedCause("BadJwtException");
     }
 
     @Test

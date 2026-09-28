@@ -61,24 +61,23 @@ public class GoogleOauthClient implements LoadGoogleProfilePort {
     private Jwt decode(String idToken) {
         try {
             return decoder.decode(idToken);
+        } catch (JwtValidationException e) {
+            // 만료·iss·aud가 맞지 않는다 — aud 불일치는 앱의 serverClientId 설정을 먼저 본다
+            List<String> reasons = e.getErrors().stream()
+                    .map(OAuth2Error::getDescription)
+                    .toList();
+            log.warn("[인증] 구글 로그인 실패: ID 토큰 규칙 위반 - reasons={}", reasons);
+            throw new OauthLoginFailedException();
         } catch (BadJwtException e) {
-            // 서명·만료·iss·aud가 맞지 않는다 — aud 불일치는 앱의 serverClientId 설정을 먼저 본다
-            log.warn("[인증] 구글 로그인 실패: ID 토큰 검증 실패 - reasons={}", reasonsOf(e));
+            // 형식이 깨졌거나 서명·키가 맞지 않는다 — 라이브러리 메시지에 무엇이 담길지 알 수 없어 직접 원인의 종류만 남긴다
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log.warn("[인증] 구글 로그인 실패: ID 토큰 해석·서명 검증 실패 - cause={}",
+                    cause.getClass().getSimpleName());
             throw new OauthLoginFailedException();
         } catch (JwtException e) {
             // 토큰이 아니라 공개키를 받아 오지 못한 것이다 — 구글 장애인지 우리 네트워크 문제인지는 여기서 가를 수 없다
             log.error("[인증] 구글 로그인 실패: 구글 공개키 조회 오류", e);
             throw new OauthProviderUnavailableException();
         }
-    }
-
-    // 실패 설명만 남긴다 — 토큰 원문은 남기지 않는다
-    private static List<String> reasonsOf(BadJwtException e) {
-        if (e instanceof JwtValidationException validation) {
-            return validation.getErrors().stream()
-                    .map(OAuth2Error::getDescription)
-                    .toList();
-        }
-        return List.of(e.getMessage());
     }
 }
