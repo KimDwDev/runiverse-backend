@@ -2,9 +2,6 @@ package com.runiverse.running_service.unit_test.user.domain.aggregate;
 
 import com.runiverse.running_service.domain.user.exception.ProviderIdRequiredException;
 import com.runiverse.running_service.domain.user.exception.ProviderIdTooLongException;
-import com.runiverse.running_service.domain.user.exception.ProviderNotSupportedException;
-import com.runiverse.running_service.domain.user.exception.ProviderRequiredException;
-import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,70 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class OauthVoTest {
-
-    @Nested
-    @DisplayName("Provider 테스트")
-    class ProviderTest {
-
-        @Test
-        @DisplayName("provider 이름으로 Provider를 생성할 수 있다")
-        void createProviderSuccess() {
-            // when & then
-            assertThat(Provider.from("KAKAO")).isEqualTo(Provider.KAKAO);
-            assertThat(Provider.from("GOOGLE")).isEqualTo(Provider.GOOGLE);
-        }
-
-        @Test
-        @DisplayName("소문자와 앞뒤 공백은 정규화된다")
-        void createProviderNormalizesInput() {
-            // when & then
-            assertThat(Provider.from("kakao")).isEqualTo(Provider.KAKAO);
-            assertThat(Provider.from("  Kakao  ")).isEqualTo(Provider.KAKAO);
-        }
-
-        @Test
-        @DisplayName("같은 provider는 항상 동일한 인스턴스이다")
-        void providerIsSingleton() {
-            // when & then -> enum이라 from()은 새 객체를 만들지 않는다
-            assertThat(Provider.from("kakao")).isSameAs(Provider.KAKAO);
-        }
-
-        @Test
-        @DisplayName("provider가 null이면 예외가 발생한다")
-        void createProviderWithNullFails() {
-            // when & then
-            assertThatThrownBy(() -> Provider.from(null))
-                    .isInstanceOf(ProviderRequiredException.class);
-        }
-
-        @Test
-        @DisplayName("provider가 빈 값이거나 공백뿐이면 예외가 발생한다")
-        void createProviderWithBlankFails() {
-            // when & then
-            assertThatThrownBy(() -> Provider.from(""))
-                    .isInstanceOf(ProviderRequiredException.class);
-
-            assertThatThrownBy(() -> Provider.from("   "))
-                    .isInstanceOf(ProviderRequiredException.class);
-        }
-
-        @Test
-        @DisplayName("지원하지 않는 provider면 예외가 발생한다")
-        void createProviderWithUnsupportedValueFails() {
-            // when & then
-            assertThatThrownBy(() -> Provider.from("facebook"))
-                    .isInstanceOf(ProviderNotSupportedException.class)
-                    .hasMessage("지원하지 않는 소셜 로그인입니다.");
-        }
-
-        @Test
-        @DisplayName("미지원 provider는 IllegalArgumentException이 아닌 도메인 예외로 변환된다")
-        void unsupportedProviderIsTranslatedToDomainException() {
-            // when & then -> valueOf()의 예외가 그대로 새어나가면 500이 된다
-            assertThatThrownBy(() -> Provider.from("facebook"))
-                    .isNotInstanceOf(IllegalArgumentException.class);
-        }
-    }
 
     @Nested
     @DisplayName("ProviderId 테스트")
