@@ -32,6 +32,9 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     private static final String CODE_VERIFIER = "pkce-code-verifier";
     private static final String KAKAO_ID = "1234567890";
     private static final String KAKAO_EMAIL = "runner@kakao.com";
+    private static final String GOOGLE_ID_TOKEN = "google-id-token";
+    private static final String GOOGLE_ID = "107812345678901234567";
+    private static final String GOOGLE_EMAIL = "runner@gmail.com";
     private SignUpHandler signUpHandler;
     private OauthLoginHandler oauthLoginHandler;
     private LogCapture handlerLog;
@@ -58,6 +61,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 new AuthMetricAdapter(meterRegistry)  // RecordAuthMetricPort
         );
         oauthClient.register(AUTH_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
+        oauthClient.register(GOOGLE_ID_TOKEN, new OauthProfile(Provider.GOOGLE, GOOGLE_ID, GOOGLE_EMAIL));
         handlerLog = LogCapture.of(OauthLoginHandler.class);
         resolverLog = LogCapture.of(OauthUserResolver.class);
     }
@@ -70,6 +74,10 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
     private OauthLoginResult login() {
         return oauthLoginHandler.handle(new OauthLoginCommand.Kakao(AUTH_CODE, CODE_VERIFIER));
+    }
+
+    private OauthLoginResult googleLogin(String idToken) {
+        return oauthLoginHandler.handle(new OauthLoginCommand.Google(idToken));
     }
 
     @Test
@@ -149,6 +157,29 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("구글 ID 토큰으로 처음 로그인하면 구글 계정으로 가입되고 토큰을 받는다")
+    void firstGoogleLoginRegistersUser() {
+        // when
+        OauthLoginResult result = googleLogin(GOOGLE_ID_TOKEN);
+        // then
+        assertThat(result.accessToken()).isNotBlank();
+        User saved = userStore.findById(result.userId()).orElseThrow();
+        assertThat(saved.getEmail().value()).isEqualTo(GOOGLE_EMAIL);
+        assertThat(saved.hasProvider(Provider.GOOGLE)).isTrue();
+    }
+
+    @Test
+    @DisplayName("구글 ID 토큰 검증에 실패하면 OauthCodeExchangeFailedException이 발생하고 아무것도 저장되지 않는다")
+    void googleLoginWithInvalidIdToken() {
+        // when & then
+        assertThatThrownBy(() -> googleLogin("forged-id-token"))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        assertThat(userStore.size()).isZero();
+        assertThat(refreshTokenStore.isEmpty()).isTrue();
+    }
+
+    @Test
     @DisplayName("소셜 로그인에 성공하면 userId와 provider를 담아 성공 로그를 남긴다")
     void oauthLoginLogsSuccess() {
         // when
@@ -203,6 +234,17 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(oauthLoginCounter("kakao", "failure", "OAUTH_CODE_EXCHANGE_FAILED")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("구글 ID 토큰 검증 실패는 google로 센다")
+    void googleLoginCountsVerificationFailure() {
+        // when
+        assertThatThrownBy(() -> googleLogin("forged-id-token"))
+                .isInstanceOf(OauthCodeExchangeFailedException.class);
+
+        // then
+        assertThat(oauthLoginCounter("google", "failure", "OAUTH_CODE_EXCHANGE_FAILED")).isNotNull();
     }
 
     @Test
