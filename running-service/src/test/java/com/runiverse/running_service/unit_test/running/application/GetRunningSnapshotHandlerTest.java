@@ -217,6 +217,23 @@ class GetRunningSnapshotHandlerTest {
     }
 
     @Test
+    @DisplayName("참가자 목록에 없는 상대의 콤보는 담지 않는다")
+    void excludesComboWithDisconnectedPeer() {
+        // given -> 완주한 상대와의 콤보는 판정이 신선도로 떼어 낼 때까지 남아 있다
+        givenRoom(connected(ME), disconnected(LEFT));
+        givenProfiles(profile(ME, "완두콩", null));
+        givenDistance(ME, 1_520, 345);
+        given(runningComboReader.read(ROOM_ID, new UserId(ME)))
+                .willReturn(List.of(new RunningComboPeer(LEFT, 5, 3, 3)));
+
+        // when
+        GetRunningSnapshotResult result = handler.handle(new GetRunningSnapshotQuery(ME, ROOM_ID));
+
+        // then -> 이름을 찾을 수 없는 상대가 콤보에만 뜨면 앱이 낯선 사람으로 그린다
+        assertThat(result.comboPeers()).isEmpty();
+    }
+
+    @Test
     @DisplayName("목표 거리가 없는 솔로 방은 null로 담는다")
     void keepsNullTargetDistanceForSoloRoom() {
         // given
