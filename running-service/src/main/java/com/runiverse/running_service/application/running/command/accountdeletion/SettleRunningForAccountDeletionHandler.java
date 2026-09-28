@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.match.port.out.LockMatchApplica
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
+import com.runiverse.running_service.application.running.command.session.RunningConnectionCloseRequestedEvent;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.SettleRunningForAccountDeletionUsecase;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningPlayerPort;
@@ -54,6 +55,7 @@ public class SettleRunningForAccountDeletionHandler
         UserId userId = new UserId(command.userId());
         // 연결은 커밋 뒤에 닫는다 — 여기서 닫으면 탈퇴가 롤백돼도 되살릴 수 없다
         eventPublisher.publishEvent(new MatchStreamCloseRequestedEvent(userId));
+        eventPublisher.publishEvent(new RunningConnectionCloseRequestedEvent(userId));
         // 활성 신청이 없으면 정리할 러닝이 없다 — 탈퇴자 대부분이 여기서 끝난다
         RunningPlayer player = lockMatchApplicationPort.lockActive(userId).orElse(null);
         if (player == null) {

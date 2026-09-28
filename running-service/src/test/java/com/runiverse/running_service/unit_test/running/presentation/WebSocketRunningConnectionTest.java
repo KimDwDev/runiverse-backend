@@ -155,6 +155,19 @@ class WebSocketRunningConnectionTest {
         verify(session).close(CloseStatus.SESSION_NOT_RELIABLE);
     }
 
+    @Test
+    @DisplayName("탈퇴로 닫을 때는 NORMAL로 닫는다")
+    void closeForAccountDeletion_closesNormally() throws IOException {
+        // given -> 4001이 아니어야 앱이 재연결을 시도하고, 폐기된 토큰으로 핸드셰이크가 막혀 멈춘다
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.closeForAccountDeletion();
+
+        // then
+        verify(session).close(CloseStatus.NORMAL);
+    }
+
     private TextMessage captureSent() throws IOException {
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
         verify(session).sendMessage(captor.capture());

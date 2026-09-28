@@ -38,6 +38,15 @@ public record WebSocketRunningConnection(WebSocketSession session, JsonMapper js
     }
 
     @Override
+    public void closeForAccountDeletion() {
+        try {
+            session.close(CloseStatus.NORMAL);
+        } catch (IOException e) {
+            log.error("[러닝] 탈퇴 연결 종료 실패: 소켓 오류 - sessionId={}", session.getId(), e);
+        }
+    }
+
+    @Override
     public void sendProgress(RunningProgress progress) {
         try {
             session.sendMessage(new TextMessage(jsonMapper.writeValueAsString(
