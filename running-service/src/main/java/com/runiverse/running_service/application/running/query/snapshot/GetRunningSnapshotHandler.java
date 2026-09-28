@@ -58,8 +58,7 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
                 runningComboReader.read(query.runningRoomId(), new UserId(query.userId())));
     }
 
-    // 본인도 담는다. 진행 통지는 본인을 빼지만 스냅샷은 다르다 —
-    // 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
+    // 본인도 담는다 — 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
     private GetRunningSnapshotResult.Player toPlayer(
             Long runningRoomId, UserId userId, Map<UUID, PlayerProfile> profiles) {
         RunningDistance distance = loadRunningDistancePort.loadDistance(runningRoomId, userId);

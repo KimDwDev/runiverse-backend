@@ -1207,13 +1207,22 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "currentPaceSecondsPerKm": 345,       // nullable
       "paused": false
     }
+  ],
+  "comboPeers": [                           // RUNNING_COMBO_UPDATED의 peers와 같은 모양, 겹친 상대가 없으면 []
+    {
+      "userId": "550e8400-e29b-41d4-a716-446655440016",
+      "gapMeters": -18,
+      "comboCount": 3,
+      "maxComboCount": 12
+    }
   ]
 }
 ```
 
 - **`RoomInfo`를 재사용하지 않는다.** 그쪽은 매칭 대기방을 그리려고 만든 구조라 진행 상황이라는 개념이 없고, 러닝 중에는 `closeAt`·`teamAveragePace`가 의미를 잃는다. 대신 `players[]`가 **`RoomInfo`의 프로필 + `RUNNING_PROGRESS_UPDATED`의 진행**을 합친 모양이라, 클라는 **이 스냅샷으로 채우고 갱신분으로 덮는** 한 쌍으로 다룬다
-- **본인도 `players`에 담는다.** 진행 통지는 본인을 빼지만(클라가 직접 계산한다) 스냅샷은 다르다 — 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다. 다만 **클라는 화면 표시에 로컬 계산값을 우선**하고 이 값은 복구용으로만 쓴다
+- **본인도 `players`에 담는다.** 본인 진행은 클라가 직접 계산하지만, 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다. 다만 **클라는 화면 표시에 로컬 계산값을 우선**하고 이 값은 복구용으로만 쓴다
 - **이미 이탈·완주한 참가자는 담지 않는다.** 러닝 화면에는 그들을 그릴 자리가 없다
+- **`comboPeers`는 받는 사람이 낀 관계만 싣는다.** `RUNNING_COMBO_UPDATED`의 `peers`와 같은 모양이라 클라는 한 벌의 코드로 스냅샷과 갱신을 다 그린다
 - **`startedAt`은 방의 `start_at`이다** — 참가자가 실제로 `RUNNING`이 된 시각을 쓰면 같은 방에서 사람마다 경과 시간이 달라진다
 - **최초 진입과 재연결에 똑같이 나간다.** 클라가 둘을 구분하지 않는 것이 `RUNNING_START`의 전제이므로 ack만 다르게 하지 않는다
 - 이 스냅샷이 있어야 `RUNNING_PROGRESS_UPDATED`·`RUNNING_COMBO_UPDATED`가 `userId`만 싣는 설계가 성립한다 — 표시 정보는 여기서 받아 둔다
@@ -1270,9 +1279,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - **최초 진입·재연결 시 전원의 현재 진행은 `RUNNING_STARTED` 스냅샷이 나른다**(5-C) — 이 메시지는 갱신분만 실으므로 그것만으로는 화면을 복구할 수 없다
   - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
   - 닉네임·`profileImageUrl`을 싣지 않는다 — 10초마다 인원수만큼 나가는 메시지라 presigned URL(수백 자)이 붙으면 payload가 커진다. 표시 정보는 `RUNNING_STARTED` 스냅샷에서 받아 `userId`로 찾는다
-- **본인에게는 보내지 않는다.** 본인 진행은 클라가 이미 계산해 화면에 띄우고 있다
+- **본인도 받는다.** 방 전체가 같은 서버 기준값을 받게 하려는 것이다. 다만 본인 표시 거리는 클라의 로컬 계산값이 정본이라 이 값으로 덮지 않는다
 - `distanceMeters`는 **서버가 수신한 좌표로 누적한 값**이다. 클라 표시용 거리(5-D)와 미세하게 다를 수 있으나 다른 참가자 화면에 쓰는 값이라 서버 기준으로 통일한다
-- `currentPaceSecondsPerKm`는 마지막 좌표의 값을 그대로 옮긴다 — 단말이 못 재면 `null`이다
+- `currentPaceSecondsPerKm`는 거리에 반영한 마지막 좌표의 값을 옮긴다. 재전송분만 온 배치면 직전 값을 유지한다 — 단말이 못 재면 `null`이다
 - `paused`가 없으면 상대가 멈춘 것과 느려진 것을 구분할 수 없다 — 화면에서 갑자기 뒤처진 것처럼 보인다
   - **[미정]** `RUNNING_PAUSE`/`RUNNING_RESUME` 구현 전까지 항상 `false`로 나간다
 
