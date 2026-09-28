@@ -67,11 +67,11 @@ public record WebSocketRunningConnection(WebSocketSession session, JsonMapper js
 
     // 전송이 한도를 넘겨 밀렸다 — 래퍼가 이후 전송을 조용히 버리므로 닫아서 재연결을 유도한다
     private void closeUnreliable(SessionLimitExceededException e) {
-        log.warn("러닝 WebSocket 전송 한도 초과로 연결 종료 — sessionId={}", session.getId());
+        log.warn("[러닝] 연결 종료: 전송 한도 초과 - sessionId={}", session.getId());
         try {
             session.close(e.getStatus());
         } catch (IOException closeFailure) {
-            log.warn("러닝 WebSocket 종료 실패 — sessionId={}", session.getId(), closeFailure);
+            log.error("[러닝] 연결 종료 실패: 소켓 오류 - sessionId={}", session.getId(), closeFailure);
         }
     }
 }
