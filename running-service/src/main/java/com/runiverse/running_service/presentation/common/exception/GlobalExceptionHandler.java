@@ -22,6 +22,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -92,6 +93,22 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getMessage()
+        );
+    }
+
+    // 매핑된 컨트롤러가 없는 경로 — 정적 리소스 핸들러까지 내려갔다가 여기로 온다
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            NoResourceFoundException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 경로 매칭 실패 - method={}, path={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI());
+        markReason(request, ResourceErrorCode.NOT_FOUND.getCode());
+        return respond(
+                HttpStatus.NOT_FOUND,
+                ResourceErrorCode.NOT_FOUND.getCode(),
+                ResourceErrorCode.NOT_FOUND.getMessage()
         );
     }
 

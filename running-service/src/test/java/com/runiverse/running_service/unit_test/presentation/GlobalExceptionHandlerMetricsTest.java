@@ -12,7 +12,9 @@ import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -115,6 +118,16 @@ class GlobalExceptionHandlerMetricsTest {
     }
 
     @Test
+    @DisplayName("없는 경로는 500이 아니라 404로 응답하고 NOT_FOUND를 원인으로 남긴다")
+    void noResourceFound() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/probe/no-resource")).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(response.getContentAsString()).contains("\"code\":\"NOT_FOUND\"");
+        assertThat(only("reason")).isEqualTo("NOT_FOUND");
+    }
+
+    @Test
     @DisplayName("예상 못 한 예외는 INTERNAL_SERVER_ERROR를 원인으로 남긴다")
     void unexpectedException() throws Exception {
         perform(post("/probe/unexpected"));
@@ -159,6 +172,12 @@ class GlobalExceptionHandlerMetricsTest {
 
         @PostMapping("/probe/validated")
         void validated(@Valid @RequestBody ProbeRequest request) {
+        }
+
+        // 실제 앱에서는 매핑이 없으면 정적 리소스 핸들러가 이 예외를 던진다 — standalone MockMvc에는 그 핸들러가 없어 직접 던진다
+        @GetMapping("/probe/no-resource")
+        void noResource() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "/probe/no-resource", "probe/no-resource");
         }
 
         @PostMapping("/probe/unexpected")
