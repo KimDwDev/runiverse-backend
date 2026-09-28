@@ -856,7 +856,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원 [미구현]
 
-> **아직 서버에 없다.** `RunningMatchController`에 이 경로의 핸들러가 없어 정적 리소스 조회로 떨어지고, `NoResourceFoundException`은 `GlobalExceptionHandler`가 잡지 못해 **응답이 `500`이며 본문도 공통 에러 포맷을 따르지 않는다.** 아래 정의는 구현 시점의 계약이지 현재 동작이 아니다 — **클라는 구현 전까지 호출하지 않는다.**
+> **아직 서버에 없다.** `RunningMatchController`에 이 경로의 핸들러가 없어 지금은 **`404 NOT_FOUND`**로 응답한다. 아래 정의는 구현 시점의 계약이지 현재 동작이 아니다 — **클라는 구현 전까지 호출하지 않는다.**
 >
 > 없는 동안 시간 선택 박스는 대기 인원과 `selectable` 없이 그린다. 마감이 지난 슬롯을 클라가 미리 거를 수 없으므로 `MATCH_SLOT_CLOSED`(409)가 경합이 아니라 **정상 경로로도** 나온다 — 받으면 그 슬롯을 지우고 다시 고르게 한다.
 

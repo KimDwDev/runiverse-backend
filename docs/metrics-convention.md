@@ -79,6 +79,7 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | 성공 | `success` | `none` |
 | 업무 실패 | `failure` | `ErrorCode` 이름(`EMAIL_ALREADY_EXISTS`) |
 | 요청 형식·검증 실패 | `failure` | `INVALID_REQUEST`, `MALFORMED_REQUEST_BODY` |
+| 없는 경로 | `failure` | `NOT_FOUND` |
 | 인증·인가 거절 | `failure` | 해당 코드 이름 |
 | 예상 못 한 서버 오류 | `failure` | `INTERNAL_SERVER_ERROR` |
 | 실패했는데 원인이 남지 않음 | `failure` | `UNKNOWN` — 원인을 남기지 않는 예외 경로가 생겼다는 신호다. 보이면 코드를 고친다 |
