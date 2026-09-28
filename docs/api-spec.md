@@ -16,7 +16,7 @@
 | 2 | POST | `/api/v1/auth/email/verifications/confirm` | 이메일 인증번호 확인 → `verificationTicket` 발급 — 회원가입 2단계 |
 | 3 | POST | `/api/v1/auth/signup` | 로컬 회원가입 (인증 티켓/비밀번호) — 가입 즉시 자동 로그인 |
 | 4 | POST | `/api/v1/auth/login` | 로컬 로그인 |
-| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
+| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — ID 토큰 서버 검증 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
 | 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
@@ -478,26 +478,38 @@
 
 - **인증**: 불필요
 
-### 1-5. `POST /api/v1/auth/oauth/google` / 1-6. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
+### 1-5. `POST /api/v1/auth/oauth/google` — 구글 로그인 (ID 토큰)
 
-> **서버 매핑은 `POST /auth/oauth/{provider}` 하나다.** 위 두 경로는 클라이언트가 실제로 호출하는 구체 URL이다. `{provider}`는 `google`·`kakao`(대소문자 무시). 지원하지 않는 값은 404가 아니라 **400 `UNSUPPORTED_PROVIDER`**로 응답한다 — 경로 자체는 매칭되기 때문이다.
+> 소셜 로그인은 provider마다 경로가 따로 있다(1-5 구글·1-6 카카오). 앱이 받아 오는 자격 증명이 달라 요청 본문이 다르고, 응답과 401·403·409·503 에러 형식은 같다.
+>
+> 목록에 없는 provider(`POST /api/v1/auth/oauth/{그 외}`)는 404가 아니라 **400 `UNSUPPORTED_PROVIDER`**다 — 본문은 보지 않는다. provider 이름은 소문자로 보낸다(`GOOGLE`도 목록 밖으로 본다).
+>
+> ```json
+> {
+>   "code": "UNSUPPORTED_PROVIDER",
+>   "message": "지원하지 않는 로그인 제공자입니다."
+> }
+> ```
 
-- **Request** (둘 다 필수, 구글·카카오 공통)
+- **Request** (필수)
 
 ```json
 {
-  "authorizationCode": "...",
-  "codeVerifier": "..."
+  "idToken": "ey..."
 }
 ```
 
-- **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+앱은 `google_sign_in`을 `serverClientId`(서버의 웹 클라이언트 ID)로 초기화하고, 로그인 결과의 ID 토큰을 그대로 보낸다.
+
+- **동작**
+  - 서버가 구글 공개키로 ID 토큰 서명을 검증하고 `iss`(구글)·`aud`(서버의 웹 클라이언트 ID)·만료를 확인한다. `email_verified`가 `true`인 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
 - **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
-- **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
+- **에러 (401 Unauthorized — ID 토큰 검증 실패(위조·만료·다른 앱용))**
 
 ```json
 {
-  "code": "OAUTH_CODE_EXCHANGE_FAILED",
+  "code": "OAUTH_LOGIN_FAILED",
   "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
 }
 ```
@@ -507,21 +519,11 @@
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "인가 코드는 필수입니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "코드 검증값은 필수입니다."
-}
-
-{
-  "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
+  "message": "ID 토큰은 필수입니다."
 }
 ```
 
-- **에러 (403 Forbidden — 카카오 이메일 제공 미동의 — 가입 거부)**
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 소유가 확인되지 않은 이메일(`email_verified`가 `true`가 아님)도 여기에 해당한다
 
 ```json
 {
@@ -539,6 +541,50 @@
 }
 ```
 
+- **에러 (503 Service Unavailable — 구글 공개키를 받아 오지 못함)** — 사용자 자격 증명 문제가 아니다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 1-6. `POST /api/v1/auth/oauth/kakao` — 카카오 로그인 (인가 코드 + PKCE)
+
+- **Request** (둘 다 필수)
+
+```json
+{
+  "authorizationCode": "...",
+  "codeVerifier": "..."
+}
+```
+
+- **동작**
+  - 서버가 카카오에 인가 코드를 교환(PKCE `codeVerifier` 검증)하고 유저 정보를 조회한다. 유효하고(`is_email_valid`) 인증된(`is_email_verified`) 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **Response `200 OK`**: 1-5와 같다
+- **에러 (401 Unauthorized — 코드 교환 실패(위조·만료·PKCE 불일치))**: `OAUTH_LOGIN_FAILED` — 형식은 1-5와 같다
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "인가 코드는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "코드 검증값은 필수입니다."
+}
+```
+
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)**: `OAUTH_EMAIL_NOT_PROVIDED` — 형식은 1-5와 같다. 인증되지 않은 이메일, 다른 카카오계정에 사용돼 만료된 이메일(`is_email_verified`·`is_email_valid`가 `true`가 아님)도 여기에 해당한다 — 만료된 이메일은 카카오가 마스킹해서 준다
+- **에러 (409 Conflict — 소셜 최초 가입인데 이메일이 기존 로컬 계정과 겹침)**: `EMAIL_ALREADY_EXISTS` — 형식은 1-5와 같다
+- **에러 (503 Service Unavailable — 카카오 5xx·호출 한도 초과·연결 실패)**: `OAUTH_PROVIDER_UNAVAILABLE` — 형식은 1-5와 같다. 한도 초과는 429 또는 400 + 카카오 `code: -10`으로 온다
 - **인증**: 불필요
 
 ### 1-7. `POST /api/v1/auth/refresh` — 토큰 재발급
