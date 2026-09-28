@@ -20,6 +20,7 @@ import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,22 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .filter(player -> player.getUserId().equals(userId) && player.isActive())
                 .findFirst()
                 .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()));
+    }
+
+    // 실제 어댑터처럼 세션을 거쳐 방의 활성 참가자를 user_id 순으로 찾는다 — 잠그지는 않는다
+    @Override
+    public List<RunningPlayer> lockActiveInRoom(RunningRoomId runningRoomId) {
+        return playersOf(runningRoomId)
+                .filter(RunningPlayer::isActive)
+                .sorted(Comparator.comparing(player -> player.getUserId().value()))
+                .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()))
+                .toList();
+    }
+
+    // load와 같다 — 잠그지는 않는다
+    @Override
+    public Optional<RunningPlayer> lockInRoom(RunningRoomId runningRoomId, UserId userId) {
+        return load(runningRoomId, userId);
     }
 
     // 실제 어댑터처럼 세션을 거쳐 방의 참가자를 찾는다.

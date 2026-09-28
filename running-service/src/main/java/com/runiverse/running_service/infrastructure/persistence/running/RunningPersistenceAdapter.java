@@ -298,6 +298,46 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .map(this::toDomain);
     }
 
+    // JOIN으로 걸면 세션 행까지 잠겨 시작과 새로 엇갈린다 — 서브쿼리로 참가자 행만 잠근다
+    @Override
+    public List<RunningPlayer> lockActiveInRoom(RunningRoomId runningRoomId) {
+        return entityManager.createQuery("""
+                        SELECT player
+                        FROM RunningPlayerJpaEntity player
+                        WHERE player.deletedAt IS NULL
+                          AND player.runningPlayerId IN (
+                              SELECT session.runningPlayerId
+                              FROM RunningRoomSessionJpaEntity session
+                              WHERE session.room.runningRoomId = :roomId)
+                        ORDER BY player.userId
+                        """, RunningPlayerJpaEntity.class)
+                .setParameter("roomId", runningRoomId.value())
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    // load와 조건이 같고 잠그는 것만 다르다 — 서브쿼리로 참가자 행만 잠근다
+    @Override
+    public Optional<RunningPlayer> lockInRoom(RunningRoomId runningRoomId, UserId userId) {
+        return entityManager.createQuery("""
+                        SELECT player
+                        FROM RunningPlayerJpaEntity player
+                        WHERE player.userId = :userId
+                          AND player.runningPlayerId IN (
+                              SELECT session.runningPlayerId
+                              FROM RunningRoomSessionJpaEntity session
+                              WHERE session.room.runningRoomId = :roomId)
+                        """, RunningPlayerJpaEntity.class)
+                .setParameter("roomId", runningRoomId.value())
+                .setParameter("userId", userId.value())
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(this::toDomain);
+    }
+
     @Override
     public Optional<RunningResultRecord> loadRecord(RunningRoomId runningRoomId, UserId userId) {
         // 엔티티를 통째로 읽지 않는다 — 응답에 필요한 컬럼만 가져온다

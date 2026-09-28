@@ -13,6 +13,7 @@ import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomP
 import com.runiverse.running_service.application.running.command.accountdeletion.SettleRunningForAccountDeletionCommand;
 import com.runiverse.running_service.application.running.command.accountdeletion.SettleRunningForAccountDeletionHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
+import com.runiverse.running_service.application.running.command.session.RunningConnectionCloseRequestedEvent;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.DeleteRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
@@ -116,6 +117,7 @@ class SettleRunningForAccountDeletionHandlerTest {
 
         // then -> 연결은 커밋 뒤에 닫는다. 여기서 닫으면 롤백돼도 되살릴 수 없다
         verify(eventPublisher).publishEvent(new MatchStreamCloseRequestedEvent(new UserId(USER_ID)));
+        verify(eventPublisher).publishEvent(new RunningConnectionCloseRequestedEvent(new UserId(USER_ID)));
         verifyNoInteractions(loadMatchRoomPort, lockRunningRoomPort,
                 deleteRunningPlayerPort, finishRunningUsecase);
     }
@@ -178,7 +180,7 @@ class SettleRunningForAccountDeletionHandlerTest {
         // when
         handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
 
-        // then -> 스트림 종료 요청 하나만 나간다
+        // then -> 연결 종료 요청만 나간다
         verify(eventPublisher).publishEvent(new MatchStreamCloseRequestedEvent(new UserId(USER_ID)));
         verify(eventPublisher, never()).publishEvent(any(MatchRoomChangedEvent.class));
     }
