@@ -512,15 +512,6 @@
 }
 ```
 
-- **에러 (400 Bad Request — 목록에 없는 provider)** — `POST /api/v1/auth/oauth/{provider}`에서 `google`·`kakao`가 아니면 404가 아니라 400이다. 본문은 보지 않는다. provider 이름은 소문자로 보낸다(`GOOGLE`도 목록 밖으로 본다)
-
-```json
-{
-  "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
-}
-```
-
 - **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 소유가 확인되지 않은 이메일(`email_verified`가 `true`가 아님)도 여기에 해당한다
 
 ```json
@@ -588,15 +579,6 @@
 }
 ```
 
-- **에러 (400 Bad Request — 목록에 없는 provider)** — `POST /api/v1/auth/oauth/{provider}`에서 `google`·`kakao`가 아니면 404가 아니라 400이다. 본문은 보지 않는다. provider 이름은 소문자로 보낸다(`KAKAO`도 목록 밖으로 본다)
-
-```json
-{
-  "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
-}
-```
-
 - **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 인증되지 않은 이메일, 다른 카카오계정에 사용돼 만료된 이메일(`is_email_verified`·`is_email_valid`가 `true`가 아님)도 여기에 해당한다. 만료된 이메일은 카카오가 마스킹해서 준다
 
 ```json
@@ -621,6 +603,22 @@
 {
   "code": "OAUTH_PROVIDER_UNAVAILABLE",
   "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 소셜 로그인 미지원 provider — `POST /api/v1/auth/oauth/{provider}`
+
+> 1-5(`google`)·1-6(`kakao`) 외의 경로를 받는 자리다. 호출할 API가 아니라 목록에 없는 provider를 거절하는 규칙이라 번호를 붙이지 않는다.
+
+- **동작**: `{provider}`가 소문자 `google`·`kakao`가 아니면 404가 아니라 400으로 거절한다. 본문은 보지 않는다. `GOOGLE`·`KAKAO`처럼 대문자로 보내도 목록 밖으로 본다
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "UNSUPPORTED_PROVIDER",
+  "message": "지원하지 않는 로그인 제공자입니다."
 }
 ```
 
