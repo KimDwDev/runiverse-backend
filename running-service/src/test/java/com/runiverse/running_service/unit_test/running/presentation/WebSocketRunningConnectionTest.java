@@ -9,8 +9,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.SessionLimitExceededException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -136,6 +138,34 @@ class WebSocketRunningConnectionTest {
         assertThatCode(() -> connection.sendProgress(
                 new RunningProgress(UUID.randomUUID(), 100, 5_000, 300, false)))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("콤보 전송이 한도를 넘기면 연결을 닫아 재연결을 유도한다")
+    void sendCombo_closesSessionWhenSendLimitExceeded() throws IOException {
+        // given -> 한도를 넘긴 래퍼는 이후 전송을 조용히 버린다 — 열어 두면 콤보가 영영 멈춘다
+        willThrow(new SessionLimitExceededException("limit", CloseStatus.SESSION_NOT_RELIABLE))
+                .given(session).sendMessage(any());
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.sendCombo(List.of());
+
+        // then
+        verify(session).close(CloseStatus.SESSION_NOT_RELIABLE);
+    }
+
+    @Test
+    @DisplayName("탈퇴로 닫을 때는 NORMAL로 닫는다")
+    void closeForAccountDeletion_closesNormally() throws IOException {
+        // given -> 4001이 아니어야 앱이 재연결을 시도하고, 폐기된 토큰으로 핸드셰이크가 막혀 멈춘다
+        WebSocketRunningConnection connection = new WebSocketRunningConnection(session, jsonMapper);
+
+        // when
+        connection.closeForAccountDeletion();
+
+        // then
+        verify(session).close(CloseStatus.NORMAL);
     }
 
     private TextMessage captureSent() throws IOException {

@@ -55,11 +55,13 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
                 actives.stream()
                         .map(userId -> toPlayer(query.runningRoomId(), userId, profiles))
                         .toList(),
-                runningComboReader.read(query.runningRoomId(), new UserId(query.userId())));
+                runningComboReader.read(query.runningRoomId(), new UserId(query.userId())).stream()
+                        // 끝난 참가자의 콤보는 판정이 신선도로 떼어 낼 때까지 남는다 — 목록에 없는 상대는 싣지 않는다
+                        .filter(peer -> actives.contains(new UserId(peer.userId())))
+                        .toList());
     }
 
-    // 본인도 담는다. 진행 통지는 본인을 빼지만 스냅샷은 다르다 —
-    // 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
+    // 본인도 담는다 — 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
     private GetRunningSnapshotResult.Player toPlayer(
             Long runningRoomId, UserId userId, Map<UUID, PlayerProfile> profiles) {
         RunningDistance distance = loadRunningDistancePort.loadDistance(runningRoomId, userId);

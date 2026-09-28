@@ -127,6 +127,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         FinishRunningHandler finishRunningHandler = new FinishRunningHandler(runningFinisher);
         ForceFinishRunningRoomHandler forceFinishRunningRoomHandler =
                 new ForceFinishRunningRoomHandler(
+                        runningStore,         // LockRunningPlayerPort
                         runningStore,         // LockRunningRoomPort
                         runningStore,         // LoadRunningRoomPort
                         runningStore,         // LoadRoomPlayerPort

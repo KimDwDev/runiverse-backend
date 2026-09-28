@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.running.port.in.FinishRunningUs
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,6 +41,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -57,6 +60,9 @@ class ForceFinishRunningRoomHandlerTest {
 
     private static final UserId RUNNER = new UserId(UuidCreator.getTimeOrderedEpoch());
     private static final UserId NO_SHOW = new UserId(UuidCreator.getTimeOrderedEpoch());
+
+    @Mock
+    private LockRunningPlayerPort lockRunningPlayerPort;
 
     @Mock
     private LockRunningRoomPort lockRunningRoomPort;
@@ -87,7 +93,7 @@ class ForceFinishRunningRoomHandlerTest {
     @BeforeEach
     void setUp() {
         forceFinishRunningRoomHandler = new ForceFinishRunningRoomHandler(
-                lockRunningRoomPort, loadRunningRoomPort, loadRoomPlayerPort,
+                lockRunningPlayerPort, lockRunningRoomPort, loadRunningRoomPort, loadRoomPlayerPort,
                 updateRunningRoomPort, updateRunningPlayerPort, startMatchCooldownPort,
                 existsRunningRecordPort, finishRunningUsecase, PROPERTIES);
     }
@@ -107,6 +113,24 @@ class ForceFinishRunningRoomHandlerTest {
         // then -> 강제 종료라는 사실만 넘기고 최종 상태는 그쪽이 정한다
         verify(finishRunningUsecase).handle(
                 new FinishRunningCommand(ROOM_ID, RUNNER.value(), true));
+    }
+
+    @Test
+    @DisplayName("참가자를 방보다 먼저 잠근다")
+    void locksPlayersBeforeRoom() {
+        // given -> 시작·취소·탈퇴 정산이 모두 참가자 → 방 순이라, 반대로 잡으면 교착에 빠진다
+        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+        givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
+        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
+
+        // when
+        forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then
+        InOrder inOrder = inOrder(lockRunningPlayerPort, lockRunningRoomPort);
+        inOrder.verify(lockRunningPlayerPort).lockActiveInRoom(new RunningRoomId(ROOM_ID));
+        inOrder.verify(lockRunningRoomPort).lockById(new RunningRoomId(ROOM_ID));
     }
 
     @Test

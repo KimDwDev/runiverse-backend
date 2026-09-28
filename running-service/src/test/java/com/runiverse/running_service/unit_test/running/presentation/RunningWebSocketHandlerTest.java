@@ -34,6 +34,7 @@ import com.runiverse.running_service.infrastructure.websocket.RunningSessionRegi
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
 import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketHandler;
+import com.runiverse.running_service.presentation.running.websocket.RunningWebSocketProperties;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,13 +50,21 @@ import org.mockito.quality.Strictness;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.util.unit.DataSize;
+import org.springframework.web.socket.handler.SessionLimitExceededException;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -63,6 +72,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
@@ -138,13 +148,15 @@ class RunningWebSocketHandlerTest {
     @Mock
     private StartRunningComboUsecase startRunningComboUsecase;
 
+    private RunningSessionPort sessionPort;
+
     private RunningWebSocketHandler handler;
 
     @BeforeEach
     void setUp() {
         // 소켓 명부와 등록·해제 유스케이스는 상태만 들고 있는 POJO라 실제 구현을 쓴다
         // — 중복 연결 판정이 진짜로 도는지 봐야 한다. 인스턴스 밖으로 나가는 것만 가짜다
-        RunningSessionPort sessionPort = new RunningSessionRegistryAdapter();
+        sessionPort = new RunningSessionRegistryAdapter();
         handler = new RunningWebSocketHandler(
                 jsonMapper,
                 startRunningUsecase,
@@ -155,7 +167,8 @@ class RunningWebSocketHandlerTest {
                         new UpdateRunningFinishJudge(runningFinisher)),
                 finishRunningUsecase,
                 getRunningSnapshotUsecase,
-                startRunningComboUsecase);
+                startRunningComboUsecase,
+                new RunningWebSocketProperties(Duration.ofSeconds(10), DataSize.ofKilobytes(512)));
         // 좌표를 한 번도 못 받은 상태에서 시작한다 — 누적 거리는 이 테스트의 관심사가 아니다
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
                 .willReturn(RunningDistance.empty());
@@ -915,6 +928,81 @@ class RunningWebSocketHandlerTest {
         // then
         verify(session, never()).close();
         verify(session, never()).close(any(CloseStatus.class));
+    }
+
+    @Test
+    @DisplayName("ack를 보내는 도중 다른 스레드가 통지를 보내도 소켓에는 하나씩 쓰고 둘 다 전달한다")
+    void serializesConcurrentSends() throws Exception {
+        // given -> 첫 전송(ack)이 소켓에 붙잡혀 있는 동안 두 번째 전송이 들어오게 만든다
+        CountDownLatch ackWriting = new CountDownLatch(1);
+        CountDownLatch releaseAck = new CountDownLatch(1);
+        AtomicInteger writing = new AtomicInteger();
+        AtomicInteger maxWriting = new AtomicInteger();
+        // 시간 초과로 풀리면 겹치지 않은 채 통과할 수 있다 — 테스트가 직접 풀었는지 따로 본다
+        AtomicBoolean ackReleased = new AtomicBoolean();
+        AtomicReference<Throwable> requestFailure = new AtomicReference<>();
+        willAnswer(invocation -> {
+            maxWriting.accumulateAndGet(writing.incrementAndGet(), Math::max);
+            if (ackWriting.getCount() > 0) {
+                ackWriting.countDown();
+                ackReleased.set(releaseAck.await(5, TimeUnit.SECONDS));
+            }
+            writing.decrementAndGet();
+            return null;
+        }).given(session).sendMessage(any());
+        Thread requestThread = new Thread(() -> {
+            try {
+                started();
+            } catch (Throwable e) {
+                requestFailure.set(e);
+            }
+        });
+        requestThread.start();
+        assertThat(ackWriting.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // when -> Redis 리스너 스레드처럼 같은 사용자에게 콤보를 보낸다
+        sessionPort.find(new UserId(USER_ID)).orElseThrow().sendCombo(List.of());
+        releaseAck.countDown();
+        requestThread.join(5_000);
+
+        // then -> 소켓에 겹쳐 쓰지 않고, ack 뒤에 콤보가 이어서 나간다
+        assertThat(requestThread.isAlive()).isFalse();
+        assertThat(requestFailure).hasNullValue();
+        assertThat(ackReleased).isTrue();
+        assertThat(maxWriting).hasValue(1);
+        ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(session, times(2)).sendMessage(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(message -> jsonMapper.readValue(message.getPayload(), WebSocketEnvelope.class).event())
+                .containsExactly("RUNNING_STARTED", "RUNNING_COMBO_UPDATED");
+    }
+
+    @Test
+    @DisplayName("전송 한도를 넘기면 연결을 SESSION_NOT_RELIABLE로 닫는다")
+    void closesSessionWhenSendLimitExceeded() throws Exception {
+        // given -> 한도를 넘긴 래퍼는 이후 전송을 조용히 버린다 — 열어 두면 클라가 재연결할 계기가 없다
+        willThrow(new SessionLimitExceededException("limit", CloseStatus.SESSION_NOT_RELIABLE))
+                .given(session).sendMessage(any());
+
+        // when
+        handler.handleMessage(session, text("""
+                {"event":"HEALTH_CHECK"}"""));
+
+        // then
+        verify(session).close(CloseStatus.SESSION_NOT_RELIABLE);
+    }
+
+    @Test
+    @DisplayName("연결이 끊기면 명부에서 그 연결을 지운다")
+    void removesConnectionOnClose() throws Exception {
+        // given
+        started();
+
+        // when
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        // then -> 등록과 해제가 서로 다른 래퍼로 연결을 만들면 값 비교에 걸려 명부에 남는다
+        assertThat(sessionPort.find(new UserId(USER_ID))).isEmpty();
     }
 
     // 종료 케이스는 전부 "이미 시작한 러닝"에서 출발한다
