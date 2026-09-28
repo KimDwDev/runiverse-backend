@@ -99,8 +99,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore   // SaveOnboardingPort
         );
         RunningFinisher runningFinisher = new RunningFinisher(
-                runningStore,       // LoadRunningRoomPort
-                runningStore,       // LoadRoomPlayerPort
+                runningStore,       // LockRunningRoomPort
+                runningStore,       // LockRunningPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
                 onboardingStore,    // LoadUserWeightPort
                 weatherProvider,    // LoadWeatherPort

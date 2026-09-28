@@ -92,8 +92,8 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 runningStore      // UpdateRunningPlayerPort
         );
         RunningFinisher runningFinisher = new RunningFinisher(
-                runningStore,       // LoadRunningRoomPort
-                runningStore,       // LoadRoomPlayerPort
+                runningStore,       // LockRunningRoomPort
+                runningStore,       // LockRunningPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
                 onboardingStore,    // LoadUserWeightPort
                 weatherProvider,    // LoadWeatherPort

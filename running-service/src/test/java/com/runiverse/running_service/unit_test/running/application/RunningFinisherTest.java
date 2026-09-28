@@ -14,11 +14,11 @@ import com.runiverse.running_service.application.running.port.out.ExistsRunningP
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
-import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
@@ -98,10 +98,10 @@ public class RunningFinisherTest {
             0.8, 10, 100, 60, 3.0, COOLDOWN);
 
     @Mock
-    private LoadRunningRoomPort loadRunningRoomPort;
+    private LockRunningRoomPort lockRunningRoomPort;
 
     @Mock
-    private LoadRoomPlayerPort loadRoomPlayerPort;
+    private LockRunningPlayerPort lockRunningPlayerPort;
 
     @Mock
     private LoadRunningTrackPort loadRunningTrackPort;
@@ -153,7 +153,7 @@ public class RunningFinisherTest {
     // 설정값은 검증 대상이라 mock이 아니라 실제 값을 넣는다 — 0.8 경계가 이 테스트의 주제다
     @BeforeEach
     void setUp() {
-        finisher = new RunningFinisher(loadRunningRoomPort, loadRoomPlayerPort,
+        finisher = new RunningFinisher(lockRunningRoomPort, lockRunningPlayerPort,
                 loadRunningTrackPort, loadUserWeightPort, loadWeatherPort, saveGpsTrackPort,
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
@@ -222,12 +222,12 @@ public class RunningFinisherTest {
     }
 
     private void givenPlayer(RunningPlayer player) {
-        given(loadRoomPlayerPort.load(new RunningRoomId(ROOM_ID), new UserId(USER_ID)))
+        given(lockRunningPlayerPort.lockInRoom(new RunningRoomId(ROOM_ID), new UserId(USER_ID)))
                 .willReturn(Optional.ofNullable(player));
     }
 
     private void givenRoom(RunningRoom room) {
-        given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
+        given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID))).willReturn(Optional.of(room));
     }
 
     private void givenTrack(RunningTrack track) {
@@ -247,6 +247,23 @@ public class RunningFinisherTest {
 
     private void finish() {
         finisher.finish(ROOM_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("참가자를 방보다 먼저 잠근다")
+    void locksPlayerBeforeRoom() {
+        // given -> 시작·취소·강제 종료가 모두 참가자 → 방 순이라, 반대로 잡으면 교착에 빠진다
+        givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+        givenRoom(room(RunningRoomType.MATCH, TARGET));
+        givenTrack(track(1_801, 2.8));
+
+        // when
+        finish();
+
+        // then
+        InOrder inOrder = inOrder(lockRunningPlayerPort, lockRunningRoomPort);
+        inOrder.verify(lockRunningPlayerPort).lockInRoom(new RunningRoomId(ROOM_ID), new UserId(USER_ID));
+        inOrder.verify(lockRunningRoomPort).lockById(new RunningRoomId(ROOM_ID));
     }
 
     @Nested
@@ -720,7 +737,7 @@ public class RunningFinisherTest {
         void rejectUnknownRoom() {
             // given -> 목표 거리를 정하는 쪽이 방이라 방 없이는 판정할 수 없다
             givenPlayer(player(RunningPlayerStatus.RUNNING, null));
-            given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID)))
+            given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID)))
                     .willReturn(Optional.empty());
 
             // when & then
