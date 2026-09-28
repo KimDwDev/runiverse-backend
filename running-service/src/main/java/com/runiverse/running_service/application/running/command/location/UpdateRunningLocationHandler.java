@@ -23,9 +23,10 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
     private final SaveRunningDistancePort saveRunningDistancePort;
     private final PublishRunningProgressPort publishRunningProgressPort;
     private final UpdateRunningComboJudge updateRunningComboJudge;
+    private final UpdateRunningFinishJudge updateRunningFinishJudge;
 
     @Override
-    public void handle(UpdateRunningLocationCommand command) {
+    public UpdateRunningLocationResult handle(UpdateRunningLocationCommand command) {
         UserId userId = new UserId(command.userId());
         // 좌표 저장이 먼저다 — 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다
         appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
@@ -51,5 +52,15 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
                 false));   // TODO: 일시정지 고정값 — RUNNING_PAUSE/RESUME을 만들 때 실제 상태로 교체한다
         // 진행 통지 뒤에 둔다 — 콤보는 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다
         updateRunningComboJudge.judge(command.runningRoomId(), userId, updated.meters());
+        // 종료는 맨 마지막이다 — 목표를 넘은 이 배치까지 트랙에 저장되고 진행 통지도 나간 뒤여야 한다
+        boolean finished = updateRunningFinishJudge.judge(
+                command.runningRoomId(), userId, command.targetDistanceMeters(), updated.meters());
+        return new UpdateRunningLocationResult(finished);
+    }
+
+    // 솔로 방은 목표가 없다 — 사용자가 끝내야 끝난다.
+    // 넘은 순간만이 아니라 넘어 있는 동안 계속 참이다 — 종료가 한 번 실패해도 다음 배치가 다시 시도한다
+    private boolean isTargetReached(Integer targetDistanceMeters, RunningDistance distance) {
+        return targetDistanceMeters != null && distance.meters() >= targetDistanceMeters;
     }
 }
