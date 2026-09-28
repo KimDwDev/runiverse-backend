@@ -100,8 +100,8 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
                 newUpdateRunningComboJudge()
         );
         finishRunningHandler = new FinishRunningHandler(
-                runningStore,       // LoadRunningRoomPort
-                runningStore,       // LoadRoomPlayerPort
+                runningStore,       // LockRunningRoomPort
+                runningStore,       // LockRunningPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
                 onboardingStore,    // LoadUserWeightPort
                 weatherProvider,    // LoadWeatherPort

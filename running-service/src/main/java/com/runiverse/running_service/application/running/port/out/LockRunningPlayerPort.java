@@ -16,4 +16,7 @@ public interface LockRunningPlayerPort {
     // 방의 활성 참가자를 user_id 순으로 한 번에 잠근다 — 방보다 먼저 잡아야 시작·취소와 순서가 맞는다.
     // 방 행은 건드리지 않는다: 먼저 읽어 두면 이어지는 잠금 조회가 영속성 컨텍스트의 낡은 값을 돌려준다
     List<RunningPlayer> lockActiveInRoom(RunningRoomId runningRoomId);
+
+    // deleted_at과 무관하게 이 방의 참가자를 잠근다 — 이미 끝난 참가자도 찾아야 RUNNING_FINISH가 멱등이 된다
+    Optional<RunningPlayer> lockInRoom(RunningRoomId runningRoomId, UserId userId);
 }

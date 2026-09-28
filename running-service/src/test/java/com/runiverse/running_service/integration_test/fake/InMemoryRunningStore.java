@@ -103,6 +103,12 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .toList();
     }
 
+    // load와 같다 — 잠그지는 않는다
+    @Override
+    public Optional<RunningPlayer> lockInRoom(RunningRoomId runningRoomId, UserId userId) {
+        return load(runningRoomId, userId);
+    }
+
     // 실제 어댑터처럼 세션을 거쳐 방의 참가자를 찾는다.
     // deleted_at은 보지 않는다 — 이미 종료된 참가자도 찾아야 RUNNING_FINISH가 멱등이 된다
     @Override

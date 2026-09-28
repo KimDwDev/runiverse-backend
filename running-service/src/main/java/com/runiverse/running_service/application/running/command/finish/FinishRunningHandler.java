@@ -11,11 +11,11 @@ import com.runiverse.running_service.application.running.port.out.ExistsRunningP
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
-import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
-import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
+import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
@@ -51,8 +51,8 @@ import java.util.Optional;
 @Transactional
 public class FinishRunningHandler implements FinishRunningUsecase {
 
-    private final LoadRunningRoomPort loadRunningRoomPort;
-    private final LoadRoomPlayerPort loadRoomPlayerPort;
+    private final LockRunningRoomPort lockRunningRoomPort;
+    private final LockRunningPlayerPort lockRunningPlayerPort;
     private final LoadRunningTrackPort loadRunningTrackPort;
     private final LoadUserWeightPort loadUserWeightPort;
     private final LoadWeatherPort loadWeatherPort;
@@ -79,8 +79,10 @@ public class FinishRunningHandler implements FinishRunningUsecase {
     public void handle(FinishRunningCommand command) {
         RunningRoomId roomId = new RunningRoomId(command.runningRoomId());
         UserId userId = new UserId(command.userId());
-        // 1. 활성 신청이 아니라 이 방의 참가자를 찾는다 — 이미 끝난 참가자도 찾아야 멱등이 된다
-        RunningPlayer player = loadRoomPlayerPort.load(roomId, userId)
+        // 1. 활성 신청이 아니라 이 방의 참가자를 찾는다 — 이미 끝난 참가자도 찾아야 멱등이 된다.
+        //    참가자 → 방 순으로 잠근다: 시작·취소·강제 종료와 순서가 같아야 교착이 없고,
+        //    같은 방의 종료가 한 줄로 서야 마지막 사람이 앞사람의 확정을 보고 방을 닫는다
+        RunningPlayer player = lockRunningPlayerPort.lockInRoom(roomId, userId)
                 .orElseThrow(NotRoomPlayerException::new);
         // 이미 확정된 참가자 - 기록을 덮어쓰지 않고 트랙만 정리한 뒤 ack를 다시 보낸다
         if (!player.isActive()) {
@@ -94,7 +96,7 @@ public class FinishRunningHandler implements FinishRunningUsecase {
         }
         // 2. 목표 거리는 참가자가 아니라 방이 정한다 —
         //    참가자별 목표로 나누면 같은 방에서 splitNumber N이 서로 다른 구간을 가리킨다
-        RunningRoom room = loadRunningRoomPort.loadById(roomId)
+        RunningRoom room = lockRunningRoomPort.lockById(roomId)
                 .orElseThrow(RunningRoomNotFoundException::new);
         // 온보딩에서 몸무게는 필수다 — 비어 있으면 러닝을 시작할 수 없었어야 할 사용자다
         BigDecimal weightKg = loadUserWeightPort.loadWeightKg(userId)
