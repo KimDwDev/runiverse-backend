@@ -4,13 +4,13 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
-import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
-import com.runiverse.running_service.application.running.common.RunningFinisher;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishExecutor;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobCommand;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobHandler;

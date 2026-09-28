@@ -1,10 +1,6 @@
 package com.runiverse.running_service.application.running.common;
 
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
-import com.runiverse.running_service.application.running.command.finish.CalorieCalculator;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
-import com.runiverse.running_service.application.running.command.finish.TrackAnalysis;
-import com.runiverse.running_service.application.running.command.finish.TrackAnalyzer;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;

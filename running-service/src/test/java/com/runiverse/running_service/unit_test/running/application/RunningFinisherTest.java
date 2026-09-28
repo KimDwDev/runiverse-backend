@@ -2,8 +2,8 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
-import com.runiverse.running_service.application.running.command.finish.CalorieCalculator;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.CalorieCalculator;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
@@ -15,11 +15,11 @@ import com.runiverse.running_service.application.running.port.out.ExistsRunningR
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
-import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
+import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
 import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
@@ -29,11 +29,11 @@ import com.runiverse.running_service.application.running.port.out.UpdateRunningR
 import com.runiverse.running_service.application.running.port.out.Weather;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.running.record.RunningRecord;
-import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.record.RunningRecord;
+import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;

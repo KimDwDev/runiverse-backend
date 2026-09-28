@@ -1,12 +1,13 @@
 package com.runiverse.running_service.unit_test.running.application;
 
+import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
-import com.runiverse.running_service.application.running.command.finish.TrackDistance;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
+import com.runiverse.running_service.application.running.common.TrackDistance;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
@@ -16,7 +17,6 @@ import com.runiverse.running_service.application.running.port.out.RunningProgres
 import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import ch.qos.logback.classic.Level;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,8 +35,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;

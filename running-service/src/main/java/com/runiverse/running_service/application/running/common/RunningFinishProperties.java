@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.running.command.finish;
+package com.runiverse.running_service.application.running.common;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
