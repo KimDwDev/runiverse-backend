@@ -37,6 +37,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -146,6 +147,15 @@ public class AuthController {
                 request.authorizationCode(),
                 request.codeVerifier()
         ));
+    }
+
+    // 목록에 없는 provider — 고정 경로가 더 구체적이라 먼저 매칭되므로 google·kakao는 여기로 오지 않는다.
+    // 본문은 읽지 않는다: provider마다 본문 모양이 달라 검증할 기준이 없다
+    @PostMapping("/oauth/{provider}")
+    public ResponseEntity<OauthLoginResponse> unsupportedOauthLogin(
+            @PathVariable String provider
+    ) {
+        return oauthLogin(new OauthLoginCommand.Unsupported(provider));
     }
 
     private ResponseEntity<OauthLoginResponse> oauthLogin(OauthLoginCommand command) {

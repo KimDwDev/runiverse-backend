@@ -27,4 +27,16 @@ public sealed interface OauthLoginCommand {
             return Provider.GOOGLE;
         }
     }
+
+    // 목록에 없는 provider 경로로 들어온 요청 — 실패로 세고 거절하려고 핸들러까지 보낸다
+    record Unsupported(
+            String rawProvider
+    ) implements OauthLoginCommand {
+
+        // 대응하는 Provider가 없다 — 핸들러는 이 커맨드를 받으면 provider()를 쓰기 전에 거절한다
+        @Override
+        public Provider provider() {
+            return null;
+        }
+    }
 }

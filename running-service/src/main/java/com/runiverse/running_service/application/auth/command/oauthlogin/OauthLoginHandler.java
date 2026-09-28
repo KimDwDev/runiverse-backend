@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
+import com.runiverse.running_service.application.auth.exception.UnsupportedProviderException;
 import com.runiverse.running_service.application.auth.port.in.OauthLoginUsecase;
 import com.runiverse.running_service.application.auth.port.out.GenerateTokenPort;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
@@ -38,6 +39,10 @@ public class OauthLoginHandler implements OauthLoginUsecase {
                         loadKakaoProfilePort.load(kakao.authorizationCode(), kakao.codeVerifier());
                 case OauthLoginCommand.Google google ->
                         loadGoogleProfilePort.load(google.idToken());
+                case OauthLoginCommand.Unsupported unsupported -> {
+                    log.info("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider={}", unsupported.rawProvider());
+                    throw new UnsupportedProviderException();
+                }
             };
             // 2. 조회 or 가입 (트랜잭션)
             User user = oauthUserResolver.findOrRegister(oauthProfile);
