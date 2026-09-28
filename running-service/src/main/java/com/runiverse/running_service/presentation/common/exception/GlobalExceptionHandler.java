@@ -209,7 +209,8 @@ public class GlobalExceptionHandler {
             case EMAIL_VERIFICATION_COOLDOWN,
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
-            case EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
+            case OAUTH_PROVIDER_UNAVAILABLE,
+                 EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
         };
     }
 

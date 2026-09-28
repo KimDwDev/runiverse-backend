@@ -13,6 +13,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthProviderUnavailableException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.support.LogCapture;
@@ -237,7 +238,7 @@ public class GoogleOauthClientTest {
     }
 
     @Test
-    @DisplayName("구글 공개키를 받아 오지 못하면 OauthLoginFailedException을 던지고 ERROR를 예외와 함께 남긴다")
+    @DisplayName("구글 공개키를 받아 오지 못하면 OauthProviderUnavailableException을 던지고 ERROR를 예외와 함께 남긴다")
     void loadFailsWhenJwkSetUnavailable() {
         // given
         mockServer.expect(requestTo(JWK_SET_URI)).andRespond(withServerError());
@@ -246,7 +247,7 @@ public class GoogleOauthClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.load(token))
-                .isInstanceOf(OauthLoginFailedException.class);
+                .isInstanceOf(OauthProviderUnavailableException.class);
         assertThat(log.events(Level.ERROR))
                 .singleElement()
                 .satisfies(event -> {

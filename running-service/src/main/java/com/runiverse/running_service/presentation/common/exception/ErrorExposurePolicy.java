@@ -25,6 +25,7 @@ public final class ErrorExposurePolicy {
             UserErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             AuthErrorCode.INVALID_CREDENTIALS.getCode(),
             AuthErrorCode.OAUTH_LOGIN_FAILED.getCode(),
+            AuthErrorCode.OAUTH_PROVIDER_UNAVAILABLE.getCode(),
             AuthErrorCode.OAUTH_EMAIL_NOT_PROVIDED.getCode(),
             AuthErrorCode.UNSUPPORTED_PROVIDER.getCode(),
             AuthErrorCode.INVALID_REFRESH_TOKEN.getCode(),

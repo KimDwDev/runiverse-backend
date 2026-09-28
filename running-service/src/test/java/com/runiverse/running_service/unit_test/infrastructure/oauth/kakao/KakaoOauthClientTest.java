@@ -3,6 +3,7 @@ package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthProviderUnavailableException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import ch.qos.logback.classic.Level;
@@ -413,7 +414,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthLoginFailedException.class);
+                .isInstanceOf(OauthProviderUnavailableException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -489,7 +490,7 @@ public class KakaoOauthClientTest {
 
         // when
         assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthLoginFailedException.class);
+                .isInstanceOf(OauthProviderUnavailableException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))

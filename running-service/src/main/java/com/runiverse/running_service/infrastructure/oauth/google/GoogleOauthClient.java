@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.oauth.google;
 
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
 import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthProviderUnavailableException;
 import com.runiverse.running_service.application.auth.port.out.LoadGoogleProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
@@ -65,8 +66,9 @@ public class GoogleOauthClient implements LoadGoogleProfilePort {
             log.warn("[인증] 구글 로그인 실패: ID 토큰 검증 실패 - reasons={}", reasonsOf(e));
             throw new OauthLoginFailedException();
         } catch (JwtException e) {
+            // 토큰이 아니라 공개키를 받아 오지 못한 것이다 — 구글 장애인지 우리 네트워크 문제인지는 여기서 가를 수 없다
             log.error("[인증] 구글 로그인 실패: 구글 공개키 조회 오류", e);
-            throw new OauthLoginFailedException();
+            throw new OauthProviderUnavailableException();
         }
     }
 

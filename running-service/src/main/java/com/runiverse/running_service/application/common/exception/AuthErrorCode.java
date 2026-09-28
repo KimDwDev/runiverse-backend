@@ -11,6 +11,7 @@ public enum AuthErrorCode implements ErrorCode {
     INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "리프레시 토큰이 유효하지 않습니다. 다시 로그인해 주세요."),
     UNSUPPORTED_PROVIDER("UNSUPPORTED_PROVIDER", "지원하지 않는 로그인 제공자입니다."),
     OAUTH_LOGIN_FAILED("OAUTH_LOGIN_FAILED","소셜 로그인에 실패했습니다. 다시 시도해 주세요."),
+    OAUTH_PROVIDER_UNAVAILABLE("OAUTH_PROVIDER_UNAVAILABLE", "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     OAUTH_EMAIL_NOT_PROVIDED("OAUTH_EMAIL_NOT_PROVIDED", "이메일 제공에 동의해야 소셜 로그인을 할 수 있습니다."),
 
     // 이메일 인증과 관련된 에러코드
