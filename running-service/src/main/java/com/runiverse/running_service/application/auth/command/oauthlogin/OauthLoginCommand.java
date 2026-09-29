@@ -1,42 +1,11 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
-import com.runiverse.running_service.domain.user.vo.Provider;
+// 그 provider가 쓰는 자격 증명만 채우고 나머지는 null이다 — 구글은 idToken, 카카오는 authorizationCode·codeVerifier
+public record OauthLoginCommand(
+        String provider,
+        String idToken,
+        String authorizationCode,
+        String codeVerifier
+) {
 
-// provider마다 앱이 받아 오는 자격 증명이 달라 커맨드 모양이 갈린다
-public sealed interface OauthLoginCommand {
-
-    Provider provider();
-
-    record Kakao(
-            String authorizationCode,
-            String codeVerifier
-    ) implements OauthLoginCommand {
-
-        @Override
-        public Provider provider() {
-            return Provider.KAKAO;
-        }
-    }
-
-    record Google(
-            String idToken
-    ) implements OauthLoginCommand {
-
-        @Override
-        public Provider provider() {
-            return Provider.GOOGLE;
-        }
-    }
-
-    // 목록에 없는 provider 경로로 들어온 요청 — 실패로 세고 거절하려고 핸들러까지 보낸다
-    record Unsupported(
-            String rawProvider
-    ) implements OauthLoginCommand {
-
-        // 대응하는 Provider가 없어 null이다 — 핸들러는 이 값을 받아 둔 채 거절하고, 실패 메트릭에 unknown으로 남긴다
-        @Override
-        public Provider provider() {
-            return null;
-        }
-    }
 }

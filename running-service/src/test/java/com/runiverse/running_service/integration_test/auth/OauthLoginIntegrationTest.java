@@ -74,11 +74,11 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     private OauthLoginResult login() {
-        return oauthLoginHandler.handle(new OauthLoginCommand.Kakao(AUTH_CODE, CODE_VERIFIER));
+        return oauthLoginHandler.handle(new OauthLoginCommand("kakao", null, AUTH_CODE, CODE_VERIFIER));
     }
 
     private OauthLoginResult googleLogin(String idToken) {
-        return oauthLoginHandler.handle(new OauthLoginCommand.Google(idToken));
+        return oauthLoginHandler.handle(new OauthLoginCommand("google", idToken, null, null));
     }
 
     @Test
@@ -150,7 +150,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     void oauthLoginWithInvalidAuthorizationCode() {
         // when & then
         assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
+                new OauthLoginCommand("kakao", null, "expired-code", CODE_VERIFIER)))
                 .isInstanceOf(OauthLoginFailedException.class);
 
         assertThat(userStore.size()).isZero();
@@ -184,7 +184,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 아무것도 저장되지 않는다")
     void oauthLoginWithUnsupportedProvider() {
         // when & then
-        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand("naver", null, null, null)))
                 .isInstanceOf(UnsupportedProviderException.class);
 
         assertThat(userStore.size()).isZero();
@@ -222,7 +222,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @DisplayName("지원하지 않는 provider면 요청한 provider 이름을 담아 실패 로그를 남긴다")
     void oauthLoginWithUnsupportedProviderLogsFailure() {
         // when
-        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand("naver", null, null, null)))
                 .isInstanceOf(UnsupportedProviderException.class);
         // then
         assertThat(handlerLog.messages(Level.INFO))
@@ -252,7 +252,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     void oauthLoginCountsExchangeFailureWithProvider() {
         // when -> 예외는 infra(OAuth 클라이언트)에서 던져져 핸들러를 통과한다
         assertThatThrownBy(() -> oauthLoginHandler.handle(
-                new OauthLoginCommand.Kakao("expired-code", CODE_VERIFIER)))
+                new OauthLoginCommand("kakao", null, "expired-code", CODE_VERIFIER)))
                 .isInstanceOf(OauthLoginFailedException.class);
 
         // then
@@ -288,7 +288,7 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     @DisplayName("지원하지 않는 provider는 요청 값 대신 unknown으로 센다")
     void oauthLoginCountsUnsupportedProviderAsUnknown() {
         // when
-        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand.Unsupported("naver")))
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand("naver", null, null, null)))
                 .isInstanceOf(UnsupportedProviderException.class);
 
         // then -> 요청 값을 태그로 쓰면 값의 종류가 무한히 늘어난다

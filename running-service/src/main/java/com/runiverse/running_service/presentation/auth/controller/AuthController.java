@@ -136,14 +136,21 @@ public class AuthController {
     public ResponseEntity<OauthLoginResponse> googleLogin(
             @Valid @RequestBody GoogleLoginRequest request
     ) {
-        return oauthLogin(new OauthLoginCommand.Google(request.idToken()));
+        return oauthLogin(new OauthLoginCommand(
+                "google",
+                request.idToken(),
+                null,
+                null
+        ));
     }
 
     @PostMapping("/oauth/kakao")
     public ResponseEntity<OauthLoginResponse> kakaoLogin(
             @Valid @RequestBody KakaoLoginRequest request
     ) {
-        return oauthLogin(new OauthLoginCommand.Kakao(
+        return oauthLogin(new OauthLoginCommand(
+                "kakao",
+                null,
                 request.authorizationCode(),
                 request.codeVerifier()
         ));
@@ -155,7 +162,7 @@ public class AuthController {
     public ResponseEntity<OauthLoginResponse> unsupportedOauthLogin(
             @PathVariable String provider
     ) {
-        return oauthLogin(new OauthLoginCommand.Unsupported(provider));
+        return oauthLogin(new OauthLoginCommand(provider, null, null, null));
     }
 
     private ResponseEntity<OauthLoginResponse> oauthLogin(OauthLoginCommand command) {

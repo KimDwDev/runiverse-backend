@@ -95,11 +95,11 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     }
 
     private UUID kakaoLogin() {
-        return oauthLoginHandler.handle(new OauthLoginCommand.Kakao(KAKAO_CODE, CODE_VERIFIER)).userId();
+        return oauthLoginHandler.handle(new OauthLoginCommand("kakao", null, KAKAO_CODE, CODE_VERIFIER)).userId();
     }
 
     private UUID googleLogin() {
-        return oauthLoginHandler.handle(new OauthLoginCommand.Google(GOOGLE_ID_TOKEN)).userId();
+        return oauthLoginHandler.handle(new OauthLoginCommand("google", GOOGLE_ID_TOKEN, null, null)).userId();
     }
 
     private void completeOnboarding(UUID userId, String nickname) {
