@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.running.application;
 
-import com.runiverse.running_service.application.running.command.finish.BoundaryPoint;
-import com.runiverse.running_service.application.running.command.finish.SplitAssembler;
-import com.runiverse.running_service.application.running.command.finish.TrackDistance;
-import com.runiverse.running_service.application.running.command.finish.TrackResampler;
+import com.runiverse.running_service.application.running.common.BoundaryPoint;
+import com.runiverse.running_service.application.running.common.SplitAssembler;
+import com.runiverse.running_service.application.running.common.TrackDistance;
+import com.runiverse.running_service.application.running.common.TrackResampler;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.SplitDraft;

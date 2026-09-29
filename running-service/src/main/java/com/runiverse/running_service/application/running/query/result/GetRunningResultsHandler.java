@@ -2,7 +2,7 @@ package com.runiverse.running_service.application.running.query.result;
 
 import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
-import com.runiverse.running_service.application.running.command.finish.PolylineDecoder;
+import com.runiverse.running_service.application.running.common.PolylineDecoder;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
 import com.runiverse.running_service.application.running.port.in.GetRunningResultsUsecase;

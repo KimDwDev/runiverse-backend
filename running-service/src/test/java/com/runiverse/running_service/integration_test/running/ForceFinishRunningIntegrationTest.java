@@ -4,11 +4,13 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishExecutor;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobCommand;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobHandler;
@@ -58,7 +60,12 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
     private static final LocalDateTime TRACK_START = LocalDateTime.of(2026, 9, 8, 19, 0, 0);
     // TrackDistance와 같은 지구 반경 — 어긋나면 의도한 거리와 측정 거리가 벌어진다
     private static final double METERS_PER_DEGREE = Math.toRadians(1) * 6_371_008.8;
-    // 초당 2.5m라 목표(5km)를 확실히 넘긴다
+    // 강제 종료가 거두는 사람은 목표를 못 채운 채 아직 뛰고 있던 사람이다 — 목표를 채우면
+    // 좌표 배치가 그 자리에서 끝내 버린다. 초당 2.5m라 약 4,500m(목표의 90%)로 제재선(80%) 위다
+    private static final int RUNNING_POINTS = 1_801;
+    // 약 3,000m(목표의 60%) — 제재선 아래
+    private static final int SHORT_POINTS = 1_201;
+    // 약 5,250m — 좌표 배치만으로 목표를 넘겨 강제 종료 전에 이미 끝난다
     private static final int COMPLETING_POINTS = 2_101;
 
     // 운영 설정과 같은 값
@@ -91,14 +98,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,  // CheckNicknameDuplicatePort
                 onboardingStore   // SaveOnboardingPort
         );
-        updateRunningLocationHandler = new UpdateRunningLocationHandler(
-                runningTrackStore,       // AppendRunningTrackPort
-                runningDistanceStore,    // LoadRunningDistancePort
-                runningDistanceStore,    // SaveRunningDistancePort
-                runningProgressPublisher, // PublishRunningProgressPort
-                newUpdateRunningComboJudge()
-        );
-        FinishRunningHandler finishRunningHandler = new FinishRunningHandler(
+        RunningFinisher runningFinisher = new RunningFinisher(
                 runningStore,       // LockRunningRoomPort
                 runningStore,       // LockRunningPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
@@ -116,6 +116,15 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 FINISH_PROPERTIES
         );
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                runningTrackStore,       // AppendRunningTrackPort
+                runningDistanceStore,    // LoadRunningDistancePort
+                runningDistanceStore,    // SaveRunningDistancePort
+                runningProgressPublisher, // PublishRunningProgressPort
+                newUpdateRunningComboJudge(),
+                new UpdateRunningFinishJudge(runningFinisher)
+        );
+        FinishRunningHandler finishRunningHandler = new FinishRunningHandler(runningFinisher);
         ForceFinishRunningRoomHandler forceFinishRunningRoomHandler =
                 new ForceFinishRunningRoomHandler(
                         runningStore,         // LockRunningPlayerPort
@@ -140,19 +149,19 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("뛴 사람은 러닝 종료로, 안 나타난 사람은 확정 후 이탈로 함께 닫는다")
     void closesRunnerAndNoShowInOneRoom() {
-        // given -> 2인 확정 방에서 A만 붙어 목표를 채웠고 B는 한 번도 오지 않았다
+        // given -> 2인 확정 방에서 A만 붙어 목표 직전까지 뛰었고 B는 한 번도 오지 않았다
         UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
         UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
         long roomId = givenStartedMatchRoom(runner, noShow);
-        runFor(runner, roomId, COMPLETING_POINTS);
+        runFor(runner, roomId, RUNNING_POINTS);
         schedule(roomId);
 
         // when
         fire(roomId);
 
-        // then -> 뛴 사람은 평소 종료와 똑같다. 기록도 남는다
+        // then -> 뛴 사람은 평소 종료와 똑같다 — 거리 비율로 판정하고 기록도 남긴다
         assertThat(storedPlayer(roomId, runner).getStatus())
-                .isEqualTo(RunningPlayerStatus.COMPLETED);
+                .isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
         assertThat(runningRecordStore.find(roomId, new UserId(runner))).isPresent();
         // 안 나타난 사람은 RUNNING을 거치지 않았으므로 조기 종료가 아니라 확정 후 이탈이다
         assertThat(storedPlayer(roomId, noShow).getStatus())
@@ -163,11 +172,11 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("제재는 안 나타난 사람에게만, 이탈 쪽 쿨다운으로 걸린다")
     void penalizesOnlyNoShowWithMatchCooldown() {
-        // given -> 목표를 채운 A는 제재 대상이 아니다
+        // given -> 제재선(80%)을 넘겨 뛴 A는 제재 대상이 아니다
         UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
         UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
         long roomId = givenStartedMatchRoom(runner, noShow);
-        runFor(runner, roomId, COMPLETING_POINTS);
+        runFor(runner, roomId, RUNNING_POINTS);
         schedule(roomId);
 
         // when
@@ -185,7 +194,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
         UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
         long roomId = givenStartedMatchRoom(runner, noShow);
-        runFor(runner, roomId, COMPLETING_POINTS);
+        runFor(runner, roomId, RUNNING_POINTS);
         schedule(roomId);
 
         // when
@@ -252,7 +261,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
         UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
         long roomId = givenStartedMatchRoom(runner, noShow);
-        runFor(runner, roomId, COMPLETING_POINTS);
+        runFor(runner, roomId, RUNNING_POINTS);
         schedule(roomId);
 
         // when
@@ -271,7 +280,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
         UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
         long roomId = givenStartedMatchRoom(runner, noShow);
-        runFor(runner, roomId, COMPLETING_POINTS);
+        runFor(runner, roomId, RUNNING_POINTS);
         schedule(roomId);
 
         // when
@@ -282,6 +291,52 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(runningRecordStore.size()).isOne();
         assertThat(storedRoom(roomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
         assertThat(cooldowns).containsOnlyKeys(noShow);
+    }
+
+    @Test
+    @DisplayName("제재선에 못 미친 채 뛰던 사람은 조기 종료 제재를 받는다")
+    void penalizesShortRunnerAsEarlyLeave() {
+        // given -> 뛰긴 했지만 목표의 60%에서 멈췄다
+        UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
+        UUID teammate = onboardedUser("teammate@runiverse.com", "같이뛴사람");
+        long roomId = givenStartedMatchRoom(runner, teammate);
+        runFor(runner, roomId, SHORT_POINTS);
+        runFor(teammate, roomId, RUNNING_POINTS);
+        schedule(roomId);
+
+        // when
+        fire(roomId);
+
+        // then -> 붙었으니 미출석(MATCHED_LEFT_*)이 아니라 러닝 종료 규칙의 조기 종료다
+        assertThat(storedPlayer(roomId, runner).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING_LEFT_PENALTY);
+        assertThat(storedPlayer(roomId, teammate).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
+        assertThat(cooldowns).containsOnlyKeys(runner);
+        assertThat(cooldowns.get(runner)).isEqualTo(RUNNING_COOLDOWN);
+    }
+
+    @Test
+    @DisplayName("목표를 채워 이미 끝난 사람은 강제 종료가 다시 건드리지 않는다")
+    void leavesAutoFinishedRunnerAlone() {
+        // given -> A는 좌표 배치로 목표를 채워 그 자리에서 끝났고, B는 한 번도 오지 않았다
+        UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
+        UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
+        long roomId = givenStartedMatchRoom(runner, noShow);
+        runFor(runner, roomId, COMPLETING_POINTS);
+        schedule(roomId);
+
+        // when
+        fire(roomId);
+
+        // then -> A의 완주와 기록은 그대로고, 강제 종료는 B만 닫는다
+        assertThat(storedPlayer(roomId, runner).getStatus())
+                .isEqualTo(RunningPlayerStatus.COMPLETED);
+        assertThat(runningRecordStore.size()).isOne();
+        assertThat(storedPlayer(roomId, noShow).getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_PENALTY);
+        assertThat(cooldowns).containsOnlyKeys(noShow);
+        assertThat(storedRoom(roomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
     }
 
     private void recordCooldown(UserId userId, Duration cooldown) {

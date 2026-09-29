@@ -1,10 +1,13 @@
 package com.runiverse.running_service.unit_test.running.application;
 
+import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
-import com.runiverse.running_service.application.running.command.finish.TrackDistance;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
+import com.runiverse.running_service.application.running.common.TrackDistance;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
@@ -14,13 +17,13 @@ import com.runiverse.running_service.application.running.port.out.RunningProgres
 import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import ch.qos.logback.classic.Level;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,11 +35,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -71,6 +76,11 @@ public class UpdateRunningLocationHandlerTest {
     // @InjectMocks는 목이 없는 생성자 인자에 null을 넣으므로 선언하지 않으면 NPE가 난다
     @Mock
     private UpdateRunningComboJudge updateRunningComboJudge;
+
+    // 목표 도달 판정과 종료 확정은 판정기의 몫이다 — 여기서는 무엇을 넘기고 결과를 어떻게 돌려주는지만 본다.
+    // 목이 기본으로 false를 돌려주므로 나머지 테스트는 끝나지 않은 러닝을 그대로 본다
+    @Mock
+    private UpdateRunningFinishJudge updateRunningFinishJudge;
 
     @InjectMocks
     private UpdateRunningLocationHandler updateRunningLocationHandler;
@@ -273,6 +283,7 @@ public class UpdateRunningLocationHandlerTest {
         verify(loadRunningDistancePort, never()).loadDistance(anyLong(), any());
         verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
         verify(publishRunningProgressPort, never()).publish(anyLong(), any());
+        verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
     }
 
     @Test
@@ -357,5 +368,82 @@ public class UpdateRunningLocationHandlerTest {
         // 재연결 직후 화면이 지나간 구간의 속도로 되돌아간다
         assertThat(captureSaved().lastPaceSecondsPerKm()).isEqualTo(STORED_PACE);
         assertThat(capturePublished().currentPaceSecondsPerKm()).isEqualTo(STORED_PACE);
+    }
+
+    @Test
+    @DisplayName("갱신한 누적 거리와 방의 목표로 종료를 판정한다")
+    void judgesFinishWithUpdatedDistance() {
+        // given
+        List<TrackPoint> points = List.of(trackPoint(0L), trackPoint(1L));
+
+        // when
+        updateRunningLocationHandler.handle(command(points));
+
+        // then -> 저장한 값과 같은 누적으로 판정해야 화면의 거리와 종료 시점이 어긋나지 않는다
+        double saved = captureSaved().meters();
+        verify(updateRunningFinishJudge).judge(
+                ROOM_ID, new UserId(USER_ID), TARGET_DISTANCE_METERS, saved);
+    }
+
+    @Test
+    @DisplayName("판정기가 러닝을 끝내면 끝났다고 돌려준다")
+    void returnsFinishedWhenJudgeFinishes() {
+        // given
+        given(updateRunningFinishJudge.judge(anyLong(), any(), any(), anyDouble())).willReturn(true);
+
+        // when
+        UpdateRunningLocationResult result =
+                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+
+        // then -> 이걸 보고 presentation이 RUNNING_FINISHED를 보낸다
+        assertThat(result.finished()).isTrue();
+    }
+
+    @Test
+    @DisplayName("판정기가 끝내지 않으면 끝나지 않았다고 돌려준다")
+    void returnsNotFinishedWhenJudgeDoesNotFinish() {
+        // given
+        given(updateRunningFinishJudge.judge(anyLong(), any(), any(), anyDouble())).willReturn(false);
+
+        // when
+        UpdateRunningLocationResult result =
+                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+
+        // then
+        assertThat(result.finished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료 판정은 진행 통지와 콤보 판정 뒤에 한다")
+    void judgesFinishLast() {
+        // given
+        List<TrackPoint> points = List.of(trackPoint(0L), trackPoint(1L));
+
+        // when
+        updateRunningLocationHandler.handle(command(points));
+
+        // then -> 목표를 넘은 배치의 진행이 먼저 나가야 방 사람들 화면에도 도달이 보인다
+        InOrder order = inOrder(appendRunningTrackPort, publishRunningProgressPort,
+                updateRunningComboJudge, updateRunningFinishJudge);
+        order.verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
+        order.verify(publishRunningProgressPort).publish(anyLong(), any());
+        order.verify(updateRunningComboJudge).judge(anyLong(), any(), anyDouble());
+        order.verify(updateRunningFinishJudge).judge(anyLong(), any(), any(), anyDouble());
+    }
+
+    @Test
+    @DisplayName("누적 거리를 못 읽으면 종료를 판정하지 않고 끝나지 않았다고 돌려준다")
+    void skipsFinishWhenDistanceLoadFails() {
+        // given -> 누적을 모르면 목표를 넘었는지도 모른다
+        given(loadRunningDistancePort.loadDistance(anyLong(), any()))
+                .willThrow(new RuntimeException("redis down"));
+
+        // when
+        UpdateRunningLocationResult result =
+                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+
+        // then -> 다음 배치가 다시 판정한다
+        assertThat(result.finished()).isFalse();
+        verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
     }
 }

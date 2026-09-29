@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.common.exception.ErrorCode;
 import com.runiverse.running_service.application.running.command.combo.StartRunningComboCommand;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
@@ -167,6 +168,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     }
 
     // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다
+    // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다.
+    // 다만 이 배치로 목표를 채워 러닝이 끝났으면 RUNNING_FINISHED를 보낸다
     private void handleLocationUpdate(WebSocketSession session, WebSocketEnvelope envelope)
             throws IOException {
         RunningLocationUpdateRequest request;
@@ -186,16 +189,24 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             sendError(session, RunningWebSocketErrorCode.RUNNING_NOT_STARTED, envelope.event());
             return;
         }
+        UpdateRunningLocationResult result;
         try {
-            updateRunningLocationUsecase.handle(new UpdateRunningLocationCommand(
+            result = updateRunningLocationUsecase.handle(new UpdateRunningLocationCommand(
                     userId(session).value(), startedRoomId,
                     (Integer) session.getAttributes().get(TARGET_DISTANCE_METERS),
                     toTrackPoints(request)));
         } catch (BusinessException e) {
-            // 유스케이스가 튕겨낸 것만 코드로 내보낸다
+            // 유스케이스가 튕겨낸 것만 코드로 내보낸다 — 자동 종료 실패도 여기로 온다
             sendError(session, e.getErrorCode(), envelope.event());
+            return;
+        }
+        // RUNNING_FINISH의 ack와 같은 메시지다 — 클라는 요청 없이 받아도 똑같이 처리한다:
+        // 로컬 트랙을 지우고 결과 화면으로 간다. 세션의 방은 RUNNING_FINISH와 같은 이유로 지우지 않는다
+        if (result.finished()) {
+            send(session, RunningMessageType.RUNNING_FINISHED.message());
         }
     }
+
 
     private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
         return request.locations().stream()

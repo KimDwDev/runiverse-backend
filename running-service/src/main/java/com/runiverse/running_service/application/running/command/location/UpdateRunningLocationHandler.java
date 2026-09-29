@@ -23,12 +23,14 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
     private final SaveRunningDistancePort saveRunningDistancePort;
     private final PublishRunningProgressPort publishRunningProgressPort;
     private final UpdateRunningComboJudge updateRunningComboJudge;
+    private final UpdateRunningFinishJudge updateRunningFinishJudge;
 
     @Override
-    public void handle(UpdateRunningLocationCommand command) {
+    public UpdateRunningLocationResult handle(UpdateRunningLocationCommand command) {
         UserId userId = new UserId(command.userId());
-        // 좌표 저장이 먼저다 — 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다
+        // 1. 좌표를 저장한다 — 가장 먼저다. 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다
         appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
+        // 2. 누적 거리를 이어 센다
         RunningDistance stored;
         try {
             stored = loadRunningDistancePort.loadDistance(command.runningRoomId(), userId);
@@ -37,10 +39,12 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
             // 건너뛴 배치의 곡선은 다음 배치가 직선으로 이어 라이브 표시에서만 빠진다 — 최종 기록이 바로잡는다
             log.error("[러닝] 누적 거리 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}",
                     command.runningRoomId(), userId.value(), e);
-            return;
+            // 누적을 모르면 목표 도달도 판정할 수 없다 — 다음 배치가 다시 판정한다
+            return new UpdateRunningLocationResult(false);
         }
         RunningDistance updated = RunningDistanceAccumulator.accumulate(stored, command.points());
         saveRunningDistancePort.saveDistance(command.runningRoomId(), userId, updated);
+        // 3. 방 참가자에게 진행 상황을 알린다
         publishRunningProgressPort.publish(command.runningRoomId(), new RunningProgress(
                 command.userId(),
                 updated.metersRounded(),
@@ -49,7 +53,12 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
                 // 직전 값이 그대로 유지된다
                 updated.lastPaceSecondsPerKm(),
                 false));   // TODO: 일시정지 고정값 — RUNNING_PAUSE/RESUME을 만들 때 실제 상태로 교체한다
-        // 진행 통지 뒤에 둔다 — 콤보는 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다
+        // 4. 콤보를 판정한다 — 진행 통지 뒤에 둔다. 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다
         updateRunningComboJudge.judge(command.runningRoomId(), userId, updated.meters());
+        // 5. 목표 도달을 판정한다 — 맨 마지막이다. 목표를 넘은 이 배치까지 트랙에 저장되고
+        //    진행 통지도 나간 뒤여야 한다
+        boolean finished = updateRunningFinishJudge.judge(
+                command.runningRoomId(), userId, command.targetDistanceMeters(), updated.meters());
+        return new UpdateRunningLocationResult(finished);
     }
 }
