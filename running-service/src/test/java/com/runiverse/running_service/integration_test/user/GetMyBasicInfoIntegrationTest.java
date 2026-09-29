@@ -41,7 +41,7 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     private static final String KAKAO_CODE = "kakao-authorization-code";
     private static final String KAKAO_ID = "1234567890";
     private static final String KAKAO_EMAIL = "runner@kakao.com";
-    private static final String GOOGLE_CODE = "google-authorization-code";
+    private static final String GOOGLE_ID_TOKEN = "google-id-token";
     private static final String GOOGLE_ID = "9876543210";
     private static final String GOOGLE_EMAIL = "runner@gmail.com";
     private static final String CODE_VERIFIER = "pkce-code-verifier";
@@ -62,7 +62,8 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
                 userStore         // SaveUserPort
         );
         oauthLoginHandler = new OauthLoginHandler(
-                oauthClient,       // ExchangeOauthCodePort
+                oauthClient,       // LoadKakaoProfilePort
+                oauthClient,       // LoadGoogleProfilePort
                 oauthUserResolver,
                 tokenProvider,     // GenerateTokenPort
                 tokenProvider,     // RefreshTokenHashPort
@@ -86,15 +87,19 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
                 userStore         // LoadOauthProviderPort
         );
         oauthClient.register(KAKAO_CODE, new OauthProfile(Provider.KAKAO, KAKAO_ID, KAKAO_EMAIL));
-        oauthClient.register(GOOGLE_CODE, new OauthProfile(Provider.GOOGLE, GOOGLE_ID, GOOGLE_EMAIL));
+        oauthClient.register(GOOGLE_ID_TOKEN,new OauthProfile(Provider.GOOGLE, GOOGLE_ID, GOOGLE_EMAIL));
     }
 
     private UUID signUp(String email) {
         return signUpHandler.handle(new SignUpCommand(issueVerificationTicket(email), PASSWORD)).userId();
     }
 
-    private UUID oauthLogin(String provider, String code) {
-        return oauthLoginHandler.handle(new OauthLoginCommand(provider, code, CODE_VERIFIER)).userId();
+    private UUID kakaoLogin() {
+        return oauthLoginHandler.handle(new OauthLoginCommand("kakao", null, KAKAO_CODE, CODE_VERIFIER)).userId();
+    }
+
+    private UUID googleLogin() {
+        return oauthLoginHandler.handle(new OauthLoginCommand("google", GOOGLE_ID_TOKEN, null, null)).userId();
     }
 
     private void completeOnboarding(UUID userId, String nickname) {
@@ -183,7 +188,7 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     @DisplayName("카카오로 가입한 사용자는 카카오 이메일과 KAKAO를 받는다")
     void reportsKakaoForKakaoUser() {
         // given
-        UUID userId = oauthLogin("kakao", KAKAO_CODE);
+        UUID userId = kakaoLogin();
 
         // when
         GetMyBasicInfoResult result = basicInfoOf(userId);
@@ -197,7 +202,7 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     @DisplayName("구글로 가입한 사용자는 구글 이메일과 GOOGLE을 받는다")
     void reportsGoogleForGoogleUser() {
         // given
-        UUID userId = oauthLogin("google", GOOGLE_CODE);
+        UUID userId = googleLogin();
 
         // when
         GetMyBasicInfoResult result = basicInfoOf(userId);
@@ -212,7 +217,7 @@ public class GetMyBasicInfoIntegrationTest extends IntegrationTestSupport {
     void otherUsersProviderDoesNotLeak() {
         // given -> 로컬과 소셜 계정이 함께 있는 상태
         UUID localUserId = signUp(EMAIL);
-        UUID kakaoUserId = oauthLogin("kakao", KAKAO_CODE);
+        UUID kakaoUserId = kakaoLogin();
 
         // when & then
         assertThat(basicInfoOf(localUserId).loginType()).isEqualTo("LOCAL");

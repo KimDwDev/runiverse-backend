@@ -1,17 +1,20 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthProviderUnavailableException;
+import com.runiverse.running_service.application.common.exception.BusinessException;
+import com.runiverse.running_service.application.auth.port.out.LoadKakaoProfilePort;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.application.user.port.out.UnlinkKakaoPort;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import com.runiverse.running_service.domain.user.vo.ProviderId;
-import com.runiverse.running_service.infrastructure.oauth.OauthClient;
 import com.runiverse.running_service.infrastructure.oauth.OauthErrorCode;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoTokenResponse;
 import com.runiverse.running_service.infrastructure.oauth.kakao.dto.KakaoUserResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpResponse;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.json.JsonMapper;
@@ -27,12 +31,13 @@ import java.io.IOException;
 
 @Slf4j
 @Component
-public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
+public class KakaoOauthClient implements LoadKakaoProfilePort, UnlinkKakaoPort {
 
     private static final String GRANT_TYPE = "authorization_code";
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String KAKAO_AK_PREFIX = "KakaoAK ";
     private static final String TARGET_ID_TYPE = "user_id";
+    private static final String API_LIMIT_EXCEEDED = "-10";
     private final RestClient restClient;
     private final KakaoOauthProperties properties;
     private final JsonMapper jsonMapper;
@@ -47,19 +52,18 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
     }
 
     @Override
-    public Provider provider() {
-        return Provider.KAKAO;
-    }
-
-    @Override
-    public OauthProfile exchange(String authorizationCode, String codeVerifier) {
+    public OauthProfile load(String authorizationCode, String codeVerifier) {
         try {
             String kakaoAccessToken = requestAccessToken(authorizationCode, codeVerifier);
             KakaoUserResponse user = fetchUser(kakaoAccessToken);
             return toProfile(user);
+        } catch (ResourceAccessException e) {
+            // 연결 실패·타임아웃 — 카카오 장애인지 우리 네트워크 문제인지는 여기서 가를 수 없다
+            log.error("[인증] 카카오 로그인 실패: 카카오 통신 오류", e);
+            throw new OauthProviderUnavailableException();
         } catch (RestClientException e) {
             log.error("[인증] 카카오 로그인 실패: 카카오 통신 오류", e);
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
     }
 
@@ -81,13 +85,12 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
                 .body(form)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류", res);
-                    throw new OauthCodeExchangeFailedException();
+                    throw failureOf("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류", res);
                 })
                 .body(KakaoTokenResponse.class);
         if (response == null || !StringUtils.hasText(response.accessToken())) {
             log.error("[인증] 카카오 토큰 요청 실패: access_token 누락");
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
         return response.accessToken();
     }
@@ -99,13 +102,12 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + kakaoAccessToken)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, res) -> {
-                    logFailure("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류", res);
-                    throw new OauthCodeExchangeFailedException();
+                    throw failureOf("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류", res);
                 })
                 .body(KakaoUserResponse.class);
         if (response == null || response.id() == null) {
             log.error("[인증] 카카오 사용자 조회 실패: id 누락");
-            throw new OauthCodeExchangeFailedException();
+            throw new OauthLoginFailedException();
         }
         return response;
     }
@@ -138,20 +140,33 @@ public class KakaoOauthClient implements OauthClient, UnlinkKakaoPort {
         // 보낸 데이터 에서 email이 있으면 account로 받아온다
         KakaoUserResponse.KakaoAccount account = response.kakaoAccount();
         String email = (account == null) ? null : account.email();
-        if (!StringUtils.hasText(email)) {
+        // 동의하지 않았거나, 인증되지 않았거나, 다른 카카오계정에 사용돼 만료된 이메일은 가입에 쓰지 않는다
+        // — 만료된 이메일은 카카오가 마스킹(ka***@kakao.com)해서 준다
+        if (!StringUtils.hasText(email)
+                || !Boolean.TRUE.equals(account.isEmailValid())
+                || !Boolean.TRUE.equals(account.isEmailVerified())) {
             throw new OauthEmailNotProvidedException();
         }
         return new OauthProfile(Provider.KAKAO, String.valueOf(response.id()), email);
     }
 
-    // 문구는 호출하는 곳에서 고정 문자열로 넘긴다 — 변하는 값은 key=value로만 붙인다
-    private void logFailure(String message, ClientHttpResponse response) throws IOException {
+    // 문구는 호출하는 곳에서 고정 문자열로 넘긴다 — 변하는 값은 key=value로만 붙인다.
+    // 카카오 쪽 사정(장애·점검·호출 한도 초과)이면 다시 시도해도 당장은 소용없어 503, 나머지는 사용자 인증 실패로 본다
+    private BusinessException failureOf(String message, ClientHttpResponse response) throws IOException {
         HttpStatusCode status = response.getStatusCode();
         String errorCode = OauthErrorCode.of(jsonMapper, response);
-        if (status.is5xxServerError()) {
+        if (isProviderUnavailable(status, errorCode)) {
             log.error(message + " - status={}, errorCode={}", status.value(), errorCode);
-            return;
+            return new OauthProviderUnavailableException();
         }
         log.warn(message + " - status={}, errorCode={}", status.value(), errorCode);
+        return new OauthLoginFailedException();
+    }
+
+    // 카카오 사용자 조회는 호출 한도 초과를 429가 아니라 400 + code -10으로 준다(카카오 REST API 응답 코드 표)
+    private static boolean isProviderUnavailable(HttpStatusCode status, String errorCode) {
+        return status.is5xxServerError()
+                || status.value() == HttpStatus.TOO_MANY_REQUESTS.value()
+                || API_LIMIT_EXCEEDED.equals(errorCode);
     }
 }

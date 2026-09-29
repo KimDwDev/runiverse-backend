@@ -16,7 +16,7 @@
 | 2 | POST | `/api/v1/auth/email/verifications/confirm` | 이메일 인증번호 확인 → `verificationTicket` 발급 — 회원가입 2단계 |
 | 3 | POST | `/api/v1/auth/signup` | 로컬 회원가입 (인증 티켓/비밀번호) — 가입 즉시 자동 로그인 |
 | 4 | POST | `/api/v1/auth/login` | 로컬 로그인 |
-| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
+| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — ID 토큰 서버 검증 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
 | 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
@@ -50,7 +50,7 @@
 |---|--------|------|------|
 | 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
 | 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 **[미구현]** |
+| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
@@ -151,7 +151,7 @@
 | 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개(13번 [MVP 제외], 14번 [미구현]) + SSE 스트림 1개(이벤트 2종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -170,7 +170,6 @@
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담아 돌려주므로 그쪽의 `null`은 "보내지 않았다"를 뜻한다.
 - **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 보낸 필드만 담는 기존 계약이라 그대로 유지한다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
-- **`[미구현]` 표기**: 만들기로 한 엔드포인트인데 아직 서버에 없다. `[MVP 제외]`와 **반대 뜻이다** — 그쪽은 "안 만든다"이고 이쪽은 "만들어야 하는데 못 만들었다"다. **마커가 사라지는 것이 곧 완료다.** 붙어 있는 동안 그 경로는 핸들러가 없어 정적 리소스로 떨어지고, `GlobalExceptionHandler`가 잡지 못해 `500`이 나간다 — 클라는 호출하지 않는다.
 
 ### 공통 에러 응답
 
@@ -479,11 +478,72 @@
 
 - **인증**: 불필요
 
-### 1-5. `POST /api/v1/auth/oauth/google` / 1-6. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
+### 1-5. `POST /api/v1/auth/oauth/google` — 구글 로그인 (ID 토큰)
 
-> **서버 매핑은 `POST /auth/oauth/{provider}` 하나다.** 위 두 경로는 클라이언트가 실제로 호출하는 구체 URL이다. `{provider}`는 `google`·`kakao`(대소문자 무시). 지원하지 않는 값은 404가 아니라 **400 `UNSUPPORTED_PROVIDER`**로 응답한다 — 경로 자체는 매칭되기 때문이다.
+- **Request** (필수)
 
-- **Request** (둘 다 필수, 구글·카카오 공통)
+```json
+{
+  "idToken": "ey..."
+}
+```
+
+앱은 `google_sign_in`을 `serverClientId`(서버의 웹 클라이언트 ID)로 초기화하고, 로그인 결과의 ID 토큰을 그대로 보낸다.
+
+- **동작**
+  - 서버가 구글 공개키로 ID 토큰 서명을 검증하고 `iss`(구글)·`aud`(서버의 웹 클라이언트 ID)·만료를 확인한다. `email_verified`가 `true`인 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
+- **에러 (401 Unauthorized — ID 토큰 검증 실패(위조·만료·다른 앱용))**
+
+```json
+{
+  "code": "OAUTH_LOGIN_FAILED",
+  "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
+}
+```
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "ID 토큰은 필수입니다."
+}
+```
+
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 소유가 확인되지 않은 이메일(`email_verified`가 `true`가 아님)도 여기에 해당한다
+
+```json
+{
+  "code": "OAUTH_EMAIL_NOT_PROVIDED",
+  "message": "이메일 제공에 동의해야 소셜 로그인을 할 수 있습니다."
+}
+```
+
+- **에러 (409 Conflict — 소셜 최초 가입인데 이메일이 기존 로컬 계정과 겹침)** — 자동 연동하지 않는다. 클라는 로컬 로그인으로 안내
+
+```json
+{
+  "code": "EMAIL_ALREADY_EXISTS",
+  "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (503 Service Unavailable — 구글 공개키를 받아 오지 못함)** — 사용자 자격 증명 문제가 아니다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 1-6. `POST /api/v1/auth/oauth/kakao` — 카카오 로그인 (인가 코드 + PKCE)
+
+- **Request** (둘 다 필수)
 
 ```json
 {
@@ -492,13 +552,15 @@
 }
 ```
 
-- **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **동작**
+  - 서버가 카카오에 인가 코드를 교환(PKCE `codeVerifier` 검증)하고 유저 정보를 조회한다. 유효하고(`is_email_valid`) 인증된(`is_email_verified`) 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
 - **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
-- **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
+- **에러 (401 Unauthorized — 코드 교환 실패(위조·만료·PKCE 불일치))**
 
 ```json
 {
-  "code": "OAUTH_CODE_EXCHANGE_FAILED",
+  "code": "OAUTH_LOGIN_FAILED",
   "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
 }
 ```
@@ -515,14 +577,9 @@
   "code": "INVALID_REQUEST",
   "message": "코드 검증값은 필수입니다."
 }
-
-{
-  "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
-}
 ```
 
-- **에러 (403 Forbidden — 카카오 이메일 제공 미동의 — 가입 거부)**
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 인증되지 않은 이메일, 다른 카카오계정에 사용돼 만료된 이메일(`is_email_verified`·`is_email_valid`가 `true`가 아님)도 여기에 해당한다. 만료된 이메일은 카카오가 마스킹해서 준다
 
 ```json
 {
@@ -537,6 +594,31 @@
 {
   "code": "EMAIL_ALREADY_EXISTS",
   "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (503 Service Unavailable — 카카오 5xx·호출 한도 초과·연결 실패)** — 사용자 자격 증명 문제가 아니다. 한도 초과는 429 또는 400 + 카카오 `code: -10`으로 온다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 소셜 로그인 미지원 provider — `POST /api/v1/auth/oauth/{provider}`
+
+> 1-5(`google`)·1-6(`kakao`) 외의 경로를 받는 자리다. 호출할 API가 아니라 목록에 없는 provider를 거절하는 규칙이라 번호를 붙이지 않는다.
+
+- **동작**: `{provider}`가 소문자 `google`·`kakao`가 아니면 404가 아니라 400으로 거절한다. 본문은 보지 않는다. `GOOGLE`·`KAKAO`처럼 대소문자가 다른 경로도 400이다
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "UNSUPPORTED_PROVIDER",
+  "message": "지원하지 않는 로그인 제공자입니다."
 }
 ```
 
@@ -817,7 +899,9 @@
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
   - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로 전용 스케줄러는 두지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
-- **에러 (409 Conflict)**: `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+- **에러 (409 Conflict)**
+  - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+  - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
 - **인증**: 필요
 
 **솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서이며, 보내는 메시지도 똑같다.
@@ -848,17 +932,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 이벤트 | 시점 |
 |---|---|
 | `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
-| `MATCH_ROOM_UPDATED` | 방 정보 갱신·취소·러닝 시작 — `data` = `RoomInfo` |
+| `MATCH_ROOM_UPDATED` | 인원 변동·방 취소·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다 |
+| `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 각 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다.
 - **keep-alive**: 주기적으로 주석 라인(`: ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
-#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원 [미구현]
-
-> **아직 서버에 없다.** `RunningMatchController`에 이 경로의 핸들러가 없어 정적 리소스 조회로 떨어지고, `NoResourceFoundException`은 `GlobalExceptionHandler`가 잡지 못해 **응답이 `500`이며 본문도 공통 에러 포맷을 따르지 않는다.** 아래 정의는 구현 시점의 계약이지 현재 동작이 아니다 — **클라는 구현 전까지 호출하지 않는다.**
->
-> 없는 동안 시간 선택 박스는 대기 인원과 `selectable` 없이 그린다. 마감이 지난 슬롯을 클라가 미리 거를 수 없으므로 `MATCH_SLOT_CLOSED`(409)가 경합이 아니라 **정상 경로로도** 나온다 — 받으면 그 슬롯을 지우고 다시 고르게 한다.
+#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
 - **Query**: `date`(YYYY-MM-DD, 생략 시 오늘), `targetDistanceMeters`(선택 — 주면 해당 거리 조건만 집계)
@@ -941,7 +1022,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
 - 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
-  - **14번이 `[미구현]`인 동안은 1차 차단이 없다** — 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 그 구간에서는 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
+  - **`slots`로 1차 차단하지 않는 동안에는** 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
 
 - **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
 
@@ -1164,6 +1245,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
+  | `ONBOARDING_NOT_COMPLETED` | `RUNNING_FINISH` 처리 중 온보딩 정보가 없음 |
   | `INTERNAL_SERVER_ERROR` | 예기치 못한 서버 오류 — 러닝은 계속된다. 표에 없는 오류는 이 코드로 마스킹된다 |
 
 - **`ERROR`로는 연결을 끊지 않는다.** 잘못된 메시지 하나 때문에 러닝 전체가 끊기면 안 되므로, 오류를 돌려주고 연결은 유지한다
@@ -1184,7 +1266,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | | 하는 일 | 이미 그 상태면 |
   |---|---|---|
   | 1 | 끝나지 않은 신청(`deleted_at` 없음)이 있고 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` — **나간 사람은 신청이 닫혀 여기서 걸린다** |
-  | 2 | 배정(`is_connected`)이 끊겨 있으면 거부한다 | `INVALID_ROOM_STATE` — 1번을 통과한 뒤 남는 방어선이다 |
+  | 2 | 배정(`is_connected`)이 끊겨 있으면 빈자리가 있을 때 다시 잇는다(재입장) | 끊겨 있지 않으면 통과. 그새 자리가 찼으면 `INVALID_ROOM_STATE` |
   | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
   | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
   | 5 | WS 세션을 방에 등록하고 세션이 `runningRoomId`를 기억한다(브로드캐스트 대상·이후 메시지의 방) | 덮어쓴다 |

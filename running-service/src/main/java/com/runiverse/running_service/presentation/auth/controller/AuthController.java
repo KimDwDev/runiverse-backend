@@ -20,8 +20,9 @@ import com.runiverse.running_service.application.auth.port.in.SendEmailVerificat
 import com.runiverse.running_service.application.auth.port.in.SignUpUsecase;
 import com.runiverse.running_service.application.auth.port.in.VerifyEmailCodeUsecase;
 import com.runiverse.running_service.presentation.auth.request.EmailVerificationRequest;
+import com.runiverse.running_service.presentation.auth.request.GoogleLoginRequest;
+import com.runiverse.running_service.presentation.auth.request.KakaoLoginRequest;
 import com.runiverse.running_service.presentation.auth.request.LoginRequest;
-import com.runiverse.running_service.presentation.auth.request.OauthLoginRequest;
 import com.runiverse.running_service.presentation.auth.request.RefreshRequest;
 import com.runiverse.running_service.presentation.auth.request.SignUpRequest;
 import com.runiverse.running_service.presentation.auth.request.VerifyEmailCodeRequest;
@@ -131,16 +132,40 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/oauth/{provider}")
-    public ResponseEntity<OauthLoginResponse> oauthLogin(
-            @PathVariable String provider,
-            @Valid @RequestBody OauthLoginRequest request
+    @PostMapping("/oauth/google")
+    public ResponseEntity<OauthLoginResponse> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest request
     ) {
-        OauthLoginCommand command = new OauthLoginCommand(
-                provider,
+        return oauthLogin(new OauthLoginCommand(
+                "google",
+                request.idToken(),
+                null,
+                null
+        ));
+    }
+
+    @PostMapping("/oauth/kakao")
+    public ResponseEntity<OauthLoginResponse> kakaoLogin(
+            @Valid @RequestBody KakaoLoginRequest request
+    ) {
+        return oauthLogin(new OauthLoginCommand(
+                "kakao",
+                null,
                 request.authorizationCode(),
                 request.codeVerifier()
-        );
+        ));
+    }
+
+    // 목록에 없는 provider — 고정 경로가 더 구체적이라 먼저 매칭되므로 google·kakao는 여기로 오지 않는다.
+    // 본문은 읽지 않는다: provider마다 본문 모양이 달라 검증할 기준이 없다
+    @PostMapping("/oauth/{provider}")
+    public ResponseEntity<OauthLoginResponse> unsupportedOauthLogin(
+            @PathVariable String provider
+    ) {
+        return oauthLogin(new OauthLoginCommand(provider, null, null, null));
+    }
+
+    private ResponseEntity<OauthLoginResponse> oauthLogin(OauthLoginCommand command) {
         OauthLoginResult result = oauthLoginUsecase.handle(command);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(new OauthLoginResponse(
