@@ -4,13 +4,15 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningHandler;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
 import com.runiverse.running_service.application.running.port.out.RoutePoint;
@@ -31,8 +33,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,10 +81,7 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningStore, onboardingStore, runningStore, runningStore);
         startRunningHandler = new StartRunningHandler(
                 runningStore, runningStore, runningStore, runningStore);
-        updateRunningLocationHandler = new UpdateRunningLocationHandler(
-                runningTrackStore, runningDistanceStore, runningDistanceStore,
-                runningProgressPublisher, newUpdateRunningComboJudge());
-        finishRunningHandler = new FinishRunningHandler(
+        RunningFinisher runningFinisher = new RunningFinisher(
                 runningStore, runningStore, runningTrackStore, onboardingStore, weatherProvider,
                 gpsTrackUploader, runningRecordStore, runningStore, runningTrackStore,
                 runningStore, runningStore,
@@ -92,6 +91,11 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningRecordStore,
                 runningRecordStore, onboardingStore,
                 PROPERTIES);
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                runningTrackStore, runningDistanceStore, runningDistanceStore,
+                runningProgressPublisher, newUpdateRunningComboJudge(),
+                new UpdateRunningFinishJudge(runningFinisher));
+        finishRunningHandler = new FinishRunningHandler(runningFinisher);
 
         InMemoryRunningResultStore resultStore =
                 new InMemoryRunningResultStore(runningStore, runningRecordStore);

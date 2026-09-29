@@ -4,34 +4,39 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
-import com.runiverse.running_service.application.running.command.finish.RunningFinishProperties;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningHandler;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,14 +91,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 runningStore,     // UpdateRunningRoomPort
                 runningStore      // UpdateRunningPlayerPort
         );
-        updateRunningLocationHandler = new UpdateRunningLocationHandler(
-                runningTrackStore,     // AppendRunningTrackPort
-                runningDistanceStore,  // LoadRunningDistancePort
-                runningDistanceStore,  // SaveRunningDistancePort
-                runningProgressPublisher, // PublishRunningProgressPort
-                newUpdateRunningComboJudge()
-        );
-        handler = new FinishRunningHandler(
+        RunningFinisher runningFinisher = new RunningFinisher(
                 runningStore,       // LockRunningRoomPort
                 runningStore,       // LockRunningPlayerPort
                 runningTrackStore,  // LoadRunningTrackPort
@@ -113,6 +111,15 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 PROPERTIES
         );
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                runningTrackStore,     // AppendRunningTrackPort
+                runningDistanceStore,  // LoadRunningDistancePort
+                runningDistanceStore,  // SaveRunningDistancePort
+                runningProgressPublisher, // PublishRunningProgressPort
+                newUpdateRunningComboJudge(),
+                new UpdateRunningFinishJudge(runningFinisher)
+        );
+        handler = new FinishRunningHandler(runningFinisher);
     }
 
     private UUID onboardedUser(String email, String nickname) {
@@ -514,5 +521,172 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 .isInstanceOf(NotRoomPlayerException.class);
         assertThat(storedPlayer(runningRoomId).getStatus())
                 .isEqualTo(RunningPlayerStatus.RUNNING);
+    }
+
+    // 매칭 방의 목표 거리 — 자동 종료는 목표가 있는 방에서만 돈다
+    private static final int TARGET_DISTANCE = 5_000;
+    // 초당 2.5m라 약 5,250m — 목표를 넘긴다
+    private static final int COMPLETING_POINTS = 2_101;
+
+    // 시작 스케줄러가 STARTED로 올린 매칭 방. 좌표를 보내기 전에 RUNNING_START를 마친 상태다
+    private Long startedMatchRoom(UUID... members) {
+        LocalDateTime startAt = LocalDateTime.now().minusMinutes(1);
+        List<SessionDraft> sessions = new ArrayList<>();
+        for (UUID member : members) {
+            RunningPlayer player = runningStore.create(RunningPlayer.builder()
+                    .userId(member)
+                    .status(RunningPlayerStatus.JOINED)
+                    .avgPace(AVG_PACE)
+                    .targetDistance(TARGET_DISTANCE)
+                    .startAt(startAt)
+                    .build());
+            player.start();
+            runningStore.update(player);
+            sessions.add(new SessionDraft(new UserId(member),
+                    player.getRunningPlayerId().orElseThrow(), 0, true));
+        }
+        RunningRoom room = runningStore.create(RunningRoom.builder()
+                .type(RunningRoomType.MATCH)
+                .status(RunningRoomStatus.STARTED)
+                .startAt(startAt)
+                .targetDistance(TARGET_DISTANCE)
+                .avgPace(AVG_PACE)
+                .currentPlayerCount(members.length)
+                .maxPlayerCount(4)
+                .sessions(sessions)
+                .build());
+        return room.getRunningRoomId().orElseThrow().value();
+    }
+
+    // WS 핸들러처럼 세션이 기억한 방의 목표를 실어 좌표 배치를 보낸다
+    private UpdateRunningLocationResult runTowardTarget(UUID userId, Long runningRoomId, int count) {
+        List<TrackPoint> points = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+        }
+        return updateRunningLocationHandler.handle(
+                new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));
+    }
+
+    private RunningPlayer storedPlayer(Long runningRoomId, UUID userId) {
+        RunningPlayerId playerId = storedRoom(runningRoomId).getSessions().stream()
+                .filter(session -> session.isSameUser(new UserId(userId)))
+                .findFirst()
+                .orElseThrow()
+                .getRunningPlayerId();
+        return runningStore.findPlayer(playerId.value()).orElseThrow();
+    }
+
+    @Test
+    @DisplayName("좌표 배치로 목표를 채우면 RUNNING_FINISH 없이 완주로 확정된다")
+    void autoFinishesWhenTargetReached() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = startedMatchRoom(userId);
+
+        // when -> 약 5,250m를 뛴 배치가 들어온다
+        UpdateRunningLocationResult result = runTowardTarget(userId, runningRoomId, COMPLETING_POINTS);
+
+        // then -> 끝났다고 돌려줘야 presentation이 RUNNING_FINISHED를 보낸다
+        assertThat(result.finished()).isTrue();
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.COMPLETED);
+        // 혼자 남은 참가자가 끝났으니 방도 닫히고, 버퍼는 비워진다
+        assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isTrue();
+    }
+
+    @Test
+    @DisplayName("자동 종료한 기록은 목표 지점에서 끊긴다")
+    void autoFinishedRecordIsCutAtTarget() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = startedMatchRoom(userId);
+
+        // when -> 목표를 약 250m 넘겨 뛰었다
+        runTowardTarget(userId, runningRoomId, COMPLETING_POINTS);
+
+        // then -> 넘친 거리는 기록에 넣지 않는다. 원본 트랙은 그대로 올라간다
+        RunningRecord record = runningRecordStore.find(runningRoomId, new UserId(userId))
+                .orElseThrow();
+        assertThat(record.getTotalDistance().meters()).isEqualTo(TARGET_DISTANCE);
+        assertThat(record.getSplits()).hasSize(TARGET_DISTANCE / 10);
+        assertThat(gpsTrackUploader.isEmpty()).isFalse();
+    }
+
+    @Test
+    @DisplayName("목표에 못 미친 좌표 배치는 러닝을 끝내지 않는다")
+    void doesNotAutoFinishBelowTarget() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = startedMatchRoom(userId);
+
+        // when -> 약 1,000m
+        UpdateRunningLocationResult result = runTowardTarget(userId, runningRoomId, 400);
+
+        // then
+        assertThat(result.finished()).isFalse();
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(runningRecordStore.size()).isZero();
+        assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("목표 없는 솔로 방은 얼마를 뛰어도 좌표 배치로 끝나지 않는다")
+    void doesNotAutoFinishSoloRoom() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+
+        // when -> 매칭 방이라면 끝났을 거리다
+        runFor(userId, runningRoomId, COMPLETING_POINTS);
+
+        // then -> 솔로는 사용자가 RUNNING_FINISH를 보내야 끝난다
+        assertThat(storedPlayer(runningRoomId).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(runningRecordStore.size()).isZero();
+    }
+
+    @Test
+    @DisplayName("먼저 목표를 채운 사람만 끝나고 방은 남은 사람이 끝날 때까지 열려 있다")
+    void keepsRoomOpenUntilLastRunnerFinishes() {
+        // given
+        UUID first = onboardedUser(EMAIL, NICKNAME);
+        UUID second = onboardedUser("second@runiverse.com", "두번째러너");
+        Long runningRoomId = startedMatchRoom(first, second);
+
+        // when -> 첫 번째 러너만 목표를 넘겼다
+        runTowardTarget(first, runningRoomId, COMPLETING_POINTS);
+        runTowardTarget(second, runningRoomId, 400);
+
+        // then
+        assertThat(storedPlayer(runningRoomId, first).getStatus())
+                .isEqualTo(RunningPlayerStatus.COMPLETED);
+        assertThat(storedPlayer(runningRoomId, second).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("자동 종료 뒤 늦게 온 배치와 RUNNING_FINISH는 기록을 덮어쓰지 않는다")
+    void ignoresLateBatchAndFinishAfterAutoFinish() {
+        // given -> 목표를 채워 이미 끝났다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = startedMatchRoom(userId);
+        runTowardTarget(userId, runningRoomId, COMPLETING_POINTS);
+
+        // when -> 전송 중이던 배치가 늦게 도착하고, 클라도 RUNNING_FINISH를 보낸다
+        UpdateRunningLocationResult late = runTowardTarget(userId, runningRoomId, COMPLETING_POINTS);
+        finish(userId, runningRoomId);
+
+        // then -> 늦은 배치도 끝났다고 돌려줘 클라가 로컬 트랙을 지울 수 있다. 기록은 하나뿐이다
+        assertThat(late.finished()).isTrue();
+        assertThat(runningRecordStore.size()).isEqualTo(1);
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.COMPLETED);
+        // 늦은 배치가 다시 쌓은 버퍼도 멱등 경로가 비운다
+        assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isTrue();
     }
 }

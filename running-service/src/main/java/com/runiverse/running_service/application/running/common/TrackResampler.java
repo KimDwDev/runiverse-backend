@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.running.command.finish;
+package com.runiverse.running_service.application.running.common;
 
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 

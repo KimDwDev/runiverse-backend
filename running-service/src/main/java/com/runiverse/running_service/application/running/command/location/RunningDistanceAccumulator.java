@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.running.command.location;
 
-import com.runiverse.running_service.application.running.command.finish.TrackDistance;
+import com.runiverse.running_service.application.running.common.TrackDistance;
 import com.runiverse.running_service.application.running.port.out.RunningDistance;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 

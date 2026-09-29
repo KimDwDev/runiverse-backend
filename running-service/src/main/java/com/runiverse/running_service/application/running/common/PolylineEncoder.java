@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.running.command.finish;
+package com.runiverse.running_service.application.running.common;
 
 import java.util.List;
 
