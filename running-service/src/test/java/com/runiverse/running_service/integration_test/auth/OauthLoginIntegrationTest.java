@@ -229,6 +229,28 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
                 .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=naver");
     }
 
+    @Test
+    @DisplayName("대소문자만 다른 provider도 지원하지 않는 provider로 거절하고 unknown으로 센다")
+    void oauthLoginWithCaseMismatchedProvider() {
+        // when -> 도메인은 소문자 이름과 정확히 같을 때만 인식한다
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand("GOOGLE", null, null, null)))
+                .isInstanceOf(UnsupportedProviderException.class);
+
+        // then
+        assertThat(handlerLog.messages(Level.INFO))
+                .containsExactly("[인증] 소셜 로그인 실패: 지원하지 않는 provider - provider=GOOGLE");
+        assertThat(oauthLoginCounter("unknown", "failure", "UNSUPPORTED_PROVIDER")).isNotNull();
+        assertThat(userStore.size()).isZero();
+    }
+
+    @Test
+    @DisplayName("provider가 공백뿐이면 도메인 예외 대신 UnsupportedProviderException으로 거절한다")
+    void oauthLoginWithBlankProvider() {
+        // when & then -> 도메인의 ProviderRequiredException이 그대로 나가면 500으로 가려진다
+        assertThatThrownBy(() -> oauthLoginHandler.handle(new OauthLoginCommand(" ", null, null, null)))
+                .isInstanceOf(UnsupportedProviderException.class);
+    }
+
     private Counter oauthLoginCounter(String provider, String result, String reason) {
         return meterRegistry.find("runiverse.auth.oauthlogin")
                 .tags("provider", provider, "result", result, "reason", reason)
