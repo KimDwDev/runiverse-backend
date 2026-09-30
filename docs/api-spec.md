@@ -27,7 +27,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 10 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
-| 13 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
+| 11 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 
 ### 3. 홈 화면
 
@@ -48,8 +48,8 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 12 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 13 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
