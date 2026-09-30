@@ -1695,13 +1695,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 항상 값이 있다
+      "type": "MATCH",                // MATCH | SOLO
+      "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
       "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
-      "type": "MATCH",                // MATCH | SOLO
-      "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
     }
   ]
@@ -1710,9 +1710,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
 - **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
-- **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
 - **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝이다. `INVITE`는 [MVP 제외] 예약값이라 나오지 않는다
 - **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
+- **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
 - **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
 - **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록 절)
 - **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
