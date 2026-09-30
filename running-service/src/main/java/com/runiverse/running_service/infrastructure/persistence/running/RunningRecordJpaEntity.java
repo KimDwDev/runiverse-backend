@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -46,7 +46,7 @@ import java.util.UUID;
 @Check(name = "ck_running_record_weather_code", constraints = "weather_code between 0 and 99")
 @Check(name = "ck_running_record_period", constraints = "end_at > start_at")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RunningRecordJpaEntity extends BaseTimeEntity {
+public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
