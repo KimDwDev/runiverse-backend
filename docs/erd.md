@@ -404,7 +404,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | feed_images.feed_id | **[MVP 제외]** 피드 이미지 조회 |
 | comments.feed_id | **[MVP 제외]** 댓글 목록 |
 | comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
-| running_records.user_id | 내 기록 조회 |
+| running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.user_id | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 탄다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |
