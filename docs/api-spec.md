@@ -85,7 +85,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
+| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
@@ -1683,14 +1683,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 7-1. `GET /api/v1/users/me/running-records` — 내 러닝 기록 목록
 
-- **화면**: 기록(캘린더), 피드 작성(러닝기록 템플릿 선택)
-- **Query는 두 모드 중 하나다.** 캘린더는 `from`·`to`(`YYYY-MM-DD`)를 함께 보내 양 끝을 포함한 최대 31일의 전체 기록을 받고 `nextCursor=null`로 반환한다. 최근 목록은 `from`·`to` 없이 `cursor`·`limit`(기본 20, 최대 50)로 페이지네이션한다
-- `from`·`to`는 `running_records.start_at`의 KST 달력 날짜 기준이다. 두 모드의 파라미터를 섞거나 한쪽만 보내거나 `from > to`이거나 31일을 초과하면 `400 INVALID_REQUEST`다
+- **화면**: 기록(주간 요약·주간 차트·기록 캘린더·날짜별 카드)
+- **Query**: `from`·`to`(`YYYY-MM-DD`) 둘 다 필수다. 양 끝을 포함한 기간의 기록을 한 번에 받으며 기간은 최대 31일이다 — 예: 이번 주는 `?from=2026-09-28&to=2026-10-04`, 한 달은 `?from=2026-09-01&to=2026-09-30`, 하루는 `from`과 `to`를 같은 날로 보낸다
+- 날짜는 `running_records.start_at`의 KST 달력 날짜 기준이다. **자정을 넘긴 러닝은 시작한 날에 속한다.** 미래 날짜도 받는다 — 이번 주 월~일을 조회하면 아직 오지 않은 요일이 들어간다
+- 정렬은 `startedAt` 오름차순이다
 - **Response `200 OK`**
 
 ```json
 {
-  "items": [
+  "runningRecords": [
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 항상 값이 있다
@@ -1698,15 +1699,54 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
+      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
+      "type": "MATCH",                // MATCH | SOLO
+      "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
     }
-  ],
-  "nextCursor": null
+  ]
 }
 ```
 
-- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절)
+- 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
+- **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
+- **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
+- **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝이다. `INVITE`는 [MVP 제외] 예약값이라 나오지 않는다
+- **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
+- **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
+- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록 절)
 - **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 종료일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 종료일보다 늦을 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 기간은 31일 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
+}
+```
+
+- 날짜가 `YYYY-MM-DD` 형식이 아니거나 없는 날짜(`2026-02-30`)면 마지막 기본 문구다. 형식 오류가 난 날짜는 순서·기간 검사를 하지 않는다
 - **인증**: 필요 (본인 기록만)
 
 ## 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
