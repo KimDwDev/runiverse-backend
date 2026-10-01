@@ -41,6 +41,12 @@ public enum RunningPlayerStatus {
         return this == MATCHED_LEFT_PENALTY || this == RUNNING_LEFT_PENALTY;
     }
 
+    // 러닝 단계에 들어간 상태인가 — 시작 전 이탈(MATCHED_LEFT_*)과 가른다
+    public boolean hasStartedRunning() {
+        return this == RUNNING || this == RUNNING_LEFT_PENALTY
+                || this == RUNNING_LEFT_NO_PENALTY || this == COMPLETED;
+    }
+
     public boolean isTerminal() {
         return allowedNext().isEmpty();
     }
