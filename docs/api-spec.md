@@ -27,7 +27,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 10 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
-| 13 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
+| 11 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 
 ### 3. 홈 화면
 
@@ -48,8 +48,8 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 12 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 13 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
@@ -85,73 +85,72 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
-| 20 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
+| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 20 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 21 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 22 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 23 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 24 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 25 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 26 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 27 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 28 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 29 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 30 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 32 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 33 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 34 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 35 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 31 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 32 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 33 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 34 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
-| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 43 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 44 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 45 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 46 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 35 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 36 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 37 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 38 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 39 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 40 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 41 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 42 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 43 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 44 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 45 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 47 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 48 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 49 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 50 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 54 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 55 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -162,7 +161,7 @@
 ## 0. 공통 규칙
 
 - **refreshToken**: 바디로 전달하고 클라이언트 Keychain/Keystore에 보관한다.
-- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2·7-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-2만 전체가 아니라 구간별로 잘라 `splits[].routes`에 싣는다), 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
+- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-2만 전체가 아니라 구간별로 잘라 `splits[].routes`에 싣는다), 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
@@ -1400,7 +1399,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
 - `profileImageUrl`·닉네임을 싣지 않는다 — 고빈도 메시지라 `userId`로만 지목하고 표시 정보는 진입 시 받은 참가자 목록에서 찾는다
 - **ack 없음** — 실패는 `ERROR`로 통지
-- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과·기록 상세 응답에 콤보 필드가 없다
+- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과 응답에 콤보 필드가 없다
 - 판정 규칙(붙는 거리·봐주는 횟수·신선도·보정)은 [feature-spec.md](feature-spec.md)의 러닝 콤보 절이 정본이다
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
@@ -1525,7 +1524,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
 - **`routes`는 서버가 폴리라인을 풀어서 내린다** — 저장은 `running_records.route_polyline`(encoded polyline)이지만 응답은 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. **러닝 결과(6-1·6-2) 중 전체 경로를 한 덩어리로 주는 곳은 여기뿐이다** — 6-2의 `routes`는 같은 경로를 구간별로 자른 조각이다
 - **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
-- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2·7-2)에만 쓴다
+- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2)에만 쓴다
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -1684,91 +1683,71 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 7-1. `GET /api/v1/users/me/running-records` — 내 러닝 기록 목록
 
-- **화면**: 기록(캘린더), 피드 작성(러닝기록 템플릿 선택)
-- **Query는 두 모드 중 하나다.** 캘린더는 `from`·`to`(`YYYY-MM-DD`)를 함께 보내 양 끝을 포함한 최대 31일의 전체 기록을 받고 `nextCursor=null`로 반환한다. 최근 목록은 `from`·`to` 없이 `cursor`·`limit`(기본 20, 최대 50)로 페이지네이션한다
-- `from`·`to`는 `running_records.start_at`의 KST 달력 날짜 기준이다. 두 모드의 파라미터를 섞거나 한쪽만 보내거나 `from > to`이거나 31일을 초과하면 `400 INVALID_REQUEST`다
+- **화면**: 기록(주간 요약·주간 차트·기록 캘린더·날짜별 카드)
+- **Query**: `from`·`to`(`YYYY-MM-DD`) 둘 다 필수다. 양 끝을 포함한 기간의 기록을 한 번에 받으며 기간은 최대 31일이다 — 예: 이번 주는 `?from=2026-09-27&to=2026-10-03`, 한 달은 `?from=2026-09-01&to=2026-09-30`, 하루는 `from`과 `to`를 같은 날로 보낸다
+- 날짜는 `running_records.start_at`의 KST 달력 날짜 기준이다. **자정을 넘긴 러닝은 시작한 날에 속한다.** 미래 날짜도 받는다 — 이번 주를 조회하면 아직 오지 않은 요일이 들어간다
+- 정렬은 `startedAt` 오름차순이다
 - **Response `200 OK`**
 
 ```json
 {
-  "items": [
+  "runningRecords": [
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 항상 값이 있다
+      "type": "MATCH",                // MATCH | SOLO
+      "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
+      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
       "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
-    }
-  ],
-  "nextCursor": null
-}
-```
-
-- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절)
-- **인증**: 필요 (본인 기록만)
-
-### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
-
-- **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**
-
-```json
-{
-  "runningRecordId": 501,
-  "runningRoomId": 125,
-  "startedAt": "2026-07-25T19:00:30",
-  "finishedAt": "2026-07-25T19:30:30",
-  "totalDistanceMeters": 5020,
-  "totalDurationSeconds": 1800,
-  "averagePaceSecondsPerKm": 359,
-  "averageCadenceSpm": 165,
-  "totalCaloriesKcal": 352,
-  "totalElevationGainMeters": 42,
-  "routes": [                            // 본인 경로 [위도, 경도]
-    [35.1795543, 129.0756416],
-    [35.1842012, 129.0831421]
-  ],
-  "splits": [
-    {
-      "splitNumber": 1,
-      "distanceMeters": 1000,
-      "durationSeconds": 345,
-      "averagePaceSecondsPerKm": 345,
-      "averageCadenceSpm": 162,
-      "caloriesKcal": 68,
-      "elevationChangeMeters": 12
     }
   ]
 }
 ```
 
-- `averageCadenceSpm`·`totalElevationGainMeters`와 각 구간의 `averageCadenceSpm`·`elevationChangeMeters`는 유효 표본이 부족하면 null이다
-- 마지막 구간의 `distanceMeters`는 기본 구간 거리인 1000m보다 짧을 수 있다
-- 최상위 `totalElevationGainMeters`는 누적 상승 고도이고 구간의 `elevationChangeMeters`는 순고도차이므로 구간값의 합과 일치하지 않을 수 있다
-- **경로는 `routes` 좌표 배열로 내린다**(6-1·6-2와 같은 형식) — 상세 화면은 기록 하나를 크게 그리므로 서버가 `running_records.route_polyline`을 풀어 보낸다. 시작·종료 마커는 `routes`의 첫 원소·끝 원소다. 목록(7-1)은 카드에 선만 그리고 한 응답에 여러 건이 실려 `routePolyline` 문자열을 그대로 쓴다
-- 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
+- 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
+- **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
+- **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝이다. `INVITE`는 [MVP 제외] 예약값이라 나오지 않는다
+- **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
+- **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
+- **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
+- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록 절)
+- **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
 
-- **에러 (403 Forbidden — 본인 기록 아님)**
-
-```json
-{
-  "code": "FORBIDDEN",
-  "message": "권한이 없습니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (400 Bad Request)**
 
 ```json
 {
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 종료일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 종료일보다 늦을 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 기간은 31일 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
 }
 ```
 
-- **인증**: 필요 (본인)
+- 날짜가 `YYYY-MM-DD` 형식이 아니거나 없는 날짜(`2026-02-30`)면 마지막 기본 문구다. 형식 오류가 난 날짜는 순서·기간 검사를 하지 않는다
+- **인증**: 필요 (본인 기록만)
 
 ## 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 

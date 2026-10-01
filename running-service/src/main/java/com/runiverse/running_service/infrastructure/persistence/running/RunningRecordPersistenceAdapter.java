@@ -2,9 +2,12 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
+import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
+import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
@@ -12,16 +15,22 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort,
-        LoadRecentRunningPacesPort {
+        LoadRecentRunningPacesPort, LoadMyRunningRecordsPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
     private static final int BATCH_SIZE = 100;
+    private static final List<RunningPlayerStatus> STARTED_STATUSES =
+            Arrays.stream(RunningPlayerStatus.values())
+                    .filter(RunningPlayerStatus::hasStartedRunning)
+                    .toList();
     private final EntityManager entityManager;
 
     @Override
@@ -90,6 +99,35 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                         """, RecentRunningPace.class)
                 .setParameter("userId", userId.value())
                 .setMaxResults(limit)
+                .getResultList();
+    }
+
+    @Override
+    public List<RunningRecordRow> loadByPeriod(UserId userId, LocalDateTime startInclusive,
+                                               LocalDateTime endExclusive) {
+        // 숨긴 방의 기록은 목록에서도 뺀다 — 결과 조회가 그 방을 없는 방으로 본다
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.running.port.out.RunningRecordRow(
+                            record.runningRecordId, record.room.runningRoomId, record.room.type,
+                            (SELECT COUNT(player)
+                             FROM RunningRoomSessionJpaEntity session
+                             JOIN RunningPlayerJpaEntity player
+                                 ON player.runningPlayerId = session.runningPlayerId
+                             WHERE session.room = record.room
+                               AND player.status IN :startedStatuses),
+                            record.startAt, record.totalDistance, record.totalDuration, record.avgPace,
+                            record.totalElevationGain, record.routePolyline)
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.userId = :userId
+                          AND record.room.deletedAt IS NULL
+                          AND record.startAt >= :startInclusive
+                          AND record.startAt < :endExclusive
+                        ORDER BY record.startAt, record.runningRecordId
+                        """, RunningRecordRow.class)
+                .setParameter("userId", userId.value())
+                .setParameter("startedStatuses", STARTED_STATUSES)
+                .setParameter("startInclusive", startInclusive)
+                .setParameter("endExclusive", endExclusive)
                 .getResultList();
     }
 

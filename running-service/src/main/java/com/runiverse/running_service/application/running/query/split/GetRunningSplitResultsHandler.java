@@ -40,13 +40,6 @@ public class GetRunningSplitResultsHandler implements GetRunningSplitResultsUsec
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_COMPLETED = "COMPLETED";
 
-    // 러닝 단계에 들어간 참가자만 남긴다 — 시작 전 이탈자는 제외한다
-    private static final Set<RunningPlayerStatus> RUNNING_STAGE = Set.of(
-            RunningPlayerStatus.RUNNING,
-            RunningPlayerStatus.RUNNING_LEFT_PENALTY,
-            RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY,
-            RunningPlayerStatus.COMPLETED);
-
     private final LoadRunningRoomPort loadRunningRoomPort;
     private final LoadRunningResultPlayersPort loadRunningResultPlayersPort;
     private final LoadRunningResultRecordPort loadRunningResultRecordPort;
@@ -64,7 +57,7 @@ public class GetRunningSplitResultsHandler implements GetRunningSplitResultsUsec
 
         List<RunningResultPlayer> roomPlayers = loadRunningResultPlayersPort.loadPlayers(roomId)
                 .stream()
-                .filter(player -> RUNNING_STAGE.contains(player.status()))
+                .filter(player -> player.status().hasStartedRunning())
                 .toList();
         if (roomPlayers.stream().noneMatch(player -> player.userId().equals(query.viewerId()))) {
             throw new NotRoomPlayerException();
