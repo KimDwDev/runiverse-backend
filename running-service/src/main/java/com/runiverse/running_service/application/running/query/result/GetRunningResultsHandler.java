@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,13 +33,6 @@ public class GetRunningResultsHandler implements GetRunningResultsUsecase {
     private static final String DELETED_NICKNAME = "탈퇴한 사용자";
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_COMPLETED = "COMPLETED";
-
-    // 러닝 단계에 들어간 참가자만 남긴다 — 시작 전 이탈자(MATCHED_LEFT_*)는 제외한다
-    private static final Set<RunningPlayerStatus> RUNNING_STAGE = Set.of(
-            RunningPlayerStatus.RUNNING,
-            RunningPlayerStatus.RUNNING_LEFT_PENALTY,
-            RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY,
-            RunningPlayerStatus.COMPLETED);
 
     private final LoadRunningRoomPort loadRunningRoomPort;
     private final LoadRunningResultPlayersPort loadRunningResultPlayersPort;
@@ -57,7 +49,7 @@ public class GetRunningResultsHandler implements GetRunningResultsUsecase {
         loadRunningRoomPort.loadById(roomId).orElseThrow(RunningResultNotFoundException::new);
 
         List<RunningResultPlayer> players = loadRunningResultPlayersPort.loadPlayers(roomId).stream()
-                .filter(player -> RUNNING_STAGE.contains(player.status()))
+                .filter(player -> player.status().hasStartedRunning())
                 .toList();
         // 2. 러닝에 들어가지 않은 사람은 이 방의 결과를 볼 수 없다
         if (players.stream().noneMatch(player -> player.userId().equals(query.viewerId()))) {
@@ -111,7 +103,7 @@ public class GetRunningResultsHandler implements GetRunningResultsUsecase {
     }
 
     // 응답은 두 값뿐이다 — 페널티 여부는 본인 매칭 쿨다운용 내부 판정이라 남의 화면에 뿌리지 않는다.
-    // RUNNING_STAGE로 이미 걸러 여기 오는 것은 넷뿐이므로, RUNNING이 아니면 전부 끝난 참가자다
+    // 러닝을 시작한 참가자만 걸러 여기 오는 것은 넷뿐이므로, RUNNING이 아니면 전부 끝난 참가자다
     private String status(RunningPlayerStatus status) {
         return status == RunningPlayerStatus.RUNNING ? STATUS_RUNNING : STATUS_COMPLETED;
     }
