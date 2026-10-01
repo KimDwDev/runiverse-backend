@@ -46,7 +46,7 @@ class SoloRunningE2eTest extends E2eTestSupport {
             .minusSeconds((long) POINT_COUNT * SECONDS_PER_STEP);
 
     @Test
-    @DisplayName("방 개설부터 결과 조회까지 실제 컨테이너 위에서 한 흐름으로 이어진다")
+    @DisplayName("방 개설부터 결과·기록 목록 조회까지 실제 컨테이너 위에서 한 흐름으로 이어진다")
     void fullFlow() {
         // given - 1. 온보딩을 마친 사용자가 솔로 방을 연다
         TestUser user = signUpAndOnboard();
@@ -119,6 +119,21 @@ class SoloRunningE2eTest extends E2eTestSupport {
         assertThat(splitPlayers).hasSize(1);
         assertThat(splitPlayers.get(0).get("userId")).isEqualTo(user.userId());
         assertThat((Integer) splitPlayers.get(0).get("durationSeconds")).isPositive();
+
+        // 5. 기록 목록에도 같은 러닝이 한 건 나온다 — 출발 인원은 결과 화면의 참가자 수와 같다
+        String day = trackStartAt.toLocalDate().toString();
+        Response records = get("/users/me/running-records?from=" + day + "&to=" + day, user.accessToken());
+        assertThat(records.status()).isEqualTo(200);
+        List<Map<String, Object>> runningRecords = records.objects("runningRecords");
+        assertThat(runningRecords).hasSize(1);
+        Map<String, Object> record = runningRecords.get(0);
+        assertThat(((Number) record.get("runningRoomId")).intValue()).isEqualTo((int) runningRoomId);
+        assertThat(record.get("type")).isEqualTo("SOLO");
+        assertThat(((Number) record.get("playerCount")).intValue()).isEqualTo(players.size());
+        assertThat(record.get("startedAt")).isEqualTo(results.text("startedAt"));
+        assertThat(record.get("totalDistanceMeters")).isEqualTo(me.get("totalDistanceMeters"));
+        assertThat(record.get("totalDurationSeconds")).isEqualTo(me.get("totalDurationSeconds"));
+        assertThat((String) record.get("routePolyline")).isNotBlank();
     }
 
     @Test
