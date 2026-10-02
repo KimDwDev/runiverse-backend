@@ -128,13 +128,7 @@ class MatchE2eTest extends E2eTestSupport {
     @DisplayName("온보딩을 마치지 않으면 매칭 조건에 쓸 페이스가 없어 409로 막힌다")
     void onboardingIsRequired() {
         // given - 가입만 하고 온보딩은 건너뛴다
-        String email = uniqueEmail();
-        post("/auth/email/verifications", Map.of("email", email));
-        Response verified = post("/auth/email/verifications/confirm",
-                Map.of("email", email, "code", sentVerificationCode(email)));
-        String accessToken = post("/auth/signup", Map.of(
-                "verificationTicket", verified.text("verificationTicket"),
-                "password", "Password123!")).text("accessToken");
+        String accessToken = signUp(uniqueEmail(), "Password123!");
 
         // when
         Response response = post("/running-matches", Map.of(

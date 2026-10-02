@@ -214,15 +214,9 @@ class SoloRunningE2eTest extends E2eTestSupport {
     @DisplayName("온보딩을 마치지 않으면 솔로 러닝을 시작할 수 없다")
     void onboardingIsRequired() {
         // given - 가입만 하고 온보딩은 건너뛴다. 평균 페이스가 없으면 방을 열 수 없다
-        String email = uniqueEmail();
-        post("/auth/email/verifications", Map.of("email", email));
-        Response verified = post("/auth/email/verifications/confirm",
-                Map.of("email", email, "code", sentVerificationCode(email)));
-        Response signedUp = post("/auth/signup", Map.of(
-                "verificationTicket", verified.text("verificationTicket"),
-                "password", "Password123!"));
+        String accessToken = signUp(uniqueEmail(), "Password123!");
         // when
-        Response response = post("/running-rooms/solo", Map.of(), signedUp.text("accessToken"));
+        Response response = post("/running-rooms/solo", Map.of(), accessToken);
         // then
         assertThat(response.status()).isEqualTo(409);
         assertThat(response.text("code")).isEqualTo("ONBOARDING_NOT_COMPLETED");
