@@ -6,10 +6,12 @@ import com.runiverse.running_service.application.running.port.out.ExistsActiveRu
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.LoadUserStatusPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -34,7 +36,7 @@ import java.util.stream.Stream;
 public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunningRoomPort,
         ExistsActiveRunningPlayerPort, LoadRunningRoomPort, LockRunningRoomPort, UpdateRunningRoomPort,
         LockRunningPlayerPort, UpdateRunningPlayerPort, LoadRoomPlayerPort,
-        ExistsRunningPlayerPort {
+        ExistsRunningPlayerPort, LoadUserStatusPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();
@@ -123,6 +125,25 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     public boolean existsRunning(RunningRoomId runningRoomId) {
         return playersOf(runningRoomId)
                 .anyMatch(player -> player.getStatus() == RunningPlayerStatus.RUNNING);
+    }
+
+    // 실제 쿼리처럼 활성 신청(deleted_at IS NULL)과 연결된 배정 행을 잇는다.
+    // 목표 거리·시작 시각은 방 쪽 값을 쓴다 — 솔로의 목표 없음(null)은 방에만 남는다
+    @Override
+    public Optional<UserStatusRow> loadStatus(UserId userId) {
+        return rooms.values().stream()
+                .flatMap(room -> room.getSessions().stream()
+                        .filter(session -> session.isConnected())
+                        .map(session -> players.get(session.getRunningPlayerId().value()))
+                        .filter(player -> player != null
+                                && player.getUserId().equals(userId) && player.isActive())
+                        .map(player -> new UserStatusRow(
+                                room.getRunningRoomId().orElseThrow().value(),
+                                room.getType(),
+                                room.getStatus(),
+                                room.getStartAt(),
+                                room.getTargetDistance().map(Distance::meters).orElse(null))))
+                .findFirst();
     }
 
     private Stream<RunningPlayer> playersOf(RunningRoomId runningRoomId) {
