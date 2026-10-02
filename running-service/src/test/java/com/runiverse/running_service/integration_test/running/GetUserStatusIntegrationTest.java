@@ -267,7 +267,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
         return userId;
     }
 
-    // 매칭 신청 핸들러는 페이크가 없어 신청이 남기는 신청·방·배정 행을 직접 만든다
+    // 마감이 지난 방은 신청으로 만들 수 없어(마감 슬롯은 막힌다) 신청·방·배정 행을 직접 만든다
     private Long matchingRoom(UUID userId, LocalDateTime startAt) {
         RunningPlayer player = runningStore.create(
                 RunningPlayer.request(userId, AVG_PACE, TARGET_DISTANCE, startAt));
