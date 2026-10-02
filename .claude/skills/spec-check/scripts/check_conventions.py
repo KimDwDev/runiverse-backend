@@ -28,6 +28,7 @@ FORBIDDEN = {
         ("jakarta.transaction", "트랜잭션 API 의존"),
         ("org.hibernate", "하이버네이트 의존"),
         ("com.fasterxml", "잭슨 의존"),
+        ("tools.jackson", "잭슨 의존"),
         ("io.micrometer", "메트릭 의존"),
         (f"{BASE_PKG}.application", "바깥 레이어 참조"),
         (f"{BASE_PKG}.infrastructure", "바깥 레이어 참조"),
@@ -433,20 +434,23 @@ def check_error_exposure_details(root: Path, scope: Path = None):
     complete_claim = scope is None
 
     if scope is not None:
-        scoped_files = java_files(root, scope)
+        scoped = {path.resolve() for path in java_files(root, scope)}
         exception_dir = base / "application/common/exception"
         global_files = {
-            (exception_dir / f"{name}.java").resolve() for name in ["ErrorCode", *enums]
-        } | {
+            (exception_dir / "ErrorCode.java").resolve(),
             (base / "presentation/common/exception/GlobalExceptionHandler.java").resolve(),
             (base / "presentation/common/exception/ErrorExposurePolicy.java").resolve(),
         }
-        complete_claim = any(path.resolve() in global_files for path in scoped_files)
+        complete_claim = bool(scoped & global_files)
         if not complete_claim:
             selected_codes, followed, traced_unresolved = trace_scoped_application_codes(
                 root, scope, enums
             )
             unresolved |= traced_unresolved
+            # 범위에 든 enum 파일은 그 enum의 상수만 본다
+            for name, codes in enums.items():
+                if (exception_dir / f"{name}.java").resolve() in scoped:
+                    selected_codes |= {f"{name}.{code}" for code in codes}
 
     handler = base / "presentation/common/exception/GlobalExceptionHandler.java"
     policy = base / "presentation/common/exception/ErrorExposurePolicy.java"
@@ -679,7 +683,7 @@ def check_outbound_role_ambiguities(root: Path, scope: Path = None):
 
 
 def check_unit_suffix(root: Path, scope: Path = None):
-    """요청·응답 DTO 필드의 단위 접미사 (api-convention.md '예외 0' 규칙).
+    """요청·응답 DTO 필드의 단위 접미사 (api-convention.md '물리량 단위').
 
     휴리스틱이다 — 이름에 물리량 키워드가 있는데 접미사가 없는 필드를 모은다.
     """
