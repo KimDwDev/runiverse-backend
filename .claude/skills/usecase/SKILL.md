@@ -20,7 +20,7 @@ description: >-
 
 ## 사전 확인
 
-`api-spec.md` 색인에서 대상 번호나 경로를 특정한다. 대상이 모호하거나 계약이 빠졌으면 수정 전에 한 번에 확인한다. `api-spec.md`는 §0 공통 규칙과 대상 기능 절을 함께 읽고, 나머지 문서는 아래 범위만 읽는다.
+`api-spec.md` 색인에서 대상 번호나 경로를 특정한다. 대상이 모호하거나 계약이 빠졌으면 수정 전에 한 번에 확인한다. 문서는 아래 범위만 읽는다.
 
 | 문서 | 확인할 것 |
 |---|---|
@@ -41,11 +41,11 @@ description: >-
 
 **1) 도메인** — 값 규칙이나 상태 전이가 있을 때만 변경한다. 프레임워크를 import하지 않는다.
 
-**2) 애플리케이션** — 상태 변경은 `command/<기능>/`에 `Command`·`Handler`(반환값이 있으면 `Result`), 조회는 `query/<기능>/`에 `Query`·`Handler`·`Result`를 두고, `port/in/<기능>Usecase`와 필요한 `port/out/`을 만든다. 포트는 작고 응집되게 나눈다. 출력 포트명은 동작·역할이 드러나게 짓는다. 유스케이스 거부 조건은 `application/<도메인>/exception/`에 둔다. 로그·메트릭을 남기면 `layer-patterns.md`의 "로그·메트릭"을 따른다.
+**2) 애플리케이션** — `architecture.md`의 패키지 구조대로 `command/`·`query/` 기능 패키지, `port/in`·`port/out`, 유스케이스 거부 조건용 `exception/`을 만든다. 로그·메트릭을 남기면 `layer-patterns.md`의 "로그·메트릭"을 따른다.
 
 **3) 에러 처리** — 애플리케이션 예외를 추가하거나 요청 값 규칙을 바꿀 때 `references/error-registration.md`를 따르고 DTO·VO 검증을 함께 반영한다.
 
-**4) 인프라** — JPA 엔티티는 `erd.md`의 제약을 그대로 반영한다. 도메인 ↔ 엔티티 변환은 어댑터가 맡고, 기존 도메인 어댑터가 있으면 `implements`만 추가한다.
+**4) 인프라** — JPA 엔티티는 `erd.md`의 제약을 그대로 반영한다. 도메인 ↔ 엔티티 변환은 어댑터가 맡는다. 같은 애그리거트·저장 기술의 포트는 기존 어댑터가 함께 구현할 수 있다.
 
 **5) 프레젠테이션** — 설정이 붙이므로 `@RequestMapping`에 `/api/v1`을 넣지 않는다. DTO 단위 접미사는 `api-convention.md` "물리량 단위"를 따른다. Bean Validation 메시지는 **`api-spec.md` 문구 그대로** 둔다.
 
@@ -57,8 +57,6 @@ description: >-
 | 통합 | `src/test/.../integration_test/` | 스프링 없이 페이크(`integration_test/fake/`)로 Handler를 조립해 유스케이스 흐름 검증 |
 | E2E | `e2e_test/` | 배포 이미지를 Docker로 띄워 HTTP·WebSocket으로 검증. `e2e_test/run-e2e.sh` |
 
-스프링 컨텍스트·DB를 띄우는 테스트는 없다 — JSON 필드명·JPQL·DB 제약은 단위·통합 테스트가 통과해도 검증된 게 아니다.
-
 테스트 제외 요청이 있으면 새 테스트를 만들지 않는다. 컴파일과 기존 테스트로 검증하고 미완료 커버리지를 보고한다.
 
 ## 검증
@@ -67,7 +65,7 @@ description: >-
 cd running-service && ./gradlew test
 ```
 
-응답 필드명·상태 코드·에러 코드, 포트의 응집도, 새 ErrorCode의 `EXPOSED_CODES` 등록을 확인한다. E2E는 Docker가 필요하므로 돌리지 못했으면 그 사실을 밝힌다.
+응답 필드명·상태 코드·에러 코드, 포트의 응집도, 새 에러 코드의 상태·노출 여부가 계약과 맞는지 확인한다. E2E는 Docker가 필요하므로 돌리지 못했으면 그 사실을 밝힌다.
 
 구현과 필요한 테스트를 작성하고 위 검증을 마쳐야 완료다. 구현 요약, 검증 결과, 남은 결정이나 실행하지 못한 항목만 보고한다.
 
