@@ -1,15 +1,23 @@
 package com.runiverse.e2e.user;
 
 import com.runiverse.e2e.E2eTestSupport;
+import com.runiverse.e2e.RunningWebSocket;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("배포 이미지 대상 설정·회원탈퇴 E2E 테스트")
 class UserAccountE2eTest extends E2eTestSupport {
+
+    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");   // 좌표 시각은 오프셋 없는 앱 시각이다
 
     @Test
     @DisplayName("설정은 기본값으로 시작하고, 한 필드만 바꿔도 전체 설정이 돌아온다")
@@ -104,5 +112,43 @@ class UserAccountE2eTest extends E2eTestSupport {
         assertThat(deleted.status()).isEqualTo(204);
         assertThat(post("/auth/login",
                 Map.of("email", user.email(), "password", user.password())).status()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("러닝 중에 탈퇴해도 받은 좌표까지로 러닝을 정리하고 탈퇴된다")
+    void accountIsDeletedWhileRunning() {
+        // given - 러닝을 시작하고 좌표를 보냈다
+        TestUser user = signUpAndOnboard();
+        long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
+                .number("runningRoomId");
+        try (RunningWebSocket socket = connectRunningWebSocket(user.accessToken())) {
+            socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
+            socket.await("RUNNING_STARTED");
+            socket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", List.of(point(0), point(1))));
+            // 좌표에는 ack가 없다 — 같은 연결은 순서대로 처리되니 헬스체크 응답으로 처리 완료를 기다린다
+            socket.send("HEALTH_CHECK", Map.of());
+            socket.await("HEALTH_CHECKED");
+        }
+        // 연결을 끊어도 러닝은 끝나지 않는다 — 탈퇴가 연결을 닫으므로 먼저 닫아 둔다
+
+        // when - 종료 처리가 탈퇴보다 먼저 돈다
+        Response deleted = delete("/users/me", user.accessToken());
+
+        // then
+        assertThat(deleted.status()).isEqualTo(204);
+        assertThat(post("/auth/login",
+                Map.of("email", user.email(), "password", user.password())).status()).isEqualTo(401);
+    }
+
+    private static Map<String, Object> point(int sequence) {
+        Map<String, Object> point = new HashMap<>();
+        point.put("sequence", sequence);
+        point.put("latitude", 37.5665 + sequence * 0.0001);
+        point.put("longitude", 126.9780);
+        point.put("accuracyMeters", 5.0);
+        point.put("cadenceSpm", 170);
+        point.put("recordedAt", LocalDateTime.now(APP_ZONE).minusSeconds(10 - sequence)
+                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        return point;
     }
 }
