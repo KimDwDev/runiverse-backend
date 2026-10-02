@@ -27,7 +27,7 @@ description: >-
 rg -n '@(RestController|Controller|RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|MessageMapping|SubscribeMapping)\b|WebSocketHandler' running-service/src/main/java -g '*.java'
 ```
 
-판정 기준은 항목별 문서다. 레이어·트랜잭션·포트는 `docs/architecture.md`, API 표면은 `docs/api-convention.md`·`docs/api-spec.md`, 저장 구조·enum은 `docs/erd.md`, 업무 동작은 `docs/feature-spec.md`를 본다. 같은 영역의 문서끼리 충돌하면 임의로 우선순위를 만들지 말고 조사 필요로 둔다.
+판정 기준은 항목별 문서다. 레이어·트랜잭션·포트는 `docs/architecture.md`, API 표면은 `docs/api-convention.md`·`docs/api-spec.md`, 저장 구조·enum은 `docs/erd.md`, 업무 동작은 `docs/feature-spec.md`, 로그·메트릭은 `docs/logging-convention.md`·`docs/metrics-convention.md`를 본다. 같은 영역의 문서끼리 충돌하면 임의로 우선순위를 만들지 말고 조사 필요로 둔다.
 
 ## 1. 구조 검사
 
@@ -40,16 +40,17 @@ python3 .claude/skills/spec-check/scripts/check_conventions.py . application/use
 
 종료 코드는 위반이 있어도 0이고, 인자·루트·범위가 잘못됐을 때만 2다. 2가 나오면 경로를 바로잡아 다시 실행하고, 그래도 실행하지 못하면 이 절의 항목을 수동 검사한 뒤 그 사실을 보고에 밝힌다. §2는 구조 검사의 대체가 아니다.
 
-스크립트는 레이어 의존 방향, application 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 등록 후보, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 출력 분류는 **후보**다 — 코드와 기준 문서를 직접 확인해 재분류하고, 스크립트 휴리스틱이 문서와 다르면 문서를 기준으로 판정한다.
+스크립트는 레이어 의존 방향(메트릭 의존 포함), command·query 패키지 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 등록 후보, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 출력 분류는 **후보**다 — 코드와 기준 문서를 직접 확인해 재분류하고, 스크립트 휴리스틱이 문서와 다르면 문서를 기준으로 판정한다. 검사 항목이 "0개"·"없음"으로만 나오는데 코드에 대상이 있으면 스크립트가 구조 변경을 못 따라간 것이다 — 통과로 보고하지 말고 수동 검사한다.
 
-범위를 좁혀 실행한 에러 코드 결과는 단독으로 판정하지 않는다. throw 지점 → application 예외 → application `ErrorCode` → `toStatus()` → `EXPOSED_CODES` 또는 마스킹까지 추적한다(domain의 동명 `ErrorCode`는 제외).
+범위를 좁혀 실행한 에러 코드 결과는 단독으로 판정하지 않는다. throw 지점 → application 예외 → 도메인별 `*ErrorCode` enum → 해당 `toStatus()` overload → `EXPOSED_CODES` 또는 마스킹까지 추적한다(domain의 동명 enum은 제외). throw 지점이 WebSocket 경로뿐인 코드는 HTTP 마스킹 후보로 나와도 핸들러가 직접 보내므로 조치 불필요다.
 
 스크립트가 보지 못하는 다음을 직접 확인한다.
 
 - 어댑터가 애그리거트를 반쪽만 복원해서 도메인 메서드가 죽은 코드가 됐는지
 - 같은 일을 하는 포트가 이름만 다르게 중복됐는지
 - Handler가 필요한 포트만 주입받는지 — 같은 애그리거트·저장 기술의 포트를 어댑터 하나가 함께 구현하는 것도, 나누는 것도 그 자체로는 위반이 아니다
-- 포트 구현체의 `*Adapter`·`*Client`·`*Router` 접미사가 실제 역할과 맞는지
+- 포트 구현체의 `*Adapter`·`*Client`·`*Router`·`*Registry` 접미사가 실제 역할과 맞는지
+- 로그가 레이어별 규칙(레벨·찍는 위치·남기지 않는 것)을, 메트릭이 기록 위치·태그 규칙을 따르는지 — `logging-convention.md` "전환 중" 절에 해당하는 기존 코드는 위반으로 올리지 않는다
 
 ## 2. 명세와 구현 대조
 
