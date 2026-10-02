@@ -61,8 +61,7 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
     private static final String PASSWORD = "Password123!";
     private static final int AVG_PACE = 330;
     private static final int TARGET_DISTANCE = 5_000;
-    // 내일 슬롯이라 언제 돌려도 모집이 마감되지 않는다
-    private static final LocalDateTime SLOT = LocalDate.now().plusDays(1).atTime(19, 0);
+    private static final LocalDateTime SLOT = LocalDate.now().plusDays(1).atTime(19, 0);   // 마감되지 않는 내일 슬롯
 
     // 운영 설정과 같은 값
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
@@ -269,8 +268,7 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("러닝이 시작된 뒤에는 취소로 끊을 수 없다")
     void rejectsAfterRunningStarted() {
-        // given -> 시작 시각이 지나 방이 STARTED고 본인도 뛰는 중이다.
-        // 여기서 끊으면 트랙과 기록 없이 신청만 끝난다
+        // given -> 시작 시각이 지나 방이 STARTED고 본인도 뛰는 중이다
         UUID userId = onboardedUser();
         UUID otherId = onboardedUser();
         Long runningRoomId = givenRoom(RunningRoomStatus.STARTED,
@@ -359,7 +357,7 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
                 .getRunningPlayerId().orElseThrow();
     }
 
-    // 끝난 신청도 찾는다 — 세션을 거쳐 방의 참가자를 읽는다
+    // 끝난 신청도 찾는다
     private RunningPlayer playerOf(UUID userId, Long runningRoomId) {
         return runningStore.load(new RunningRoomId(runningRoomId), new UserId(userId)).orElseThrow();
     }

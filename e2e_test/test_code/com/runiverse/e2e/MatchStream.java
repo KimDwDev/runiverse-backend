@@ -19,18 +19,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
-/**
- * 매칭 이벤트 스트림(SSE)을 컨테이너 밖에서 구독하는 테스트 클라이언트.
- * SSE는 줄 단위 텍스트라 라이브러리 없이 JDK HttpClient의 줄 스트림만으로 읽는다.
- */
+/** 매칭 이벤트 스트림(SSE) 테스트 클라이언트. 줄 단위 텍스트라 JDK HttpClient만으로 읽는다. */
 public final class MatchStream implements AutoCloseable {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
     private static final String EVENT_PREFIX = "event:";
     private static final String DATA_PREFIX = "data:";
-    // 서버 이벤트 이름과 겹치지 않는 내부 표지
-    private static final String STREAM_ENDED = "__STREAM_ENDED__";
+    private static final String STREAM_ENDED = "__STREAM_ENDED__";   // 서버 이벤트와 구분하는 종료 표지
 
     private final int status;
     private final Stream<String> lines;
@@ -49,8 +45,7 @@ public final class MatchStream implements AutoCloseable {
                 .header("Authorization", "Bearer " + accessToken)
                 .GET()
                 .build();
-        // 요청 timeout은 걸지 않는다 — 응답 헤더 뒤에도 본문이 계속 흘러오는 연결이다.
-        // 헤더가 오기까지만 여기서 기다린다
+        // 본문이 계속 흘러오는 연결이라 요청 timeout 대신 헤더 수신까지만 기다린다
         HttpResponse<Stream<String>> response = awaitHeaders(
                 httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofLines()));
         BlockingQueue<Map<String, Object>> received = new LinkedBlockingQueue<>();
@@ -81,8 +76,7 @@ public final class MatchStream implements AutoCloseable {
                 continue;
             }
             if (STREAM_ENDED.equals(message.get("event"))) {
-                // 끝난 스트림에는 더 올 것이 없다 — 다음 대기도 바로 끝나게 표지를 되돌려 둔다
-                received.add(message);
+                received.add(message);   // 다음 대기도 바로 실패하게 되돌린다
                 throw new IllegalStateException(
                         "%s 를 기다리는 중 스트림이 끝났습니다 — %s".formatted(event, message.get("data")));
             }
@@ -94,7 +88,6 @@ public final class MatchStream implements AutoCloseable {
 
     @Override
     public void close() {
-        // 본문 스트림을 닫으면 구독이 취소되고 연결이 끊긴다 — 서버는 이걸 클라 종료로 받는다
         lines.close();
     }
 
@@ -116,11 +109,9 @@ public final class MatchStream implements AutoCloseable {
                     data.append(line.substring(DATA_PREFIX.length()).trim());
                 }
             });
-            // 서버가 complete()로 닫은 경우다(연결 교체·회원탈퇴)
             received.add(Map.of("event", STREAM_ENDED, "data", "서버가 스트림을 닫았습니다"));
         } catch (RuntimeException e) {
-            // close()로 끊어도 여기로 온다 — 그때는 기다리는 쪽이 없어 표지가 그냥 남는다.
-            // 대기 중에 끊긴 것이면 원인이 타임아웃으로 뭉개지지 않게 대기 쪽에서 드러낸다
+            // 끊긴 원인이 대기 쪽에서 타임아웃으로 뭉개지지 않게 넘긴다
             received.add(Map.of("event", STREAM_ENDED, "data", e.toString()));
         }
     }
@@ -150,8 +141,7 @@ public final class MatchStream implements AutoCloseable {
         }
     }
 
-    // 포기한 요청이 뒤늦게 응답하면 읽을 주체가 없는 연결이 남는다 — 취소하고,
-    // 취소보다 응답이 먼저 와 있었으면 그 본문을 닫는다
+    // 취소보다 먼저 도착한 응답도 닫아야 연결이 남지 않는다
     private static void abandon(CompletableFuture<HttpResponse<Stream<String>>> future) {
         if (!future.cancel(true)) {
             HttpResponse<Stream<String>> response = future.getNow(null);

@@ -128,8 +128,7 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
         users.put(userId.value(), replaced);
     }
 
-    // 사진 URL 조회가 users에서 key를 읽으므로 반영도 여기에 남긴다.
-    // 변경 핸들러만 보는 테스트는 InMemoryProfileImageStore를 쓴다
+    // 사진 URL 조회가 users에서 key를 읽어 반영도 여기에 남긴다
     @Override
     public void updateProfileImage(UserId userId, ProfileImageKey profileImageKey) {
         replaceProfileImageKey(userId, profileImageKey.value());

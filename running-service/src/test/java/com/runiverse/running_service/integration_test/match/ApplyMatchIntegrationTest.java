@@ -63,8 +63,7 @@ public class ApplyMatchIntegrationTest extends IntegrationTestSupport {
 
     private static final String PASSWORD = "Password123!";
     private static final int TARGET_DISTANCE = 5_000;
-    // 내일 슬롯이라 언제 돌려도 모집이 마감되지 않는다
-    private static final LocalDateTime SLOT = LocalDate.now().plusDays(1).atTime(19, 0);
+    private static final LocalDateTime SLOT = LocalDate.now().plusDays(1).atTime(19, 0);   // 마감되지 않는 내일 슬롯
 
     // 운영 설정과 같은 값
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
@@ -163,7 +162,6 @@ public class ApplyMatchIntegrationTest extends IntegrationTestSupport {
         assertThat(executeAtOf(ScheduledJobType.RUNNING_START, runningRoomId)).isEqualTo(SLOT);
         assertThat(executeAtOf(ScheduledJobType.RUNNING_FORCE_FINISH, runningRoomId))
                 .isEqualTo(SLOT.plus(FORCE_FINISH_OFFSET));
-        // 신청 행은 활성이고 아직 참가 대기다
         assertThat(runningStore.loadActive(new UserId(userId))).isPresent();
     }
 

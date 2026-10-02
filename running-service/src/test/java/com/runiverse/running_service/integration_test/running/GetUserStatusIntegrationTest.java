@@ -159,7 +159,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
         Long runningRoomId = openSoloRoomHandler.handle(
                 new OpenSoloRoomCommand(userId)).runningRoomId();
 
-        // then -> 솔로는 모집 없이 확정된 채로 태어나 곧바로 RUNNING_START를 보낼 수 있다
+        // then -> 솔로는 모집 없이 확정된 채로 태어난다
         GetUserStatusResult result = statusOf(userId);
         assertThat(result.status()).isEqualTo(UserRunningStatus.READY);
         assertThat(result.type()).isEqualTo(RunningRoomType.SOLO);
@@ -185,7 +185,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
         assertThat(statusOf(userId).status()).isEqualTo(UserRunningStatus.RUNNING);
         assertThat(statusOf(userId).runningRoomId()).isEqualTo(runningRoomId);
 
-        // when -> 종료가 신청의 deleted_at을 찍어 활성 신청이 사라진다
+        // when
         runFor(userId, runningRoomId);
         finishRunningHandler.handle(new FinishRunningCommand(runningRoomId, userId, false));
 
@@ -217,11 +217,11 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("마감이 지났는데 아직 MATCHING인 방은 READY로 답한다")
     void matchingRoomAfterCloseIsReady() {
-        // given -> 확정 예약이 아직 깨지 않은 틈이다. 방은 MATCHING 그대로다
+        // given -> 확정 예약이 아직 깨지 않아 방은 MATCHING 그대로다
         UUID userId = onboardedUser(EMAIL, NICKNAME);
         matchingRoom(userId, LocalDateTime.now().plus(CLOSE_OFFSET).minusMinutes(1));
 
-        // when & then -> 대기 화면을 그리면 잠시 뒤 화면이 다시 바뀐다
+        // when & then
         assertThat(statusOf(userId).status()).isEqualTo(UserRunningStatus.READY);
     }
 
@@ -235,7 +235,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
         // when
         GetUserStatusResult result = statusOf(userId);
 
-        // then -> 홈 매칭 버튼에 남은 시간을 그린다
+        // then
         assertThat(result.status()).isEqualTo(UserRunningStatus.IDLE);
         assertThat(result.cooldownUntil())
                 .isCloseTo(LocalDateTime.now().plus(COOLDOWN), within(5, SECONDS));

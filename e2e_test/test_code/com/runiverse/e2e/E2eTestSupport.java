@@ -130,7 +130,6 @@ public abstract class E2eTestSupport {
         return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken);
     }
 
-    /** 매칭 이벤트 스트림을 연다. 활성 신청이 없으면 404로 거절되어 이벤트가 오지 않는다. */
     protected MatchStream openMatchStream(String accessToken) {
         return MatchStream.open(HTTP_CLIENT, BASE_URL + "/running-matches/stream", accessToken);
     }

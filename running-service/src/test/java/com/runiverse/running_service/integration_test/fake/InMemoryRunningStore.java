@@ -106,7 +106,6 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         return loadActive(userId);
     }
 
-    // lockActive와 조건이 같다 — 잠그지 않는 것만 다르다
     @Override
     public Optional<RunningPlayer> loadActive(UserId userId) {
         return players.values().stream()
@@ -115,7 +114,6 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .map(player -> copyWithId(player, player.getRunningPlayerId().orElseThrow().value()));
     }
 
-    // 스냅샷 조회 — lockById와 같다
     @Override
     public Optional<RunningRoom> loadDetailById(RunningRoomId runningRoomId) {
         return loadById(runningRoomId);
@@ -153,8 +151,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .anyMatch(player -> player.getStatus() == RunningPlayerStatus.RUNNING);
     }
 
-    // 실제 쿼리처럼 활성 신청(deleted_at IS NULL)과 연결된 배정 행을 잇는다.
-    // 목표 거리·시작 시각은 방 쪽 값을 쓴다 — 솔로의 목표 없음(null)은 방에만 남는다
+    // 목표 거리는 방 값을 쓴다 — 솔로의 목표 없음(null)은 방에만 남는다
     @Override
     public Optional<UserStatusRow> loadStatus(UserId userId) {
         return rooms.values().stream()
@@ -249,7 +246,6 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         return players.size();
     }
 
-    // 매칭 조회 페이크가 방을 훑는다 — 저장한 순서 그대로
     public List<RunningRoom> findAllRooms() {
         return List.copyOf(rooms.values());
     }

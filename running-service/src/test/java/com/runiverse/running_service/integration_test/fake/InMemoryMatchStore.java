@@ -18,8 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-// MatchPersistenceAdapter를 대신한다 — 실제 쿼리처럼 배정 행(is_connected)을 거쳐 방과 참가자를 잇는다.
-// 방 숨김(running_rooms.deleted_at)은 도메인에 없어 걸러내지 않는다
+// MatchPersistenceAdapter를 대신한다 — 방 숨김(deleted_at)은 도메인에 없어 걸러내지 않는다
 public class InMemoryMatchStore implements LoadMatchRoomPort, LoadMatchPlayersPort, LoadMatchCandidatesPort {
 
     private final InMemoryRunningStore runningStore;
@@ -50,8 +49,6 @@ public class InMemoryMatchStore implements LoadMatchRoomPort, LoadMatchPlayersPo
                 .toList();
     }
 
-    // 실제 쿼리처럼 같은 슬롯·거리에서 모집 중이고 자리가 남은 방만 준다.
-    // 신청자가 그 방을 나간 횟수는 세션이 없으면 0이다
     @Override
     public List<MatchCandidate> loadCandidates(UserId userId, LocalDateTime startAt,
                                                int targetDistanceMeters) {

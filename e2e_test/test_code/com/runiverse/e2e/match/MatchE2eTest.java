@@ -18,13 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("배포 이미지 대상 매칭 E2E 테스트")
 class MatchE2eTest extends E2eTestSupport {
 
-    // 앱은 APP_TIME_ZONE으로 돌고 시각에는 오프셋이 없다 — 호스트 시간대로 만들면 어긋난다
-    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");
+    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");   // 호스트 시간대로 만들면 슬롯이 어긋난다
     private static final int CLOSE_OFFSET_MINUTES = 10;   // match.close-offset
     private static final int ONBOARDING_PACE = 330;       // signUpAndOnboard의 평균 페이스
 
-    // DB를 비울 수 없어 같은 슬롯·거리로 신청하면 테스트끼리 한 방에 합쳐진다 —
-    // 테스트마다 다른 조합을 쓴다. 내일 슬롯이라 언제 돌려도 모집이 마감되지 않는다
+    // 같은 슬롯·거리면 테스트끼리 한 방에 합쳐져 테스트마다 다른 내일 슬롯을 쓴다
     private static final LocalDate TOMORROW = LocalDate.now(APP_ZONE).plusDays(1);
     private static final LocalDateTime FLOW_SLOT = TOMORROW.atTime(18, 0);
     private static final LocalDateTime GUARD_SLOT = TOMORROW.atTime(18, 30);
@@ -77,7 +75,6 @@ class MatchE2eTest extends E2eTestSupport {
             assertThat(userIdsOf(stream.await("MATCH_ROOM_UPDATED")))
                     .containsExactly(host.userId());
             assertThat(get("/users/me/status", guest.accessToken()).text("status")).isEqualTo("IDLE");
-            // 제재 없는 취소라 쿨다운도 없다
             assertThat(get("/users/me/status", guest.accessToken()).text("cooldownUntil")).isNull();
         }
 
@@ -102,13 +99,11 @@ class MatchE2eTest extends E2eTestSupport {
         assertThat(cancelWithout.status()).isEqualTo(404);
         assertThat(cancelWithout.text("code")).isEqualTo("NOT_FOUND");
 
-        // 같은 슬롯이든 다른 슬롯이든 두 번째 신청은 막힌다
         assertThat(apply(user, GUARD_SLOT, DISTANCE).status()).isEqualTo(201);
         Response duplicated = apply(user, GUARD_SLOT.plusMinutes(30), DISTANCE);
         assertThat(duplicated.status()).isEqualTo(409);
         assertThat(duplicated.text("code")).isEqualTo("MATCH_ALREADY_IN_PROGRESS");
 
-        // 취소하면 다시 신청할 수 있다
         assertThat(delete("/running-matches", user.accessToken()).status()).isEqualTo(204);
         assertThat(apply(user, GUARD_SLOT, DISTANCE).status()).isEqualTo(201);
         assertThat(delete("/running-matches", user.accessToken()).status()).isEqualTo(204);
@@ -132,8 +127,7 @@ class MatchE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("러닝이 시작된 뒤에는 취소 API로 끊을 수 없어 409로 막힌다")
     void cancelIsRejectedAfterRunningStarted() {
-        // given - 매칭 방은 시작 시각 전에 시작할 수 없어 바로 시작되는 솔로 방으로 만든다.
-        // 취소는 방 종류가 아니라 신청이 RUNNING인지로 막는다
+        // given - 취소는 신청이 RUNNING인지로만 막아 바로 시작되는 솔로 방으로 만든다
         TestUser user = signUpAndOnboard();
         long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
                 .number("runningRoomId");
@@ -141,7 +135,7 @@ class MatchE2eTest extends E2eTestSupport {
             socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
             socket.await("RUNNING_STARTED");
 
-            // when - 여기서 끊으면 트랙과 기록 없이 신청만 끝난다
+            // when
             Response response = delete("/running-matches", user.accessToken());
 
             // then - 종료는 WS RUNNING_FINISH가 맡는다
@@ -167,7 +161,6 @@ class MatchE2eTest extends E2eTestSupport {
         // then - 마감은 운영값·현재 시각에 걸린 정책이라 유스케이스가 409로 막는다
         assertThat(closed.status()).isEqualTo(409);
         assertThat(closed.text("code")).isEqualTo("MATCH_SLOT_CLOSED");
-        // 형식은 요청 검증이 막는다 — 어느 쪽도 신청을 남기지 않는다
         assertThat(offSlot.status()).isEqualTo(400);
         assertThat(offSlot.text("code")).isEqualTo("INVALID_REQUEST");
         assertThat(offDistance.status()).isEqualTo(400);

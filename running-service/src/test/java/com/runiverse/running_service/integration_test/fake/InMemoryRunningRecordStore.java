@@ -73,7 +73,6 @@ public class InMemoryRunningRecordStore
         return records.size();
     }
 
-    // 저장한 순서 그대로 — 기록 목록 페이크가 이 순서로 bigserial id를 매긴다
     public List<RunningRecord> findAll() {
         return List.copyOf(records.values());
     }

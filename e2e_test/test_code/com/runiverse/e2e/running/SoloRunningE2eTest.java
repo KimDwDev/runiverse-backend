@@ -53,7 +53,6 @@ class SoloRunningE2eTest extends E2eTestSupport {
         Response opened = post("/running-rooms/solo", Map.of(), user.accessToken());
         assertThat(opened.status()).isEqualTo(201);
         long runningRoomId = opened.number("runningRoomId");
-        // 솔로는 모집 없이 확정된 채로 태어난다 — 목표 거리가 없어 방 값 그대로 null이다
         Response ready = get("/users/me/status", user.accessToken());
         assertThat(ready.status()).isEqualTo(200);
         assertThat(ready.text("status")).isEqualTo("READY");
@@ -66,7 +65,6 @@ class SoloRunningE2eTest extends E2eTestSupport {
             // 연결만으로는 아무것도 정해지지 않는다 — 어느 방인지는 RUNNING_START가 정한다
             socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
             socket.await("RUNNING_STARTED");
-            // 앱 재진입 시 이 값으로 러닝 화면을 복구한다
             assertThat(get("/users/me/status", user.accessToken()).text("status"))
                     .isEqualTo("RUNNING");
             sendTrack(socket);
@@ -80,7 +78,6 @@ class SoloRunningE2eTest extends E2eTestSupport {
             socket.send("RUNNING_FINISH", Map.of("forced", false));
             socket.await("RUNNING_FINISHED", FINISH_TIMEOUT);
         }
-        // 종료가 신청을 끝내 활성 신청이 사라진다
         assertThat(get("/users/me/status", user.accessToken()).text("status")).isEqualTo("IDLE");
 
         // then - 3. 결과 요약이 본인 기록으로 채워진다

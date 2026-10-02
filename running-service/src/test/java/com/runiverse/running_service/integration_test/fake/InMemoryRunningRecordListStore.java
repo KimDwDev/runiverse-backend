@@ -13,9 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-// RunningRecordPersistenceAdapter의 기록 목록 조회를 대신한다 —
-// 실제 쿼리처럼 방을 붙여 종류와 출발 인원을 함께 싣는다.
-// 방 숨김(running_rooms.deleted_at)은 도메인에 없어 걸러내지 않는다
+// RunningRecordPersistenceAdapter의 기록 목록 조회를 대신한다 — 방 숨김(deleted_at)은 도메인에 없어 걸러내지 않는다
 public class InMemoryRunningRecordListStore implements LoadMyRunningRecordsPort {
 
     private final InMemoryRunningStore runningStore;
@@ -39,7 +37,7 @@ public class InMemoryRunningRecordListStore implements LoadMyRunningRecordsPort 
                     || startAt.isBefore(startInclusive) || !startAt.isBefore(endExclusive)) {
                 continue;
             }
-            // 기록 저장 포트가 id를 돌려주지 않는다 — 저장 순서로 bigserial을 흉내 낸다
+            // 기록 저장 포트가 id를 돌려주지 않아 저장 순서로 매긴다
             rows.add(toRow(index + 1L, record));
         }
         // 실제 쿼리의 ORDER BY start_at, running_record_id
@@ -63,7 +61,6 @@ public class InMemoryRunningRecordListStore implements LoadMyRunningRecordsPort 
                 record.getRoutePolyline().value());
     }
 
-    // 실제 쿼리처럼 출발한 참가자만 센다 — 시작 전에 나간 신청은 빠진다
     private long startedPlayerCount(RunningRoom room) {
         return room.getSessions().stream()
                 .map(session -> runningStore.findPlayer(session.getRunningPlayerId().value()))
