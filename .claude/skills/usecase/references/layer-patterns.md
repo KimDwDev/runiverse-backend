@@ -26,7 +26,7 @@
 
 열어볼 것: `SignUpHandler`, `LoginHandler`
 
-- Command·Result는 원시 타입·UUID를 사용한다. 도메인 VO를 컨트롤러까지 노출하지 않는다.
+- Command·Result는 원시 타입·UUID를 사용하고, record VO는 컨트롤러까지 노출하지 않는다. 도메인 enum(`RunningRoomType`·`RunningRoomStatus`)은 Result·Response에서 그대로 쓰는 선례가 있다(`GetMyRunningRecordsResult`·`RoomInfoResponse` 등 5곳).
 - `@Transactional`은 **스프링 것**(`org.springframework.transaction.annotation`)을 쓴다.
 - Handler는 조립과 순서만 제어한다. 값 규칙은 도메인, 저장·조회는 포트가 맡는다.
 
@@ -82,3 +82,4 @@
 - 필수 숫자는 `Integer`와 `@NotNull`로 받는다. `int`는 누락을 0으로 바꾼다.
 - enum은 `String`과 `@Pattern`으로 검증한다. enum 타입은 Jackson의 `MALFORMED_REQUEST_BODY`가 먼저 발생해 명세 메시지를 제어할 수 없다.
 - 물리량 필드명에는 `api-convention.md` "물리량 단위"의 접미사를 붙인다. 메시지는 `api-spec.md` 문구 그대로 쓴다.
+- 쿼리 파라미터 선례는 `presentation/running/request/RunningRecordsRequest` 하나다 — 날짜를 `LocalDate`가 아닌 `String`으로 받고 `@AssertTrue`로 검증한다. 이유는 파일 주석에 있다.

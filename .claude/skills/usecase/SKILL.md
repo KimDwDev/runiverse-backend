@@ -25,7 +25,7 @@ description: >-
 | 문서 | 확인할 것 |
 |---|---|
 | `api-spec.md` | §0 공통 규칙 + 대상 절의 경로·필드·상태 코드·에러 케이스·**검증 메시지 문구** |
-| `erd.md` | 컬럼·타입, §0 PK/FK 정책, §6 enum 사전 |
+| `erd.md` | 컬럼·타입, §0 PK/FK 정책, §6 enum 사전, 조회 조건이 있으면 §7 인덱스 |
 | `feature-spec.md` | 해당 화면 절(§1)과 공통 도메인 제약(§2) |
 | `api-convention.md` | 정본·성공 상태 코드·단위 접미사·커서 페이지네이션·토글 액션 |
 
@@ -53,7 +53,7 @@ description: >-
 
 | 층 | 위치 | 하는 일 |
 |---|---|---|
-| 단위 | `src/test/.../unit_test/<도메인>/` | 도메인·Handler·요청 검증·컨트롤러(standalone MockMvc)를 각각 검증 |
+| 단위 | `src/test/.../unit_test/<도메인>/`, 어댑터는 `unit_test/infrastructure/` | 도메인·Handler·요청 검증·컨트롤러(standalone MockMvc)·어댑터를 각각 검증 |
 | 통합 | `src/test/.../integration_test/` | 스프링 없이 페이크(`integration_test/fake/`)로 Handler를 조립해 유스케이스 흐름 검증 |
 | E2E | `e2e_test/` | 배포 이미지를 Docker로 띄워 HTTP·WebSocket으로 검증. `e2e_test/run-e2e.sh` |
 
