@@ -50,7 +50,7 @@ python3 .claude/skills/spec-check/scripts/check_conventions.py . application/use
 - 같은 일을 하는 포트가 이름만 다르게 중복됐는지
 - Handler가 필요한 포트만 주입받는지 — 같은 애그리거트·저장 기술의 포트를 어댑터 하나가 함께 구현하는 것도, 나누는 것도 그 자체로는 위반이 아니다
 - 포트 구현체의 `*Adapter`·`*Client`·`*Router`·`*Registry` 접미사가 실제 역할과 맞는지
-- 컨트롤러가 자기 패키지(`presentation/<도메인>/`)와 다른 도메인의 `port/in`을 호출하는지 — 로그·메트릭 도메인 태그가 어긋난다
+- 컨트롤러와 그 request·response가 첫 경로 구간의 도메인 패키지에 있는지(`architecture.md` presentation 규칙)
 - 로그가 레이어별 규칙(레벨·찍는 위치·남기지 않는 것)을, 메트릭이 기록 위치·태그 규칙을 따르는지 — `logging-convention.md` "전환 중" 절에 해당하는 기존 코드는 위반으로 올리지 않는다
 
 ## 2. 명세와 구현 대조
