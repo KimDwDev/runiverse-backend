@@ -81,4 +81,4 @@
 - 필수 숫자는 `Integer`와 `@NotNull`로 받는다. `int`는 누락을 0으로 바꾼다.
 - enum은 `String`과 `@Pattern`으로 검증한다. enum 타입은 Jackson의 `MALFORMED_REQUEST_BODY`가 먼저 발생해 명세 메시지를 제어할 수 없다.
 - 물리량 필드명에는 `api-convention.md` "물리량 단위"의 접미사를 붙인다. 메시지는 `api-spec.md` 문구 그대로 쓴다.
-- 날짜 쿼리 파라미터는 `presentation/running/request/RunningRecordsRequest`를 참고한다. `LocalDate` 대신 `String`과 `@AssertTrue`를 쓰는 이유는 파일 주석에 있다.
+- 날짜 쿼리 파라미터는 `RunningRecordsRequest`를 참고한다. `LocalDate` 대신 `String`과 `@AssertTrue`를 쓰는 이유는 파일 주석에 있다.
