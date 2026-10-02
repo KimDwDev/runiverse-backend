@@ -2,6 +2,7 @@ package com.runiverse.e2e.match;
 
 import com.runiverse.e2e.E2eTestSupport;
 import com.runiverse.e2e.MatchStream;
+import com.runiverse.e2e.RunningWebSocket;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -126,6 +127,29 @@ class MatchE2eTest extends E2eTestSupport {
         // then
         assertThat(response.status()).isEqualTo(409);
         assertThat(response.text("code")).isEqualTo("MATCH_ALREADY_IN_PROGRESS");
+    }
+
+    @Test
+    @DisplayName("러닝이 시작된 뒤에는 취소 API로 끊을 수 없어 409로 막힌다")
+    void cancelIsRejectedAfterRunningStarted() {
+        // given - 매칭 방은 시작 시각 전에 시작할 수 없어 바로 시작되는 솔로 방으로 만든다.
+        // 취소는 방 종류가 아니라 신청이 RUNNING인지로 막는다
+        TestUser user = signUpAndOnboard();
+        long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
+                .number("runningRoomId");
+        try (RunningWebSocket socket = connectRunningWebSocket(user.accessToken())) {
+            socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
+            socket.await("RUNNING_STARTED");
+
+            // when - 여기서 끊으면 트랙과 기록 없이 신청만 끝난다
+            Response response = delete("/running-matches", user.accessToken());
+
+            // then - 종료는 WS RUNNING_FINISH가 맡는다
+            assertThat(response.status()).isEqualTo(409);
+            assertThat(response.text("code")).isEqualTo("MATCH_ALREADY_STARTED");
+            assertThat(get("/users/me/status", user.accessToken()).text("status"))
+                    .isEqualTo("RUNNING");
+        }
     }
 
     @Test
