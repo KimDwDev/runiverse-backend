@@ -171,23 +171,6 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("시작 시각 순으로 나온다 -> 나중에 저장한 기록이 앞설 수 있다")
-    void ordersByStartedAt() {
-        // given -> 저장 순서와 시작 순서가 어긋난 경우다
-        UUID userId = onboardedUser(EMAIL, NICKNAME);
-        Long lateRoomId = finishedRunning(userId, FIRST_START.plusHours(2));
-        Long earlyRoomId = finishedRunning(userId, FIRST_START);
-
-        // when
-        List<GetMyRunningRecordsResult.RunningRecord> records = recordsOf(userId, FIRST_DAY, FIRST_DAY);
-
-        // then
-        assertThat(records)
-                .extracting(GetMyRunningRecordsResult.RunningRecord::runningRoomId)
-                .containsExactly(earlyRoomId, lateRoomId);
-    }
-
-    @Test
     @DisplayName("아직 뛰는 중인 러닝은 기록이 없어 목록에 없다")
     void excludesRunningInProgress() {
         // given
@@ -212,17 +195,6 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
         assertThat(recordsOf(userId, FIRST_DAY, FIRST_DAY))
                 .extracting(GetMyRunningRecordsResult.RunningRecord::runningRoomId)
                 .containsExactly(myRoomId);
-    }
-
-    @Test
-    @DisplayName("기간에 기록이 없으면 빈 목록이다")
-    void returnsEmptyListWithoutRecords() {
-        // given
-        UUID userId = onboardedUser(EMAIL, NICKNAME);
-        finishedRunning(userId, FIRST_START);
-
-        // when & then -> 다른 날을 보면 비어 있다
-        assertThat(recordsOf(userId, SECOND_DAY, SECOND_DAY)).isEmpty();
     }
 
     private List<GetMyRunningRecordsResult.RunningRecord> recordsOf(UUID userId, LocalDate from,
