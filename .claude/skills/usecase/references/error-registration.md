@@ -32,4 +32,4 @@ WebSocket으로만 보내는 코드는 핸들러가 직접 보내므로 이 경�
 
 ## 컨트롤러 앞단의 에러
 
-`@Valid`·JSON 파싱 실패는 `presentation/common/exception/CommonErrorCode`, 인증·인가 실패는 `SecurityErrorCode`와 `JwtAuthenticationEntryPoint`·`JwtAccessDeniedHandler`가 담당한다. 응답 코드·메시지는 기존 상수명이 아닌 `api-spec.md`를 기준으로 대조한다.
+`@Valid`·JSON 파싱 실패는 `CommonErrorCode`, 인증·인가 실패는 `SecurityErrorCode`와 `JwtAuthenticationEntryPoint`·`JwtAccessDeniedHandler`가 담당한다(모두 `presentation/common/` 아래). 응답 코드·메시지는 기존 상수명이 아닌 `api-spec.md`를 기준으로 대조한다.
