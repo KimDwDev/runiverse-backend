@@ -10,7 +10,7 @@
 
 - `record` 컴팩트 생성자에서 파라미터에 재대입해 정규화한 값을 필드에 넣는다.
 - 접근자는 의미가 드러나게 짓고 무조건 `value()`로 만들지 않는다.
-- 규칙 하나에 예외 클래스 하나. 예외는 `domain/<도메인>/exception/`, 코드·메시지는 `domain/common/exception/`의 도메인별 `*ErrorCode` enum.
+- 규칙 하나에 예외 클래스 하나. 예외는 `domain/<도메인>[/<하위>]/exception/`, 코드·메시지는 `domain/common/exception/`의 도메인별 `*ErrorCode` enum.
 
 ## 도메인 애그리거트 — `domain/user/`
 

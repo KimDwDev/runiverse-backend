@@ -5,7 +5,7 @@
 | | `domain.common.exception` | `application.common.exception` |
 |---|---|---|
 | 언제 | VO 생성·애그리거트 상태 전이 위반 | 유스케이스가 요청을 튕겨낼 때 |
-| 위치 | `domain/<도메인>/exception/` | `application/<도메인>/exception/` |
+| 위치 | `domain/<도메인>[/<하위>]/exception/` | `application/<도메인>/exception/` |
 | 응답 | **항상 500** | `toStatus()` + 노출 정책 통과 시 그 상태(전용 핸들러가 있으면 그쪽, 예: `MatchCooldownException`) |
 
 값만 보고 판단하면 도메인, 저장소·외부 상태가 필요하면 애플리케이션 예외다. 코드 enum도 양쪽에 도메인별로 있고 이름이 겹친다(`UserErrorCode`) — import 패키지를 확인한다.
@@ -32,4 +32,4 @@ WebSocket으로만 보내는 코드는 핸들러가 직접 보내므로 이 경�
 
 ## 컨트롤러 앞단의 에러
 
-`@Valid`·JSON 파싱 실패는 `presentation/common/exception/CommonErrorCode`, 인증 실패는 `SecurityErrorCode`와 `JwtAuthenticationEntryPoint`가 담당한다. 응답 코드·메시지는 기존 상수명이 아닌 `api-spec.md`를 기준으로 대조한다.
+`@Valid`·JSON 파싱 실패는 `presentation/common/exception/CommonErrorCode`, 인증·인가 실패는 `SecurityErrorCode`와 `JwtAuthenticationEntryPoint`·`JwtAccessDeniedHandler`가 담당한다. 응답 코드·메시지는 기존 상수명이 아닌 `api-spec.md`를 기준으로 대조한다.

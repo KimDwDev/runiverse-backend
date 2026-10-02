@@ -71,6 +71,6 @@ cd running-service && ./gradlew test
 
 ## WebSocket·SSE
 
-러닝 WebSocket(`api-spec.md` 5-C·5-D)은 `presentation/running/websocket/`, 매칭 SSE(5-A·5-B)는 `presentation/match/sse/`에 선례가 있다. 기존 채널에 메시지를 더하면 `RunningWebSocketHandler`·`RunningMessageType`과 `message/`의 요청·페이로드 형태를 따른다. WebSocket 에러는 핸들러가 `ErrorPayload`로 직접 보내며 HTTP 노출 정책을 타지 않는다.
+러닝 WebSocket(`api-spec.md` 5-C·5-D)은 `presentation/running/websocket/`, 매칭 SSE(5-A~5-C)는 `presentation/match/sse/`에 선례가 있다. 기존 채널에 메시지를 더하면 `RunningWebSocketHandler`·`RunningMessageType`과 `message/`의 요청·페이로드 형태를 따른다. WebSocket 에러는 핸들러가 `ErrorPayload`로 직접 보내며 HTTP 노출 정책을 타지 않는다.
 
 다음은 아직 정하지 않았으므로 REST 절차를 적용하지 말고 설계를 먼저 합의한다: 새 채널·세션 정책, WebSocket·SSE 진입점의 로그 MDC(`logging-convention.md` "전환 중")와 메트릭(`metrics-convention.md` "예정"), `RUNNING_PAUSE`/`RUNNING_RESUME`.
