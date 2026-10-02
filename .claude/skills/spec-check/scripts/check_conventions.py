@@ -28,6 +28,7 @@ FORBIDDEN = {
         ("jakarta.transaction", "트랜잭션 API 의존"),
         ("org.hibernate", "하이버네이트 의존"),
         ("com.fasterxml", "잭슨 의존"),
+        ("io.micrometer", "메트릭 의존"),
         (f"{BASE_PKG}.application", "바깥 레이어 참조"),
         (f"{BASE_PKG}.infrastructure", "바깥 레이어 참조"),
         (f"{BASE_PKG}.presentation", "바깥 레이어 참조"),
@@ -36,6 +37,7 @@ FORBIDDEN = {
     "application": [
         ("jakarta.persistence", "JPA 의존 — 영속성은 어댑터 책임"),
         ("org.hibernate", "하이버네이트 의존"),
+        ("io.micrometer", "메트릭 의존 — port/out 기록 포트로 남긴다"),
         (f"{BASE_PKG}.infrastructure", "바깥 레이어 참조"),
         (f"{BASE_PKG}.presentation", "바깥 레이어 참조"),
         (f"{BASE_PKG}.observability", "관측성 참조 — 로그는 SLF4J만으로 충분"),
@@ -555,24 +557,28 @@ def check_ports(root: Path, scope: Path = None):
 
 
 def check_application_structure(root: Path, scope: Path = None):
-    """Command/Handler 세트와 트랜잭션 경계를 검사한다.
+    """command/·query/ 기능 패키지의 구성과 트랜잭션 경계를 검사한다.
 
-    `Result`는 반환값이 있을 때만 두므로 필수가 아니다. 트랜잭션도 경계가 Handler가
-    아닐 수 있고(내부 컴포넌트) Redis 전용 유스케이스는 아예 불필요하므로,
-    기능 패키지 전체에 `@Transactional`이 하나도 없을 때만 휴리스틱으로 보고한다.
+    command는 Command·Handler, query는 Query·Handler·Result가 필수다 — command의
+    `Result`는 반환값이 있을 때만 둔다. 트랜잭션도 경계가 Handler가 아닐 수 있고
+    (내부 컴포넌트) Redis 전용 유스케이스는 아예 불필요하므로, 기능 패키지 전체에
+    `@Transactional`이 하나도 없을 때만 휴리스틱으로 보고한다. 다만 query Handler가
+    `@Transactional`을 걸었으면 `readOnly = true`여야 한다.
     """
+    required = {"command": ("Command", "Handler"), "query": ("Query", "Handler", "Result")}
     source_root = root / SRC
     feature_dirs = set()
     for f in java_files(root, scope):
         parts = f.relative_to(source_root).parts
-        if len(parts) >= 4 and parts[0] == "application" and parts[2] == "command":
+        if len(parts) >= 4 and parts[0] == "application" and parts[2] in required:
             feature_dirs.add(source_root.joinpath(*parts[:4]))
 
     missing_sets, handler_issues, no_tx = [], [], []
     for feature_dir in sorted(feature_dirs):
+        kind = feature_dir.parent.name
         files = sorted(feature_dir.glob("*.java"))
         stems = [f.stem for f in files]
-        missing = [suffix for suffix in ("Command", "Handler")
+        missing = [suffix for suffix in required[kind]
                    if not any(stem.endswith(suffix) for stem in stems)]
         if missing:
             missing_sets.append((rel(feature_dir, root), missing))
@@ -585,13 +591,20 @@ def check_application_structure(root: Path, scope: Path = None):
             no_tx.append(rel(feature_dir, root))
 
         for handler in (f for f in files if f.stem.endswith("Handler")):
+            issues = []
             declaration = re.search(
                 r"\bclass\s+\w+Handler\b[^\{]*\bimplements\b[^\{]*\b\w+Usecase\b",
                 texts[handler],
                 re.S,
             )
             if not declaration:
-                handler_issues.append((rel(handler, root), ["*Usecase 구현 누락"]))
+                issues.append("*Usecase 구현 누락")
+            if kind == "query":
+                transactions = re.findall(r"@Transactional\b(\([^)]*\))?", texts[handler])
+                if any(not re.search(r"\breadOnly\s*=\s*true\b", args) for args in transactions):
+                    issues.append("query Handler의 @Transactional에 readOnly = true 누락")
+            if issues:
+                handler_issues.append((rel(handler, root), issues))
     return missing_sets, handler_issues, no_tx
 
 
