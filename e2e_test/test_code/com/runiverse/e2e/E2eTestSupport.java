@@ -130,6 +130,11 @@ public abstract class E2eTestSupport {
         return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken);
     }
 
+    /** 매칭 이벤트 스트림을 연다. 활성 신청이 없으면 404로 거절되어 이벤트가 오지 않는다. */
+    protected MatchStream openMatchStream(String accessToken) {
+        return MatchStream.open(HTTP_CLIENT, BASE_URL + "/running-matches/stream", accessToken);
+    }
+
     /**
      * 메일 인증 → 가입 → 온보딩까지 한 번에 끝낸다.
      * 러닝은 온보딩의 평균 페이스·몸무게가 없으면 시작조차 못 해 대부분의 흐름이 여기서 출발한다.
