@@ -8,7 +8,7 @@
 | 위치 | `domain/<도메인>[/<하위>]/exception/` | `application/<도메인>/exception/` |
 | 응답 | **항상 500** | `toStatus()` + 노출 정책 통과 시 그 상태(전용 핸들러가 있으면 그쪽, 예: `MatchCooldownException`) |
 
-값만 보고 판단하면 도메인, 저장소·외부 상태가 필요하면 애플리케이션 예외다. 코드 enum도 양쪽에 도메인별로 있고 이름이 겹친다(`UserErrorCode`) — import 패키지를 확인한다.
+값만 보고 판단하면 도메인, 저장소·외부 상태가 필요하면 애플리케이션 예외다. 코드 enum도 양쪽에 도메인별로 있고 sealed `ErrorCode`와 `UserErrorCode`는 이름이 겹친다 — import 패키지를 확인한다.
 
 ## 도메인 예외가 500인 이유
 

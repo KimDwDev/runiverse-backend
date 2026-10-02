@@ -20,7 +20,7 @@
 - 생성자는 원시 값을 VO로 감싼다. 검증은 VO에 위임하고 애그리거트는 내부 상태의 불변식만 본다.
 - nullable한 내부 상태는 `Optional`로 노출한다.
 - 값 성격의 내부 엔티티는 수정 시 새 인스턴스를 반환한다(`UserOnboarding.change(...)`).
-- 동등성은 식별자 기준으로 재정의한다.
+- 애그리거트 내부 엔티티(`UserOnboarding`·`OauthUser`)는 동등성을 식별자 기준으로 재정의한다. 루트(`User`)는 재정의하지 않는다.
 
 ## 유스케이스 — `application/auth/command/signup/`, `login/`
 
