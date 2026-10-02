@@ -57,6 +57,8 @@ description: >-
 | 통합 | `src/test/.../integration_test/` | 스프링 없이 페이크(`integration_test/fake/`)로 Handler를 조립해 유스케이스 흐름 검증 |
 | E2E | `e2e_test/` | 배포 이미지를 Docker로 띄워 HTTP·WebSocket으로 검증. `e2e_test/run-e2e.sh` |
 
+새 API는 E2E에 그 API를 부르는 단계를 반드시 붙인다(기존 시나리오에 잇거나 새로 만든다). 실제 DB에서 쿼리를 확인하는 층은 E2E뿐이다. 외부 제공자가 필요한 경로(소셜 로그인)는 제외하고 그 사실을 보고한다.
+
 테스트 제외 요청이 있으면 새 테스트를 만들지 않는다. 컴파일과 기존 테스트로 검증하고 미완료 커버리지를 보고한다.
 
 ## 검증
