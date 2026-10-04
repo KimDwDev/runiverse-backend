@@ -50,6 +50,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -142,6 +143,9 @@ public class RunningFinisherTest {
     @Mock
     private UpdateUserAvgPacePort updateUserAvgPacePort;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @Captor
     private ArgumentCaptor<RunningRecord> recordCaptor;
 
@@ -158,7 +162,7 @@ public class RunningFinisherTest {
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
                 existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
-                PROPERTIES);
+                eventPublisher, PROPERTIES);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
         lenient().when(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
@@ -637,6 +641,16 @@ public class RunningFinisherTest {
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
             assertThat(room.getCloseAt()).isPresent();
             verify(updateRunningRoomPort).update(room);
+        }
+
+        @Test
+        @DisplayName("남은 자리 없이 닫힌 방은 즉시 강제 종료를 요청하지 않는다")
+        void doesNotRequestForceFinishWhenNobodyRemains() {
+            // when
+            finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then
+            verifyNoInteractions(eventPublisher);
         }
 
         @Test

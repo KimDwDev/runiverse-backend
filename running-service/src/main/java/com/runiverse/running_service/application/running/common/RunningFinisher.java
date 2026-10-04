@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.running.common;
 
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
+import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishRequestedEvent;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
@@ -30,11 +31,13 @@ import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
+import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -66,6 +69,7 @@ public class RunningFinisher {
     private final ExistsRunningRecordPort existsRunningRecordPort;
     private final LoadRecentRunningPacesPort loadRecentRunningPacesPort;
     private final UpdateUserAvgPacePort updateUserAvgPacePort;
+    private final ApplicationEventPublisher eventPublisher;
     private final RunningFinishProperties properties;
     // 1인 확정 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
     // 시작 전 이탈(CancelMatchHandler)의 면제와 같은 기준이다.
@@ -215,6 +219,10 @@ public class RunningFinisher {
                 room.finish(closedAt);
             } else {
                 room.cancel(closedAt);
+            }
+            // 한 번도 붙지 않은 참가자가 남았다 — 커밋 뒤 강제 종료가 바로 닫는다
+            if (room.getSessions().stream().anyMatch(RoomSession::isConnected)) {
+                eventPublisher.publishEvent(new RunningForceFinishRequestedEvent(roomId.value()));
             }
         }
         // 방을 닫지 않아도 세션 변경(is_connected)은 저장돼야 한다
