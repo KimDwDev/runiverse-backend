@@ -2,7 +2,8 @@
 """Runiverse 백엔드 구조 규칙 검사.
 
 문서를 읽어야 판단되는 것(스펙 ↔ 구현 정합성)은 다루지 않는다.
-소스만 보고 기계적으로 판정 가능한 것만 검사한다.
+소스만 보고 기계적으로 판정 가능한 것만 검사한다. 예외는 erd.md CHECK 블록 하나다 —
+엔티티 @Check와 이름·조건식을 글자 그대로 대조하므로 판단이 들어가지 않는다.
 
 사용법:
     python3 .claude/skills/spec-check/scripts/check_conventions.py [저장소_루트] [소스_범위]
@@ -18,6 +19,12 @@ from pathlib import Path
 
 SRC = "running-service/src/main/java/com/runiverse/running_service"
 BASE_PKG = "com.runiverse.running_service"
+ERD = "docs/erd.md"
+
+ENTITY_CHECK = re.compile(
+    r'@Check\(\s*name\s*=\s*"(\w+)"\s*,\s*constraints\s*=\s*((?:"[^"]*"\s*\+?\s*)+)\)'
+)
+ERD_CHECK = re.compile(r"^> CHECK `(\w+)`: `(.+)`\s*$", re.M)
 
 # 레이어별 금지 import (접두사 매칭). lombok은 전 레이어 허용.
 FORBIDDEN = {
@@ -701,6 +708,34 @@ def check_unit_suffix(root: Path, scope: Path = None):
     return hits
 
 
+def check_erd_checks(root: Path):
+    """엔티티 @Check ↔ erd.md CHECK 블록 (erd.md §0 'CHECK 표기').
+
+    운영 스키마는 손으로 쓴 DDL이라 erd가 대조 목록 노릇을 한다 — 어느 쪽이 맞는지는 판정하지 않는다.
+    """
+    entity = {}
+    for f in java_files(root):
+        if not f.name.endswith("JpaEntity.java"):
+            continue
+        for m in ENTITY_CHECK.finditer(without_comments(f.read_text(encoding="utf-8"))):
+            expr = "".join(re.findall(r'"([^"]*)"', m.group(2)))
+            entity[m.group(1)] = (" ".join(expr.split()), rel(f, root))
+    erd = root / ERD
+    documented = {}
+    if erd.is_file():
+        for name, expr in ERD_CHECK.findall(erd.read_text(encoding="utf-8")):
+            documented[name] = " ".join(expr.split())
+    issues = []
+    for name, (expr, path) in sorted(entity.items()):
+        if name not in documented:
+            issues.append((name, f"erd에 없음 ({path})"))
+        elif documented[name] != expr:
+            issues.append((name, f"조건식 다름 — 엔티티 `{expr}` / erd `{documented[name]}`"))
+    for name in sorted(documented.keys() - entity.keys()):
+        issues.append((name, "엔티티에 없음 — erd에만 있다"))
+    return len(entity), issues
+
+
 def main():
     if len(sys.argv) > 3:
         print("인자가 너무 많습니다.", file=sys.stderr)
@@ -827,6 +862,21 @@ def main():
             print(f"  - {path}")
     else:
         print("  없음")
+
+    print("\n### 엔티티 CHECK ↔ erd CHECK 블록")
+    if scope is not None:
+        print("  범위 검사에서는 건너뜀 — 전체 검사에서만 대조한다")
+    else:
+        entity_checks, erd_issues = check_erd_checks(root)
+        if entity_checks == 0:
+            investigate += 1
+            print("  - 엔티티 @Check를 하나도 읽지 못함 — 스크립트가 엔티티 구조를 따라가지 못한다")
+        elif erd_issues:
+            investigate += len(erd_issues)
+            for name, why in erd_issues:
+                print(f"  - {name}: {why}")
+        else:
+            print(f"  {entity_checks}개 모두 erd와 같음")
 
     print("\n## 3. 휴리스틱 의심")
     print("\n### port/out 메서드 2개 이상")

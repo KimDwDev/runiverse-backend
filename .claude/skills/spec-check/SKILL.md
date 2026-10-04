@@ -40,7 +40,7 @@ python3 .claude/skills/spec-check/scripts/check_conventions.py . application/use
 
 종료 코드는 위반이 있어도 0이고, 인자·루트·범위가 잘못됐을 때만 2다. 2가 나오면 경로를 바로잡아 다시 실행하고, 그래도 실행하지 못하면 이 절의 항목을 수동 검사한 뒤 그 사실을 보고에 밝힌다. §2는 구조 검사의 대체가 아니다.
 
-스크립트는 레이어 의존 방향(메트릭 의존 포함), command·query 패키지 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 등록 후보, 미사용 예외, 포트 규칙, DTO 단위 접미사를 검사한다. 출력 분류는 **후보**다 — 코드와 기준 문서를 직접 확인해 재분류하고, 스크립트 휴리스틱이 문서와 다르면 문서를 기준으로 판정한다. 검사 항목이 "0개"·"없음"으로만 나오는데 코드에 대상이 있으면 스크립트가 구조 변경을 못 따라간 것이다 — 통과로 보고하지 말고 수동 검사한다.
+스크립트는 레이어 의존 방향(메트릭 의존 포함), command·query 패키지 구성·트랜잭션, 아웃바운드 구현체 네이밍, 에러 등록 후보, 미사용 예외, 포트 규칙, DTO 단위 접미사, 엔티티 `@Check` ↔ erd CHECK 블록(전체 검사에서만)을 검사한다. 출력 분류는 **후보**다 — 코드와 기준 문서를 직접 확인해 재분류하고, 스크립트 휴리스틱이 문서와 다르면 문서를 기준으로 판정한다. 검사 항목이 "0개"·"없음"으로만 나오는데 코드에 대상이 있으면 스크립트가 구조 변경을 못 따라간 것이다 — 통과로 보고하지 말고 수동 검사한다.
 
 범위를 좁혀 실행한 에러 코드 결과는 단독으로 판정하지 않는다. throw 지점 → application 예외 → 도메인별 `*ErrorCode` enum → 해당 `toStatus()` overload → `EXPOSED_CODES` 또는 마스킹까지 추적한다(domain의 동명 enum은 제외). 전용 `@ExceptionHandler`(`MatchCooldownException`)와 WebSocket 경로는 직접 응답하므로 그 응답을 본다 — WebSocket 전용 코드는 HTTP 마스킹 후보로 나와도 조치 불필요다.
 
@@ -70,7 +70,7 @@ python3 .claude/skills/spec-check/scripts/check_conventions.py . application/use
 | 멱등성·업무 동작 | Handler·도메인·포트 호출 + 중복 호출 결과·상태 변경·트랜잭션 |
 | 시각·ID·단위·enum | DTO·매핑·도메인 타입과 `docs/api-spec.md` §0·`docs/api-convention.md`·`docs/erd.md` §6 |
 
-JPA 엔티티는 `docs/erd.md` §0과 해당 표의 컬럼명·타입·nullable·PK·UNIQUE·FK·삭제 정책·감사 컬럼·enum 값(§6)과 대조한다.
+JPA 엔티티는 `docs/erd.md` §0과 해당 표의 컬럼명·타입·nullable·PK·UNIQUE·FK·삭제 정책·감사 컬럼·enum 값(§6)과 대조한다. CHECK는 스크립트가 대조한다.
 
 빌드·테스트는 진단의 완료 조건이 아니다. 사용자가 런타임 검증을 요청했거나 별도 수정 단계에서 파일을 바꾼 경우에만 `CLAUDE.md`의 가장 작은 관련 테스트를 실행한다. 실패는 우회하지 말고 명령·핵심 오류와 함께 그대로 보고한다.
 
