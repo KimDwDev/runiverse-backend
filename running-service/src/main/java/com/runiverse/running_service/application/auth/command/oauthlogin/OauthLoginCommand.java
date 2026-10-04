@@ -1,7 +1,9 @@
 package com.runiverse.running_service.application.auth.command.oauthlogin;
 
+// 그 provider가 쓰는 자격 증명만 채우고 나머지는 null이다 — 구글은 idToken, 카카오는 authorizationCode·codeVerifier
 public record OauthLoginCommand(
-        String provider, // google, kakao등 다양한 방향에서 통일할 계획이기 때문이다.
+        String provider,
+        String idToken,
         String authorizationCode,
         String codeVerifier
 ) {

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
-import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
+import com.runiverse.running_service.infrastructure.persistence.common.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -29,7 +29,7 @@ import java.util.UUID;
         // 유저당 방별 1기록 — 멱등한 종료 처리가 이 제약에 기댄다
         uniqueConstraints = @UniqueConstraint(name = "uk_running_record_room_user",
                 columnNames = {"running_room_id", "user_id"}),
-        // 내 기록 목록(7-1)·피드 카드가 유저 기준 최신순으로 훑는다
+        // 내 기록 조회 — 기간 조회와 시작 시각 정렬을 함께 처리한다
         indexes = @Index(name = "idx_running_record_user", columnList = "user_id, start_at")
 )
 @Check(name = "ck_running_record_avg_pace", constraints = "avg_pace between 120 and 3600")
@@ -46,7 +46,7 @@ import java.util.UUID;
 @Check(name = "ck_running_record_weather_code", constraints = "weather_code between 0 and 99")
 @Check(name = "ck_running_record_period", constraints = "end_at > start_at")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RunningRecordJpaEntity extends BaseTimeEntity {
+public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

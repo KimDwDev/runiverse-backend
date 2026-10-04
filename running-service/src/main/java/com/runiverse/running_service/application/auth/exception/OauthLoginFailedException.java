@@ -3,9 +3,9 @@ package com.runiverse.running_service.application.auth.exception;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 
-public class OauthCodeExchangeFailedException extends BusinessException {
+public class OauthLoginFailedException extends BusinessException {
 
-    public OauthCodeExchangeFailedException() {
-        super(AuthErrorCode.OAUTH_CODE_EXCHANGE_FAILED);
+    public OauthLoginFailedException() {
+        super(AuthErrorCode.OAUTH_LOGIN_FAILED);
     }
 }

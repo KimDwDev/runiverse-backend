@@ -1,8 +1,9 @@
 package com.runiverse.running_service.infrastructure.oauth.kakao;
 
 
-import com.runiverse.running_service.application.auth.exception.OauthCodeExchangeFailedException;
 import com.runiverse.running_service.application.auth.exception.OauthEmailNotProvidedException;
+import com.runiverse.running_service.application.auth.exception.OauthLoginFailedException;
+import com.runiverse.running_service.application.auth.exception.OauthProviderUnavailableException;
 import com.runiverse.running_service.application.auth.port.out.OauthProfile;
 import com.runiverse.running_service.domain.user.vo.Provider;
 import ch.qos.logback.classic.Level;
@@ -34,6 +35,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withTooManyRequests;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 public class KakaoOauthClientTest {
@@ -90,6 +92,42 @@ public class KakaoOauthClientTest {
                     }
                     """;
 
+    // 카카오계정에 등록만 되고 소유가 확인되지 않은 이메일
+    private static final String USER_RESPONSE_UNVERIFIED_EMAIL =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "is_email_valid": true,
+                        "is_email_verified": false,
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
+
+    // 다른 카카오계정에 사용돼 만료된 이메일 — 카카오가 마스킹해서 준다
+    private static final String USER_RESPONSE_INVALID_EMAIL =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "is_email_valid": false,
+                        "is_email_verified": true,
+                        "email": "ka***@example.com"
+                      }
+                    }
+                    """;
+
+    private static final String USER_RESPONSE_WITHOUT_EMAIL_STATUS =
+            """
+                    {
+                      "id": 1234567890,
+                      "kakao_account": {
+                        "email": "kakao@example.com"
+                      }
+                    }
+                    """;
+
     // 동의 항목이 하나도 없으면 kakao_account 자체가 오지 않는다
     private static final String USER_RESPONSE_WITHOUT_ACCOUNT =
             """
@@ -130,12 +168,6 @@ public class KakaoOauthClientTest {
     }
 
     @Test
-    @DisplayName("provider는 KAKAO를 반환한다")
-    void providerReturnsKakao() {
-        assertThat(createClient(CLIENT_SECRET).provider()).isEqualTo(Provider.KAKAO);
-    }
-
-    @Test
     @DisplayName("인가 코드를 교환해 카카오 프로필을 반환한다")
     void exchangeReturnsProfile() {
         // given
@@ -161,7 +193,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        OauthProfile profile = client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
+        OauthProfile profile = client.load(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         assertThat(profile.provider()).isEqualTo(Provider.KAKAO);
@@ -193,14 +225,14 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE, MediaType.APPLICATION_JSON));
 
         // when
-        client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER);
+        client.load(AUTHORIZATION_CODE, CODE_VERIFIER);
 
         // then
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("토큰 요청이 실패하면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("토큰 요청이 실패하면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenTokenRequestRejected() {
         // given -> 인가 코드 재사용 시 카카오가 KOE320으로 거부한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -214,14 +246,14 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("토큰 응답에 access_token이 없으면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("토큰 응답에 access_token이 없으면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenAccessTokenMissing() {
         // given -> 200이지만 본문이 비어 있는 경우를 방어한다
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -230,14 +262,14 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("사용자 정보 조회가 실패하면 OauthCodeExchangeFailedException을 던진다")
+    @DisplayName("사용자 정보 조회가 실패하면 OauthLoginFailedException을 던진다")
     void exchangeFailsWhenUserRequestRejected() {
         // given
         KakaoOauthClient client = createClient(CLIENT_SECRET);
@@ -249,8 +281,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withUnauthorizedRequest());
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         mockServer.verify();
     }
@@ -268,7 +300,7 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE_WITHOUT_EMAIL, MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthEmailNotProvidedException.class);
 
         mockServer.verify();
@@ -287,7 +319,64 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess(USER_RESPONSE_WITHOUT_ACCOUNT, MediaType.APPLICATION_JSON));
 
         // when & then
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 이메일이면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailUnverified() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_UNVERIFIED_EMAIL, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("다른 카카오계정에 사용돼 만료된 이메일이면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailInvalid() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_INVALID_EMAIL, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthEmailNotProvidedException.class);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("이메일의 유효·인증 여부가 오지 않으면 OauthEmailNotProvidedException을 던진다")
+    void exchangeFailsWhenEmailStatusMissing() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess(USER_RESPONSE_WITHOUT_EMAIL_STATUS, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
                 .isInstanceOf(OauthEmailNotProvidedException.class);
 
         mockServer.verify();
@@ -306,8 +395,8 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then -> 오류 설명에 되돌아온 인가 코드는 남기지 않는다
         assertThat(log.messages(Level.WARN))
@@ -325,8 +414,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withServerError().body("<html>bad gateway</html>").contentType(MediaType.TEXT_HTML));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -348,12 +437,72 @@ public class KakaoOauthClientTest {
                         .contentType(MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.WARN))
                 .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=401, errorCode=-401");
+    }
+
+    @Test
+    @DisplayName("사용자 조회가 5xx로 실패하면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void userInfoServerErrorIsProviderUnavailable() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withServerError());
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=500, errorCode=unknown");
+    }
+
+    @Test
+    @DisplayName("사용자 조회가 호출 한도 초과(400 + code -10)면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void userInfoApiLimitExceededIsProviderUnavailable() {
+        // given -> 카카오는 한도 초과를 429가 아니라 400에 code -10으로 준다
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withSuccess(TOKEN_RESPONSE, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USER_INFO_URI))
+                .andRespond(withBadRequest()
+                        .body("""
+                                {"msg":"API limit has been exceeded.","code":-10}
+                                """)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 사용자 조회 실패: 카카오 응답 오류 - status=400, errorCode=-10");
+        assertThat(log.messages(Level.WARN)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("토큰 요청이 429로 거부되면 OauthProviderUnavailableException을 던지고 ERROR로 남긴다")
+    void tokenTooManyRequestsIsProviderUnavailable() {
+        // given
+        KakaoOauthClient client = createClient(CLIENT_SECRET);
+        mockServer.expect(requestTo(TOKEN_URI))
+                .andRespond(withTooManyRequests());
+
+        // when
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
+
+        // then
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[인증] 카카오 토큰 요청 실패: 카카오 응답 오류 - status=429, errorCode=unknown");
     }
 
     @Test
@@ -365,8 +514,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -384,8 +533,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthLoginFailedException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))
@@ -401,8 +550,8 @@ public class KakaoOauthClientTest {
                 .andRespond(withException(new IOException("connection reset")));
 
         // when
-        assertThatThrownBy(() -> client.exchange(AUTHORIZATION_CODE, CODE_VERIFIER))
-                .isInstanceOf(OauthCodeExchangeFailedException.class);
+        assertThatThrownBy(() -> client.load(AUTHORIZATION_CODE, CODE_VERIFIER))
+                .isInstanceOf(OauthProviderUnavailableException.class);
 
         // then
         assertThat(log.messages(Level.ERROR))

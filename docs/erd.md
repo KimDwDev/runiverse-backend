@@ -95,13 +95,13 @@
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | **방이 닫힌 시각.** `FINISHED`·`CANCELLED`로 갈 때 찍고, 그 전까지는 null이다 — 종류와 무관하게 열려 있는 방은 전부 null. 모집 마감 시각이 아니다(그건 `start_at - 오프셋`으로 계산한다) |
 | target_distance | int | nullable | 방의 목표 거리(미터). **솔로 방은 null** — 목표가 없어야 조기 종료 페널티 판정을 건너뛴다. 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 가져 후보 방 조회가 단일 테이블에서 끝난다 |
-| avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 시 페이스가 가까운 방을 고르는 데 쓰고, `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다. **nullable인 이유는 참가자가 0이면 평균 낼 대상이 없기 때문이다** — 마지막 값을 남기지 않고 지운다(그 방은 같은 순간 닫힌다 — `FINISHED`·`CANCELLED` 판정은 아래 `current_player_count`) |
+| avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 후보의 순위 재료로 쓰고(자격 조건이 아니다 — 멀어도 매칭한다), `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다. **nullable인 이유는 참가자가 0이면 평균 낼 대상이 없기 때문이다** — 마지막 값을 남기지 않고 지운다(그 방은 같은 순간 닫힌다 — `FINISHED`·`CANCELLED` 판정은 아래 `current_player_count`) |
 | max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`, **[MVP 제외]** 초대 `4`. 생성 시 확정·불변 |
 | current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신한다. `current_player_count < max_player_count`면 들어갈 수 있다. **`1`은 정상 상태다** — 마감 전이면 계속 모집하고 마감 후면 혼자 뛴다. `0`이 되면 방을 닫는다. **시작 전이면 항상 `CANCELLED`**(빈 방이 후보로 남지 않게), **시작 후면 유효 기록 유무로 갈린다** — 저장된 기록이 하나라도 있으면 `FINISHED`, 없으면 `CANCELLED`. 이탈 페널티 면제 판정에도 쓴다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
 
-> **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_player_count < max_player_count`인 방 중 `target_distance`·`start_at`이 맞고 `avg_pace`가 가까운 방을 고른다. 없으면 새 방을 만든다(1인 방).
+> **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_player_count < max_player_count`인 방 중 `target_distance`·`start_at`이 맞는 방을 후보로 삼고, `avg_pace`가 가까운 순으로 고른다 — 페이스는 순위 재료라 멀어도 후보에서 빠지지 않는다(`feature-spec.md` 방 배정 기준). 후보가 하나도 없을 때만 새 방을 만든다(1인 방).
 > **마감 판정**: 모집 마감(`start_at - 운영 설정 오프셋`)에 도달하면 스케줄러가 **인원과 무관하게** `MATCHED`로 확정한다(1인이면 1인으로 확정돼 혼자 뛴다). `max_player_count` 도달 여부와도 무관하다. 마감 시각은 컬럼이 아니라 계산값이라 스케줄러가 `start_at`으로 찾는다.
 
 ### running_players
@@ -154,7 +154,7 @@
 | total_elevation_gain | int | nullable | 누적 상승 고도(미터). 기기 GPS 고도를 운영 임계값으로 필터링해 계산하며 유효 표본이 부족하면 null. 구간(`running_splits.elevation_change`)의 합과는 다르다 |
 | total_calories | int | NOT NULL | 종료 시 서버가 확정 거리·시간과 사용자 체중으로 계산한 kcal |
 | gps_track_key | varchar | NOT NULL | S3 key — 전체 좌표·시각·기기 GPS 고도를 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
-| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드(6-1·6-2)·기록 목록(7-1)·기록 상세(7-2)·피드 카드가 전부 이 값을 쓴다. **다운샘플 시 구간 경계점을 반드시 보존한다** — `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리키므로 경계가 틀어지면 구간이 어긋난다 |
+| route_polyline | text | NOT NULL | 다운샘플 경로(encoded polyline, precision 5) — **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 상세(6-1·6-2)·기록 목록(7-1)·피드 카드가 전부 이 값을 쓴다. **다운샘플 시 구간 경계점을 반드시 보존한다** — `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리키므로 경계가 틀어지면 구간이 어긋난다 |
 | weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
@@ -404,7 +404,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | feed_images.feed_id | **[MVP 제외]** 피드 이미지 조회 |
 | comments.feed_id | **[MVP 제외]** 댓글 목록 |
 | comments.parent_comment_id | **[MVP 제외]** 답글 지연 로딩 |
-| running_records.user_id | 내 기록 조회 |
+| running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
 | running_records.running_room_id | 방 결과 조회 |
 | running_room_sessions.user_id | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 탄다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |

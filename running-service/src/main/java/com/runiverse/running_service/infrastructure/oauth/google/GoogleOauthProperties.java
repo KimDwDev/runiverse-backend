@@ -7,11 +7,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "oauth.google")
 @Validated
 public record GoogleOauthProperties(
-        @NotBlank String clientId,
-        String clientSecret,      // 모바일 클라이언트는 secret이 없다 — 비우면 토큰 요청에 싣지 않는다
-        @NotBlank String redirectUri,
-        @NotBlank String tokenUri,
-        @NotBlank String userInfoUri
+        @NotBlank String clientId,      // ID 토큰의 aud — 앱이 serverClientId로 넘기는 웹 클라이언트 ID
+        @NotBlank String jwkSetUri
 ) {
 
 }

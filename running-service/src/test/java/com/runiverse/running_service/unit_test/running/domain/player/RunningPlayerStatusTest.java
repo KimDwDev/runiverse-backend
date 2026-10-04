@@ -208,5 +208,24 @@ public class RunningPlayerStatusTest {
             // when & then
             assertThat(current.isTerminal()).isFalse();
         }
+
+        @ParameterizedTest
+        @EnumSource(value = RunningPlayerStatus.class,
+                names = {"RUNNING", "RUNNING_LEFT_PENALTY", "RUNNING_LEFT_NO_PENALTY", "COMPLETED"})
+        @DisplayName("뛰는 중·러닝 중 이탈·완주는 러닝을 시작한 상태다")
+        void startedStatuses(RunningPlayerStatus current) {
+            // when & then
+            assertThat(current.hasStartedRunning()).isTrue();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = RunningPlayerStatus.class,
+                names = {"RUNNING", "RUNNING_LEFT_PENALTY", "RUNNING_LEFT_NO_PENALTY", "COMPLETED"},
+                mode = EnumSource.Mode.EXCLUDE)
+        @DisplayName("시작 전 상태와 시작 전 이탈은 러닝을 시작한 상태가 아니다")
+        void notStartedStatuses(RunningPlayerStatus current) {
+            // when & then -> 확정만 되고 안 나타난 참가자를 세면 결과 화면 인원과 어긋난다
+            assertThat(current.hasStartedRunning()).isFalse();
+        }
     }
 }

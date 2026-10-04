@@ -22,6 +22,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -92,6 +93,22 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getCode(),
                 CommonErrorCode.MALFORMED_REQUEST_BODY.getMessage()
+        );
+    }
+
+    // 매핑된 컨트롤러가 없는 경로 — 정적 리소스 핸들러까지 내려갔다가 여기로 온다
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            NoResourceFoundException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 경로 매칭 실패 - method={}, path={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI());
+        markReason(request, ResourceErrorCode.NOT_FOUND.getCode());
+        return respond(
+                HttpStatus.NOT_FOUND,
+                ResourceErrorCode.NOT_FOUND.getCode(),
+                ResourceErrorCode.NOT_FOUND.getMessage()
         );
     }
 
@@ -183,7 +200,7 @@ public class GlobalExceptionHandler {
             case EMAIL_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_CREDENTIALS,
                  INVALID_REFRESH_TOKEN,
-                 OAUTH_CODE_EXCHANGE_FAILED -> HttpStatus.UNAUTHORIZED;
+                 OAUTH_LOGIN_FAILED -> HttpStatus.UNAUTHORIZED;
             case OAUTH_EMAIL_NOT_PROVIDED,
                  EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case UNSUPPORTED_PROVIDER,
@@ -192,7 +209,8 @@ public class GlobalExceptionHandler {
             case EMAIL_VERIFICATION_COOLDOWN,
                  EMAIL_VERIFICATION_DAILY_LIMIT_EXCEEDED,
                  TOO_MANY_VERIFICATION_ATTEMPTS -> HttpStatus.TOO_MANY_REQUESTS;
-            case EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
+            case OAUTH_PROVIDER_UNAVAILABLE,
+                 EMAIL_SEND_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;
         };
     }
 

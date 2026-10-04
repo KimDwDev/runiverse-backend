@@ -16,7 +16,7 @@
 | 2 | POST | `/api/v1/auth/email/verifications/confirm` | 이메일 인증번호 확인 → `verificationTicket` 발급 — 회원가입 2단계 |
 | 3 | POST | `/api/v1/auth/signup` | 로컬 회원가입 (인증 티켓/비밀번호) — 가입 즉시 자동 로그인 |
 | 4 | POST | `/api/v1/auth/login` | 로컬 로그인 |
-| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
+| 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — ID 토큰 서버 검증 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
 | 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
 | 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
@@ -27,7 +27,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 10 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
-| 13 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
+| 11 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 
 ### 3. 홈 화면
 
@@ -48,9 +48,9 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 12 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 **[미구현]** |
+| 12 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 13 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
@@ -85,73 +85,72 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 필터, 캘린더용) — 사용 화면: 기록, 피드 작성(템플릿 선택) |
-| 20 | GET | `/api/v1/running-records/{runningRecordId}` | 기록 상세 (경로·구간 포함) |
+| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 20 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 21 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 22 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 23 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 24 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 25 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 26 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 27 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 28 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 29 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 30 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 32 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 33 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 34 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 35 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 31 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 32 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 33 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 34 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
-| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 43 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 44 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 45 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 46 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 35 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 36 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 37 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 38 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 39 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 40 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 41 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 42 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 43 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 44 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 45 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 47 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 48 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 49 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 50 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 54 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 55 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개(13번 [MVP 제외], 14번 [미구현]) + SSE 스트림 1개(이벤트 2종) + WebSocket 채널 1개(메시지 7종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -162,7 +161,7 @@
 ## 0. 공통 규칙
 
 - **refreshToken**: 바디로 전달하고 클라이언트 Keychain/Keystore에 보관한다.
-- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2·7-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-2만 전체가 아니라 구간별로 잘라 `splits[].routes`에 싣는다), 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
+- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-2만 전체가 아니라 구간별로 잘라 `splits[].routes`에 싣는다), 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
@@ -170,7 +169,6 @@
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담아 돌려주므로 그쪽의 `null`은 "보내지 않았다"를 뜻한다.
 - **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 보낸 필드만 담는 기존 계약이라 그대로 유지한다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
-- **`[미구현]` 표기**: 만들기로 한 엔드포인트인데 아직 서버에 없다. `[MVP 제외]`와 **반대 뜻이다** — 그쪽은 "안 만든다"이고 이쪽은 "만들어야 하는데 못 만들었다"다. **마커가 사라지는 것이 곧 완료다.** 붙어 있는 동안 그 경로는 핸들러가 없어 정적 리소스로 떨어지고, `GlobalExceptionHandler`가 잡지 못해 `500`이 나간다 — 클라는 호출하지 않는다.
 
 ### 공통 에러 응답
 
@@ -479,11 +477,72 @@
 
 - **인증**: 불필요
 
-### 1-5. `POST /api/v1/auth/oauth/google` / 1-6. `POST /api/v1/auth/oauth/kakao` — 소셜 로그인 (인가 코드 방식)
+### 1-5. `POST /api/v1/auth/oauth/google` — 구글 로그인 (ID 토큰)
 
-> **서버 매핑은 `POST /auth/oauth/{provider}` 하나다.** 위 두 경로는 클라이언트가 실제로 호출하는 구체 URL이다. `{provider}`는 `google`·`kakao`(대소문자 무시). 지원하지 않는 값은 404가 아니라 **400 `UNSUPPORTED_PROVIDER`**로 응답한다 — 경로 자체는 매칭되기 때문이다.
+- **Request** (필수)
 
-- **Request** (둘 다 필수, 구글·카카오 공통)
+```json
+{
+  "idToken": "ey..."
+}
+```
+
+앱은 `google_sign_in`을 `serverClientId`(서버의 웹 클라이언트 ID)로 초기화하고, 로그인 결과의 ID 토큰을 그대로 보낸다.
+
+- **동작**
+  - 서버가 구글 공개키로 ID 토큰 서명을 검증하고 `iss`(구글)·`aud`(서버의 웹 클라이언트 ID)·만료를 확인한다. `email_verified`가 `true`인 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
+- **에러 (401 Unauthorized — ID 토큰 검증 실패(위조·만료·다른 앱용))**
+
+```json
+{
+  "code": "OAUTH_LOGIN_FAILED",
+  "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
+}
+```
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "ID 토큰은 필수입니다."
+}
+```
+
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 소유가 확인되지 않은 이메일(`email_verified`가 `true`가 아님)도 여기에 해당한다
+
+```json
+{
+  "code": "OAUTH_EMAIL_NOT_PROVIDED",
+  "message": "이메일 제공에 동의해야 소셜 로그인을 할 수 있습니다."
+}
+```
+
+- **에러 (409 Conflict — 소셜 최초 가입인데 이메일이 기존 로컬 계정과 겹침)** — 자동 연동하지 않는다. 클라는 로컬 로그인으로 안내
+
+```json
+{
+  "code": "EMAIL_ALREADY_EXISTS",
+  "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (503 Service Unavailable — 구글 공개키를 받아 오지 못함)** — 사용자 자격 증명 문제가 아니다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 1-6. `POST /api/v1/auth/oauth/kakao` — 카카오 로그인 (인가 코드 + PKCE)
+
+- **Request** (둘 다 필수)
 
 ```json
 {
@@ -492,13 +551,15 @@
 }
 ```
 
-- **동작**: 서버가 provider에 인가 코드 교환(PKCE `codeVerifier` 검증) → 유저 정보 조회 → `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **동작**
+  - 서버가 카카오에 인가 코드를 교환(PKCE `codeVerifier` 검증)하고 유저 정보를 조회한다. 유효하고(`is_email_valid`) 인증된(`is_email_verified`) 이메일만 쓴다
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
 - **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
-- **에러 (401 Unauthorized — 코드 교환 실패 — 위조·만료·PKCE 불일치)**
+- **에러 (401 Unauthorized — 코드 교환 실패(위조·만료·PKCE 불일치))**
 
 ```json
 {
-  "code": "OAUTH_CODE_EXCHANGE_FAILED",
+  "code": "OAUTH_LOGIN_FAILED",
   "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
 }
 ```
@@ -515,14 +576,9 @@
   "code": "INVALID_REQUEST",
   "message": "코드 검증값은 필수입니다."
 }
-
-{
-  "code": "UNSUPPORTED_PROVIDER",
-  "message": "지원하지 않는 로그인 제공자입니다."
-}
 ```
 
-- **에러 (403 Forbidden — 카카오 이메일 제공 미동의 — 가입 거부)**
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 인증되지 않은 이메일, 다른 카카오계정에 사용돼 만료된 이메일(`is_email_verified`·`is_email_valid`가 `true`가 아님)도 여기에 해당한다. 만료된 이메일은 카카오가 마스킹해서 준다
 
 ```json
 {
@@ -537,6 +593,31 @@
 {
   "code": "EMAIL_ALREADY_EXISTS",
   "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (503 Service Unavailable — 카카오 5xx·호출 한도 초과·연결 실패)** — 사용자 자격 증명 문제가 아니다. 한도 초과는 429 또는 400 + 카카오 `code: -10`으로 온다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
+### 소셜 로그인 미지원 provider — `POST /api/v1/auth/oauth/{provider}`
+
+> 1-5(`google`)·1-6(`kakao`) 외의 경로를 받는 자리다. 호출할 API가 아니라 목록에 없는 provider를 거절하는 규칙이라 번호를 붙이지 않는다.
+
+- **동작**: `{provider}`가 소문자 `google`·`kakao`가 아니면 404가 아니라 400으로 거절한다. 본문은 보지 않는다. `GOOGLE`·`KAKAO`처럼 대소문자가 다른 경로도 400이다
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "UNSUPPORTED_PROVIDER",
+  "message": "지원하지 않는 로그인 제공자입니다."
 }
 ```
 
@@ -817,7 +898,9 @@
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
   - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로 전용 스케줄러는 두지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
 - 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
-- **에러 (409 Conflict)**: `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+- **에러 (409 Conflict)**
+  - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
+  - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
 - **인증**: 필요
 
 **솔로는 SSE를 사용하지 않는다.** POST 응답으로 `MATCHED` 방 ID를 받은 뒤 WS에 연결해 `RUNNING_START`를 보내고 `RUNNING_STARTED` ack를 받는다 — 카운트다운만 건너뛸 뿐 매칭과 같은 순서이며, 보내는 메시지도 똑같다.
@@ -848,17 +931,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 이벤트 | 시점 |
 |---|---|
 | `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
-| `MATCH_ROOM_UPDATED` | 방 정보 갱신·취소·러닝 시작 — `data` = `RoomInfo` |
+| `MATCH_ROOM_UPDATED` | 인원 변동·방 취소·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다 |
+| `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 각 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다.
 - **keep-alive**: 주기적으로 주석 라인(`: ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
-#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원 [미구현]
-
-> **아직 서버에 없다.** `RunningMatchController`에 이 경로의 핸들러가 없어 정적 리소스 조회로 떨어지고, `NoResourceFoundException`은 `GlobalExceptionHandler`가 잡지 못해 **응답이 `500`이며 본문도 공통 에러 포맷을 따르지 않는다.** 아래 정의는 구현 시점의 계약이지 현재 동작이 아니다 — **클라는 구현 전까지 호출하지 않는다.**
->
-> 없는 동안 시간 선택 박스는 대기 인원과 `selectable` 없이 그린다. 마감이 지난 슬롯을 클라가 미리 거를 수 없으므로 `MATCH_SLOT_CLOSED`(409)가 경합이 아니라 **정상 경로로도** 나온다 — 받으면 그 슬롯을 지우고 다시 고르게 한다.
+#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
 - **Query**: `date`(YYYY-MM-DD, 생략 시 오늘), `targetDistanceMeters`(선택 — 주면 해당 거리 조건만 집계)
@@ -941,7 +1021,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
 - 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
-  - **14번이 `[미구현]`인 동안은 1차 차단이 없다** — 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 그 구간에서는 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
+  - **`slots`로 1차 차단하지 않는 동안에는** 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
 
 - **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
 
@@ -1164,6 +1244,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
+  | `ONBOARDING_NOT_COMPLETED` | `RUNNING_FINISH` 처리 중 온보딩 정보가 없음 |
   | `INTERNAL_SERVER_ERROR` | 예기치 못한 서버 오류 — 러닝은 계속된다. 표에 없는 오류는 이 코드로 마스킹된다 |
 
 - **`ERROR`로는 연결을 끊지 않는다.** 잘못된 메시지 하나 때문에 러닝 전체가 끊기면 안 되므로, 오류를 돌려주고 연결은 유지한다
@@ -1184,7 +1265,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | | 하는 일 | 이미 그 상태면 |
   |---|---|---|
   | 1 | 끝나지 않은 신청(`deleted_at` 없음)이 있고 이 방 참가자인지 확인 | 아니면 `NOT_ROOM_PLAYER` — **나간 사람은 신청이 닫혀 여기서 걸린다** |
-  | 2 | 배정(`is_connected`)이 끊겨 있으면 거부한다 | `INVALID_ROOM_STATE` — 1번을 통과한 뒤 남는 방어선이다 |
+  | 2 | 배정(`is_connected`)이 끊겨 있으면 빈자리가 있을 때 다시 잇는다(재입장) | 끊겨 있지 않으면 통과. 그새 자리가 찼으면 `INVALID_ROOM_STATE` |
   | 3 | 방이 `MATCHED`면 `STARTED`로 올린다 | 통과 |
   | 4 | 참가자가 `JOINED`면 `RUNNING`으로 올린다 | 통과 |
   | 5 | WS 세션을 방에 등록하고 세션이 `runningRoomId`를 기억한다(브로드캐스트 대상·이후 메시지의 방) | 덮어쓴다 |
@@ -1318,7 +1399,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
 - `profileImageUrl`·닉네임을 싣지 않는다 — 고빈도 메시지라 `userId`로만 지목하고 표시 정보는 진입 시 받은 참가자 목록에서 찾는다
 - **ack 없음** — 실패는 `ERROR`로 통지
-- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과·기록 상세 응답에 콤보 필드가 없다
+- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과 응답에 콤보 필드가 없다
 - 판정 규칙(붙는 거리·봐주는 횟수·신선도·보정)은 [feature-spec.md](feature-spec.md)의 러닝 콤보 절이 정본이다
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
@@ -1443,7 +1524,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
 - **`routes`는 서버가 폴리라인을 풀어서 내린다** — 저장은 `running_records.route_polyline`(encoded polyline)이지만 응답은 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. **러닝 결과(6-1·6-2) 중 전체 경로를 한 덩어리로 주는 곳은 여기뿐이다** — 6-2의 `routes`는 같은 경로를 구간별로 자른 조각이다
 - **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
-- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2·7-2)에만 쓴다
+- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2)에만 쓴다
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -1602,91 +1683,71 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 7-1. `GET /api/v1/users/me/running-records` — 내 러닝 기록 목록
 
-- **화면**: 기록(캘린더), 피드 작성(러닝기록 템플릿 선택)
-- **Query는 두 모드 중 하나다.** 캘린더는 `from`·`to`(`YYYY-MM-DD`)를 함께 보내 양 끝을 포함한 최대 31일의 전체 기록을 받고 `nextCursor=null`로 반환한다. 최근 목록은 `from`·`to` 없이 `cursor`·`limit`(기본 20, 최대 50)로 페이지네이션한다
-- `from`·`to`는 `running_records.start_at`의 KST 달력 날짜 기준이다. 두 모드의 파라미터를 섞거나 한쪽만 보내거나 `from > to`이거나 31일을 초과하면 `400 INVALID_REQUEST`다
+- **화면**: 기록(주간 요약·주간 차트·기록 캘린더·날짜별 카드)
+- **Query**: `from`·`to`(`YYYY-MM-DD`) 둘 다 필수다. 양 끝을 포함한 기간의 기록을 한 번에 받으며 기간은 최대 31일이다 — 예: 이번 주는 `?from=2026-09-27&to=2026-10-03`, 한 달은 `?from=2026-09-01&to=2026-09-30`, 하루는 `from`과 `to`를 같은 날로 보낸다
+- 날짜는 `running_records.start_at`의 KST 달력 날짜 기준이다. **자정을 넘긴 러닝은 시작한 날에 속한다.** 미래 날짜도 받는다 — 이번 주를 조회하면 아직 오지 않은 요일이 들어간다
+- 정렬은 `startedAt` 오름차순이다
 - **Response `200 OK`**
 
 ```json
 {
-  "items": [
+  "runningRecords": [
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 항상 값이 있다
+      "type": "MATCH",                // MATCH | SOLO
+      "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
+      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
       "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
-    }
-  ],
-  "nextCursor": null
-}
-```
-
-- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드와 피드 작성 템플릿 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록·피드 작성 절)
-- **인증**: 필요 (본인 기록만)
-
-### 7-2. `GET /api/v1/running-records/{runningRecordId}` — 기록 상세
-
-- **화면**: 기록(일정 상세 — 경로·러닝 기록)
-- **Response `200 OK`**
-
-```json
-{
-  "runningRecordId": 501,
-  "runningRoomId": 125,
-  "startedAt": "2026-07-25T19:00:30",
-  "finishedAt": "2026-07-25T19:30:30",
-  "totalDistanceMeters": 5020,
-  "totalDurationSeconds": 1800,
-  "averagePaceSecondsPerKm": 359,
-  "averageCadenceSpm": 165,
-  "totalCaloriesKcal": 352,
-  "totalElevationGainMeters": 42,
-  "routes": [                            // 본인 경로 [위도, 경도]
-    [35.1795543, 129.0756416],
-    [35.1842012, 129.0831421]
-  ],
-  "splits": [
-    {
-      "splitNumber": 1,
-      "distanceMeters": 1000,
-      "durationSeconds": 345,
-      "averagePaceSecondsPerKm": 345,
-      "averageCadenceSpm": 162,
-      "caloriesKcal": 68,
-      "elevationChangeMeters": 12
     }
   ]
 }
 ```
 
-- `averageCadenceSpm`·`totalElevationGainMeters`와 각 구간의 `averageCadenceSpm`·`elevationChangeMeters`는 유효 표본이 부족하면 null이다
-- 마지막 구간의 `distanceMeters`는 기본 구간 거리인 1000m보다 짧을 수 있다
-- 최상위 `totalElevationGainMeters`는 누적 상승 고도이고 구간의 `elevationChangeMeters`는 순고도차이므로 구간값의 합과 일치하지 않을 수 있다
-- **경로는 `routes` 좌표 배열로 내린다**(6-1·6-2와 같은 형식) — 상세 화면은 기록 하나를 크게 그리므로 서버가 `running_records.route_polyline`을 풀어 보낸다. 시작·종료 마커는 `routes`의 첫 원소·끝 원소다. 목록(7-1)은 카드에 선만 그리고 한 응답에 여러 건이 실려 `routePolyline` 문자열을 그대로 쓴다
-- 같은 방 참가자 비교는 6-1·6-2(러닝 결과 API) 사용 — 이 API는 **본인 기록 전용**
+- 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
+- **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
+- **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝이다. `INVITE`는 [MVP 제외] 예약값이라 나오지 않는다
+- **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
+- **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
+- **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
+- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록 절)
+- **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
 
-- **에러 (403 Forbidden — 본인 기록 아님)**
-
-```json
-{
-  "code": "FORBIDDEN",
-  "message": "권한이 없습니다."
-}
-```
-
-- **에러 (404 Not Found)**
+- **에러 (400 Bad Request)**
 
 ```json
 {
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다."
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 종료일은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 시작일은 종료일보다 늦을 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 기간은 31일 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
 }
 ```
 
-- **인증**: 필요 (본인)
+- 날짜가 `YYYY-MM-DD` 형식이 아니거나 없는 날짜(`2026-02-30`)면 마지막 기본 문구다. 형식 오류가 난 날짜는 순서·기간 검사를 하지 않는다
+- **인증**: 필요 (본인 기록만)
 
 ## 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 

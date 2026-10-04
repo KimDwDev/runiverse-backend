@@ -20,19 +20,23 @@ public class OauthVoTest {
     class ProviderTest {
 
         @Test
-        @DisplayName("provider 이름으로 Provider를 생성할 수 있다")
+        @DisplayName("소문자 provider 이름으로 Provider를 생성할 수 있다")
         void createProviderSuccess() {
             // when & then
-            assertThat(Provider.from("KAKAO")).isEqualTo(Provider.KAKAO);
-            assertThat(Provider.from("GOOGLE")).isEqualTo(Provider.GOOGLE);
+            assertThat(Provider.from("kakao")).isEqualTo(Provider.KAKAO);
+            assertThat(Provider.from("google")).isEqualTo(Provider.GOOGLE);
         }
 
         @Test
-        @DisplayName("소문자와 앞뒤 공백은 정규화된다")
-        void createProviderNormalizesInput() {
-            // when & then
-            assertThat(Provider.from("kakao")).isEqualTo(Provider.KAKAO);
-            assertThat(Provider.from("  Kakao  ")).isEqualTo(Provider.KAKAO);
+        @DisplayName("대소문자가 다르거나 앞뒤에 공백이 붙으면 지원하지 않는 provider로 본다")
+        void createProviderWithDifferentCaseFails() {
+            // when & then -> 경로는 소문자만 받는다
+            assertThatThrownBy(() -> Provider.from("KAKAO"))
+                    .isInstanceOf(ProviderNotSupportedException.class);
+            assertThatThrownBy(() -> Provider.from("Google"))
+                    .isInstanceOf(ProviderNotSupportedException.class);
+            assertThatThrownBy(() -> Provider.from(" kakao "))
+                    .isInstanceOf(ProviderNotSupportedException.class);
         }
 
         @Test

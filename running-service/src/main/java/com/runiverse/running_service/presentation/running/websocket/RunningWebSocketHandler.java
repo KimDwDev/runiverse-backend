@@ -167,7 +167,6 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                 RunningStartedPayload.from(snapshot)));
     }
 
-    // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다
     // 위치 배치에는 ack가 없다 — 실패만 ERROR로 돌려준다.
     // 다만 이 배치로 목표를 채워 러닝이 끝났으면 RUNNING_FINISHED를 보낸다
     private void handleLocationUpdate(WebSocketSession session, WebSocketEnvelope envelope)
@@ -206,7 +205,6 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             send(session, RunningMessageType.RUNNING_FINISHED.message());
         }
     }
-
 
     private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
         return request.locations().stream()

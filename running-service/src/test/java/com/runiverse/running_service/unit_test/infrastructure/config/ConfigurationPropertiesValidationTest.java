@@ -94,22 +94,13 @@ class ConfigurationPropertiesValidationTest {
     }
 
     @Test
-    @DisplayName("구글 client secret은 비어도 통과한다")
-    void googleAcceptsBlankClientSecret() {
-        // given -> 모바일 클라이언트는 secret이 없다. 비우면 토큰 요청에 싣지 않는다
-        GoogleOauthProperties properties = new GoogleOauthProperties(
-                "client-id", "", "redirect", "token-uri", "user-info-uri");
-
-        // when & then
-        assertThat(validator.validate(properties)).isEmpty();
-    }
-
-    @Test
     @DisplayName("구글 client id가 비면 위반이다")
     void googleRejectsBlankClientId() {
+        // given -> ID 토큰의 aud로 검증하는 값이라 비면 모든 구글 로그인이 거절된다
+        GoogleOauthProperties properties = new GoogleOauthProperties("", "jwk-set-uri");
+
         // when
-        Set<ConstraintViolation<GoogleOauthProperties>> violations = validator.validate(
-                new GoogleOauthProperties("", "secret", "redirect", "token-uri", "user-info-uri"));
+        Set<ConstraintViolation<GoogleOauthProperties>> violations = validator.validate(properties);
 
         // then
         assertThat(paths(violations)).containsExactly("clientId");
