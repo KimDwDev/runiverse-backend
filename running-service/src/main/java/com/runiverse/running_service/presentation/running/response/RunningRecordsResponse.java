@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.user.response;
+package com.runiverse.running_service.presentation.running.response;
 
 import com.runiverse.running_service.application.running.query.record.GetMyRunningRecordsResult;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
