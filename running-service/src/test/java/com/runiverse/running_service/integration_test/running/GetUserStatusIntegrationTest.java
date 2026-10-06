@@ -112,6 +112,8 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 runningRecordStore, // ExistsRunningRecordPort
                 runningRecordStore, // LoadRecentRunningPacesPort
                 onboardingStore,    // UpdateUserAvgPacePort
+                event -> {          // ApplicationEventPublisher
+                },
                 FINISH_PROPERTIES
         );
         updateRunningLocationHandler = new UpdateRunningLocationHandler(

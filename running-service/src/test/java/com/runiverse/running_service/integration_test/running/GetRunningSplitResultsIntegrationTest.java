@@ -90,6 +90,8 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 },
                 runningRecordStore,
                 runningRecordStore, onboardingStore,
+                event -> {
+                },
                 PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore, runningDistanceStore, runningDistanceStore,

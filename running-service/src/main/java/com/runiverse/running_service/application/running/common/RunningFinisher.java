@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.running.common;
 
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
+import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishRequestedEvent;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
@@ -30,11 +31,13 @@ import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
+import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -66,10 +69,11 @@ public class RunningFinisher {
     private final ExistsRunningRecordPort existsRunningRecordPort;
     private final LoadRecentRunningPacesPort loadRecentRunningPacesPort;
     private final UpdateUserAvgPacePort updateUserAvgPacePort;
+    private final ApplicationEventPublisher eventPublisher;
     private final RunningFinishProperties properties;
-    // 1인 확정 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
+    // 1인 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
     // 시작 전 이탈(CancelMatchHandler)의 면제와 같은 기준이다.
-    // 러닝 시작 후에는 인원이 줄지 않으므로(erd) 이 값이 곧 확정 시점 인원이다
+    // 시작 후 인원은 확정 인원에서 취소·탈퇴한 미출석자만 뺀 값이다
     private static final int PENALTY_MIN_PLAYER_COUNT = 2;
     // 이만큼 쌓여야 실측 평균으로 갈아탄다. 그전에는 온보딩 입력값을 쓴다.
     // 늘리면 자기 신고값이 오래 남고, 줄이면 한 번의 회복 러닝에 매칭 페이스가 흔들린다
@@ -120,7 +124,7 @@ public class RunningFinisher {
         confirmStatus(player, room, analysis.map(TrackAnalysis::totalDistanceMeters).orElse(0));
         updateRunningPlayerPort.update(player);
         // 6. 러닝이 끝났으니 자리를 비운다 — 인원과 방 상태는 건드리지 않는다.
-        //    러닝 시작 후 current_player_count는 "몇 명으로 확정됐나"로 고정된다(erd)
+        //    시작 후 인원은 접속 전 참가자의 취소·탈퇴로만 줄어든다
         room.finishSession(userId);
         // 7. 방은 마지막 한 사람이 끝낼 때 닫힌다.
         //    참가자 갱신을 먼저 반영해야 방금 끝낸 자신이 RUNNING으로 세어지지 않는다
@@ -201,7 +205,7 @@ public class RunningFinisher {
     }
 
     // 시작 때 RUNNING이 된 참가자가 전원 종료되면 방도 끝난다.
-    // 1인 방도 같은 규칙이다 — 인원이 0이 됐다고 닫지 않는다(시작 후 인원은 확정 시점 값으로 고정된다)
+    // 1인 방도 같은 규칙이다 — 완주·조기 종료는 인원을 줄이지 않으므로 인원으로 판정하지 않는다
     private void closeRoomIfLastPlayer(RunningRoom room) {
         RunningRoomId roomId = room.getRunningRoomId().orElseThrow();
         // 강제 종료가 먼저 닫았을 수 있다 — 끝난 방에 다시 부르면 도메인 예외다
@@ -215,6 +219,10 @@ public class RunningFinisher {
                 room.finish(closedAt);
             } else {
                 room.cancel(closedAt);
+            }
+            // 한 번도 붙지 않은 참가자가 남았다 — 커밋 뒤 강제 종료가 바로 닫는다
+            if (room.getSessions().stream().anyMatch(RoomSession::isConnected)) {
+                eventPublisher.publishEvent(new RunningForceFinishRequestedEvent(roomId.value()));
             }
         }
         // 방을 닫지 않아도 세션 변경(is_connected)은 저장돼야 한다
