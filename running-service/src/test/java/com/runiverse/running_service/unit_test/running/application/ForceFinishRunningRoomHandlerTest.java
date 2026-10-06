@@ -344,7 +344,7 @@ class ForceFinishRunningRoomHandlerTest {
                 .runningRoomId(ROOM_ID)
                 .type(RunningRoomType.MATCH)
                 .status(status)
-                // 시작 후 인원은 "몇 명으로 확정됐나"로 고정된다 — 제재 판정이 이 값을 본다
+                // 아무도 취소·탈퇴하지 않은 방이라 확정 인원 그대로다 — 제재 판정이 이 값을 본다
                 .currentPlayerCount(members.length)
                 .maxPlayerCount(4)
                 .startAt(LocalDateTime.now().minusHours(6))

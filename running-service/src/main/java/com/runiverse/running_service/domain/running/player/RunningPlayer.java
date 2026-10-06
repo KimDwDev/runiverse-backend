@@ -19,7 +19,7 @@ import java.util.UUID;
 public class RunningPlayer {
 
     private final RunningPlayerId runningPlayerId;   // 저장 전에는 null
-    private final UserId userId;                     // 논리 참조 — 탈퇴 시 앱이 지운다
+    private final UserId userId;                     // 논리 참조 — 탈퇴해도 남는다
     private final Pace avgPace;                      // 매칭 희망 페이스
     private final Distance targetDistance;           // 목표 거리 — 실적(total_*)과 다른 값이다
     private final DesiredPlayerCount desiredPlayerCount;           // 희망 매칭 인원 — 아직 합류 조건은 아니다
@@ -102,7 +102,7 @@ public class RunningPlayer {
         return Optional.ofNullable(deletedAt);
     }
 
-    // 끝난 신청은 상태만 봐서는 살아 있어 보인다 — 취소가 status를 JOINED로 남기기 때문
+    // 끝난 신청(deleted_at 있음)은 더 바꾸지 않는다
     private void ensureActive() {
         if (!isActive()) {
             throw new PlayerAlreadyLeftException();

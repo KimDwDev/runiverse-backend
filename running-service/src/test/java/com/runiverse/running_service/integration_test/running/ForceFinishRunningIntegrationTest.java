@@ -216,7 +216,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         RunningRoom room = storedRoom(roomId);
         assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
         assertThat(room.getCloseAt()).isPresent();
-        // 인원은 확정 시점 값으로 고정된다 — 자리를 비우는 것과 인원을 줄이는 것은 다르다
+        // 강제 종료는 인원을 줄이지 않는다 — 자리를 비우는 것과 인원을 줄이는 것은 다르다
         assertThat(room.getPlayerCount().current()).isEqualTo(2);
         assertThat(room.getSessions()).extracting(RoomSession::isConnected)
                 .containsOnly(false);

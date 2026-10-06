@@ -382,8 +382,7 @@ public class RunningFinisherTest {
         @Test
         @DisplayName("1인 확정 방에서는 비율이 미달이어도 제재하지 않는다")
         void exemptsSoleRunnerFromPenalty() {
-            // given -> 아무도 안 붙어 혼자 확정된 방. 곤란해지는 상대가 없다(feature-spec).
-            //          러닝 시작 후 인원은 줄지 않으므로 이 값이 곧 확정 시점 인원이다
+            // given -> 아무도 안 붙어 혼자 확정된 방이다. 곤란해지는 상대가 없다
             RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
             givenPlayer(player);
             givenRoom(room(RunningRoomType.MATCH, TARGET, RunningRoomStatus.STARTED, 1));
