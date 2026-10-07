@@ -1387,7 +1387,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **목표 거리를 채우면 서버가 러닝을 끝낸다.** 서버가 누적한 거리(`RUNNING_PROGRESS_UPDATED`의 `distanceMeters`와 같은 값)가 목표 이상이 되면, 그 배치를 저장하고 진행을 알린 뒤 `RUNNING_FINISH`(`forced=false`)와 같은 규칙으로 종료를 확정하고 `RUNNING_FINISHED`를 보낸다. 클라는 받으면 좌표 전송을 멈추고 로컬 트랙을 지운 뒤 결과 화면으로 간다
   - **목표가 없는 솔로 방은 해당 없다.** 사용자가 `RUNNING_FINISH`를 보내야 끝난다
   - **판정은 러닝 중 누적 거리로, 최종 상태는 확정 거리로 한다.** 둘은 계산 방식이 달라(확정은 저장된 트랙을 다시 분석한다) 드물게 목표 직전으로 확정될 수 있고, 그러면 `COMPLETED`가 아니라 거리 비율 판정을 따른다
-  - **누적이 목표 위에 있는 한 배치마다 다시 판정한다.** 종료가 실패하면 그 배치에 `ERROR`(`sourceType: RUNNING_LOCATION_UPDATE`)가 나가고 다음 배치가 다시 시도한다. 이미 끝난 뒤 늦게 도착한 배치는 기록을 덮어쓰지 않고 `RUNNING_FINISHED`만 다시 보내므로, 클라는 이 메시지를 **여러 번 받아도** 같은 처리를 해야 한다
+  - **누적이 목표 위에 있는 한 배치마다 다시 판정한다.** 종료가 실패하면 그 배치에 `ERROR`(`sourceType: RUNNING_LOCATION_UPDATE`)가 나가고 다음 배치가 다시 시도한다. 이미 끝난 뒤 늦게 도착한 배치는 **목표 유무와 관계없이** 저장·누적·진행 알림 없이 `RUNNING_FINISHED`만 다시 보내므로, 클라는 이 메시지를 **여러 번 받아도** 같은 처리를 해야 한다
 
 #### `RUNNING_PROGRESS_UPDATED` (S→C) — 참가자 진행 정보
 
@@ -1422,7 +1422,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `DISCONNECTED` | 연결 끊김 | WS 연결 종료 감지 — 앱 종료는 즉시, 응답 없이 끊긴 연결은 유휴 타임아웃(운영값) 뒤 |
   | `FINISHED` | 러닝 종료. **이후 바뀌지 않는다** | 종료 확정 — `RUNNING_FINISH`, 목표 도달 자동 종료, 강제 종료 |
 
-  - **`FINISHED`에서는 어디로도 가지 않는다.** 종료 ack를 받은 클라가 연결을 닫아도 `DISCONNECTED`로 퍼지지 않고, 종료 뒤 늦게 도착한 배치도 `FINISHED`로 나간다
+  - **`FINISHED`에서는 어디로도 가지 않는다.** 종료 ack를 받은 클라가 연결을 닫아도 `DISCONNECTED`로 퍼지지 않고, 종료 뒤 늦게 도착한 배치는 받지 않고(저장·누적·진행 알림 없음) `RUNNING_FINISHED`만 다시 보낸다
   - **`DISCONNECTED`는 `RUNNING`·`PAUSED`에서만 된다.** 한 번도 붙지 않은 참가자에게 쓰지 않는다
   - **좌표·`RUNNING_PAUSE`·`RUNNING_RESUME`이 오면 `DISCONNECTED`도 풀린다.** 메시지가 왔다는 것 자체가 연결돼 있다는 뜻이다 — 재연결한 뒤 옛 연결의 끊김이 늦게 반영돼도 다음 메시지가 바로잡는다
   - **재전송분만 온 배치는 상태를 바꾸지 않는다.** 멈춘 채 재연결해 로컬 트랙을 다시 보내도 `PAUSED`가 유지된다. 상태가 기록된 적 없는 참가자의 배치는 `RUNNING`으로 싣는다
