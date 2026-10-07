@@ -305,18 +305,67 @@ public class UpdateRunningLocationHandlerTest {
     }
 
     @Test
-    @DisplayName("끝난 참가자의 늦은 좌표는 FINISHED를 그대로 싣는다")
-    void lateBatchAfterFinishKeepsFinished() {
-        // given -> 처음 보는 좌표라도 FINISHED는 되살리지 않는다
-        given(appendRunningTrackPort.append(anyLong(), any(), anyList())).willReturn(1);
-        given(changeLiveRunningStatusPort.change(ROOM_ID, new UserId(USER_ID), LiveRunningStatus.RUNNING))
-                .willReturn(LiveRunningStatusChange.of(LiveRunningStatus.FINISHED, LiveRunningStatus.RUNNING));
+    @DisplayName("끝난 참가자의 늦은 배치는 저장·누적·통지·콤보·종료 판정을 모두 건너뛰고 끝났다고 답한다")
+    void skipsLateBatchAfterFinish() {
+        // given -> 종료 때 비운 버퍼가 다시 쌓이고 끝난 사람의 거리가 늘어나면 안 된다
+        given(loadLiveRunningStatusPort.load(ROOM_ID, new UserId(USER_ID)))
+                .willReturn(Optional.of(LiveRunningStatus.FINISHED));
 
         // when
-        updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+        UpdateRunningLocationResult result =
+                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L), trackPoint(1L))));
+
+        // then -> 끝났다고 답해야 WS가 RUNNING_FINISHED를 다시 보내 클라가 로컬 트랙을 지운다
+        assertThat(result.finished()).isTrue();
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
+        verify(publishRunningProgressPort, never()).publish(anyLong(), any());
+        verify(updateRunningComboJudge, never()).judge(anyLong(), any(), anyDouble());
+        verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
+        verify(changeLiveRunningStatusPort, never()).change(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("끝나지 않은 참가자는 상태가 무엇이든 배치를 받는다")
+    void acceptsBatchUnlessFinished() {
+        // given -> 멈춤·끊김은 막지 않는다. 처음 보는 좌표가 그 상태를 푼다
+        given(loadLiveRunningStatusPort.load(ROOM_ID, new UserId(USER_ID)))
+                .willReturn(Optional.of(LiveRunningStatus.DISCONNECTED));
+        given(appendRunningTrackPort.append(anyLong(), any(), anyList())).willReturn(1);
+        given(changeLiveRunningStatusPort.change(ROOM_ID, new UserId(USER_ID), LiveRunningStatus.RUNNING))
+                .willReturn(LiveRunningStatusChange.of(LiveRunningStatus.DISCONNECTED, LiveRunningStatus.RUNNING));
+
+        // when
+        UpdateRunningLocationResult result =
+                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
 
         // then
-        assertThat(capturePublished().status()).isEqualTo(LiveRunningStatus.FINISHED);
+        assertThat(result.finished()).isFalse();
+        verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
+        assertThat(capturePublished().status()).isEqualTo(LiveRunningStatus.RUNNING);
+    }
+
+    @Test
+    @DisplayName("상태를 못 읽으면 끝나지 않은 것으로 보고 배치를 받는다")
+    void acceptsBatchWhenStatusUnreadable() {
+        // given -> 끝난 사람을 놓치면 버퍼가 TTL까지 남을 뿐이지만, 뛰는 사람을 막으면 좌표가 사라진다
+        LogCapture log = LogCapture.of(UpdateRunningLocationHandler.class);
+        given(loadLiveRunningStatusPort.load(anyLong(), any()))
+                .willThrow(new RuntimeException("redis down"));
+
+        try {
+            // when
+            updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+
+            // then -> 좌표는 저장되고 진행도 알린다. 삼키는 곳이라 원인 예외를 담아 ERROR로 남긴다
+            verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
+            verify(publishRunningProgressPort).publish(anyLong(), any());
+            assertThat(log.messages(Level.ERROR)).contains(
+                    "[러닝] 참가자 상태 조회 실패: 처리하지 못한 예외 - roomId=" + ROOM_ID + ", userId=" + USER_ID);
+            assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+        } finally {
+            log.stop();
+        }
     }
 
     @Test

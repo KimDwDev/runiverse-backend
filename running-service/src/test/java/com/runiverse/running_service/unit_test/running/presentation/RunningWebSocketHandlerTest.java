@@ -67,6 +67,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -892,6 +893,24 @@ class RunningWebSocketHandlerTest {
 
         // then -> 클라는 RUNNING_FINISH의 ack와 똑같이 받아 로컬 트랙을 지우고 결과로 간다
         verify(runningFinisher).finish(ROOM_ID, USER_ID);
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
+    }
+
+    @Test
+    @DisplayName("이미 끝난 참가자의 늦은 좌표 배치는 저장하지 않고 RUNNING_FINISHED를 다시 보낸다")
+    void resendsFinishedForLateBatchAfterFinish() throws Exception {
+        // given -> 종료가 확정돼 화면 상태가 FINISHED다
+        started();
+        given(loadLiveRunningStatusPort.load(eq(ROOM_ID), any()))
+                .willReturn(Optional.of(LiveRunningStatus.FINISHED));
+
+        // when -> ack 전에 이미 보낸 배치나 재연결 재전송이 늦게 도착한다
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then -> 클라는 ack와 똑같이 받아 전송을 멈추고 로컬 트랙을 지운다
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        verify(runningFinisher, never()).finish(anyLong(), any());
         assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
     }
 

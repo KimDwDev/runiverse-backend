@@ -246,6 +246,32 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("끝난 뒤 늦게 온 좌표는 버퍼에 다시 쌓지 않고 거리도 늘리지 않는다")
+    void ignoresLateBatchAfterFinish() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        runFor(userId, runningRoomId, 400);
+        finish(userId, runningRoomId);
+        double metersBefore = runningDistanceStore.loadDistance(runningRoomId, new UserId(userId)).meters();
+        int publishedBefore = runningProgressPublisher.publishedIn(runningRoomId).size();
+
+        // when -> 종료 ack 전에 이미 보낸 배치가 늦게 도착한다
+        List<TrackPoint> late = List.of(
+                sensorPoint(400, 168, null, TRACK_START.plusSeconds(400)),
+                sensorPoint(401, 168, null, TRACK_START.plusSeconds(401)));
+        UpdateRunningLocationResult result = updateRunningLocationHandler.handle(
+                new UpdateRunningLocationCommand(userId, runningRoomId, null, late));
+
+        // then -> 끝났다고 답해 클라가 로컬 트랙을 지우게 하고, 아무것도 남기지 않는다
+        assertThat(result.finished()).isTrue();
+        assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isTrue();
+        assertThat(runningDistanceStore.loadDistance(runningRoomId, new UserId(userId)).meters())
+                .isEqualTo(metersBefore);
+        assertThat(runningProgressPublisher.publishedIn(runningRoomId)).hasSize(publishedBefore);
+    }
+
+    @Test
     @DisplayName("다섯 번째 러닝부터 평균 페이스가 실측으로 갈아탄다")
     void updatesAvgPaceAfterFiveRunnings() {
         // given -> 온보딩에서 330초/km라고 신고했지만 실제로는 초당 2.5m(400초/km)로 뛴다

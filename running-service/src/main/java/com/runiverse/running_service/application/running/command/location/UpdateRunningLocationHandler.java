@@ -33,6 +33,12 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
     @Override
     public UpdateRunningLocationResult handle(UpdateRunningLocationCommand command) {
         UserId userId = new UserId(command.userId());
+        // 0. 이미 끝난 참가자의 늦은 배치는 받지 않는다 — 종료 때 비운 버퍼가 다시 쌓이고,
+        //    끝난 사람의 거리가 늘어나 상대 화면과 콤보 판정에 섞인다.
+        //    끝났다고 답해 RUNNING_FINISHED를 다시 받은 클라가 로컬 트랙을 지우게 한다
+        if (isFinished(command.runningRoomId(), userId)) {
+            return new UpdateRunningLocationResult(true);
+        }
         // 1. 좌표를 저장한다 — 가장 먼저다. 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다.
         //    처음 보는 좌표 수를 받아 둔다 — 재전송분만 온 배치인지 가르는 근거다
         int appended = appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
@@ -85,6 +91,20 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
             log.error("[러닝] 참가자 상태 갱신 실패: 처리하지 못한 예외 - roomId={}, userId={}",
                     runningRoomId, userId.value(), e);
             return LiveRunningStatus.RUNNING;
+        }
+    }
+
+    // 상태를 못 읽으면 끝나지 않은 것으로 본다 — 표시용 값이 흔들려도 좌표 수용은 지금처럼 이어진다.
+    // 끝난 참가자를 놓치면 버퍼만 TTL까지 남고, 끝나지 않은 참가자를 막으면 좌표가 사라진다
+    private boolean isFinished(Long runningRoomId, UserId userId) {
+        try {
+            return loadLiveRunningStatusPort.load(runningRoomId, userId)
+                    .filter(status -> status == LiveRunningStatus.FINISHED)
+                    .isPresent();
+        } catch (RuntimeException e) {
+            log.error("[러닝] 참가자 상태 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}",
+                    runningRoomId, userId.value(), e);
+            return false;
         }
     }
 }
