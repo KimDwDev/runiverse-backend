@@ -115,6 +115,8 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                event -> {          // ApplicationEventPublisher
+                },
                 PROPERTIES
         );
         updateRunningLocationHandler = new UpdateRunningLocationHandler(

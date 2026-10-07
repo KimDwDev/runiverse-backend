@@ -93,6 +93,8 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningRecordStore, onboardingStore,
                 new LiveRunningStatusChanger(
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                event -> {
+                },
                 PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore, runningDistanceStore, runningDistanceStore,
