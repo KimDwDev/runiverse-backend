@@ -21,6 +21,7 @@ import com.runiverse.running_service.application.running.port.out.RunningComboPe
 import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
+import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.PublishRunningProgressPort;
@@ -339,6 +340,9 @@ class RunningWebSocketHandlerTest {
         assertThat(player.get("userId")).isEqualTo(USER_ID.toString());
         assertThat(player.get("distanceMeters")).isEqualTo(1_520);
         assertThat(player.get("currentPaceSecondsPerKm")).isEqualTo(345);
+        // 상태는 RUNNING_PROGRESS_UPDATED와 같은 문자열 계약이다
+        assertThat(player.get("status")).isEqualTo("RUNNING");
+        assertThat(player.containsKey("paused")).isFalse();
         // 콤보는 RUNNING_COMBO_UPDATED의 peers와 같은 모양으로 나가야
         // 클라가 한 벌의 코드로 스냅샷과 갱신을 다 그린다
         List<?> comboPeers = (List<?>) data.get("comboPeers");
@@ -1033,7 +1037,8 @@ class RunningWebSocketHandlerTest {
                 LocalDateTime.of(2026, 7, 25, 19, 0),
                 TARGET_DISTANCE_METERS,
                 List.of(new GetRunningSnapshotResult.Player(
-                        USER_ID, "완두콩", "https://example.test/p.png", 1_520, 345, false)),
+                        USER_ID, "완두콩", "https://example.test/p.png", 1_520, 345,
+                        LiveRunningStatus.RUNNING)),
                 List.of(new RunningComboPeer(PEER_ID, -8, 12, 30)));
     }
 
