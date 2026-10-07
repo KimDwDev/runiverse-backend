@@ -120,6 +120,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 runningTrackStore,       // AppendRunningTrackPort
                 runningDistanceStore,    // LoadRunningDistancePort
                 runningDistanceStore,    // SaveRunningDistancePort
+                liveRunningStatusStore,   // ChangeLiveRunningStatusPort
+                liveRunningStatusStore,   // LoadLiveRunningStatusPort
                 runningProgressPublisher, // PublishRunningProgressPort
                 newUpdateRunningComboJudge(),
                 new UpdateRunningFinishJudge(runningFinisher)

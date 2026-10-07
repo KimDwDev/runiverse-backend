@@ -93,6 +93,7 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore, runningDistanceStore, runningDistanceStore,
+                liveRunningStatusStore, liveRunningStatusStore,
                 runningProgressPublisher, newUpdateRunningComboJudge(),
                 new UpdateRunningFinishJudge(runningFinisher));
         finishRunningHandler = new FinishRunningHandler(runningFinisher);

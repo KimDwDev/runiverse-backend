@@ -20,6 +20,8 @@ import com.runiverse.running_service.application.running.port.in.StartRunningUse
 import com.runiverse.running_service.application.running.port.out.RunningComboPeer;
 import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
+import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
+import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.PublishRunningProgressPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
@@ -128,6 +130,13 @@ class RunningWebSocketHandlerTest {
     @Mock
     private PublishRunningProgressPort publishRunningProgressPort;
 
+    // 참가자 상태도 Redis에 있다. 적재 목이 0을 돌려줘 읽기만 하고, 빈 값이라 RUNNING으로 실린다
+    @Mock
+    private ChangeLiveRunningStatusPort changeLiveRunningStatusPort;
+
+    @Mock
+    private LoadLiveRunningStatusPort loadLiveRunningStatusPort;
+
     // 콤보 판정은 Redis를 여러 번 오가며 자기 안에서 실패를 삼킨다 — 이 테스트의 관심사가 아니다
     @Mock
     private UpdateRunningComboJudge updateRunningComboJudge;
@@ -163,7 +172,8 @@ class RunningWebSocketHandlerTest {
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
                 new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
                 new UpdateRunningLocationHandler(appendRunningTrackPort, loadRunningDistancePort,
-                        saveRunningDistancePort, publishRunningProgressPort, updateRunningComboJudge,
+                        saveRunningDistancePort, changeLiveRunningStatusPort, loadLiveRunningStatusPort,
+                        publishRunningProgressPort, updateRunningComboJudge,
                         new UpdateRunningFinishJudge(runningFinisher)),
                 finishRunningUsecase,
                 getRunningSnapshotUsecase,
