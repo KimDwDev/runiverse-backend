@@ -10,6 +10,7 @@ import com.runiverse.running_service.application.running.command.session.Registe
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
+import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusCommand;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
@@ -20,6 +21,7 @@ import com.runiverse.running_service.application.running.port.in.StartRunningUse
 import com.runiverse.running_service.application.running.port.out.RunningComboPeer;
 import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
+import com.runiverse.running_service.application.running.port.in.ChangeLiveRunningStatusUsecase;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
@@ -46,6 +48,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -78,6 +81,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -158,6 +162,10 @@ class RunningWebSocketHandlerTest {
     @Mock
     private StartRunningComboUsecase startRunningComboUsecase;
 
+    // 상태 변경은 Redis 판정과 방 발행을 함께 한다 — 여기서는 무엇을 언제 넘기는지만 본다
+    @Mock
+    private ChangeLiveRunningStatusUsecase changeLiveRunningStatusUsecase;
+
     private RunningSessionPort sessionPort;
 
     private RunningWebSocketHandler handler;
@@ -179,6 +187,7 @@ class RunningWebSocketHandlerTest {
                 finishRunningUsecase,
                 getRunningSnapshotUsecase,
                 startRunningComboUsecase,
+                changeLiveRunningStatusUsecase,
                 new RunningWebSocketProperties(Duration.ofSeconds(10), DataSize.ofKilobytes(512)));
         // 좌표를 한 번도 못 받은 상태에서 시작한다 — 누적 거리는 이 테스트의 관심사가 아니다
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
@@ -208,6 +217,12 @@ class RunningWebSocketHandlerTest {
     private static TextMessage locationUpdate(String data) {
         return new TextMessage("""
                 {"event":"RUNNING_LOCATION_UPDATE","data":%s}""".formatted(data));
+    }
+
+    // 일시정지·재개는 data를 보지 않는다 — 계약상 {}다
+    private static TextMessage liveStatus(String event) {
+        return new TextMessage("""
+                {"event":"%s","data":{}}""".formatted(event));
     }
 
     private static TextMessage runningFinish(String data) {
@@ -1114,5 +1129,140 @@ class RunningWebSocketHandlerTest {
         Map<?, ?> data = (Map<?, ?>) sent.data();
         assertThat(data.get("code")).isEqualTo(code);
         assertThat(data.get("sourceType")).isEqualTo(sourceType);
+    }
+
+    // ── 참가자 상태(RUNNING_START·RUNNING_PAUSE·RUNNING_RESUME) ──
+
+    private void startRoom(Integer targetDistanceMeters) throws Exception {
+        given(startRunningUsecase.handle(any()))
+                .willReturn(new StartRunningResult(ROOM_ID, targetDistanceMeters));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+    }
+
+    @Test
+    @DisplayName("RUNNING_START는 방의 목표 거리와 함께 RUNNING으로 바꾼다")
+    void startChangesStatusToRunning() throws Exception {
+        // when
+        startRoom(TARGET_DISTANCE_METERS);
+
+        // then -> 재연결이면 상대 화면의 DISCONNECTED·PAUSED가 여기서 풀린다
+        verify(changeLiveRunningStatusUsecase).handle(new ChangeLiveRunningStatusCommand(
+                USER_ID, ROOM_ID, TARGET_DISTANCE_METERS, LiveRunningStatus.RUNNING));
+    }
+
+    @Test
+    @DisplayName("RUNNING_START의 상태 변경은 콤보·스냅샷보다 먼저 한다")
+    void startChangesStatusBeforeSnapshot() throws Exception {
+        // when
+        startRoom(TARGET_DISTANCE_METERS);
+
+        // then -> 스냅샷이 먼저면 본인이 상태 없음(DISCONNECTED)으로 실린다
+        InOrder order = inOrder(changeLiveRunningStatusUsecase, startRunningComboUsecase,
+                getRunningSnapshotUsecase);
+        order.verify(changeLiveRunningStatusUsecase).handle(any());
+        order.verify(startRunningComboUsecase).handle(any());
+        order.verify(getRunningSnapshotUsecase).handle(any());
+    }
+
+    @Test
+    @DisplayName("RUNNING_START가 거절되면 상태를 바꾸지 않는다")
+    void rejectedStartKeepsStatus() throws Exception {
+        // given -> 끝난 참가자가 RUNNING으로 되살아나 보이면 안 된다
+        given(startRunningUsecase.handle(any())).willThrow(new NotRoomPlayerException());
+
+        // when
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // then
+        assertThatError(captureSent(), "NOT_ROOM_PLAYER", "RUNNING_START");
+        verifyNoInteractions(changeLiveRunningStatusUsecase);
+    }
+
+    @Test
+    @DisplayName("RUNNING_PAUSE는 세션의 방과 목표 거리로 PAUSED로 바꾼다")
+    void pauseChangesStatusToPaused() throws Exception {
+        // given
+        startRoom(TARGET_DISTANCE_METERS);
+
+        // when
+        handler.handleMessage(session, liveStatus("RUNNING_PAUSE"));
+
+        // then
+        verify(changeLiveRunningStatusUsecase).handle(new ChangeLiveRunningStatusCommand(
+                USER_ID, ROOM_ID, TARGET_DISTANCE_METERS, LiveRunningStatus.PAUSED));
+    }
+
+    @Test
+    @DisplayName("RUNNING_RESUME은 RUNNING으로 바꾼다")
+    void resumeChangesStatusToRunning() throws Exception {
+        // given
+        startRoom(TARGET_DISTANCE_METERS);
+        handler.handleMessage(session, liveStatus("RUNNING_PAUSE"));
+
+        // when
+        handler.handleMessage(session, liveStatus("RUNNING_RESUME"));
+
+        // then -> START에서 한 번, RESUME에서 한 번
+        verify(changeLiveRunningStatusUsecase, times(2)).handle(new ChangeLiveRunningStatusCommand(
+                USER_ID, ROOM_ID, TARGET_DISTANCE_METERS, LiveRunningStatus.RUNNING));
+    }
+
+    @Test
+    @DisplayName("일시정지·재개에는 ack가 없다")
+    void pauseAndResumeHaveNoAck() throws Exception {
+        // given
+        startRoom(TARGET_DISTANCE_METERS);
+
+        // when
+        handler.handleMessage(session, liveStatus("RUNNING_PAUSE"));
+        handler.handleMessage(session, liveStatus("RUNNING_RESUME"));
+
+        // then -> 마지막으로 나간 것은 RUNNING_STARTED 그대로다. 상대에게는 진행 통지로 알린다
+        assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_STARTED");
+    }
+
+    @Test
+    @DisplayName("목표 없는 솔로 방이면 목표 거리를 null로 넘긴다")
+    void pauseInSoloRoomPassesNullTarget() throws Exception {
+        // given
+        startRoom(null);
+
+        // when
+        handler.handleMessage(session, liveStatus("RUNNING_PAUSE"));
+
+        // then
+        verify(changeLiveRunningStatusUsecase).handle(new ChangeLiveRunningStatusCommand(
+                USER_ID, ROOM_ID, null, LiveRunningStatus.PAUSED));
+    }
+
+    @Test
+    @DisplayName("data 없이 와도 일시정지를 처리한다")
+    void pauseIgnoresData() throws Exception {
+        // given
+        startRoom(TARGET_DISTANCE_METERS);
+
+        // when -> 계약은 {}지만 서버는 data를 보지 않는다
+        handler.handleMessage(session, text("""
+                {"event":"RUNNING_PAUSE"}"""));
+
+        // then
+        verify(changeLiveRunningStatusUsecase).handle(new ChangeLiveRunningStatusCommand(
+                USER_ID, ROOM_ID, TARGET_DISTANCE_METERS, LiveRunningStatus.PAUSED));
+    }
+
+    @Test
+    @DisplayName("RUNNING_START 없이 일시정지·재개를 보내면 RUNNING_NOT_STARTED로 응답한다")
+    void rejectsPauseBeforeStart() throws Exception {
+        // when
+        handler.handleMessage(session, liveStatus("RUNNING_PAUSE"));
+        WebSocketEnvelope pauseError = captureLastSent(session);
+        handler.handleMessage(session, liveStatus("RUNNING_RESUME"));
+
+        // then -> 좌표 배치와 같은 규칙이다. 세션에 방이 없으면 바꿀 대상을 모른다
+        assertThatError(pauseError, "RUNNING_NOT_STARTED", "RUNNING_PAUSE");
+        assertThatError(captureLastSent(session), "RUNNING_NOT_STARTED", "RUNNING_RESUME");
+        verifyNoInteractions(changeLiveRunningStatusUsecase);
     }
 }

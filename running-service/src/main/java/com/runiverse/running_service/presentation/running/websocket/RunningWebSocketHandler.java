@@ -329,10 +329,12 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         UserId userId = userId(session);
         // 연결 끊김 ≠ 방 나가기 — running_room_sessions.is_connected는 여기서 건드리지 않는다.
-        // 명부는 접속 여부라 여기서 지운다
+        // 명부는 접속 여부라 여기서 지운다. 방·목표는 RUNNING_START가 세션에 새겨 둔 값이다
         removeRunningSessionUsecase.handle(
                 new RemoveRunningSessionCommand(
-                        userId.value(), new WebSocketRunningConnection(outbound(session), jsonMapper)));
+                        userId.value(), new WebSocketRunningConnection(outbound(session), jsonMapper),
+                        (Long) session.getAttributes().get(RUNNING_ROOM_ID),
+                        (Integer) session.getAttributes().get(TARGET_DISTANCE_METERS)));
         log.info("러닝 WebSocket 종료 — userId={}, status={}", userId(session), status);
     }
 
