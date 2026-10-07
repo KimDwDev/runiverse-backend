@@ -184,6 +184,7 @@ public class GlobalExceptionHandler {
                  ONBOARDING_NOT_COMPLETED,
                  NICKNAME_ALREADY_EXISTS,
                  PASSWORD_NOT_SET -> HttpStatus.CONFLICT;
+            case ACCOUNT_DELETION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             // 계정 존재 여부를 숨기려고 노출하지 않는다 — ErrorExposurePolicy에서도 제외돼 500으로 응답한다
             case USER_NOT_FOUND -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
@@ -218,7 +219,7 @@ public class GlobalExceptionHandler {
         return switch (code) {
             // 한 플레이어 = 최대 한 방 — 진행 중인 신청이 있으면 새로 못 연다
             case RUNNING_ALREADY_IN_PROGRESS -> HttpStatus.CONFLICT;
-            // NOT_ROOM_PLAYER는 대시보드 조회(6-1·6-2)가 REST로도 던진다 — 403이 실제로 나간다.
+            // NOT_ROOM_PLAYER는 러닝 결과·구간별 결과 조회가 REST로도 던진다 — 403이 실제로 나간다.
             // 나머지 둘은 아직 WS 전용이라 이 경로로 나갈 일이 없다 — 스위치를 비워둘 수 없어 의미에 맞는 상태만 적어둔다
             case ROOM_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case NOT_ROOM_PLAYER -> HttpStatus.FORBIDDEN;

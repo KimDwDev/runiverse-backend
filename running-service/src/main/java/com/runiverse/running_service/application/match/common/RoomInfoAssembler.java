@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-// 13번 조회와 SSE 세 이벤트가 같은 RoomInfo를 쓴다 — 조립은 여기 한 곳에서만 한다
+// 스트림의 MATCH_STARTED·MATCH_ROOM_UPDATED가 같은 RoomInfo를 쓴다 — 조립은 여기 한 곳에서만 한다
 @Component
 @RequiredArgsConstructor
 public class RoomInfoAssembler {
@@ -55,7 +55,7 @@ public class RoomInfoAssembler {
     }
 
     private RoomInfo.RoomPlayer toPlayer(MatchPlayer player, Map<UUID, PlayerProfile> profiles) {
-        // 신청은 남고 사용자만 사라진다 — users 행이 없으면 탈퇴다(api-spec §0)
+        // 신청은 남고 사용자만 사라진다 — users 행이 없으면 탈퇴다
         PlayerProfile profile = profiles.get(player.userId());
         boolean deleted = profile == null;
         return new RoomInfo.RoomPlayer(
