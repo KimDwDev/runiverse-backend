@@ -10,6 +10,8 @@ import com.runiverse.running_service.application.running.command.session.Registe
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
+import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusCommand;
+import com.runiverse.running_service.application.running.port.in.ChangeLiveRunningStatusUsecase;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.GetRunningSnapshotUsecase;
 import com.runiverse.running_service.application.running.port.in.RegisterRunningSessionUsecase;
@@ -17,6 +19,7 @@ import com.runiverse.running_service.application.running.port.in.RemoveRunningSe
 import com.runiverse.running_service.application.running.port.in.StartRunningComboUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
+import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotQuery;
 import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
@@ -58,6 +61,7 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
     private final FinishRunningUsecase finishRunningUsecase;
     private final GetRunningSnapshotUsecase getRunningSnapshotUsecase;
     private final StartRunningComboUsecase startRunningComboUsecase;
+    private final ChangeLiveRunningStatusUsecase changeLiveRunningStatusUsecase;
     private final RunningWebSocketProperties properties;
     // attribute에 저장할 runningRoomId
     public static final String RUNNING_ROOM_ID = "runningRoomId";
@@ -106,6 +110,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             switch (type) {
                 case HEALTH_CHECK -> send(session, RunningMessageType.HEALTH_CHECKED.message());
                 case RUNNING_START -> handleRunningStart(session, envelope);
+                case RUNNING_PAUSE -> handleLiveStatus(session, envelope, LiveRunningStatus.PAUSED);
+                case RUNNING_RESUME -> handleLiveStatus(session, envelope, LiveRunningStatus.RUNNING);
                 case RUNNING_LOCATION_UPDATE -> handleLocationUpdate(session, envelope);
                 case RUNNING_FINISH -> handleRunningFinish(session, envelope);
                 // HEALTH_CHECKED·RUNNING_STARTED·ERROR는 S→C 전용 — 클라가 보내면 처리 대상이 아니다.
@@ -142,6 +148,12 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
             registerRunningSessionUsecase.handle(new RegisterRunningSessionCommand(
                     userId.value(), request.runningRoomId(),
                     new WebSocketRunningConnection(outbound(session), jsonMapper)));
+            // 세션 등록 뒤, 스냅샷 전에 올린다 — 등록 전이면 자기 상태 통지를 놓치고,
+            // 스냅샷 뒤면 본인이 상태 없음(DISCONNECTED)으로 실린다.
+            // 재연결이면 상대 화면의 DISCONNECTED·PAUSED도 여기서 풀린다
+            changeLiveRunningStatusUsecase.handle(new ChangeLiveRunningStatusCommand(
+                    userId.value(), request.runningRoomId(),
+                    result.targetDistanceMeters(), LiveRunningStatus.RUNNING));
             // 세션 등록 뒤에 세운다 — 먼저 세우면 자기가 만든 콤보의 브로드캐스트를 놓친다
             startRunningComboUsecase.handle(new StartRunningComboCommand(
                     request.runningRoomId(), userId.value()));
@@ -253,6 +265,21 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         // 세션의 방은 지우지 않는다 — 지우면 ack를 놓친 클라의 재전송이
         // RUNNING_NOT_STARTED로 걸려 로컬 트랙을 영영 못 지운다. 멱등은 유스케이스가 책임진다
         send(session, RunningMessageType.RUNNING_FINISHED.message());
+    }
+
+    // 일시정지·재개는 상대 화면 표시용이다 — 기록은 좌표 판정이 따로 지킨다.
+    // ack가 없고 data는 보지 않는다. 상태가 그대로면 아무것도 나가지 않는다
+    private void handleLiveStatus(WebSocketSession session, WebSocketEnvelope envelope,
+                                  LiveRunningStatus status) throws IOException {
+        Long startedRoomId = (Long) session.getAttributes().get(RUNNING_ROOM_ID);
+        // RUNNING_START 없이 온 요청은 검증된 방이 없다 — 좌표 배치와 같은 규칙이다
+        if (startedRoomId == null) {
+            sendError(session, RunningWebSocketErrorCode.RUNNING_NOT_STARTED, envelope.event());
+            return;
+        }
+        changeLiveRunningStatusUsecase.handle(new ChangeLiveRunningStatusCommand(
+                userId(session).value(), startedRoomId,
+                (Integer) session.getAttributes().get(TARGET_DISTANCE_METERS), status));
     }
 
     private void sendError(
