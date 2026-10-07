@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.running.command.session.RemoveR
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusCommand;
+import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
@@ -24,6 +25,8 @@ import com.runiverse.running_service.application.running.port.out.AppendRunningT
 import com.runiverse.running_service.application.running.port.in.ChangeLiveRunningStatusUsecase;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
+import com.runiverse.running_service.application.running.port.out.LiveRunningStatusChange;
+import com.runiverse.running_service.application.running.port.out.RunningProgress;
 import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.PublishRunningProgressPort;
@@ -179,7 +182,9 @@ class RunningWebSocketHandlerTest {
                 jsonMapper,
                 startRunningUsecase,
                 new RegisterRunningSessionHandler(sessionPort, runningRoomMembershipPort, publishSupersedePort),
-                new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort),
+                new RemoveRunningSessionHandler(sessionPort, runningRoomMembershipPort,
+                        new LiveRunningStatusChanger(changeLiveRunningStatusPort,
+                                loadRunningDistancePort, publishRunningProgressPort)),
                 new UpdateRunningLocationHandler(appendRunningTrackPort, loadRunningDistancePort,
                         saveRunningDistancePort, changeLiveRunningStatusPort, loadLiveRunningStatusPort,
                         publishRunningProgressPort, updateRunningComboJudge,
@@ -193,6 +198,9 @@ class RunningWebSocketHandlerTest {
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
                 .willReturn(RunningDistance.empty());
         given(getRunningSnapshotUsecase.handle(any())).willReturn(snapshot());
+        // 상태 판정은 어댑터·LiveRunningStatusChange가 본다 — 여기서는 RUNNING이던 참가자로 둔다
+        given(changeLiveRunningStatusPort.change(anyLong(), any(), any())).willAnswer(invocation ->
+                LiveRunningStatusChange.of(LiveRunningStatus.RUNNING, invocation.getArgument(2)));
         given(session.getId()).willReturn("session-1");
         given(session.getAttributes()).willReturn(authenticated());
         given(other.getId()).willReturn("session-2");
@@ -1032,6 +1040,51 @@ class RunningWebSocketHandlerTest {
 
         // then -> 등록과 해제가 서로 다른 래퍼로 연결을 만들면 값 비교에 걸려 명부에 남는다
         assertThat(sessionPort.find(new UserId(USER_ID))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("시작한 연결이 끊기면 세션의 방으로 DISCONNECTED를 알린다")
+    void publishesDisconnectedOnClose() throws Exception {
+        // given
+        started();
+
+        // when
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        // then -> 상대 화면에서 멈춘 것과 끊긴 것을 가른다. 목표 거리도 세션에 새겨 둔 값이다
+        verify(changeLiveRunningStatusPort).change(
+                ROOM_ID, new UserId(USER_ID), LiveRunningStatus.DISCONNECTED);
+        ArgumentCaptor<RunningProgress> captor = ArgumentCaptor.forClass(RunningProgress.class);
+        verify(publishRunningProgressPort).publish(eq(ROOM_ID), captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(LiveRunningStatus.DISCONNECTED);
+        assertThat(captor.getValue().targetDistanceMeters()).isEqualTo(TARGET_DISTANCE_METERS);
+    }
+
+    @Test
+    @DisplayName("RUNNING_START 전에 끊긴 연결은 상태를 건드리지 않는다")
+    void closeBeforeStartKeepsStatus() throws Exception {
+        // given -> 명부에 오른 적이 없다
+        // when
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        // then
+        verifyNoInteractions(changeLiveRunningStatusPort, publishRunningProgressPort);
+    }
+
+    @Test
+    @DisplayName("새 연결이 이어받은 뒤 옛 연결이 닫히면 끊김으로 알리지 않는다")
+    void supersededCloseKeepsStatus() throws Exception {
+        // given -> 같은 인스턴스에서 재연결했다. 새 연결의 START가 옛 연결을 밀어냈다
+        started();
+        handler.handleMessage(other, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when -> 밀려난 옛 연결의 닫힘이 뒤늦게 도착한다
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        // then -> 명부의 자리는 새 연결 것이라 옛 연결의 닫힘은 아무것도 바꾸지 않는다
+        verify(changeLiveRunningStatusPort, never()).change(
+                anyLong(), any(), eq(LiveRunningStatus.DISCONNECTED));
     }
 
     // 종료 케이스는 전부 "이미 시작한 러닝"에서 출발한다
