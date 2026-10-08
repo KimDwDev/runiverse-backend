@@ -62,6 +62,10 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `domain=auth\|user\|match\|running\|scheduling\|common` | `userId`, `roomId`, `requestId`, `scheduledJobId` |
 | `result=success\|failure` | 이메일, 좌표, 예외 메시지 |
 | `reason=<아래 목록>` | 요청 경로 원문 — 템플릿(`/users/{userId}/profile`)만 |
+| `decision=<메트릭별 목록>` — 성공·실패가 아닌 업무 판정의 갈래 | |
+| `filter=accuracy\|spike\|gap\|stop` — 트랙 필터 단계 | |
+
+- `decision`은 `result`와 섞어 쓰지 않는다. `result`는 처리가 성공했는지, `decision`은 성공한 처리가 어느 쪽으로 판정했는지다. 값 목록은 메트릭마다 아래 직접 만드는 것 표에 적는다.
 
 - **같은 이름의 메트릭은 태그 key 구성이 항상 같아야 한다** — Prometheus 레지스트리가 강제한다. 해당 없는 값도 비우지 않고 정해진 값(`none`·`unknown`)을 넣는다.
 - 태그 key는 camelCase, 값은 소문자로 쓴다. `reason`만 코드 이름을 그대로 쓴다.
@@ -136,6 +140,10 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.auth.oauthlogin` | Counter | `OauthLoginHandler` → `AuthMetricAdapter` | 사용 중 — `provider=kakao\|google\|unknown`, `result`, `reason` |
 | `runiverse.websocket.messages` | Counter | 러닝 WebSocket 핸들러 | 예정 |
 | `runiverse.sse.events` | Counter | 매칭 스트림 연결 | 예정 |
+| `runiverse.running.finish.filtered` | DistributionSummary (baseUnit `meters`) | `RunningFinisher` → 러닝 메트릭 어댑터 | 예정 — `filter=accuracy\|spike\|gap\|stop`. 기록 확정 1건당 트랙 필터 단계별로 뺀 거리(feature-spec 트랙 필터). 판정값 조정용 |
+| `runiverse.running.finish.gaps` | Counter | `RunningFinisher` → 러닝 메트릭 어댑터 | 예정 — `decision=accepted\|rejected`. 관측 안 된 칸의 인정·거부 수 |
+| `runiverse.running.location.goal` | Counter | 목표 도달 판정 → 러닝 메트릭 어댑터 | 예정 — `decision=finished\|pending`. 러닝 중 누적이 목표를 넘은 배치에서 확정 거리로 끝냈는지, 미달이라 미뤘는지 |
+| `runiverse.running.location.goalpending` | DistributionSummary (baseUnit `meters`) | 목표 도달 판정 → 러닝 메트릭 어댑터 | 예정 — 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`) |
 
 ## 노출
 
