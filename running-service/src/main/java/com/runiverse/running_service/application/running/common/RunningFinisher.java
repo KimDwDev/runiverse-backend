@@ -38,6 +38,7 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 // 참가자 한 명의 러닝을 확정한다 — RUNNING_FINISH와 목표 도달 자동 종료가 같은 규칙으로 끝나도록 한곳에 둔다
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RunningFinisher {
@@ -86,6 +88,20 @@ public class RunningFinisher {
     // 자동 종료가 기록·상태·방을 따로 커밋하고, 트랙도 커밋을 기다리지 않고 바로 지운다
     @Transactional
     public void finish(Long runningRoomId, UUID userIdValue) {
+        confirm(runningRoomId, userIdValue, false);
+    }
+
+    // 목표 도달 자동 종료 — 확정 거리도 목표에 닿았을 때만 끝내고 true를 돌려준다.
+    // 러닝 중 누적과 확정 거리는 어긋날 수 있다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와
+    // 서버가 끊은 러닝이 조기 종료로 남는다. 못 미치면 아무것도 바꾸지 않고, 다음 배치가 다시 확인한다
+    @Transactional
+    public boolean finishOnGoal(Long runningRoomId, UUID userIdValue) {
+        return confirm(runningRoomId, userIdValue, true);
+    }
+
+    // 끝냈으면(이미 끝나 있었던 경우 포함) true다.
+    // 트랜잭션은 위 두 메서드가 연다 — 여기를 밖에서 바로 부르면 트랜잭션 없이 돈다
+    private boolean confirm(Long runningRoomId, UUID userIdValue, boolean onGoal) {   // ← 수정 ①
         RunningRoomId roomId = new RunningRoomId(runningRoomId);
         UserId userId = new UserId(userIdValue);
         // 1. 활성 신청이 아니라 이 방의 참가자를 찾는다 — 이미 끝난 참가자도 찾아야 멱등이 된다.
@@ -96,7 +112,7 @@ public class RunningFinisher {
         // 이미 확정된 참가자 - 기록을 덮어쓰지 않고 트랙만 정리한 뒤 ack를 다시 보낸다
         if (!player.isActive()) {
             deleteTrackAfterCommit(runningRoomId, userId);
-            return;
+            return true;
         }
         // RUNNING_START를 거치지 않은 참가자는 확정할 러닝이 없다.
         // 도메인 예외가 아니라 여기서 거른다 — 도메인 예외는 500으로 마스킹된다
@@ -110,11 +126,14 @@ public class RunningFinisher {
         // 온보딩에서 몸무게는 필수다 — 비어 있으면 러닝을 시작할 수 없었어야 할 사용자다
         BigDecimal weightKg = loadUserWeightPort.loadWeightKg(userId)
                 .orElseThrow(OnboardingNotCompletedException::new);
-
         // 3. 마지막 수신 좌표까지로 지표를 낸다. 멈춘 동안의 흔들림·GPS 튐·관측 못 한 이동은 먼저 걸러낸다.
         //    산출할 수 없는 트랙이면 실제 거리를 0으로 보고 상태만 확정한다
         RunningTrack track = loadRunningTrackPort.load(runningRoomId, userId);
-        FilteredTrack filtered = TrackFilter.apply(track.points(), trackFilterProperties);   // ← 추가
+        FilteredTrack filtered = TrackFilter.apply(track.points(), trackFilterProperties);
+        if (onGoal && !reachedGoal(runningRoomId, userIdValue, room, filtered)) {
+            return false;
+        }
+        logFilter(runningRoomId, userIdValue, onGoal, filtered.summary());
         Optional<TrackAnalysis> analysis = TrackAnalyzer.analyze(
                 filtered, analysisTargetMeters(room), weightKg, runningFinishProperties);
         // 4. 기록은 만들 수 있을 때만 남긴다 — 상태 확정과 기록 생성은 별개다.
@@ -137,6 +156,7 @@ public class RunningFinisher {
         // 8. 상대 화면에 종료를 알린다 — 이후로는 끊김·늦은 좌표가 와도 FINISHED 그대로다
         finishLiveStatusAfterCommit(runningRoomId, userId,
                 room.getTargetDistance().map(Distance::meters).orElse(null));
+        return true;                                                                     // ← 수정 ②
     }
 
     // 솔로 방은 목표 거리가 없다 — 상한을 넘겨 실측 트랙을 자르지 않고 그대로 분석한다
@@ -289,5 +309,41 @@ public class RunningFinisher {
         }
         // total_distance는 1 이상이 보장돼(ck_running_record_total_distance) 0으로 나눌 일이 없다
         updateUserAvgPacePort.updateAvgPace(userId, AvgPace.clamped((int) (seconds * 1000 / meters)));
+    }
+
+    // 10m 경계로 자르기 전의 거리로 잰다 — 경계로 자른 값은 실제보다 최대 10m 짧다
+    private boolean reachedGoal(Long runningRoomId, UUID userId, RunningRoom room,
+                                FilteredTrack filtered) {
+        int target = room.getTargetDistance().map(Distance::meters).orElse(0);
+        if (filtered.totalMeters() >= target) {
+            return true;
+        }
+        log.info("[러닝] 자동 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, "
+                        + "confirmedDistanceM={}, targetDistanceM={}",
+                runningRoomId, userId, Math.round(filtered.totalMeters()), target);
+        return false;
+    }
+
+    // 판정값을 실제 트랙으로 조정하려고 남긴다 — 원본 좌표는 남기지 않고, 들여다볼 러닝은
+    // roomId·userId로 원본 트랙을 찾는다. 위치 메시지 경로라 MDC에 userId가 없어 직접 싣는다
+    private void logFilter(Long runningRoomId, UUID userId, boolean onGoal,
+                           TrackFilterSummary summary) {
+        log.info("[러닝] 트랙 필터 성공 - roomId={}, userId={}, trigger={}, rawDistanceM={}, "
+                        + "filteredDistanceM={}, accuracyDroppedCount={}, spikePointCount={}, "
+                        + "jumpEdgeCount={}, spikeRemovedDistanceM={}, gapEdgeCount={}, "
+                        + "gapAcceptedCount={}, gapRejectedCount={}, gapRejectedDistanceM={}, "
+                        + "maxGapEdgeM={}, maxGapEdgeSec={}, stopCount={}, stopSec={}, "
+                        + "stopRemovedDistanceM={}, maxStopSec={}, maxStopDisplacementM={}, "
+                        + "radiusClampedCount={}",
+                runningRoomId, userId, onGoal ? "GOAL" : "FINISH",
+                Math.round(summary.rawMeters()), Math.round(summary.filteredMeters()),
+                summary.accuracyDroppedCount(), summary.spikePointCount(),
+                summary.jumpEdgeCount(), Math.round(summary.spikeRemovedMeters()),
+                summary.gapEdgeCount(), summary.gapAcceptedCount(), summary.gapRejectedCount(),
+                Math.round(summary.gapRejectedMeters()), Math.round(summary.maxGapEdgeMeters()),
+                Math.round(summary.maxGapEdgeSeconds()), summary.stopCount(),
+                Math.round(summary.stopSeconds()), Math.round(summary.stopRemovedMeters()),
+                Math.round(summary.maxStopSeconds()), Math.round(summary.maxStopDisplacementMeters()),
+                summary.radiusClampedCount());
     }
 }

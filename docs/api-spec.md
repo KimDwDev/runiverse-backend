@@ -62,13 +62,12 @@
 | `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
 
-**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
+**러닝 WebSocket** — `/api/v1/ws/running`, 메시지 8종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
 | 그룹 | 메시지 | 방향 | 비고 |
 |------|--------|------|------|
 | 카운트 다운 | `RUNNING_START` | C→S | 방 시작(`MATCHED`면 `STARTED`로)과 참가자 시작을 함께 처리 |
 | 러닝 중 | `RUNNING_LOCATION_UPDATE` | C→S | 고빈도 — ack 없음. 이 배치로 확정 거리가 목표를 채우면 서버가 종료하고 `RUNNING_FINISHED`를 보낸다 |
-| 러닝 중 | `RUNNING_GOAL_PENDING` | S→C | 러닝 중 누적은 목표를 넘었지만 확정 거리가 모자람 — 본인에게만 남은 거리를 알린다 |
 | 러닝 중 | `RUNNING_PROGRESS_UPDATED` | S→C | `status` 포함 — 멈춘 것·끊긴 것·끝난 것을 느려진 것과 구분. 상태가 바뀔 때도 나간다 |
 | 러닝 중 | `RUNNING_COMBO_UPDATED` | S→C | 나란히 달리는 상대와의 콤보 — 참가자 쌍마다 따로 센다 |
 | 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 상대 화면의 `status` 표시용. 기록 계산은 바꾸지 않는다 |
@@ -151,7 +150,7 @@
 | 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 8종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -1388,7 +1387,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
 - **목표 거리를 채우면 서버가 러닝을 끝낸다.** 서버가 누적한 거리(`RUNNING_PROGRESS_UPDATED`의 `distanceMeters`와 같은 값)가 목표 이상이 되면, 그 배치를 저장하고 진행을 알린 뒤 저장된 트랙을 트랙 필터로 분석해 **확정 거리**를 낸다. 확정 거리도 목표 이상이면 `RUNNING_FINISH`(`forced=false`)와 같은 규칙으로 종료를 확정하고 `RUNNING_FINISHED`를 보낸다. 클라는 받으면 좌표 전송을 멈추고 로컬 트랙을 지운 뒤 결과 화면으로 간다
   - **목표가 없는 솔로 방은 해당 없다.** 사용자가 `RUNNING_FINISH`를 보내야 끝난다
-  - **확정 거리가 목표 미만이면 끝내지 않는다.** 러닝 중 누적은 필터를 거치지 않아 확정 거리보다 크거나 같다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와 서버가 끊은 러닝이 조기 종료로 남는다. 대신 본인에게 `RUNNING_GOAL_PENDING`을 보내고 러닝은 계속된다
+  - **확정 거리가 목표 미만이면 끝내지 않고 아무것도 보내지 않는다.** 러닝 중 누적과 확정 거리는 어긋날 수 있다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와 서버가 끊은 러닝이 조기 종료로 남는다. 러닝은 그대로 계속되고 다음 배치가 다시 확인한다. 클라가 받는 종료 신호는 `RUNNING_FINISHED` 하나뿐이다
   - **목표 도달은 서버만 판정한다.** 클라는 자기 화면 거리가 목표를 넘어도 `RUNNING_FINISH`를 보내지 않고 `RUNNING_FINISHED`를 기다린다(`RUNNING_FINISH` 절)
   - **누적이 목표 위에 있는 한 배치마다 다시 판정한다.** 종료가 실패하면 그 배치에 `ERROR`(`sourceType: RUNNING_LOCATION_UPDATE`)가 나가고 다음 배치가 다시 시도한다. 이미 끝난 뒤 늦게 도착한 배치는 **목표 유무와 관계없이** 저장·누적·진행 알림 없이 `RUNNING_FINISHED`만 다시 보내므로, 클라는 이 메시지를 **여러 번 받아도** 같은 처리를 해야 한다
 
@@ -1462,23 +1461,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **ack 없음** — 실패는 `ERROR`로 통지
 - **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과 응답에 콤보 필드가 없다
 - 판정 규칙(붙는 거리·봐주는 횟수·신선도·보정)은 [feature-spec.md](feature-spec.md)의 러닝 콤보 절이 정본이다
-
-#### `RUNNING_GOAL_PENDING` (S→C) — 목표 확인 중, 남은 거리
-
-```json
-{
-  "remainingMeters": 40              // 목표 − 확정 거리. 항상 1 이상
-}
-```
-
-- **러닝 중 누적은 목표를 넘었는데 확정 거리가 모자랄 때 나간다.** 확정 거리는 트랙 필터(정지·GPS 튐·관측 안 된 칸 제외)를 거쳐 누적보다 작거나 같다 — 화면 거리로는 목표를 넘었는데 끝나지 않는 이유를 클라가 보여줄 수 있게 한다
-- **본인에게만 보낸다.** 다른 참가자의 진행 표시는 `RUNNING_PROGRESS_UPDATED`가 맡는다
-- **누적이 목표 위에 있고 확정 거리가 모자란 동안 배치마다 나간다.** 확정 거리가 목표를 채우는 배치에서는 이 메시지 대신 `RUNNING_FINISHED`가 나간다
-- **`remainingMeters`는 필터를 거친 누적 거리로 낸다** — 10m 경계로 자른 기록 거리가 아니다. 자른 값으로 내면 남은 거리가 최대 10m 부풀려진다
-- **받은 값은 이미 최대 10초 지난 값이다.** 클라는 받은 순간의 로컬 거리를 기억해 두고 `remainingMeters − (지금 로컬 거리 − 받은 순간 로컬 거리)`로 줄여 표시한다(0 아래로 내리지 않는다)
-- **클라는 이 상태에서도 `RUNNING_FINISH`를 보내지 않는다.** 수집·전송을 계속하며 `RUNNING_FINISHED`를 기다린다. 사용자가 종료를 길게 누르면 "N m 남았어요. 지금 끝내면 완주로 기록되지 않아요"를 한 번 확인받고 `RUNNING_FINISH`(`forced=true`)를 보낸다
-- `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
-- **ack 없음**
 
 #### `RUNNING_PAUSE` / `RUNNING_RESUME` (C→S) — 일시정지·재개
 
