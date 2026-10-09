@@ -26,8 +26,10 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
+import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchCooldownStore;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -120,7 +122,9 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 },
                 FINISH_PROPERTIES
         ,
-                DEFAULT_PROPERTIES);
+                DEFAULT_PROPERTIES,
+                // 메트릭은 이 테스트의 관심사가 아니다 — 메모리 레지스트리에 흘려보낸다
+                new RunningMetricAdapter(new SimpleMeterRegistry()));
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,        // AppendRunningTrackPort
                 runningDistanceStore,     // LoadRunningDistancePort

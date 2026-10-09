@@ -1,5 +1,6 @@
 package com.runiverse.running_service.unit_test.running.application;
 
+import com.runiverse.running_service.application.running.port.out.RecordRunningMetricPort;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
@@ -71,10 +72,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -156,6 +160,10 @@ public class RunningFinisherTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    // 메트릭 이름·태그는 RunningMetricAdapterTest가 본다 — 여기서는 언제 무엇을 알리는지만 본다
+    @Mock
+    private RecordRunningMetricPort recordRunningMetricPort;
+
     @Captor
     private ArgumentCaptor<RunningRecord> recordCaptor;
 
@@ -173,7 +181,7 @@ public class RunningFinisherTest {
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
                 existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
                 liveRunningStatusChanger, eventPublisher, PROPERTIES,
-                DEFAULT_PROPERTIES);
+                DEFAULT_PROPERTIES, recordRunningMetricPort);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
         lenient().when(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
@@ -1136,6 +1144,87 @@ public class RunningFinisherTest {
             assertThat(check.finished()).isTrue();
             verify(deleteRunningTrackPort).delete(ROOM_ID, new UserId(USER_ID));
             verifyNoInteractions(updateRunningPlayerPort);
+        }
+
+        @Test
+        @DisplayName("확정하면 필터 결과를 기록하고, 사용자 종료는 자동 종료 판정을 세지 않는다")
+        void recordsFilterOnUserFinish() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            finish();
+
+            // then
+            verify(recordRunningMetricPort).trackFiltered(any());
+            verify(recordRunningMetricPort, never()).autoFinishChecked(anyBoolean());
+            verify(recordRunningMetricPort, never()).userFinishDeferred(anyInt());
+        }
+
+        @Test
+        @DisplayName("자동 종료가 확정되면 확정으로 세고 필터 결과를 기록한다")
+        void recordsFinishedAutoFinish() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then
+            verify(recordRunningMetricPort).autoFinishChecked(true);
+            verify(recordRunningMetricPort).trackFiltered(any());
+        }
+
+        @Test
+        @DisplayName("자동 종료가 미뤄지면 미룸으로만 센다 — 다시 시도할 때마다 필터 결과를 쌓지 않는다")
+        void recordsPendingAutoFinishOnly() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID))).willReturn(jitteredTrack());
+
+            // when
+            finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then
+            verify(recordRunningMetricPort).autoFinishChecked(false);
+            verify(recordRunningMetricPort, never()).trackFiltered(any());
+        }
+
+        @Test
+        @DisplayName("다 뛰었다고 보고 누른 종료가 미뤄지면 남은 거리를 기록한다")
+        void recordsDeferredUserFinish() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID))).willReturn(jitteredTrack());
+
+            // when
+            GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+            // then
+            verify(recordRunningMetricPort).userFinishDeferred(check.remainingMeters());
+            verify(recordRunningMetricPort, never()).autoFinishChecked(anyBoolean());
+            verify(recordRunningMetricPort, never()).trackFiltered(any());
+        }
+
+        @Test
+        @DisplayName("이미 끝난 참가자의 재전송은 아무것도 세지 않는다")
+        void recordsNothingForAlreadyFinishedPlayer() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.COMPLETED, PAST.plusMinutes(20)));
+
+            // when
+            finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then -> 늦은 배치가 올 때마다 세면 확정 수가 부풀려진다
+            verifyNoInteractions(recordRunningMetricPort);
         }
     }
 }

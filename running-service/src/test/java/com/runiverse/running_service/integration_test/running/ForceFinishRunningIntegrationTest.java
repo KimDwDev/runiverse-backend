@@ -32,8 +32,10 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobId;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
+import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -129,7 +131,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                     }
                 },
                 FINISH_PROPERTIES,  // RunningFinishProperties
-                DEFAULT_PROPERTIES  // TrackFilterProperties
+                DEFAULT_PROPERTIES, // TrackFilterProperties
+                new RunningMetricAdapter(new SimpleMeterRegistry()) // RecordRunningMetricPort
         );
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,       // AppendRunningTrackPort

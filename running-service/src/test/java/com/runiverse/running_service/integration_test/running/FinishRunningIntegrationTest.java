@@ -30,7 +30,9 @@ import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
+import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,9 +75,11 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     private StartRunningHandler startRunningHandler;
     private UpdateRunningLocationHandler updateRunningLocationHandler;
     private FinishRunningHandler handler;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         signUpHandler = newSignUpHandler();
         completeOnboardingHandler = new CompleteOnboardingHandler(
                 userStore,        // LoadUserByIdPort
@@ -119,7 +123,8 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 },
                 PROPERTIES
         ,
-                DEFAULT_PROPERTIES);
+                DEFAULT_PROPERTIES,
+                new RunningMetricAdapter(meterRegistry));
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,     // AppendRunningTrackPort
                 runningDistanceStore,  // LoadRunningDistancePort
@@ -775,6 +780,14 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(storedPlayer(runningRoomId, userId).getStatus())
                 .isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
         assertThat(runningRecordStore.find(runningRoomId, new UserId(userId))).isPresent();
+
+        // then -> 자동 종료 미룸 1번, 사용자 종료 미룸 1번, 확정 1번이 각각 남는다
+        assertThat(meterRegistry.get("runiverse.running.location.goal")
+                .tag("decision", "pending").counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("runiverse.running.finish.goalpending").summary().count())
+                .isEqualTo(1);
+        assertThat(meterRegistry.get("runiverse.running.finish.filtered")
+                .tag("filter", "stop").summary().totalAmount()).isPositive();
     }
 
     @Test
