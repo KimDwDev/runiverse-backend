@@ -12,8 +12,9 @@ import com.runiverse.running_service.application.running.command.solo.OpenSoloRo
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningHandler;
-import com.runiverse.running_service.application.running.common.RunningFinishProperties;
+import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
@@ -717,6 +718,63 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(record.getTotalDistance().meters()).isEqualTo(TARGET_DISTANCE);
         assertThat(record.getSplits()).hasSize(TARGET_DISTANCE / 10);
         assertThat(gpsTrackUploader.isEmpty()).isFalse();
+    }
+
+    // 약 4,750m를 달린 뒤 제자리에서 2분 동안 3m씩 흔들린다 — 흔들림까지 센 누적(화면 거리)은 5km를 넘지만
+    // 필터를 거친 확정 거리는 목표에 못 미친다
+    private UpdateRunningLocationResult runThenJitter(UUID userId, Long runningRoomId) {
+        List<TrackPoint> points = new ArrayList<>();
+        int running = 1_900;
+        for (int i = 0; i < running; i++) {
+            points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+        }
+        double stopLatitude = 37.5 + (running - 1) * 2.5 / METERS_PER_DEGREE;
+        double metersPerDegreeLongitude = METERS_PER_DEGREE * Math.cos(Math.toRadians(37.5));
+        for (int i = 1; i <= 120; i++) {
+            double east = i % 2 == 0 ? 3.0 : -3.0;
+            points.add(new TrackPoint(running - 1 + i, stopLatitude,
+                    127.0 + east / metersPerDegreeLongitude, null, 5.0, null, null, 168, null,
+                    TRACK_START.plusSeconds(running - 1 + i)));
+        }
+        return updateRunningLocationHandler.handle(
+                new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));
+    }
+
+    @Test
+    @DisplayName("화면으로는 다 뛰었지만 확정 거리가 모자라면 자동 종료는 조용히 넘기고, 사용자 종료는 남은 거리를 돌려준다")
+    void defersUntilUserChoosesToQuit() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = startedMatchRoom(userId);
+
+        // when -> 흔들림까지 센 누적이 목표를 넘어 자동 종료가 확정 거리로 다시 확인한다
+        UpdateRunningLocationResult located = runThenJitter(userId, runningRoomId);
+
+        // then -> 확정 거리가 모자라 끝내지 않는다 — 사용자가 아무것도 하지 않았으니 알릴 것도 없다
+        assertThat(located.finished()).isFalse();
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING);
+
+        // when -> 화면 거리를 보고 다 뛰었다며 종료를 누른다
+        GoalCheck deferred = handler.handle(new FinishRunningCommand(runningRoomId, userId, false));
+
+        // then -> 확정하지 않고 남은 거리를 돌려준다. 계속 뛰어야 하므로 버퍼도 그대로다
+        assertThat(deferred.finished()).isFalse();
+        assertThat(deferred.remainingMeters()).isBetween(245, 260);
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(runningRecordStore.size()).isZero();
+        assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isFalse();
+
+        // when -> 남은 거리를 보고도 그만두기로 한다
+        GoalCheck quit = handler.handle(new FinishRunningCommand(runningRoomId, userId, true));
+
+        // then -> 그 시점 확정 거리로 바로 판정한다 — 목표의 95%라 제재 없는 조기 종료다
+        assertThat(quit.finished()).isTrue();
+        assertThat(storedPlayer(runningRoomId, userId).getStatus())
+                .isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
+        assertThat(runningRecordStore.find(runningRoomId, new UserId(userId))).isPresent();
     }
 
     @Test
