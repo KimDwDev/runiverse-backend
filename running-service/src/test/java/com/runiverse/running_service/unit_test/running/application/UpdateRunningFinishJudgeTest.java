@@ -2,6 +2,8 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
+import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
+import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -40,7 +42,7 @@ public class UpdateRunningFinishJudgeTest {
     @InjectMocks
     private UpdateRunningFinishJudge judge;
 
-    private boolean judge(Integer targetDistanceMeters, double meters) {
+    private UpdateRunningLocationResult judge(Integer targetDistanceMeters, double meters) {
         return judge.judge(ROOM_ID, new UserId(USER_ID), targetDistanceMeters, meters);
     }
 
@@ -48,13 +50,14 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("누적이 목표를 넘으면 확정 거리로 다시 확인해 끝낸다")
     void finishesWhenDistanceExceedsTarget() {
         // given -> 확정 거리도 목표 이상이다
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.reached());
 
         // when -> 5km 방에서 마지막 배치가 5,020m까지 밀었다
-        boolean finished = judge(TARGET_DISTANCE_METERS, 5_020.0);
+        UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 5_020.0);
 
         // then
-        assertThat(finished).isTrue();
+        assertThat(result.finished()).isTrue();
+        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
     }
 
@@ -62,13 +65,14 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("누적은 목표를 넘었어도 확정 거리가 모자라면 끝내지 않는다")
     void doesNotFinishWhenConfirmedDistanceFallsShort() {
         // given -> 누적에 섞인 흔들림을 빼면 목표 직전이다
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(false);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.pending(40));
 
         // when
-        boolean finished = judge(TARGET_DISTANCE_METERS, 5_020.0);
+        UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 5_020.0);
 
-        // then -> RUNNING_FINISHED를 보내지 않고 다음 배치가 다시 확인한다
-        assertThat(finished).isFalse();
+        // then -> RUNNING_FINISHED 대신 남은 거리를 알리고 다음 배치가 다시 확인한다
+        assertThat(result.finished()).isFalse();
+        assertThat(result.remainingMeters()).isEqualTo(40);
         verify(runningFinisher, never()).finish(anyLong(), any());
     }
 
@@ -76,13 +80,14 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("누적이 목표와 정확히 같아도 러닝을 끝낸다")
     void finishesWhenDistanceEqualsTarget() {
         // given
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.reached());
 
         // when -> 확정도 목표 이상이면 완주다 — 판정 경계를 확정과 맞춘다
-        boolean finished = judge(TARGET_DISTANCE_METERS, 5_000.0);
+        UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 5_000.0);
 
         // then
-        assertThat(finished).isTrue();
+        assertThat(result.finished()).isTrue();
+        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
     }
 
@@ -90,10 +95,11 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("목표에 못 미치면 끝내지 않는다")
     void doesNotFinishBelowTarget() {
         // when -> 1m 모자란다
-        boolean finished = judge(TARGET_DISTANCE_METERS, 4_999.9);
+        UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 4_999.9);
 
-        // then
-        assertThat(finished).isFalse();
+        // then -> 누적이 목표 밑이면 확정 거리를 낼 필요도, 알릴 것도 없다
+        assertThat(result.finished()).isFalse();
+        assertThat(result.remainingMeters()).isNull();
         verifyNoInteractions(runningFinisher);
     }
 
@@ -101,10 +107,10 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("목표 없는 솔로 방은 얼마를 뛰어도 끝내지 않는다")
     void doesNotFinishRoomWithoutGoal() {
         // when -> 솔로는 사용자가 RUNNING_FINISH를 보내야 끝난다
-        boolean finished = judge(null, 42_195.0);
+        UpdateRunningLocationResult result = judge(null, 42_195.0);
 
         // then
-        assertThat(finished).isFalse();
+        assertThat(result.finished()).isFalse();
         verifyNoInteractions(runningFinisher);
     }
 
@@ -112,14 +118,15 @@ public class UpdateRunningFinishJudgeTest {
     @DisplayName("이미 목표를 넘은 뒤의 배치도 다시 끝낸다")
     void finishesAgainWhileAboveTarget() {
         // given
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.reached());
 
         // when -> 종료 직후 늦게 도착한 배치다. 넘은 순간만 부르면 첫 종료가 실패했을 때 되살릴 길이 없다
         judge(TARGET_DISTANCE_METERS, 5_020.0);
-        boolean finished = judge(TARGET_DISTANCE_METERS, 5_031.0);
+        UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 5_031.0);
 
         // then -> 두 번째 호출은 종료의 멱등 경로가 받는다
-        assertThat(finished).isTrue();
+        assertThat(result.finished()).isTrue();
+        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher, times(2)).finishOnGoal(ROOM_ID, USER_ID);
     }
 

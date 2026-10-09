@@ -1,43 +1,44 @@
 package com.runiverse.running_service.unit_test.running.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
+import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
-import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.command.session.RegisterRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.session.RemoveRunningSessionHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningResult;
 import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusCommand;
+import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
+import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
+import com.runiverse.running_service.application.running.port.in.ChangeLiveRunningStatusUsecase;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.in.GetRunningSnapshotUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningComboUsecase;
 import com.runiverse.running_service.application.running.port.in.StartRunningUsecase;
-import com.runiverse.running_service.application.running.port.out.RunningComboPeer;
-import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
-import com.runiverse.running_service.application.running.port.in.ChangeLiveRunningStatusUsecase;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatusChange;
-import com.runiverse.running_service.application.running.port.out.RunningProgress;
 import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.PublishRunningProgressPort;
 import com.runiverse.running_service.application.running.port.out.PublishSupersedePort;
+import com.runiverse.running_service.application.running.port.out.RunningComboPeer;
 import com.runiverse.running_service.application.running.port.out.RunningDistance;
-import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
+import com.runiverse.running_service.application.running.port.out.RunningProgress;
+import com.runiverse.running_service.application.running.port.out.RunningRoomMembershipPort;
 import com.runiverse.running_service.application.running.port.out.RunningSessionPort;
+import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
+import com.runiverse.running_service.application.running.query.snapshot.GetRunningSnapshotResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.exception.CadenceOutOfRangeException;
-import com.runiverse.running_service.application.running.port.out.RunningRoomMembershipPort;
 import com.runiverse.running_service.infrastructure.websocket.RunningSessionRegistryAdapter;
 import com.runiverse.running_service.presentation.common.security.JwtHandshakeInterceptor;
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
@@ -887,7 +888,7 @@ class RunningWebSocketHandlerTest {
         // given -> 이번 배치를 반영한 누적이 목표에 닿고, 확정 거리도 목표 이상이다
         started();
         givenStoredDistance(TARGET_DISTANCE_METERS);
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.reached());
 
         // when
         handler.handleMessage(session, locationUpdate("""
@@ -899,18 +900,21 @@ class RunningWebSocketHandlerTest {
     }
 
     @Test
-    @DisplayName("누적은 목표에 닿았어도 확정 거리가 모자라면 RUNNING_FINISHED를 보내지 않는다")
-    void doesNotFinishWhenConfirmedDistanceFallsShort() throws Exception {
-        // given -> 누적에 섞인 흔들림을 빼면 목표 직전이다
+    @DisplayName("누적은 목표에 닿았어도 확정 거리가 모자라면 RUNNING_FINISHED 대신 남은 거리를 보낸다")
+    void sendsGoalPendingWhenConfirmedDistanceFallsShort() throws Exception {
+        // given -> 누적에 섞인 흔들림을 빼면 목표까지 40m 남았다
         started();
         givenStoredDistance(TARGET_DISTANCE_METERS);
-        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(false);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.pending(40));
 
         // when
         handler.handleMessage(session, locationUpdate("""
                 {"locations":[%s]}""".formatted(point(1))));
 
-        // then -> 종료 신호는 RUNNING_FINISHED 하나뿐이다 — 아무것도 보내지 않고 러닝이 이어진다
+        // then -> 화면 거리로 목표를 넘은 사용자가 끝난 줄 알고 멈추지 않게 남은 거리를 알린다
+        WebSocketEnvelope sent = captureLastSent(session);
+        assertThat(sent.event()).isEqualTo("RUNNING_GOAL_PENDING");
+        assertThat(((Map<?, ?>) sent.data()).get("remainingMeters")).isEqualTo(40);
         verify(session, never()).sendMessage(argThat(message ->
                 message.getPayload().toString().contains("RUNNING_FINISHED")));
     }

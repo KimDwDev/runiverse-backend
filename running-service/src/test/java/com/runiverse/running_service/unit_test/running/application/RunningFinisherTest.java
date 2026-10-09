@@ -2,11 +2,10 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionSynchronization;
-import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
-import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
-import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
 import com.runiverse.running_service.application.running.common.CalorieCalculator;
+import com.runiverse.running_service.application.running.common.GoalCheck;
+import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
@@ -17,6 +16,7 @@ import com.runiverse.running_service.application.running.port.out.DeleteRunningT
 import com.runiverse.running_service.application.running.port.out.ExistsRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.GpsTrackUpload;
+import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
@@ -45,6 +45,7 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.github.f4b6a3.uuid.UuidCreator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -1020,15 +1021,15 @@ public class RunningFinisherTest {
             givenTrack(track(1_801, 2.8));
 
             // when
-            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+            GoalCheck check = finisher.finishOnGoal(ROOM_ID, USER_ID);
 
             // then
-            assertThat(finished).isTrue();
+            assertThat(check.finished()).isTrue();
             assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.COMPLETED);
         }
 
         @Test
-        @DisplayName("확정 거리가 목표에 못 미치면 아무것도 바꾸지 않고 끝내지 않았다고 답한다")
+        @DisplayName("확정 거리가 목표에 못 미치면 아무것도 바꾸지 않고 남은 거리를 답한다")
         void leavesEverythingWhenConfirmedDistanceFallsShort() {
             // given -> 기록을 만들지 않으므로 업로드·날씨 스텁을 깔지 않는다
             RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
@@ -1038,10 +1039,11 @@ public class RunningFinisherTest {
             given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID))).willReturn(jitteredTrack());
 
             // when
-            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+            GoalCheck check = finisher.finishOnGoal(ROOM_ID, USER_ID);
 
-            // then -> 다음 배치가 다시 확인해야 하므로 트랙도 지우지 않는다
-            assertThat(finished).isFalse();
+            // then -> 남은 거리는 약 4,757m를 뺀 값이다. 다음 배치가 다시 확인해야 하므로 트랙도 지우지 않는다
+            assertThat(check.finished()).isFalse();
+            assertThat(check.remainingMeters()).isBetween(240, 250);
             assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING);
             verifyNoInteractions(createRunningRecordPort, updateRunningPlayerPort,
                     deleteRunningTrackPort, saveGpsTrackPort, updateRunningRoomPort);
@@ -1071,10 +1073,10 @@ public class RunningFinisherTest {
             givenPlayer(player(RunningPlayerStatus.COMPLETED, PAST.plusMinutes(20)));
 
             // when
-            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+            GoalCheck check = finisher.finishOnGoal(ROOM_ID, USER_ID);
 
             // then -> 클라가 로컬 트랙을 지울 수 있게 버퍼도 비운다
-            assertThat(finished).isTrue();
+            assertThat(check.finished()).isTrue();
             verify(deleteRunningTrackPort).delete(ROOM_ID, new UserId(USER_ID));
             verifyNoInteractions(updateRunningPlayerPort);
         }
