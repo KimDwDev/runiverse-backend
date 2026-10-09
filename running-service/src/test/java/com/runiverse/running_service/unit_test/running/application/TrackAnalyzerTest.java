@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.running.application;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.TrackAnalysis;
 import com.runiverse.running_service.application.running.common.TrackAnalyzer;
+import com.runiverse.running_service.application.running.common.TrackFilter;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static com.runiverse.running_service.support.TrackFilterFixtures.unfiltered;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -274,5 +276,38 @@ public class TrackAnalyzerTest {
 
         // then -> 예외로 흐름을 만들지 않는다
         assertThat(analysis).isEmpty();
+    }
+
+    @Test
+    @DisplayName("멈춘 시간은 총 시간에서 빠지고 기록 기간에는 남는다")
+    void stopIsExcludedFromDurationButNotFromPeriod() {
+        // given -> 2.8m/s로 200초, 제자리에서 60초 흔들림, 다시 2.8m/s로 200초
+        List<TrackPoint> points = new ArrayList<>();
+        long sequence = 0;
+        for (int i = 0; i < 200; i++) {
+            points.add(point(sequence++, 37.5 + i * 2.8 / METERS_PER_DEGREE, null,
+                    START.plusSeconds(i)));
+        }
+        double stopNorth = 199 * 2.8;
+        for (int i = 1; i <= 30; i++) {
+            double jitter = i % 2 == 0 ? 0.5 : -0.5;
+            points.add(point(sequence++, 37.5 + (stopNorth + jitter) / METERS_PER_DEGREE, null,
+                    START.plusSeconds(199 + i * 2L)));
+        }
+        for (int i = 1; i <= 200; i++) {
+            points.add(point(sequence++, 37.5 + (stopNorth + i * 2.8) / METERS_PER_DEGREE, null,
+                    START.plusSeconds(259 + i)));
+        }
+
+        // when -> 운영 판정값으로 실제 필터를 거친다
+        TrackAnalysis analysis = TrackAnalyzer.analyze(
+                TrackFilter.apply(points, DEFAULT_PROPERTIES), TARGET, WEIGHT, PROPERTIES)
+                .orElseThrow();
+
+        // then -> 움직인 시간은 약 400초, 실제 기간은 멈춘 60초를 더해 약 460초다
+        long periodSeconds = Duration.between(analysis.startAt(), analysis.endAt()).toSeconds();
+        assertThat(analysis.totalDurationSeconds()).isBetween(390, 405);
+        assertThat(periodSeconds).isGreaterThanOrEqualTo(450);
+        assertThat(analysis.avgPaceSecondsPerKm()).isBetween(350, 365);
     }
 }
