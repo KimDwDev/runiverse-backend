@@ -72,7 +72,8 @@ public class RunningFinisher {
     private final UpdateUserAvgPacePort updateUserAvgPacePort;
     private final LiveRunningStatusChanger liveRunningStatusChanger;
     private final ApplicationEventPublisher eventPublisher;
-    private final RunningFinishProperties properties;
+    private final RunningFinishProperties runningFinishProperties;
+    private final TrackFilterProperties trackFilterProperties;
     // 1인 방에서 혼자 뛰다 그만두는 것은 제재하지 않는다 — 곤란해지는 상대가 없다.
     // 시작 전 이탈(CancelMatchHandler)의 면제와 같은 기준이다.
     // 시작 후 인원은 확정 인원에서 취소·탈퇴한 미출석자만 뺀 값이다
@@ -110,11 +111,12 @@ public class RunningFinisher {
         BigDecimal weightKg = loadUserWeightPort.loadWeightKg(userId)
                 .orElseThrow(OnboardingNotCompletedException::new);
 
-        // 3. 마지막 수신 좌표까지로 지표를 낸다.
+        // 3. 마지막 수신 좌표까지로 지표를 낸다. 멈춘 동안의 흔들림·GPS 튐·관측 못 한 이동은 먼저 걸러낸다.
         //    산출할 수 없는 트랙이면 실제 거리를 0으로 보고 상태만 확정한다
         RunningTrack track = loadRunningTrackPort.load(runningRoomId, userId);
+        FilteredTrack filtered = TrackFilter.apply(track.points(), trackFilterProperties);   // ← 추가
         Optional<TrackAnalysis> analysis = TrackAnalyzer.analyze(
-                track.points(), analysisTargetMeters(room), weightKg, properties);
+                filtered, analysisTargetMeters(room), weightKg, runningFinishProperties);
         // 4. 기록은 만들 수 있을 때만 남긴다 — 상태 확정과 기록 생성은 별개다.
         //    기록이 없으면 표본이 그대로라 평균 페이스도 다시 낼 것이 없다
         analysis.ifPresent(result -> {
@@ -200,12 +202,12 @@ public class RunningFinisher {
             return;
         }
         double ratio = (double) totalDistanceMeters / target.get().meters();
-        boolean penalty = ratio < properties.penaltyDistanceRatio()
+        boolean penalty = ratio < runningFinishProperties.penaltyDistanceRatio()
                 && room.getPlayerCount().current() >= PENALTY_MIN_PLAYER_COUNT;
         player.leave(penalty, finishedAt);
         if (penalty) {
             // 근거는 status(RUNNING_LEFT_PENALTY)에 남고, "지금 막혀 있나"는 Redis TTL이 답한다
-            startMatchCooldownPort.start(player.getUserId(), properties.cooldown());
+            startMatchCooldownPort.start(player.getUserId(), runningFinishProperties.cooldown());
         }
     }
 
