@@ -85,23 +85,29 @@ public class RunningFinisher {
     private static final int AVG_PACE_SAMPLE_SIZE = 5;
 
     // 트랜잭션 경계는 여기다 — 위치 배치는 트랜잭션 없이 들어오므로 경계가 Handler에만 있으면
-    // 자동 종료가 기록·상태·방을 따로 커밋하고, 트랙도 커밋을 기다리지 않고 바로 지운다
+    // 자동 종료가 기록·상태·방을 따로 커밋하고, 트랙도 커밋을 기다리지 않고 바로 지운다.
+    // forced=false는 사용자가 다 뛰었다고 보고 누른 종료다 — 확정 거리가 모자라면 확정하지 않고
+    // 남은 거리를 돌려준다. 그대로 확정하면 화면으로는 다 뛴 사용자의 러닝이 조기 종료로 남는다.
+    // forced=true(조기 종료를 고른 종료·강제 종료 시각)는 그 시점 거리로 바로 확정한다
     @Transactional
-    public void finish(Long runningRoomId, UUID userIdValue) {
-        confirm(runningRoomId, userIdValue, false);
+    public GoalCheck finish(Long runningRoomId, UUID userIdValue, boolean forced) {
+        return confirm(runningRoomId, userIdValue, false, !forced);
     }
 
     // 목표 도달 자동 종료 — 확정 거리도 목표에 닿았을 때만 끝낸다.
     // 러닝 중 누적과 확정 거리는 어긋날 수 있다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와
-    // 서버가 끊은 러닝이 조기 종료로 남는다. 못 미치면 아무것도 바꾸지 않고 남은 거리를 돌려준다
+    // 서버가 끊은 러닝이 조기 종료로 남는다. 못 미치면 아무것도 바꾸지 않는다
     @Transactional
     public GoalCheck finishOnGoal(Long runningRoomId, UUID userIdValue) {
-        return confirm(runningRoomId, userIdValue, true);
+        return confirm(runningRoomId, userIdValue, true, true);
     }
 
     // 이미 끝나 있었던 경우도 reached다 — RUNNING_FINISHED를 다시 보내 클라가 로컬 트랙을 지우게 한다.
     // 트랜잭션은 위 두 메서드가 연다 — 여기를 밖에서 바로 부르면 트랜잭션 없이 돈다
-    private GoalCheck confirm(Long runningRoomId, UUID userIdValue, boolean onGoal) {
+    // deferIfShort — 확정 거리가 목표에 못 미치면 확정하지 않고 남은 거리를 돌려준다.
+    // 자동 종료와, 사용자가 다 뛰었다고 보고 누른 종료(forced=false)만 미룬다
+    private GoalCheck confirm(Long runningRoomId, UUID userIdValue, boolean onGoal,
+                              boolean deferIfShort) {
         RunningRoomId roomId = new RunningRoomId(runningRoomId);
         UserId userId = new UserId(userIdValue);
         // 1. 활성 신청이 아니라 이 방의 참가자를 찾는다 — 이미 끝난 참가자도 찾아야 멱등이 된다.
@@ -130,7 +136,7 @@ public class RunningFinisher {
         //    산출할 수 없는 트랙이면 실제 거리를 0으로 보고 상태만 확정한다
         RunningTrack track = loadRunningTrackPort.load(runningRoomId, userId);
         FilteredTrack filtered = TrackFilter.apply(track.points(), trackFilterProperties);
-        if (onGoal) {
+        if (deferIfShort) {
             int remaining = remainingToGoal(runningRoomId, userIdValue, room, filtered);
             if (remaining > 0) {
                 return GoalCheck.pending(remaining);
@@ -323,7 +329,7 @@ public class RunningFinisher {
         if (remaining <= 0) {
             return 0;
         }
-        log.info("[러닝] 자동 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, "
+        log.info("[러닝] 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, "
                         + "confirmedDistanceM={}, targetDistanceM={}",
                 runningRoomId, userId, Math.round(filtered.totalMeters()), target);
         // 0.3m만 모자라도 1m로 알린다 — 0으로 알리면 클라가 끝난 줄 안다

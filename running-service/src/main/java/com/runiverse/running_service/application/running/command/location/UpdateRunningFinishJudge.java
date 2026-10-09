@@ -1,6 +1,5 @@
 package com.runiverse.running_service.application.running.command.location;
 
-import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +20,10 @@ public class UpdateRunningFinishJudge {
         if (targetDistanceMeters == null || meters < targetDistanceMeters) {
             return UpdateRunningLocationResult.ofRunning();
         }
-        // 누적이 목표에 닿아도 확정 거리로 다시 확인한다 — 못 미치면 남은 거리를 알리고 다음 배치가 다시 본다.
-        // 이미 끝났으면 종료가 멱등이라 트랙만 정리하고 끝난 것으로 답한다
-        GoalCheck check = runningFinisher.finishOnGoal(runningRoomId, userId.value());
-        return check.finished()
+        // 누적이 목표에 닿아도 확정 거리로 다시 확인한다 — 못 미치면 아무것도 보내지 않고 다음 배치가 다시 본다.
+        // 사용자가 아무것도 하지 않았으니 알릴 것이 없다. 이미 끝났으면 종료가 멱등이라 끝난 것으로 답한다
+        return runningFinisher.finishOnGoal(runningRoomId, userId.value()).finished()
                 ? UpdateRunningLocationResult.ofFinished()
-                : UpdateRunningLocationResult.ofGoalPending(check.remainingMeters());
+                : UpdateRunningLocationResult.ofRunning();
     }
 }

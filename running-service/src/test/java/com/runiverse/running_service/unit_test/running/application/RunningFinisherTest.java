@@ -260,8 +260,10 @@ public class RunningFinisherTest {
         return recordCaptor.getValue();
     }
 
+    // 그 시점 거리로 바로 확정하는 종료 — 조기 종료를 고른 사용자와 강제 종료 시각이 이 경로다.
+    // 확정 거리가 모자랄 때 미루는 forced=false는 아래 자동·사용자 종료 미루기 테스트가 따로 본다
     private void finish() {
-        finisher.finish(ROOM_ID, USER_ID);
+        finisher.finish(ROOM_ID, USER_ID, true);
     }
 
     @Test
@@ -988,7 +990,7 @@ public class RunningFinisherTest {
     }
 
     @Nested
-    @DisplayName("자동 종료 재확인 테스트")
+    @DisplayName("확정 거리 미달 시 미루기 테스트")
     class GoalCheckTest {
 
         // 약 4,760m를 달린 뒤 제자리에서 2분 동안 3m씩 흔들린다 — 흔들림까지 더한 누적은 5km를 넘지만
@@ -1050,9 +1052,9 @@ public class RunningFinisherTest {
         }
 
         @Test
-        @DisplayName("같은 트랙도 사용자가 끝내면 확정 거리로 바로 판정한다")
+        @DisplayName("같은 트랙도 조기 종료를 고른 종료(forced=true)는 확정 거리로 바로 판정한다")
         void userFinishConfirmsSameTrackImmediately() {
-            // given -> 자동 종료라면 미뤘을 트랙이다
+            // given -> 자동 종료나 forced=false였다면 미뤘을 트랙이다
             RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
             givenPlayer(player);
             givenRoom(room(RunningRoomType.MATCH, TARGET));
@@ -1064,6 +1066,61 @@ public class RunningFinisherTest {
             // then -> 목표의 95%라 제재 없는 조기 종료다
             assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
             assertThat(savedRecord().getTotalDistance().meters()).isLessThan(TARGET);
+        }
+
+        @Test
+        @DisplayName("다 뛰었다고 보고 누른 종료(forced=false)도 확정 거리가 모자라면 미루고 남은 거리를 답한다")
+        void deferredUserFinishLeavesEverything() {
+            // given -> 화면 거리(흔들림 포함)로는 5km를 넘었다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID))).willReturn(jitteredTrack());
+
+            // when
+            GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+            // then -> 그대로 확정하면 다 뛰었다고 믿는 사용자의 러닝이 조기 종료로 남는다
+            assertThat(check.finished()).isFalse();
+            assertThat(check.remainingMeters()).isBetween(240, 250);
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING);
+            verifyNoInteractions(createRunningRecordPort, updateRunningPlayerPort,
+                    deleteRunningTrackPort, saveGpsTrackPort, updateRunningRoomPort);
+        }
+
+        @Test
+        @DisplayName("다 뛰었다고 보고 누른 종료(forced=false)가 확정 거리도 채웠으면 완주다")
+        void userFinishCompletesWhenConfirmedDistanceReachesTarget() {
+            // given -> 약 5,040m
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+            // then
+            assertThat(check.finished()).isTrue();
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("목표 없는 솔로 방은 forced=false여도 미루지 않고 끝낸다")
+        void soloUserFinishNeverDefers() {
+            // given -> 목표가 없으니 모자랄 거리도 없다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.SOLO, null));
+            givenTrack(track(400, 2.8));
+
+            // when
+            GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+            // then
+            assertThat(check.finished()).isTrue();
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.COMPLETED);
         }
 
         @Test

@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -57,12 +58,11 @@ public class UpdateRunningFinishJudgeTest {
 
         // then
         assertThat(result.finished()).isTrue();
-        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
     }
 
     @Test
-    @DisplayName("누적은 목표를 넘었어도 확정 거리가 모자라면 끝내지 않는다")
+    @DisplayName("누적은 목표를 넘었어도 확정 거리가 모자라면 끝내지 않고 아무것도 알리지 않는다")
     void doesNotFinishWhenConfirmedDistanceFallsShort() {
         // given -> 누적에 섞인 흔들림을 빼면 목표 직전이다
         given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(GoalCheck.pending(40));
@@ -70,10 +70,9 @@ public class UpdateRunningFinishJudgeTest {
         // when
         UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 5_020.0);
 
-        // then -> RUNNING_FINISHED 대신 남은 거리를 알리고 다음 배치가 다시 확인한다
+        // then -> 사용자가 아무것도 하지 않았으니 알릴 것이 없다. 다음 배치가 다시 확인한다
         assertThat(result.finished()).isFalse();
-        assertThat(result.remainingMeters()).isEqualTo(40);
-        verify(runningFinisher, never()).finish(anyLong(), any());
+        verify(runningFinisher, never()).finish(anyLong(), any(), anyBoolean());
     }
 
     @Test
@@ -87,7 +86,6 @@ public class UpdateRunningFinishJudgeTest {
 
         // then
         assertThat(result.finished()).isTrue();
-        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
     }
 
@@ -97,9 +95,8 @@ public class UpdateRunningFinishJudgeTest {
         // when -> 1m 모자란다
         UpdateRunningLocationResult result = judge(TARGET_DISTANCE_METERS, 4_999.9);
 
-        // then -> 누적이 목표 밑이면 확정 거리를 낼 필요도, 알릴 것도 없다
+        // then -> 누적이 목표 밑이면 확정 거리를 낼 필요가 없다
         assertThat(result.finished()).isFalse();
-        assertThat(result.remainingMeters()).isNull();
         verifyNoInteractions(runningFinisher);
     }
 
@@ -126,7 +123,6 @@ public class UpdateRunningFinishJudgeTest {
 
         // then -> 두 번째 호출은 종료의 멱등 경로가 받는다
         assertThat(result.finished()).isTrue();
-        assertThat(result.remainingMeters()).isNull();
         verify(runningFinisher, times(2)).finishOnGoal(ROOM_ID, USER_ID);
     }
 

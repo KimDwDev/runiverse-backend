@@ -143,7 +143,7 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.running.finish.filtered` | DistributionSummary (baseUnit `meters`) | `RunningFinisher` → 러닝 메트릭 어댑터 | 예정 — `filter=accuracy\|spike\|gap\|stop`. 기록 확정 1건당 트랙 필터 단계별로 뺀 거리(feature-spec 트랙 필터). 판정값 조정용 |
 | `runiverse.running.finish.gaps` | Counter | `RunningFinisher` → 러닝 메트릭 어댑터 | 예정 — `decision=accepted\|rejected`. 관측 안 된 칸의 인정·거부 수 |
 | `runiverse.running.location.goal` | Counter | 목표 도달 판정 → 러닝 메트릭 어댑터 | 예정 — `decision=finished\|pending`. 러닝 중 누적이 목표를 넘은 배치에서 확정 거리로 끝냈는지, 미달이라 미뤘는지 |
-| `runiverse.running.location.goalpending` | DistributionSummary (baseUnit `meters`) | 목표 도달 판정 → 러닝 메트릭 어댑터 | 예정 — 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`) |
+| `runiverse.running.finish.goalpending` | DistributionSummary (baseUnit `meters`) | `RUNNING_FINISH` 처리 → 러닝 메트릭 어댑터 | 예정 — `forced=false` 종료를 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`). 화면 거리와 서버 확정 거리가 얼마나 어긋나는지 본다 |
 
 ## 노출
 
