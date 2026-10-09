@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static java.time.temporal.ChronoUnit.SECONDS;
@@ -118,7 +119,8 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 event -> {          // ApplicationEventPublisher
                 },
                 FINISH_PROPERTIES
-        );
+        ,
+                DEFAULT_PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,        // AppendRunningTrackPort
                 runningDistanceStore,     // LoadRunningDistancePort

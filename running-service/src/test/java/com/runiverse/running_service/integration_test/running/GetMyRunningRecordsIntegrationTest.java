@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("내 러닝 기록 목록 조회 통합 테스트")
@@ -114,7 +115,8 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
                 event -> {          // ApplicationEventPublisher
                 },
                 PROPERTIES
-        );
+        ,
+                DEFAULT_PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,        // AppendRunningTrackPort
                 runningDistanceStore,     // LoadRunningDistancePort

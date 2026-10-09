@@ -2,7 +2,6 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import com.runiverse.running_service.application.running.common.BoundaryPoint;
 import com.runiverse.running_service.application.running.common.SplitAssembler;
-import com.runiverse.running_service.application.running.common.TrackDistance;
 import com.runiverse.running_service.application.running.common.TrackResampler;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
@@ -16,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.unfiltered;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -50,7 +50,7 @@ public class SplitAssemblerTest {
 
     private static List<SplitDraft> assemble(List<TrackPoint> points) {
         List<BoundaryPoint> boundaries = TrackResampler.resample(
-                points, TrackDistance.cumulativeMeters(points), TARGET, INTERVAL);
+                unfiltered(points), TARGET, INTERVAL);
         return SplitAssembler.assemble(boundaries, points, INTERVAL, WEIGHT, ELEVATION_NOISE);
     }
 

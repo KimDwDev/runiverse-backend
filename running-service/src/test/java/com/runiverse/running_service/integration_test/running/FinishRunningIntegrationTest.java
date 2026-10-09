@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -116,7 +117,8 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 event -> {          // ApplicationEventPublisher
                 },
                 PROPERTIES
-        );
+        ,
+                DEFAULT_PROPERTIES);
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,     // AppendRunningTrackPort
                 runningDistanceStore,  // LoadRunningDistancePort
@@ -415,11 +417,10 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("시계가 미래로 튄 트랙은 기록 없이 상태만 확정한다")
-    void confirmsStatusWhenClockJumps() {
-        // given -> 뒤쪽 좌표의 시각이 이틀 뒤다 — 단말 재부팅·시간대 변경의 전형.
-        // 경계 시각은 경계를 감싸는 두 점만 표본하므로, 경계(980m) 위의 점(392)에서 튀게 한다 —
-        // 표본되지 않는 점의 점프는 수학에 안 실려 기록이 정상으로 만들어지는 게 맞다
+    @DisplayName("한 점만 시계가 미래로 튄 트랙은 그 점만 빼고 기록한다")
+    void dropsSinglePointWhoseClockJumps() {
+        // given -> 경계(980m) 위의 점(392) 하나만 시각이 이틀 뒤다 — 단말 시계의 순간적인 튐.
+        // 그 점으로 드나드는 두 칸은 트랙 필터가 거리·시간 모두 빼므로 경계 시각에 실리지 않는다
         UUID userId = onboardedUser(EMAIL, NICKNAME);
         Long runningRoomId = runningRoom(userId);
         List<TrackPoint> points = new ArrayList<>();
@@ -432,16 +433,19 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         // when -> 예외가 새면 세션이 죽고 6시간 동안 종료가 안 된다
         finish(userId, runningRoomId);
 
-        // then
-        assertThat(runningRecordStore.size()).isZero();
+        // then -> 기간이 이틀로 부풀지 않는다
+        RunningRecord record = runningRecordStore.find(runningRoomId, new UserId(userId))
+                .orElseThrow();
+        assertThat(record.getPeriod().endAt()).isBefore(TRACK_START.plusMinutes(10));
+        assertThat(record.getTotalDuration().seconds()).isLessThan(400);
         assertThat(storedPlayer(runningRoomId).getStatus())
                 .isEqualTo(RunningPlayerStatus.COMPLETED);
     }
 
     @Test
-    @DisplayName("중간만 미래로 튀었다 돌아온 트랙도 기록 없이 상태만 확정한다")
-    void confirmsStatusWhenClockJumpsMidway() {
-        // given -> 단조화가 중간의 튐을 이후 전 구간에 보존한다 — 끝 시각만 보는 잘못된 검사가 놓치는 모양
+    @DisplayName("중간에 한 점만 시계가 튀었다 돌아와도 그 점만 빼고 기록한다")
+    void dropsSinglePointWhoseClockJumpsMidway() {
+        // given -> 200번째 점 하나만 이틀 뒤다
         UUID userId = onboardedUser(EMAIL, NICKNAME);
         Long runningRoomId = runningRoom(userId);
         List<TrackPoint> points = new ArrayList<>();
@@ -452,6 +456,32 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         runWith(userId, runningRoomId, points);
 
         // when
+        finish(userId, runningRoomId);
+
+        // then
+        RunningRecord record = runningRecordStore.find(runningRoomId, new UserId(userId))
+                .orElseThrow();
+        assertThat(record.getPeriod().endAt()).isBefore(TRACK_START.plusMinutes(10));
+        assertThat(record.getTotalDuration().seconds()).isLessThan(400);
+        assertThat(storedPlayer(runningRoomId).getStatus())
+                .isEqualTo(RunningPlayerStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("중간부터 시계가 통째로 미래로 밀린 트랙은 기록 없이 상태만 확정한다")
+    void confirmsStatusWhenClockShiftsForGood() {
+        // given -> 200번째 점부터 끝까지 이틀 뒤로 밀린다 — 재부팅·시간대 변경의 전형.
+        // 필터는 밀린 칸 하나만 빼지만, 이후 구간의 실제 시각이 이틀 뒤라 기록 기간이 하루를 넘는다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i < 400; i++) {
+            LocalDateTime at = TRACK_START.plusSeconds(i);
+            points.add(sensorPoint(i, 168, null, i >= 200 ? at.plusDays(2) : at));
+        }
+        runWith(userId, runningRoomId, points);
+
+        // when -> 예외가 새면 세션이 죽고 6시간 동안 종료가 안 된다
         finish(userId, runningRoomId);
 
         // then

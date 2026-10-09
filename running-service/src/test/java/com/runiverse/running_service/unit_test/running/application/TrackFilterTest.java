@@ -403,6 +403,43 @@ public class TrackFilterTest {
     }
 
     @Test
+    @DisplayName("시계가 뒤로 간 칸은 거리·시간 모두 빠진다")
+    void backwardClockEdgeIsRejected() {
+        // given -> 30초 달린 뒤 다음 점의 시각이 5초 뒤로 간다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .at(93, 0, 25)
+                .run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 거리만 인정하고 시간을 0으로 두면 그 칸 페이스가 0이 된다
+        assertThat(filtered.totalMeters()).isCloseTo(120.0, within(TOLERANCE_METERS));
+        assertThat(totalSeconds(filtered)).isEqualTo(40.0);
+    }
+
+    @Test
+    @DisplayName("한 점만 시계가 미래로 튀었다 돌아오면 그 점으로 드나드는 두 칸만 빠진다")
+    void singleClockJumpDropsOnlyItsEdges() {
+        // given -> 31번째 점만 시각이 이틀 뒤다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .at(93, 0, 30 + 2 * 24 * 3_600)
+                .at(96, 0, 32)
+                .run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then
+        assertThat(filtered.totalMeters()).isCloseTo(120.0, within(TOLERANCE_METERS));
+        assertThat(totalSeconds(filtered)).isEqualTo(40.0);
+    }
+
+    @Test
     @DisplayName("정확도가 상한보다 나쁜 점은 계산에서 빠진다")
     void inaccuratePointIsDropped() {
         // given -> 가운데 한 점의 정확도가 80m

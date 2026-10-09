@@ -43,6 +43,9 @@ public final class TrackFilter {
             boolean accepted;
             if (stopEdges[edge]) {
                 accepted = false;
+            } else if (to.recordedAt().isBefore(from.recordedAt())) {
+                // 시계가 뒤로 간 칸이다(재부팅·시간대 변경) — 시간을 믿을 수 없어 거리도 함께 뺀다
+                accepted = false;
             } else if (seconds > properties.gapMinSeconds()) {
                 accepted = acceptGap(points, runMeters, runSeconds, edge, meters, seconds,
                         properties, stats);

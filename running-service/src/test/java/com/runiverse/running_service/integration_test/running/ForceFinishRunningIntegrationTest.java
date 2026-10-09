@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // 예약 발화 → 남은 참가자 확정 → 방 종료까지를 실제 클래스로 잇는다.
@@ -127,7 +128,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                         forceFinishRequests.add(request);
                     }
                 },
-                FINISH_PROPERTIES
+                FINISH_PROPERTIES,  // RunningFinishProperties
+                DEFAULT_PROPERTIES  // TrackFilterProperties
         );
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,       // AppendRunningTrackPort

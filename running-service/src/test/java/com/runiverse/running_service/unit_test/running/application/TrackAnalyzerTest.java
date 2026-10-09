@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.runiverse.running_service.support.TrackFilterFixtures.unfiltered;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -50,7 +51,7 @@ public class TrackAnalyzerTest {
     }
 
     private static TrackAnalysis analyze(List<TrackPoint> points) {
-        return TrackAnalyzer.analyze(points, TARGET, WEIGHT, PROPERTIES).orElseThrow();
+        return TrackAnalyzer.analyze(unfiltered(points), TARGET, WEIGHT, PROPERTIES).orElseThrow();
     }
 
     @Test
@@ -194,7 +195,7 @@ public class TrackAnalyzerTest {
         List<TrackPoint> points = track(20, 2.8, null);
 
         // when & then -> 기록 없이 상태만 확정하는 경로다
-        assertThat(TrackAnalyzer.analyze(points, TARGET, WEIGHT, PROPERTIES)).isEmpty();
+        assertThat(TrackAnalyzer.analyze(unfiltered(points), TARGET, WEIGHT, PROPERTIES)).isEmpty();
     }
 
     @Test
@@ -204,7 +205,7 @@ public class TrackAnalyzerTest {
         List<TrackPoint> points = track(30, 10.0, null);
 
         // when & then
-        assertThat(TrackAnalyzer.analyze(points, TARGET, WEIGHT, PROPERTIES)).isEmpty();
+        assertThat(TrackAnalyzer.analyze(unfiltered(points), TARGET, WEIGHT, PROPERTIES)).isEmpty();
     }
 
     @Test
@@ -218,14 +219,14 @@ public class TrackAnalyzerTest {
         }
 
         // when & then -> 여기서 안 거르면 RunningRecord 생성에서 터져 기록이 통째로 사라진다
-        assertThat(TrackAnalyzer.analyze(points, TARGET, WEIGHT, PROPERTIES)).isEmpty();
+        assertThat(TrackAnalyzer.analyze(unfiltered(points), TARGET, WEIGHT, PROPERTIES)).isEmpty();
     }
 
     @Test
     @DisplayName("좌표가 없으면 기록을 만들지 않는다")
     void emptyTrackProducesNoAnalysis() {
         // when & then
-        assertThat(TrackAnalyzer.analyze(List.of(), TARGET, WEIGHT, PROPERTIES)).isEmpty();
+        assertThat(TrackAnalyzer.analyze(unfiltered(List.of()), TARGET, WEIGHT, PROPERTIES)).isEmpty();
     }
 
     @Test
@@ -269,7 +270,7 @@ public class TrackAnalyzerTest {
     void returnsOptionalInsteadOfThrowing() {
         // when
         Optional<TrackAnalysis> analysis = TrackAnalyzer.analyze(
-                track(2, 2.8, null), TARGET, WEIGHT, PROPERTIES);
+                unfiltered(track(2, 2.8, null)), TARGET, WEIGHT, PROPERTIES);
 
         // then -> 예외로 흐름을 만들지 않는다
         assertThat(analysis).isEmpty();
