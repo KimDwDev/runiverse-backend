@@ -28,6 +28,7 @@ import com.runiverse.running_service.presentation.common.security.JwtHandshakeIn
 import com.runiverse.running_service.presentation.common.websocket.WebSocketEnvelope;
 import com.runiverse.running_service.presentation.running.websocket.message.ErrorPayload;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningFinishRequest;
+import com.runiverse.running_service.presentation.running.websocket.message.RunningGoalPendingPayload;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningLocationUpdateRequest;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningMessageType;
 import com.runiverse.running_service.presentation.running.websocket.message.RunningStartRequest;
@@ -215,7 +216,12 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         // 로컬 트랙을 지우고 결과 화면으로 간다. 세션의 방은 RUNNING_FINISH와 같은 이유로 지우지 않는다
         if (result.finished()) {
             send(session, RunningMessageType.RUNNING_FINISHED.message());
+        } else if (result.remainingMeters() != null) {
+            // 화면 거리로는 목표를 넘었는데 끝나지 않는 이유를 알린다 — 끝난 줄 알고 멈추면 조기 종료로 남는다
+            send(session, RunningMessageType.RUNNING_GOAL_PENDING.message(
+                    new RunningGoalPendingPayload(result.remainingMeters())));
         }
+
     }
 
     private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
