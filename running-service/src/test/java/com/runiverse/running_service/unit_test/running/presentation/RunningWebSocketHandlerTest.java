@@ -80,6 +80,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
@@ -883,17 +884,35 @@ class RunningWebSocketHandlerTest {
     @Test
     @DisplayName("좌표 배치로 목표를 채우면 요청 없이도 러닝을 끝내고 RUNNING_FINISHED를 보낸다")
     void finishesWhenLocationReachesTarget() throws Exception {
-        // given -> 이번 배치를 반영한 누적이 목표에 닿는다
+        // given -> 이번 배치를 반영한 누적이 목표에 닿고, 확정 거리도 목표 이상이다
         started();
         givenStoredDistance(TARGET_DISTANCE_METERS);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
 
         // when
         handler.handleMessage(session, locationUpdate("""
                 {"locations":[%s]}""".formatted(point(1))));
 
         // then -> 클라는 RUNNING_FINISH의 ack와 똑같이 받아 로컬 트랙을 지우고 결과로 간다
-        verify(runningFinisher).finish(ROOM_ID, USER_ID);
+        verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
         assertThat(captureLastSent(session).event()).isEqualTo("RUNNING_FINISHED");
+    }
+
+    @Test
+    @DisplayName("누적은 목표에 닿았어도 확정 거리가 모자라면 RUNNING_FINISHED를 보내지 않는다")
+    void doesNotFinishWhenConfirmedDistanceFallsShort() throws Exception {
+        // given -> 누적에 섞인 흔들림을 빼면 목표 직전이다
+        started();
+        givenStoredDistance(TARGET_DISTANCE_METERS);
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(false);
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(point(1))));
+
+        // then -> 종료 신호는 RUNNING_FINISHED 하나뿐이다 — 아무것도 보내지 않고 러닝이 이어진다
+        verify(session, never()).sendMessage(argThat(message ->
+                message.getPayload().toString().contains("RUNNING_FINISHED")));
     }
 
     @Test
@@ -954,7 +973,7 @@ class RunningWebSocketHandlerTest {
         // given
         started();
         givenStoredDistance(TARGET_DISTANCE_METERS);
-        willThrow(new NotRoomPlayerException()).given(runningFinisher).finish(anyLong(), any());
+        willThrow(new NotRoomPlayerException()).given(runningFinisher).finishOnGoal(anyLong(), any());
 
         // when
         handler.handleMessage(session, locationUpdate("""

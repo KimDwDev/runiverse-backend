@@ -18,7 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -43,25 +45,45 @@ public class UpdateRunningFinishJudgeTest {
     }
 
     @Test
-    @DisplayName("누적이 목표를 넘으면 러닝을 끝낸다")
+    @DisplayName("누적이 목표를 넘으면 확정 거리로 다시 확인해 끝낸다")
     void finishesWhenDistanceExceedsTarget() {
+        // given -> 확정 거리도 목표 이상이다
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+
         // when -> 5km 방에서 마지막 배치가 5,020m까지 밀었다
         boolean finished = judge(TARGET_DISTANCE_METERS, 5_020.0);
 
         // then
         assertThat(finished).isTrue();
-        verify(runningFinisher).finish(ROOM_ID, USER_ID);
+        verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("누적은 목표를 넘었어도 확정 거리가 모자라면 끝내지 않는다")
+    void doesNotFinishWhenConfirmedDistanceFallsShort() {
+        // given -> 누적에 섞인 흔들림을 빼면 목표 직전이다
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(false);
+
+        // when
+        boolean finished = judge(TARGET_DISTANCE_METERS, 5_020.0);
+
+        // then -> RUNNING_FINISHED를 보내지 않고 다음 배치가 다시 확인한다
+        assertThat(finished).isFalse();
+        verify(runningFinisher, never()).finish(anyLong(), any());
     }
 
     @Test
     @DisplayName("누적이 목표와 정확히 같아도 러닝을 끝낸다")
     void finishesWhenDistanceEqualsTarget() {
+        // given
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+
         // when -> 확정도 목표 이상이면 완주다 — 판정 경계를 확정과 맞춘다
         boolean finished = judge(TARGET_DISTANCE_METERS, 5_000.0);
 
         // then
         assertThat(finished).isTrue();
-        verify(runningFinisher).finish(ROOM_ID, USER_ID);
+        verify(runningFinisher).finishOnGoal(ROOM_ID, USER_ID);
     }
 
     @Test
@@ -89,13 +111,16 @@ public class UpdateRunningFinishJudgeTest {
     @Test
     @DisplayName("이미 목표를 넘은 뒤의 배치도 다시 끝낸다")
     void finishesAgainWhileAboveTarget() {
+        // given
+        given(runningFinisher.finishOnGoal(ROOM_ID, USER_ID)).willReturn(true);
+
         // when -> 종료 직후 늦게 도착한 배치다. 넘은 순간만 부르면 첫 종료가 실패했을 때 되살릴 길이 없다
         judge(TARGET_DISTANCE_METERS, 5_020.0);
         boolean finished = judge(TARGET_DISTANCE_METERS, 5_031.0);
 
         // then -> 두 번째 호출은 종료의 멱등 경로가 받는다
         assertThat(finished).isTrue();
-        verify(runningFinisher, times(2)).finish(ROOM_ID, USER_ID);
+        verify(runningFinisher, times(2)).finishOnGoal(ROOM_ID, USER_ID);
     }
 
     @Test
@@ -103,7 +128,7 @@ public class UpdateRunningFinishJudgeTest {
     void propagatesFinishFailure() {
         // given
         willThrow(new RunningNotStartableException())
-                .given(runningFinisher).finish(anyLong(), any());
+                .given(runningFinisher).finishOnGoal(anyLong(), any());
 
         // when & then -> 삼키면 클라가 ERROR를 못 받고, 끝난 줄 모른 채 계속 뛴다
         assertThatThrownBy(() -> judge(TARGET_DISTANCE_METERS, 5_020.0))

@@ -985,4 +985,98 @@ public class RunningFinisherTest {
             }
         }
     }
+
+    @Nested
+    @DisplayName("자동 종료 재확인 테스트")
+    class GoalCheckTest {
+
+        // 약 4,760m를 달린 뒤 제자리에서 2분 동안 3m씩 흔들린다 — 흔들림까지 더한 누적은 5km를 넘지만
+        // 필터가 정지로 빼면 목표에 못 미친다
+        private RunningTrack jitteredTrack() {
+            List<TrackPoint> points = new ArrayList<>();
+            int running = 1_700;
+            for (int i = 0; i < running; i++) {
+                points.add(new TrackPoint(i, 37.5 + i * 2.8 / METERS_PER_DEGREE, 127.0,
+                        null, 5.0, null, null, CADENCE, null, TRACK_START.plusSeconds(i)));
+            }
+            double stopLatitude = 37.5 + (running - 1) * 2.8 / METERS_PER_DEGREE;
+            double metersPerDegreeLongitude = METERS_PER_DEGREE * Math.cos(Math.toRadians(37.5));
+            for (int i = 1; i <= 120; i++) {
+                double east = i % 2 == 0 ? 3.0 : -3.0;
+                points.add(new TrackPoint(running - 1 + i, stopLatitude,
+                        127.0 + east / metersPerDegreeLongitude, null, 5.0, null, null, CADENCE, null,
+                        TRACK_START.plusSeconds(running - 1 + i)));
+            }
+            return new RunningTrack("raw", points);
+        }
+
+        @Test
+        @DisplayName("확정 거리도 목표 이상이면 완주로 확정하고 끝냈다고 답한다")
+        void completesWhenConfirmedDistanceReachesTarget() {
+            // given -> 약 5,040m
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(finished).isTrue();
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("확정 거리가 목표에 못 미치면 아무것도 바꾸지 않고 끝내지 않았다고 답한다")
+        void leavesEverythingWhenConfirmedDistanceFallsShort() {
+            // given -> 기록을 만들지 않으므로 업로드·날씨 스텁을 깔지 않는다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID))).willReturn(jitteredTrack());
+
+            // when
+            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then -> 다음 배치가 다시 확인해야 하므로 트랙도 지우지 않는다
+            assertThat(finished).isFalse();
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING);
+            verifyNoInteractions(createRunningRecordPort, updateRunningPlayerPort,
+                    deleteRunningTrackPort, saveGpsTrackPort, updateRunningRoomPort);
+        }
+
+        @Test
+        @DisplayName("같은 트랙도 사용자가 끝내면 확정 거리로 바로 판정한다")
+        void userFinishConfirmsSameTrackImmediately() {
+            // given -> 자동 종료라면 미뤘을 트랙이다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(jitteredTrack());
+
+            // when
+            finish();
+
+            // then -> 목표의 95%라 제재 없는 조기 종료다
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
+            assertThat(savedRecord().getTotalDistance().meters()).isLessThan(TARGET);
+        }
+
+        @Test
+        @DisplayName("이미 끝난 참가자면 끝냈다고 답해 RUNNING_FINISHED를 다시 보내게 한다")
+        void answersFinishedForAlreadyFinishedPlayer() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.COMPLETED, PAST.plusMinutes(20)));
+
+            // when
+            boolean finished = finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then -> 클라가 로컬 트랙을 지울 수 있게 버퍼도 비운다
+            assertThat(finished).isTrue();
+            verify(deleteRunningTrackPort).delete(ROOM_ID, new UserId(USER_ID));
+            verifyNoInteractions(updateRunningPlayerPort);
+        }
+    }
 }
