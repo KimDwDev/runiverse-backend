@@ -1602,7 +1602,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
 | `isMe` | Boolean | O | 현재 사용자 여부 |
 | `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
-| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 `finishedAt − startedAt`보다 짧을 수 있다. 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
 | `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
 | `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
 | `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
@@ -1731,7 +1731,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
-| `durationSeconds` | Integer | O | 구간 소요 시간(초) |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 정지·관측하지 못한 시간은 들어가지 않는다 |
 | `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
 | `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
 | `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
