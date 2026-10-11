@@ -359,14 +359,16 @@ public class RunningFinisher {
                            TrackFilterSummary summary) {
         log.info("[러닝] 트랙 필터 성공 - roomId={}, userId={}, trigger={}, lastPointLagSec={}, "
                         + "rawDistanceM={}, filteredDistanceM={}, accuracyDroppedCount={}, "
-                        + "spikePointCount={}, jumpEdgeCount={}, spikeRemovedDistanceM={}, "
+                        + "accuracyRemovedDistanceM={}, spikePointCount={}, "
+                        + "jumpEdgeCount={}, spikeRemovedDistanceM={}, "
                         + "gapEdgeCount={}, gapAcceptedCount={}, gapRejectedCount={}, "
                         + "gapRejectedDistanceM={}, maxGapEdgeM={}, maxGapEdgeSec={}, stopCount={}, "
                         + "stopSec={}, stopRemovedDistanceM={}, maxStopSec={}, "
                         + "maxStopDisplacementM={}, radiusClampedCount={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH", lastPointLagSec,
                 Math.round(summary.rawMeters()), Math.round(summary.filteredMeters()),
-                summary.accuracyDroppedCount(), summary.spikePointCount(),
+                summary.accuracyDroppedCount(), Math.round(summary.accuracyRemovedMeters()),
+                summary.spikePointCount(),
                 summary.jumpEdgeCount(), Math.round(summary.spikeRemovedMeters()),
                 summary.gapEdgeCount(), summary.gapAcceptedCount(), summary.gapRejectedCount(),
                 Math.round(summary.gapRejectedMeters()), Math.round(summary.maxGapEdgeMeters()),
