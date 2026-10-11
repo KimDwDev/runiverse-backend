@@ -218,7 +218,6 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         if (result.finished()) {
             send(session, RunningMessageType.RUNNING_FINISHED.message());
         }
-
     }
 
     private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
