@@ -72,7 +72,7 @@
 | 러닝 중 | `RUNNING_GOAL_PENDING` | S→C | `RUNNING_FINISH`(`forced=false`)의 확정 거리가 목표에 못 미침 — 종료를 확정하지 않고 본인에게 남은 거리를 알린다 |
 | 러닝 중 | `RUNNING_COMBO_UPDATED` | S→C | 나란히 달리는 상대와의 콤보 — 참가자 쌍마다 따로 센다 |
 | 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 상대 화면의 `status` 표시용. 기록 계산은 바꾸지 않는다 |
-| 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 조기 종료 의사 포함 — 서버가 상태·기록 확정 |
+| 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 조기 종료 의사 포함 — 서버가 상태·기록 확정. `forced=false`인데 확정 거리가 목표에 못 미치면 확정하지 않고 `RUNNING_GOAL_PENDING`으로 답한다 |
 | 공통 | `ERROR` | S→C | WS 요청 실패 통지 |
 
 ### 6. 러닝 중 / 러닝 후 대시보드
@@ -1248,6 +1248,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 봉투 키는 `event`다. 아래 각 메시지 절이 보여주는 JSON은 이 봉투의 `data`에 들어가는 부분이다
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
+  - **`RUNNING_FINISH`(`forced=false`)는 ack 대신 `RUNNING_GOAL_PENDING`을 받을 수 있다.** 확정 거리가 목표에 못 미쳐 종료를 확정하지 않은 경우다 — 클라는 로컬 트랙을 지우지 않고 러닝을 이어 간다(`RUNNING_GOAL_PENDING` 절)
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
   - **`RUNNING_FINISHED`는 요청 없이도 온다.** 목표가 있는 방에서 좌표 배치로 확정 거리가 목표를 채우면 서버가 그 자리에서 종료를 확정하고 보낸다(5-D). 클라는 `RUNNING_FINISH`의 ack와 똑같이 처리한다
   - ack의 `data`는 비운다. 예외는 `RUNNING_STARTED` 하나로, 진입·재연결 화면 복구용 스냅샷을 싣는다(5-C)
@@ -1459,7 +1460,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
 - `profileImageUrl`·닉네임을 싣지 않는다 — 고빈도 메시지라 `userId`로만 지목하고 표시 정보는 진입 시 받은 참가자 목록에서 찾는다
 - **ack 없음** — 실패는 `ERROR`로 통지
-- **기록에 남지 않는다.** 러닝이 끝나면 사라지며 결과 응답에 콤보 필드가 없다
+- **결과 응답에 싣지 않는다.** 콤보 구간은 방이 닫힐 때 `running_combos`에 남지만([erd.md](erd.md)), 결과·기록 응답에는 아직 콤보 필드가 없다
 - 판정 규칙(붙는 거리·봐주는 횟수·신선도·보정)은 [feature-spec.md](feature-spec.md)의 러닝 콤보 절이 정본이다
 
 #### `RUNNING_GOAL_PENDING` (S→C) — 남은 거리 알림
