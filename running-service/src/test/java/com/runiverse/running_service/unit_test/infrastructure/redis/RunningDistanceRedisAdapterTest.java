@@ -3,9 +3,13 @@ package com.runiverse.running_service.unit_test.infrastructure.redis;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.port.out.RunningDistance;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeterProperties;
 import com.runiverse.running_service.infrastructure.redis.running.RunningDistanceRedisAdapter;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
 import ch.qos.logback.classic.Level;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +52,7 @@ class RunningDistanceRedisAdapterTest {
     private UserId userId;
 
     private LogCapture log;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @AfterEach
     void tearDown() {
@@ -57,7 +62,10 @@ class RunningDistanceRedisAdapterTest {
     @BeforeEach
     void setUp() {
         log = LogCapture.of(RunningDistanceRedisAdapter.class);
-        adapter = new RunningDistanceRedisAdapter(redisTemplate, new RunningTrackProperties(TTL));
+        // 계측은 실제 구현을 쓴다 — 문턱을 크게 잡아 지연 로그가 어댑터 로그 검증에 섞이지 않게 한다
+        RunningStateMeter stateMeter = new RunningStateMeter(
+                meterRegistry, new RunningStateMeterProperties(Duration.ofHours(1)));
+        adapter = new RunningDistanceRedisAdapter(redisTemplate, new RunningTrackProperties(TTL), stateMeter);
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         userId = new UserId(UuidCreator.getTimeOrderedEpoch());
     }
@@ -215,5 +223,52 @@ class RunningDistanceRedisAdapterTest {
         // then
         assertThat(log.messages(Level.WARN))
                 .containsExactly("[러닝] 누적 거리 복원 건너뜀: 저장 값 손상 - roomId=" + ROOM_ID + ", userId=" + userId.value());
+    }
+
+    private Timer access(String operation, String result) {
+        return meterRegistry.get("runiverse.running.state.access")
+                .tag("store", "redis")
+                .tag("target", "distance")
+                .tag("phase", "running")
+                .tag("operation", operation)
+                .tag("result", result)
+                .timer();
+    }
+
+    @Test
+    @DisplayName("누적 거리 조회는 러닝 중 읽기 한 건으로 센다")
+    void measuresLoadAsRunningRead() {
+        // given
+        given(valueOperations.get(anyString())).willReturn("3000.25|180|35.17955|129.07564|345");
+
+        // when
+        adapter.loadDistance(ROOM_ID, userId);
+
+        // then
+        assertThat(access("read", "success").count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("누적 거리 저장은 러닝 중 쓰기 한 건으로 센다")
+    void measuresSaveAsRunningWrite() {
+        // when
+        adapter.saveDistance(ROOM_ID, userId, RunningDistance.empty());
+
+        // then
+        assertThat(access("write", "success").count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("누적 거리 조회가 실패하면 실패로 세고 예외는 그대로 던진다")
+    void measuresLoadFailure() {
+        // given
+        given(valueOperations.get(anyString())).willThrow(new RedisConnectionFailureException("redis down"));
+
+        // when
+        assertThatThrownBy(() -> adapter.loadDistance(ROOM_ID, userId))
+                .isInstanceOf(RedisConnectionFailureException.class);
+
+        // then
+        assertThat(access("read", "failure").count()).isEqualTo(1);
     }
 }
