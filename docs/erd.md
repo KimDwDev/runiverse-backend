@@ -193,6 +193,7 @@
 > CHECK `ck_running_record_elevation_gain`: `total_elevation_gain is null or total_elevation_gain between 0 and 20000`
 > CHECK `ck_running_record_weather_code`: `weather_code between 0 and 99`
 > CHECK `ck_running_record_period`: `end_at > start_at`
+> **러닝 중에는 이 테이블에 쓰지 않는다** — 좌표·누적 거리는 Redis가 원본이고, 확정할 때 러닝 하나치를 Redis에서 통째로 읽어 한 번에 넣는다(write-behind). 배치마다 행을 갱신하지 않는 근거와 관측 방법은 feature-spec GPS 트랙 절.
 > **개인 단위 진행 상태는 `running_players.status`가 갖는다.** 기록은 `COMPLETED`뿐 아니라 `RUNNING_LEFT_*`와도 함께 생성될 수 있으며, 기록 생성 가능한 트랙이 없으면 종료 상태만 남는다.
 > 결과 조회는 해당 방에서 러닝 단계에 들어간 참가자(`RUNNING`·`COMPLETED`·`RUNNING_LEFT_*`)의 세션에 `running_records`를 LEFT JOIN한다. 시작 전 이탈자는 제외하고 기록 없는 참가자는 유지한다.
 
@@ -253,6 +254,7 @@
 > **쌍마다 한 행이다.** A-B와 B-A를 따로 두지 않는다. 시각·횟수는 쌍의 값이고 경로만 사람마다 달라 polyline을 두 칸 둔다.
 > **정렬 순서를 DB 제약으로 건다** — `<`가 정렬과 함께 같은 사용자끼리의 쌍(`<>`)도 막는다. 앱(Java `UUID.compareTo`)은 64비트씩 부호 있는 비교, Postgres는 바이트 순(부호 없는 비교)이라 상위 64비트의 첫 비트가 서로 다른 쌍에서만 결과가 갈린다. `user_id`는 UUIDv7이라 첫 비트가 타임스탬프 최상위 비트로 늘 0이므로 두 순서가 같다. **UUIDv7이 아닌 `user_id`가 들어오면 이 제약이 쌍을 거부할 수 있다.** 조회는 크기 비교를 쓰지 않는다.
 > **유지 횟수가 0인 구간은 저장하지 않는다** — 붙자마자 끊겨 함께 달린 구간이 없다.
+> **러닝 중에는 이 테이블에 쓰지 않는다** — 판정 상태와 끊긴 구간은 Redis가 원본이다. 방이 닫힐 때 Redis 구간 해시(끊긴 구간)와 관계 해시(이어지던 관계)를 읽어 한 번에 넣는다. `segment_number`는 이때 `start_at` 순으로 매기고, `end_at`은 관계가 들고 있던 마지막 겹친 시각이다(feature-spec 러닝 콤보).
 > **경로를 시각으로 자른다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 자르면 어긋난다. 시각은 하나뿐이라 확정 경로 위 정확한 자리에 겹친다.
 
 ---
