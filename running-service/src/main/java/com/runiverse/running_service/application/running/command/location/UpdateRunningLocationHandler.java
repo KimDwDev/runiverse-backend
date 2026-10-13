@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.running.command.location;
 
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
+import com.runiverse.running_service.application.running.common.TrackFilterProperties;
 import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
@@ -29,6 +30,8 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
     private final PublishRunningProgressPort publishRunningProgressPort;
     private final UpdateRunningComboJudge updateRunningComboJudge;
     private final UpdateRunningFinishJudge updateRunningFinishJudge;
+    // 의심점 반경·관측 정확도 상한 — 트랙 필터의 정지 판정과 같은 값을 쓴다
+    private final TrackFilterProperties trackFilterProperties;
 
     @Override
     public UpdateRunningLocationResult handle(UpdateRunningLocationCommand command) {
@@ -55,7 +58,9 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
             return UpdateRunningLocationResult.ofRunning();
         }
 
-        RunningDistance updated = RunningDistanceAccumulator.accumulate(stored, command.points());
+        RunningDistanceAccumulation accumulation =
+                RunningDistanceAccumulator.accumulate(stored, command.points(), trackFilterProperties);
+        RunningDistance updated = accumulation.distance();
         saveRunningDistancePort.saveDistance(command.runningRoomId(), userId, updated);
         // 3. 방 참가자에게 진행 상황을 알린다
         publishRunningProgressPort.publish(command.runningRoomId(), new RunningProgress(

@@ -25,11 +25,13 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
     private final StringRedisTemplate redisTemplate;
     private final RunningTrackProperties properties;
     private final RunningStateMeter stateMeter;
-    // 누적거리|마지막순번|위도|경도|페이스 — 좌표 버퍼와 TTL을 맞춰 같이 사라지게 한다
+    // 누적거리|마지막순번|위도|경도|페이스|의심점위도|의심점경도 — 좌표 버퍼와 TTL을 맞춰 같이 사라지게 한다
     private static final String SEPARATOR = "|";
-    private static final int FIELD_COUNT = 5;
-    // 페이스를 싣기 전 포맷. 배포 순간 뛰고 있던 러닝의 값이 TTL 안에 남아 있어,
-    // 이걸 형식 불일치로 버리면 그 사람들의 누적 거리가 통째로 0으로 되돌아간다
+    private static final int FIELD_COUNT = 7;
+    // 의심점을 싣기 전 포맷. 배포 순간 뛰고 있던 러닝의 값이 TTL 안에 남아 있다 —
+    // 의심점이 비면 다음 관측 좌표가 첫 의심점이 되어 이어진다
+    private static final int NO_ANCHOR_FIELD_COUNT = 5;
+    // 페이스를 싣기 전 포맷. 이걸 형식 불일치로 버리면 그 사람들의 누적 거리가 통째로 0으로 되돌아간다
     private static final int LEGACY_FIELD_COUNT = 4;
 
     @Override
@@ -44,19 +46,24 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         }
         // -1을 줘야 끝이 빈 "…|null"에서 마지막 칸이 잘려나가지 않는다
         String[] fields = raw.split("\\" + SEPARATOR, -1);
-        if (fields.length != FIELD_COUNT && fields.length != LEGACY_FIELD_COUNT) {
+        if (fields.length != FIELD_COUNT
+                && fields.length != NO_ANCHOR_FIELD_COUNT
+                && fields.length != LEGACY_FIELD_COUNT) {
             // 포맷이 바뀐 옛 값이 TTL 안에 남아 있을 수 있다 — 거리를 틀리게 세느니 처음부터 센다
             log.warn("[러닝] 누적 거리 복원 건너뜀: 저장 형식 불일치 - roomId={}, userId={}", runningRoomId, userId.value());
             return RunningDistance.empty();
         }
         try {
+            boolean hasAnchor = fields.length == FIELD_COUNT;
             return new RunningDistance(
                     Double.parseDouble(fields[0]),
                     Long.parseLong(fields[1]),
                     toDouble(fields[2]),
                     toDouble(fields[3]),
                     // 옛 포맷에는 페이스 칸이 없다 — 다음 배치가 채울 때까지 null이다
-                    fields.length == FIELD_COUNT ? toInteger(fields[4]) : null);
+                    fields.length == LEGACY_FIELD_COUNT ? null : toInteger(fields[4]),
+                    hasAnchor ? toDouble(fields[5]) : null,
+                    hasAnchor ? toDouble(fields[6]) : null);
         } catch (NumberFormatException e) {
             // 깨진 값은 다시 읽어도 같다 — 형식 불일치와 같은 폴백으로 처음부터 센다
             log.warn("[러닝] 누적 거리 복원 건너뜀: 저장 값 손상 - roomId={}, userId={}", runningRoomId, userId.value());
@@ -67,12 +74,14 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
     @Override
     public void saveDistance(Long runningRoomId, UserId userId, RunningDistance distance) {
         String raw = String.format(
-                Locale.ROOT, "%.2f|%d|%s|%s|%s",
+                Locale.ROOT, "%.2f|%d|%s|%s|%s|%s|%s",
                 distance.meters(),
                 distance.lastSequence(),
                 nullable(distance.lastLatitude()),
                 nullable(distance.lastLongitude()),
-                nullable(distance.lastPaceSecondsPerKm()));
+                nullable(distance.lastPaceSecondsPerKm()),
+                nullable(distance.anchorLatitude()),
+                nullable(distance.anchorLongitude()));
         try {
             stateMeter.write(REDIS, DISTANCE, RUNNING, runningRoomId, () -> redisTemplate.opsForValue().set(
                     distanceKey(runningRoomId, userId), raw, properties.ttl()));
@@ -83,7 +92,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         }
     }
 
-    // 좌표를 한 번도 못 받았으면 마지막 좌표가 없다
+    // 좌표를 한 번도 못 받았으면 마지막 좌표·의심점이 없다
     private static String nullable(Double value) {
         return value == null ? "null" : String.format(Locale.ROOT, "%.5f", value);
     }
