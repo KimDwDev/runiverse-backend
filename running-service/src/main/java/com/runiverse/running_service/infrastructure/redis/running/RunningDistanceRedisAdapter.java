@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.running.port.out.LoadRunningDis
 import com.runiverse.running_service.application.running.port.out.RunningDistance;
 import com.runiverse.running_service.application.running.port.out.SaveRunningDistancePort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeter;
 import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStatePhase.RUNNING;
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateStore.REDIS;
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateTarget.DISTANCE;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -19,6 +24,7 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
 
     private final StringRedisTemplate redisTemplate;
     private final RunningTrackProperties properties;
+    private final RunningStateMeter stateMeter;
     // 누적거리|마지막순번|위도|경도|페이스 — 좌표 버퍼와 TTL을 맞춰 같이 사라지게 한다
     private static final String SEPARATOR = "|";
     private static final int FIELD_COUNT = 5;
@@ -31,7 +37,8 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
         // 읽기 실패를 빈 값으로 위장하면 안 된다 — 이어지는 저장이 성공하는 순간
         // 살아 있는 누적이 이번 배치 값으로 덮이고, 순번 스킵 때문에 이후 배치가 되돌리지 못한다.
         // 그대로 던지고 로그는 받는 쪽이 남긴다
-        String raw = redisTemplate.opsForValue().get(distanceKey(runningRoomId, userId));
+        String raw = stateMeter.read(REDIS, DISTANCE, RUNNING, runningRoomId,
+                () -> redisTemplate.opsForValue().get(distanceKey(runningRoomId, userId)));
         if (raw == null) {
             return RunningDistance.empty();   // 첫 배치
         }
@@ -67,8 +74,8 @@ public class RunningDistanceRedisAdapter implements LoadRunningDistancePort, Sav
                 nullable(distance.lastLongitude()),
                 nullable(distance.lastPaceSecondsPerKm()));
         try {
-            redisTemplate.opsForValue().set(
-                    distanceKey(runningRoomId, userId), raw, properties.ttl());
+            stateMeter.write(REDIS, DISTANCE, RUNNING, runningRoomId, () -> redisTemplate.opsForValue().set(
+                    distanceKey(runningRoomId, userId), raw, properties.ttl()));
         } catch (RuntimeException e) {
             // 저장에 실패하면 다음 배치가 이전 누적에서 이어 간다 — 실패 배치의 곡선은
             // 라이브 표시에서 빠지고(다음 배치가 직선으로 잇는다) 최종 기록이 바로잡는다

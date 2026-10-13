@@ -5,6 +5,8 @@ import com.runiverse.running_service.application.running.port.out.LiveRunningSta
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatusChange;
 import com.runiverse.running_service.application.running.port.out.LoadLiveRunningStatusPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStatePhase;
 import com.runiverse.running_service.infrastructure.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,6 +16,9 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateStore.REDIS;
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateTarget.STATUS;
 
 @Component
 @RequiredArgsConstructor
@@ -42,19 +47,24 @@ public class LiveRunningStatusRedisAdapter implements ChangeLiveRunningStatusPor
     private final StringRedisTemplate redisTemplate;
     // 좌표 버퍼와 TTL을 맞춰 러닝 데이터와 같이 사라지게 한다
     private final RunningTrackProperties properties;
+    private final RunningStateMeter stateMeter;
 
-    // Redis 오류는 잡지 않는다 — 표시용 값이라 받는 쪽이 로그를 남기고 넘어간다(누적 거리 조회와 같은 방식)
+    // Redis 오류는 잡지 않는다 — 표시용 값이라 받는 쪽이 로그를 남기고 넘어간다(누적 거리 조회와 같은 방식).
+    // FINISHED로 바꾸는 것은 종료 확정 뒤의 정리라 종료 단계로 센다
     @Override
     public LiveRunningStatusChange change(Long runningRoomId, UserId userId, LiveRunningStatus status) {
-        String previous = redisTemplate.execute(
-                CHANGE, List.of(statusKey(runningRoomId, userId)), changeArgs(status).toArray());
+        RunningStatePhase phase = status == LiveRunningStatus.FINISHED
+                ? RunningStatePhase.FINISH
+                : RunningStatePhase.RUNNING;
+        String previous = stateMeter.write(REDIS, STATUS, phase, runningRoomId, () -> redisTemplate.execute(
+                CHANGE, List.of(statusKey(runningRoomId, userId)), changeArgs(status).toArray()));
         return LiveRunningStatusChange.of(toStatus(previous), status);
     }
 
     @Override
     public Optional<LiveRunningStatus> load(Long runningRoomId, UserId userId) {
-        return Optional.ofNullable(toStatus(
-                redisTemplate.opsForValue().get(statusKey(runningRoomId, userId))));
+        return Optional.ofNullable(toStatus(stateMeter.read(REDIS, STATUS, RunningStatePhase.RUNNING,
+                runningRoomId, () -> redisTemplate.opsForValue().get(statusKey(runningRoomId, userId)))));
     }
 
     // [바꿀 상태, TTL(초), 허용되는 이전 상태...] 순이다
