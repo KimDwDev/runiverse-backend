@@ -75,6 +75,7 @@ public class RunningFinisher {
     private final LoadRecentRunningPacesPort loadRecentRunningPacesPort;
     private final UpdateUserAvgPacePort updateUserAvgPacePort;
     private final LiveRunningStatusChanger liveRunningStatusChanger;
+    private final RunningComboArchiver runningComboArchiver;
     private final ApplicationEventPublisher eventPublisher;
     private final RunningFinishProperties runningFinishProperties;
     private final TrackFilterProperties trackFilterProperties;
@@ -268,8 +269,11 @@ public class RunningFinisher {
             // terminal이라 FINISHED에 못 가고 결과 조회 경로가 함께 끊긴다
             if (existsRunningRecordPort.existsInRoom(roomId)) {
                 room.finish(closedAt);
+                // 콤보는 방 닫힘이 커밋된 뒤 별도 트랜잭션으로 남긴다 — 실패해도 이 종료는 지킨다
+                runningComboArchiver.archiveAfterCommit(roomId.value());
             } else {
                 room.cancel(closedAt);
+                runningComboArchiver.discardAfterCommit(roomId.value());
             }
             // 한 번도 붙지 않은 참가자가 남았다 — 커밋 뒤 강제 종료가 바로 닫는다
             if (room.getSessions().stream().anyMatch(RoomSession::isConnected)) {
@@ -279,6 +283,7 @@ public class RunningFinisher {
         // 방을 닫지 않아도 세션 변경(is_connected)은 저장돼야 한다
         updateRunningRoomPort.update(room);
     }
+
 
     // 커밋이 실패하면 재시도가 같은 트랙으로 다시 확정해야 한다 — 삭제는 커밋 뒤로 미룬다.
     // 동기화가 없으면(트랜잭션 없이 페이크로 조립하는 테스트) 바로 지운다 —

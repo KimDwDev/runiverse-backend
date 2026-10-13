@@ -163,8 +163,9 @@ public final class RunningComboEvaluator {
     }
 
     // 끊긴 관계를 구간 하나로 닫는다. 끝은 끊긴 시각이 아니라 쌓인 시각이다.
-    // 유지 횟수가 0이면 붙자마자 끊겨 함께 달린 구간이 없다 — 남기지 않는다
-    private static Optional<RunningComboSegment> segmentOf(RunningComboPair before, Duration tick) {
+    // 유지 횟수가 0이면 붙자마자 끊겨 함께 달린 구간이 없다 — 남기지 않는다.
+    // 방이 닫힐 때 이어지던 관계를 닫는 데도 같은 규칙을 쓴다
+    public static Optional<RunningComboSegment> segmentOf(RunningComboPair before, Duration tick) {
         if (before.accruedAt() == null) {
             return Optional.empty();   // 쌓인 시각을 싣기 전에 저장된 관계 — 끝을 알 수 없다
         }
