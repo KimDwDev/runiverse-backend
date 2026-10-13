@@ -149,8 +149,8 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.running.finish.gaps` | Counter | `RunningFinisher` → `RunningMetricAdapter` | 사용 중 — `decision=accepted\|rejected`. 관측 안 된 칸의 인정·거부 수 |
 | `runiverse.running.location.goal` | Counter | `RunningFinisher`(자동 종료) → `RunningMetricAdapter` | 사용 중 — `decision=finished\|pending`. 러닝 중 누적이 목표를 넘은 배치에서 확정 거리로 끝냈는지, 미달이라 미뤘는지 |
 | `runiverse.running.finish.goalpending` | DistributionSummary (baseUnit `meters`) | `RunningFinisher`(`forced=false` 종료) → `RunningMetricAdapter` | 사용 중 — `forced=false` 종료를 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`). 화면 거리와 서버 확정 거리가 얼마나 어긋나는지 본다 |
-| `runiverse.running.state.access` | Timer | 러닝 상태 어댑터 → `RunningStateMeter` | 예정 — `store=redis\|db`, `target=track\|distance\|status\|combo_snapshot\|combo_pair\|combo_segment`, `phase=running\|finish`, `operation=read\|write`, `result`. 러닝 상태 저장소 왕복의 횟수·시간. 같은 부하를 `store`만 바꿔 돌려 Redis와 DB를 비교한다. 히스토그램을 켠다(100µs~5s — Redis가 1ms 아래라 기본 하한이면 분포가 첫 칸에 몰린다) |
-| `runiverse.running.state.loaded` | DistributionSummary (baseUnit `items`) | 러닝 상태 어댑터(종료 집계 읽기) → `RunningStateMeter` | 예정 — `store=redis\|db`, `target=track\|combo_segment`. 종료 때 러닝 하나치를 통째로 읽은 개수(좌표 수, 콤보 구간 수). 저장소 물리 단위(stream 엔트리·행)가 아니라 논리 단위로 센다. `state.access`의 시간과 나눠 1,000개당 시간으로 저장소를 비교한다. 히스토그램을 켠다(1~30,000) |
+| `runiverse.running.state.access` | Timer | 러닝 상태 어댑터 → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|distance\|status\|combo_snapshot\|combo_pair\|combo_segment`, `phase=running\|finish`, `operation=read\|write`, `result`. 러닝 상태 저장소 왕복의 횟수·시간. 같은 부하를 `store`만 바꿔 돌려 Redis와 DB를 비교한다. 히스토그램을 켠다(100µs~5s — Redis가 1ms 아래라 기본 하한이면 분포가 첫 칸에 몰린다) |
+| `runiverse.running.state.loaded` | DistributionSummary (baseUnit `items`) | 러닝 상태 어댑터(종료 집계 읽기) → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|combo_segment`. 종료 때 러닝 하나치를 통째로 읽은 개수(좌표 수, 콤보 구간 수). 저장소 물리 단위(stream 엔트리·행)가 아니라 논리 단위로 센다. `state.access`의 시간과 나눠 1,000개당 시간으로 저장소를 비교한다. 히스토그램을 켠다(1~30,000) |
 
 ## 노출
 

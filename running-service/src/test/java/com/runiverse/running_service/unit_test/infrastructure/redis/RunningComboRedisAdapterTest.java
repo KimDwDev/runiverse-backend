@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.redis;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
 import com.runiverse.running_service.application.running.port.out.RunningComboSegment;
 import com.runiverse.running_service.application.running.port.out.RunningComboSnapshot;
@@ -504,5 +505,110 @@ class RunningComboRedisAdapterTest {
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(hashOperations).putAll(anyString(), captor.capture());
         return captor.getValue();
+    }
+
+    // ── 방이 닫힐 때 ──
+
+    @Test
+    @DisplayName("이력은 끊긴 구간과 이어지던 관계를 함께 읽고, 시작 시각 없는 관계는 뺀다")
+    void loadsHistory() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        String pairField = one.value() + "|" + other.value();
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":seg")).willReturn(Map.of(
+                pairField + "|" + MOVED_AT.toEpochMilli(), RECORDED_AT.toEpochMilli() + "|3"));
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":pair")).willReturn(Map.of(
+                pairField, "1788000000000|1788000030000|5|1"));
+
+        // when
+        RunningComboHistory history = adapter.loadHistory(ROOM_ID);
+
+        // then
+        assertThat(history.closedSegments()).containsExactly(
+                new RunningComboSegment(one, other, MOVED_AT, RECORDED_AT, 3));
+        assertThat(history.openPairs()).singleElement()
+                .satisfies(pair -> assertThat(pair.accruedAt()).isEqualTo(RECORDED_AT.plusSeconds(30)));
+    }
+
+    @Test
+    @DisplayName("끊긴 관계(시작 시각 없음)는 이어지던 관계로 넘기지 않는다")
+    void skipsBrokenPairsInHistory() {
+        // given -> 최고 콤보만 들고 있는 관계 — 그 구간은 이미 구간 해시에 있다
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":seg")).willReturn(Map.of());
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":pair")).willReturn(Map.of(
+                one.value() + "|" + other.value(), "null|null|5|1"));
+
+        // when & then
+        assertThat(adapter.loadHistory(ROOM_ID).openPairs()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("이력 읽기는 종료 읽기 한 건으로 세고 구간 수를 함께 남긴다")
+    void measuresHistoryAsFinishLoad() {
+        // given -> 해시 두 개를 읽지만 DB라면 방 하나의 콤보를 한 번에 가져오는 조회다
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        String pairField = one.value() + "|" + other.value();
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":seg")).willReturn(Map.of(
+                pairField + "|1", "20001|2", pairField + "|30000", "50000|2"));
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":pair")).willReturn(Map.of(
+                pairField, "60000|80000|2|1"));
+
+        // when
+        adapter.loadHistory(ROOM_ID);
+
+        // then
+        assertThat(meterRegistry.get("runiverse.running.state.access")
+                .tag("target", "combo_segment").tag("phase", "finish").tag("operation", "read")
+                .tag("result", "success").timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.get("runiverse.running.state.loaded")
+                .tag("target", "combo_segment").summary().totalAmount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("깨진 구간 칸은 건너뛰고 WARN을 남긴다 — 옮기면 제약에 걸려 방 전체가 롤백된다")
+    void skipsCorruptedSegment() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        String field = one.value() + "|" + other.value() + "|시작";
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":seg")).willReturn(Map.of(field, "20000|2"));
+        given(hashOperations.entries("running:combo:" + ROOM_ID + ":pair")).willReturn(Map.of());
+
+        // when
+        RunningComboHistory history = adapter.loadHistory(ROOM_ID);
+
+        // then
+        assertThat(history.closedSegments()).isEmpty();
+        assertThat(log.messages(Level.WARN))
+                .containsExactly("[러닝] 콤보 구간 복원 건너뜀: 저장 값 손상 - field=" + field);
+    }
+
+    @Test
+    @DisplayName("상태 삭제는 방의 콤보 키 셋을 함께 지우고 종료 쓰기로 센다")
+    void deletesAllComboKeys() {
+        // when
+        adapter.deleteComboState(ROOM_ID);
+
+        // then
+        verify(redisTemplate).delete(List.of(
+                "running:combo:" + ROOM_ID + ":dist",
+                "running:combo:" + ROOM_ID + ":pair",
+                "running:combo:" + ROOM_ID + ":seg"));
+        assertThat(meterRegistry.get("runiverse.running.state.access")
+                .tag("target", "combo_segment").tag("phase", "finish").tag("operation", "write")
+                .timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("상태 삭제가 실패해도 던지지 않고 ERROR로 남긴다 — TTL이 결국 지운다")
+    void swallowsDeleteFailure() {
+        // given
+        given(redisTemplate.delete(org.mockito.ArgumentMatchers.<java.util.Collection<String>>any()))
+                .willThrow(new RedisConnectionFailureException("down"));
+
+        // when & then
+        assertThatCode(() -> adapter.deleteComboState(ROOM_ID)).doesNotThrowAnyException();
+        assertThat(log.messages(Level.ERROR))
+                .containsExactly("[러닝] 콤보 상태 삭제 실패: Redis 오류 - roomId=" + ROOM_ID);
     }
 }
