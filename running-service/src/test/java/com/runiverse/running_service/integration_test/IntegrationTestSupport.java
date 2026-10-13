@@ -99,13 +99,15 @@ public abstract class IntegrationTestSupport {
     }
 
     // 위치 배치 핸들러가 콤보 판정을 물고 있어 러닝 통합 테스트마다 같은 조립이 필요하다.
-    // 한 저장소가 포트 4개를 겸한다
+    // 한 저장소가 포트 6개를 겸한다
     protected UpdateRunningComboJudge newUpdateRunningComboJudge() {
         return new UpdateRunningComboJudge(
                 runningComboStore,      // LoadRunningComboSnapshotsPort
                 runningComboStore,      // SaveRunningComboSnapshotPort
                 runningComboStore,      // LoadRunningComboPairsPort
                 runningComboStore,      // SaveRunningComboPairsPort
+                runningComboStore,      // SaveRunningComboSegmentsPort
+                runningComboStore,      // MarkRunningComboPausedPort
                 runningComboPublisher,  // PublishRunningComboPort
                 COMBO_PROPERTIES
         );
