@@ -246,12 +246,12 @@
 | created_at | timestamp | NOT NULL | 방이 `FINISHED`로 닫힐 때 일괄 INSERT(write-once) |
 
 > UNIQUE (running_room_id, first_user_id, second_user_id, segment_number) — 쌍마다 구간 번호 중복 방지. `second_user_id` 쪽 조회 인덱스는 [§7](#7-인덱스-조회-성능).
-> CHECK `ck_running_combo_users`: `first_user_id <> second_user_id`
+> CHECK `ck_running_combo_users`: `first_user_id < second_user_id`
 > CHECK `ck_running_combo_segment_number`: `segment_number >= 1`
 > CHECK `ck_running_combo_count`: `combo_count >= 1`
 > CHECK `ck_running_combo_period`: `end_at > start_at`
 > **쌍마다 한 행이다.** A-B와 B-A를 따로 두지 않는다. 시각·횟수는 쌍의 값이고 경로만 사람마다 달라 polyline을 두 칸 둔다.
-> **정렬 순서를 DB 제약으로 걸지 않는다.** 앱(Java `UUID.compareTo`, 부호 있는 비교)과 Postgres(바이트 순)의 UUID 정렬이 달라 `first_user_id < second_user_id` 같은 조건은 쌍의 일부를 거부한다. 조회도 크기 비교를 쓰지 않는다.
+> **정렬 순서를 DB 제약으로 건다** — `<`가 정렬과 함께 같은 사용자끼리의 쌍(`<>`)도 막는다. 앱(Java `UUID.compareTo`)은 64비트씩 부호 있는 비교, Postgres는 바이트 순(부호 없는 비교)이라 상위 64비트의 첫 비트가 서로 다른 쌍에서만 결과가 갈린다. `user_id`는 UUIDv7이라 첫 비트가 타임스탬프 최상위 비트로 늘 0이므로 두 순서가 같다. **UUIDv7이 아닌 `user_id`가 들어오면 이 제약이 쌍을 거부할 수 있다.** 조회는 크기 비교를 쓰지 않는다.
 > **유지 횟수가 0인 구간은 저장하지 않는다** — 붙자마자 끊겨 함께 달린 구간이 없다.
 > **경로를 시각으로 자른다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 자르면 어긋난다. 시각은 하나뿐이라 확정 경로 위 정확한 자리에 겹친다.
 
