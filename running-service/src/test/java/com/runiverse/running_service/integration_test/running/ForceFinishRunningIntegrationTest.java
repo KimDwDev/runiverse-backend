@@ -11,8 +11,8 @@ import com.runiverse.running_service.application.running.command.forcefinish.Run
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
-import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
+import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobCommand;
@@ -32,7 +32,7 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.scheduling.ScheduledJob;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobId;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
-import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

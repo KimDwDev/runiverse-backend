@@ -26,7 +26,7 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
-import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningMetricAdapter;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchCooldownStore;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -43,9 +43,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
+import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
-import static java.time.temporal.ChronoUnit.SECONDS;
 
 @DisplayName("유저 현재 상태 조회 통합 테스트")
 public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
@@ -121,7 +121,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 event -> {          // ApplicationEventPublisher
                 },
                 FINISH_PROPERTIES
-        ,
+                ,
                 DEFAULT_PROPERTIES,
                 // 메트릭은 이 테스트의 관심사가 아니다 — 메모리 레지스트리에 흘려보낸다
                 new RunningMetricAdapter(new SimpleMeterRegistry()));
