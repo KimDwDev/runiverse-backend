@@ -4,7 +4,10 @@ import com.runiverse.running_service.application.running.port.out.CreateRunningR
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
+import com.runiverse.running_service.application.running.port.out.LoadRecordedRoutesPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
+import com.runiverse.running_service.application.running.port.out.RecordedRoute;
+import com.runiverse.running_service.application.running.port.out.RecordedSplitTime;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
@@ -12,17 +15,21 @@ import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort,
-        LoadRecentRunningPacesPort, LoadMyRunningRecordsPort {
+        LoadRecentRunningPacesPort, LoadMyRunningRecordsPort, LoadRecordedRoutesPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
@@ -129,6 +136,50 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                 .setParameter("startInclusive", startInclusive)
                 .setParameter("endExclusive", endExclusive)
                 .getResultList();
+    }
+
+    // 콤보 달성 위치를 고를 재료 — 기록과 구간 시각을 두 번에 나눠 읽는다.
+    // 한 번에 JOIN하면 구간 행마다 route_polyline(text)이 되풀이돼 방 하나에 수천 번 실려 온다.
+    // 엔티티가 아니라 값만 읽는다 — 영속성 컨텍스트에 구간 수천 개를 올릴 이유가 없다
+    @Override
+    public List<RecordedRoute> loadRoutes(Long runningRoomId) {
+        // uk_running_record_room_user(running_room_id, user_id)를 탄다
+        List<Tuple> records = entityManager.createQuery("""
+                        SELECT record.runningRecordId AS recordId, record.userId AS userId,
+                            record.routePolyline AS routePolyline
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.room.runningRoomId = :roomId
+                        """, Tuple.class)
+                .setParameter("roomId", runningRoomId)
+                .getResultList();
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        // uk_running_split_record_number(running_record_id, split_number)가 정렬을 맡는다
+        Map<Long, List<RecordedSplitTime>> splitsByRecord = entityManager.createQuery("""
+                        SELECT split.record.runningRecordId AS recordId,
+                            split.routeStartIndex AS routeStartIndex, split.routeEndIndex AS routeEndIndex,
+                            split.startAt AS startAt, split.endAt AS endAt
+                        FROM RunningSplitJpaEntity split
+                        WHERE split.record.room.runningRoomId = :roomId
+                        ORDER BY split.record.runningRecordId, split.splitNumber
+                        """, Tuple.class)
+                .setParameter("roomId", runningRoomId)
+                .getResultList()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        split -> split.get("recordId", Long.class),
+                        Collectors.mapping(split -> new RecordedSplitTime(
+                                split.get("routeStartIndex", Integer.class),
+                                split.get("routeEndIndex", Integer.class),
+                                split.get("startAt", LocalDateTime.class),
+                                split.get("endAt", LocalDateTime.class)), Collectors.toList())));
+        return records.stream()
+                .map(record -> new RecordedRoute(
+                        record.get("userId", UUID.class),
+                        record.get("routePolyline", String.class),
+                        splitsByRecord.getOrDefault(record.get("recordId", Long.class), List.of())))
+                .toList();
     }
 
     private RunningSplitJpaEntity toEntity(RunningRecordJpaEntity record, RunningSplit split) {

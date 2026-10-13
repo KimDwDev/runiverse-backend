@@ -1,8 +1,11 @@
 package com.runiverse.running_service.infrastructure.redis.running;
 
+import com.runiverse.running_service.application.running.port.out.DeleteRunningComboStatePort;
+import com.runiverse.running_service.application.running.port.out.LoadRunningComboHistoryPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboSnapshotsPort;
 import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
+import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
 import com.runiverse.running_service.application.running.port.out.RunningComboSegment;
 import com.runiverse.running_service.application.running.port.out.RunningComboSnapshot;
@@ -28,6 +31,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.runiverse.running_service.infrastructure.metrics.running.RunningStatePhase.FINISH;
 import static com.runiverse.running_service.infrastructure.metrics.running.RunningStatePhase.RUNNING;
 import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateStore.REDIS;
 import static com.runiverse.running_service.infrastructure.metrics.running.RunningStateTarget.COMBO_PAIR;
@@ -43,7 +47,9 @@ public class RunningComboRedisAdapter implements
         LoadRunningComboPairsPort,
         SaveRunningComboPairsPort,
         SaveRunningComboSegmentsPort,
-        MarkRunningComboPausedPort {
+        MarkRunningComboPausedPort,
+        LoadRunningComboHistoryPort,
+        DeleteRunningComboStatePort {
 
     private final StringRedisTemplate redisTemplate;
     // 콤보 상태는 좌표 버퍼와 같은 러닝 하나의 수명을 산다 — 러닝이 끝나면 함께 사라진다
@@ -66,6 +72,8 @@ public class RunningComboRedisAdapter implements
     // 쌓인 시각을 싣기 전 포맷 — 형식 불일치로 버리면 살아 있던 콤보와 최고 기록이 처음부터 다시 시작한다
     private static final int LEGACY_PAIR_FIELD_COUNT = 3;
     private static final int PAIR_USER_COUNT = 2;
+    private static final int SEGMENT_KEY_COUNT = 3;
+    private static final int SEGMENT_FIELD_COUNT = 2;
 
     @Override
     public List<RunningComboSnapshot> loadSnapshots(Long runningRoomId) {
@@ -148,12 +156,41 @@ public class RunningComboRedisAdapter implements
         });
     }
 
+    // 방이 닫힐 때 한 번 — 끊긴 구간과 관계를 함께 읽어 한 건으로 잰다. DB라면 방 하나의 콤보를 한 번에 가져오는 조회다.
+    // 읽은 양은 구간 수(끊긴 구간 + 이어지던 관계)로 센다.
+    // 실패를 삼키지 않는다 — 부르는 쪽이 저장을 포기하고 로그를 남긴다
+    @Override
+    public RunningComboHistory loadHistory(Long runningRoomId) {
+        return stateMeter.load(REDIS, COMBO_SEGMENT, runningRoomId,
+                () -> new RunningComboHistory(
+                        parse(rawEntries(segmentKey(runningRoomId)), this::toSegment),
+                        parse(rawEntries(pairKey(runningRoomId)), this::toPair).stream()
+                                .filter(RunningComboPair::inCombo)
+                                .toList()),
+                history -> history.closedSegments().size() + history.openPairs().size());
+    }
+
+    // 방의 콤보 상태 셋을 함께 지운다. 실패해도 던지지 않는다 — 콤보는 이미 DB에 있거나 남길 것이 없고, TTL이 결국 지운다
+    @Override
+    public void deleteComboState(Long runningRoomId) {
+        try {
+            stateMeter.write(REDIS, COMBO_SEGMENT, FINISH, runningRoomId, () -> redisTemplate.delete(List.of(
+                    snapshotKey(runningRoomId), pairKey(runningRoomId), segmentKey(runningRoomId))));
+        } catch (RuntimeException e) {
+            log.error("[러닝] 콤보 상태 삭제 실패: Redis 오류 - roomId={}", runningRoomId, e);
+        }
+    }
+
     // 읽기 실패를 빈 목록으로 위장하면 안 된다 — 비교 상대가 사라져
     // 살아 있던 콤보와 최고 기록이 이번 배치의 저장으로 지워진다.
     // 그대로 던지고 로그는 받는 쪽이 남긴다
     private Map<String, String> entries(String key, RunningStateTarget target, Long runningRoomId) {
-        return stateMeter.read(REDIS, target, RUNNING, runningRoomId,
-                () -> redisTemplate.<String, String>opsForHash().entries(key));
+        return stateMeter.read(REDIS, target, RUNNING, runningRoomId, () -> rawEntries(key));
+    }
+
+    // 계측 없이 읽는다 — 여러 해시를 한 건으로 잴 때 바깥에서 감싼다
+    private Map<String, String> rawEntries(String key) {
+        return redisTemplate.<String, String>opsForHash().entries(key);
     }
 
     private <T> List<T> parse(Map<String, String> entries,
@@ -227,6 +264,27 @@ public class RunningComboRedisAdapter implements
         } catch (IllegalArgumentException e) {
             // 이 관계만 처음부터 다시 센다 — 거리를 틀리게 세느니 1부터가 낫다
             log.warn("[러닝] 콤보 관계 복원 건너뜀: 저장 값 손상 - field={}", entry.getKey());
+            return Optional.empty();
+        }
+    }
+
+    private Optional<RunningComboSegment> toSegment(Map.Entry<String, String> entry) {
+        String[] keys = entry.getKey().split(SEPARATOR_PATTERN);
+        String[] fields = entry.getValue().split(SEPARATOR_PATTERN);
+        if (keys.length != SEGMENT_KEY_COUNT || fields.length != SEGMENT_FIELD_COUNT) {
+            log.warn("[러닝] 콤보 구간 복원 건너뜀: 저장 형식 불일치 - field={}", entry.getKey());
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new RunningComboSegment(
+                    new UserId(UUID.fromString(keys[0])),
+                    new UserId(UUID.fromString(keys[1])),
+                    Instant.ofEpochMilli(Long.parseLong(keys[2])),
+                    Instant.ofEpochMilli(Long.parseLong(fields[0])),
+                    Integer.parseInt(fields[1])));
+        } catch (IllegalArgumentException e) {
+            // 이 구간만 빠진다 — 깨진 값을 옮기면 running_combos 제약에 걸려 방 전체가 롤백된다
+            log.warn("[러닝] 콤보 구간 복원 건너뜀: 저장 값 손상 - field={}", entry.getKey());
             return Optional.empty();
         }
     }
