@@ -240,22 +240,24 @@
 | second_user_id | UUID | → users, NOT NULL | 논리 참조. 정렬한 뒤쪽 |
 | segment_number | int | NOT NULL | 이 방에서 이 쌍의 몇 번째 콤보(1부터, `start_at` 순) |
 | combo_count | int | NOT NULL | 이 구간의 유지 횟수 — (`end_at` − `start_at`) ÷ 1회 길이. 1회 길이가 운영 설정이라 계산하지 않고 저장한다 |
-| first_route_polyline | text | nullable | `first_user_id`의 `running_records.route_polyline` 경계점 중 `start_at`~`end_at`에 든 점(encoded polyline, precision 5). 그 참가자의 기록이 없으면 null |
+| first_route_polyline | text | nullable | `first_user_id`의 콤보 달성 위치 — 그 참가자의 `route_polyline`에서 고른 점들을 같은 형식(encoded polyline, precision 5)으로 담는다. i번째 점이 i콤보를 달성한 자리다. 점 개수가 `combo_count`와 같다. 각 점은 그 참가자의 `running_records.route_polyline` 경계점 중 달성 시각(`start_at` + i × 1회 길이)에 가장 가까운 점 그대로다. 그 참가자의 기록이 없으면 null |
 | second_route_polyline | text | nullable | `second_user_id` 쪽 |
 | start_at | timestamp | NOT NULL | 콤보가 붙은 시각 |
 | end_at | timestamp | NOT NULL | **쌓인 시각** — 겹쳤다고 판정된 때 두 참가자가 모두 움직였다고 확인된 마지막 순간(feature-spec 러닝 콤보). 끊긴 시각이 아니다. 봐주는 구간이나 서 있던 시간을 넣으면 함께 달리지 않은 구간이 섞인다 |
-| created_at | timestamp | NOT NULL | 방이 `FINISHED`로 닫힐 때 일괄 INSERT(write-once) |
+| created_at | timestamp | NOT NULL | 방이 `FINISHED`로 닫힌 커밋 뒤, 별도 트랜잭션에서 일괄 INSERT(write-once) |
 
 > UNIQUE (running_room_id, first_user_id, second_user_id, segment_number) — 쌍마다 구간 번호 중복 방지. `second_user_id` 쪽 조회 인덱스는 [§7](#7-인덱스-조회-성능).
 > CHECK `ck_running_combo_users`: `first_user_id < second_user_id`
 > CHECK `ck_running_combo_segment_number`: `segment_number >= 1`
 > CHECK `ck_running_combo_count`: `combo_count >= 1`
 > CHECK `ck_running_combo_period`: `end_at > start_at`
-> **쌍마다 한 행이다.** A-B와 B-A를 따로 두지 않는다. 시각·횟수는 쌍의 값이고 경로만 사람마다 달라 polyline을 두 칸 둔다.
+> **쌍마다 한 행이다.** A-B와 B-A를 따로 두지 않는다. 시각·횟수는 쌍의 값이고 달성 위치만 사람마다 달라 polyline을 두 칸 둔다 — 원격 러닝이라 같은 시각에 각자 다른 길 위에 있다.
 > **정렬 순서를 DB 제약으로 건다** — `<`가 정렬과 함께 같은 사용자끼리의 쌍(`<>`)도 막는다. 앱(Java `UUID.compareTo`)은 64비트씩 부호 있는 비교, Postgres는 바이트 순(부호 없는 비교)이라 상위 64비트의 첫 비트가 서로 다른 쌍에서만 결과가 갈린다. `user_id`는 UUIDv7이라 첫 비트가 타임스탬프 최상위 비트로 늘 0이므로 두 순서가 같다. **UUIDv7이 아닌 `user_id`가 들어오면 이 제약이 쌍을 거부할 수 있다.** 조회는 크기 비교를 쓰지 않는다.
 > **유지 횟수가 0인 구간은 저장하지 않는다** — 붙자마자 끊겨 함께 달린 구간이 없다.
 > **러닝 중에는 이 테이블에 쓰지 않는다** — 판정 상태와 끊긴 구간은 Redis가 원본이다. 방이 닫힐 때 Redis 구간 해시(끊긴 구간)와 관계 해시(이어지던 관계)를 읽어 한 번에 넣는다. `segment_number`는 이때 `start_at` 순으로 매기고, `end_at`은 관계가 들고 있던 쌓인 시각이다(feature-spec 러닝 콤보).
-> **경로를 시각으로 자른다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 자르면 어긋난다. 시각은 하나뿐이라 확정 경로 위 정확한 자리에 겹친다.
+> **콤보는 선이 아니라 점이다.** 클라는 기록의 `route_polyline`을 그리고, 그 위에 콤보 1회마다 점 하나를 찍는다. 그래서 점은 새로 보간하지 않고 `route_polyline` 경계점을 그대로 고른다 — 그려진 경로에서 벗어나지 않는다. 경계점의 시각은 `running_splits`(`route_start_index`·`route_end_index` ↔ `start_at`·`end_at`)에서 얻는다.
+> **위치는 거리가 아니라 시각으로 찾는다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 찾으면 어긋난다. 시각은 하나뿐이다.
+> **좌표를 담고 경계점 번호는 담지 않는다.** 번호로 담으면 `running_splits`처럼 `route_polyline` 재생성에 묶인다.
 
 ---
 
