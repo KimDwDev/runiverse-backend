@@ -142,7 +142,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 liveRunningStatusStore,   // LoadLiveRunningStatusPort
                 runningProgressPublisher, // PublishRunningProgressPort
                 newUpdateRunningComboJudge(),
-                new UpdateRunningFinishJudge(runningFinisher)
+                new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES
         );
         FinishRunningHandler finishRunningHandler = new FinishRunningHandler(runningFinisher);
         ForceFinishRunningRoomHandler forceFinishRunningRoomHandler =

@@ -133,7 +133,8 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 liveRunningStatusStore,   // LoadLiveRunningStatusPort
                 runningProgressPublisher, // PublishRunningProgressPort
                 newUpdateRunningComboJudge(),
-                new UpdateRunningFinishJudge(runningFinisher)
+                new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES
         );
         finishRunningHandler = new FinishRunningHandler(runningFinisher);
         matchCooldownStore = new InMemoryMatchCooldownStore();

@@ -106,7 +106,8 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningTrackStore, runningDistanceStore, runningDistanceStore,
                 liveRunningStatusStore, liveRunningStatusStore,
                 runningProgressPublisher, newUpdateRunningComboJudge(),
-                new UpdateRunningFinishJudge(runningFinisher));
+                new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES);
         finishRunningHandler = new FinishRunningHandler(runningFinisher);
 
         InMemoryRunningResultStore resultStore =

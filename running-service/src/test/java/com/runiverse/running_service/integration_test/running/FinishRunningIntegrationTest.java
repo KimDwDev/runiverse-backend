@@ -133,7 +133,8 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 liveRunningStatusStore,   // LoadLiveRunningStatusPort
                 runningProgressPublisher, // PublishRunningProgressPort
                 newUpdateRunningComboJudge(),
-                new UpdateRunningFinishJudge(runningFinisher)
+                new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES
         );
         handler = new FinishRunningHandler(runningFinisher);
     }

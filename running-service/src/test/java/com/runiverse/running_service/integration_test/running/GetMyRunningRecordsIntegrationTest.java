@@ -129,7 +129,8 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
                 liveRunningStatusStore,   // LoadLiveRunningStatusPort
                 runningProgressPublisher, // PublishRunningProgressPort
                 newUpdateRunningComboJudge(),
-                new UpdateRunningFinishJudge(runningFinisher)
+                new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES
         );
         finishRunningHandler = new FinishRunningHandler(runningFinisher);
         handler = new GetMyRunningRecordsHandler(

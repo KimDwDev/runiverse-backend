@@ -93,6 +93,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 
 @ExtendWith(MockitoExtension.class)
 // 로그가 userId를 항상 읽지만 분기마다 호출 횟수가 달라 stubbing 검사는 끈다
@@ -192,7 +193,8 @@ class RunningWebSocketHandlerTest {
                 new UpdateRunningLocationHandler(appendRunningTrackPort, loadRunningDistancePort,
                         saveRunningDistancePort, changeLiveRunningStatusPort, loadLiveRunningStatusPort,
                         publishRunningProgressPort, updateRunningComboJudge,
-                        new UpdateRunningFinishJudge(runningFinisher)),
+                        new UpdateRunningFinishJudge(runningFinisher),
+                DEFAULT_PROPERTIES),
                 finishRunningUsecase,
                 getRunningSnapshotUsecase,
                 startRunningComboUsecase,
@@ -1012,7 +1014,7 @@ class RunningWebSocketHandlerTest {
     // 누적이 주어진 값 그대로 판정에 쓰인다
     private void givenStoredDistance(double meters) {
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
-                .willReturn(new RunningDistance(meters, 0L, 35.1795543, 129.0756416, 345));
+                .willReturn(new RunningDistance(meters, 0L, 35.1795543, 129.0756416, 345, null, null));
     }
 
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다

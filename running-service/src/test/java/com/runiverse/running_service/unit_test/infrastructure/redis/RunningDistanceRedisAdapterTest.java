@@ -88,6 +88,52 @@ class RunningDistanceRedisAdapterTest {
     }
 
     @Test
+    @DisplayName("의심점까지 실린 7필드 값을 되살린다")
+    void loadsAnchor() {
+        // given -> 누적거리|마지막순번|위도|경도|페이스|의심점위도|의심점경도
+        given(valueOperations.get(anyString()))
+                .willReturn("3000.25|180|35.17955|129.07564|345|35.17950|129.07560");
+
+        // when
+        RunningDistance distance = adapter.loadDistance(ROOM_ID, userId);
+
+        // then
+        assertThat(distance.anchorLatitude()).isEqualTo(35.17950);
+        assertThat(distance.anchorLongitude()).isEqualTo(129.07560);
+    }
+
+    @Test
+    @DisplayName("의심점이 없는 옛 5필드 값은 누적을 그대로 읽고 의심점만 비운다")
+    void loadsLegacyValueWithoutAnchor() {
+        // given -> 배포 순간 뛰고 있던 러닝의 값이 TTL 안에 남아 있다
+        given(valueOperations.get(anyString())).willReturn("3000.25|180|35.17955|129.07564|345");
+
+        // when
+        RunningDistance distance = adapter.loadDistance(ROOM_ID, userId);
+
+        // then -> 누적을 버리면 그 사람의 거리가 0으로 돌아간다. 의심점은 다음 관측 좌표가 채운다
+        assertThat(distance.meters()).isEqualTo(3000.25);
+        assertThat(distance.lastPaceSecondsPerKm()).isEqualTo(345);
+        assertThat(distance.anchorLatitude()).isNull();
+        assertThat(distance.anchorLongitude()).isNull();
+    }
+
+    @Test
+    @DisplayName("의심점이 비어 있으면 null로 되살린다")
+    void loadsNullAnchor() {
+        // given -> 정확도가 나쁜 좌표만 받아 아직 의심점이 없다
+        given(valueOperations.get(anyString()))
+                .willReturn("3000.25|180|35.17955|129.07564|345|null|null");
+
+        // when
+        RunningDistance distance = adapter.loadDistance(ROOM_ID, userId);
+
+        // then
+        assertThat(distance.anchorLatitude()).isNull();
+        assertThat(distance.anchorLongitude()).isNull();
+    }
+
+    @Test
     @DisplayName("페이스가 없는 옛 4필드 값도 누적 거리를 잃지 않고 읽는다")
     void loadsLegacyFourFieldValue() {
         // given -> 배포 순간 뛰고 있던 러닝의 값이 TTL 안에 남아 있다.
@@ -122,7 +168,7 @@ class RunningDistanceRedisAdapterTest {
     @DisplayName("저장한 값을 그대로 다시 읽어 낸다")
     void savesAndLoadsBack() {
         // given
-        RunningDistance saved = new RunningDistance(3000.25, 180L, 35.17955, 129.07564, 345);
+        RunningDistance saved = new RunningDistance(3000.25, 180L, 35.17955, 129.07564, 345, 35.17950, 129.07560);
 
         // when -> 쓰기 포맷과 읽기 파서가 어긋나면 러닝 중에만 드러난다
         adapter.saveDistance(ROOM_ID, userId, saved);

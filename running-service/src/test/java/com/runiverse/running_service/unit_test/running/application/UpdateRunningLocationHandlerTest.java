@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -50,6 +49,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("러닝 위치 업데이트 단위 테스트")
@@ -94,11 +94,21 @@ public class UpdateRunningLocationHandlerTest {
     @Mock
     private UpdateRunningFinishJudge updateRunningFinishJudge;
 
-    @InjectMocks
     private UpdateRunningLocationHandler updateRunningLocationHandler;
 
     @BeforeEach
     void setUp() {
+        // 트랙 필터 설정은 값 객체라 목으로 둘 수 없다 — @InjectMocks 대신 직접 조립한다
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                appendRunningTrackPort,
+                loadRunningDistancePort,
+                saveRunningDistancePort,
+                changeLiveRunningStatusPort,
+                loadLiveRunningStatusPort,
+                publishRunningProgressPort,
+                updateRunningComboJudge,
+                updateRunningFinishJudge,
+                DEFAULT_PROPERTIES);
         // 좌표를 한 번도 못 받은 상태가 기본이다 — 첫 배치도 같은 경로로 흐른다.
         // 적재 실패 테스트는 여기까지 오지도 않으므로 lenient로 둔다
         lenient().when(loadRunningDistancePort.loadDistance(anyLong(), any()))
@@ -196,7 +206,7 @@ public class UpdateRunningLocationHandlerTest {
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
                 new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
-                        previous.currentPaceSecondsPerKm()));
+                        previous.currentPaceSecondsPerKm(), null, null));
         List<TrackPoint> points = List.of(trackPoint(3L), trackPoint(4L));
 
         // when
@@ -217,7 +227,7 @@ public class UpdateRunningLocationHandlerTest {
         // 그대로 더하면 거리가 두 배가 된다
         TrackPoint previous = trackPoint(2L);
         RunningDistance stored = new RunningDistance(
-                100.0, 2L, previous.latitude(), previous.longitude(), STORED_PACE);
+                100.0, 2L, previous.latitude(), previous.longitude(), STORED_PACE, null, null);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(stored);
 
         // when -> 0,1,2는 이미 반영된 순번이다
@@ -520,7 +530,7 @@ public class UpdateRunningLocationHandlerTest {
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
                 new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
-                        STORED_PACE));
+                        STORED_PACE, null, null));
 
         // when -> 0,1,2는 이미 거리에 반영된 순번이다
         updateRunningLocationHandler.handle(
