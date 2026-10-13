@@ -46,6 +46,8 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.runiverse.running_service.support.LogCapture;
+import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,6 +73,7 @@ import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.STRING;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -1212,6 +1215,31 @@ public class RunningFinisherTest {
             verify(recordRunningMetricPort).userFinishDeferred(check.remainingMeters());
             verify(recordRunningMetricPort, never()).autoFinishChecked(anyBoolean());
             verify(recordRunningMetricPort, never()).trackFiltered(any());
+        }
+
+        @Test
+        @DisplayName("좌표 없이 누른 종료(forced=false)가 미뤄져도 로그에는 사용자 종료로 남긴다")
+        void deferredEmptyUserFinishLogsFinishTrigger() {
+            // given -> 시작 직후 위치 배치 전이라 트랙이 비었다. 마지막 좌표 경과 시간도 잴 수 없어
+            // 자동 종료처럼 비어 있다 — 그 값으로 경로를 짐작하면 GOAL로 찍힌다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(new RunningTrack("[]", List.of()));
+            LogCapture log = LogCapture.of(RunningFinisher.class);
+
+            try {
+                // when
+                GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+                // then
+                assertThat(check.remainingMeters()).isEqualTo(TARGET);
+                assertThat(log.messages(Level.INFO))
+                        .filteredOn(message -> message.contains("종료 건너뜀"))
+                        .singleElement(STRING)
+                        .contains("trigger=FINISH", "lastPointLagSec=null");
+            } finally {
+                log.stop();
+            }
         }
 
         @Test

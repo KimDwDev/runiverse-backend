@@ -142,7 +142,8 @@ public class RunningFinisher {
         // 유저 종료면 마지막 좌표가 얼마나 묵었는지 본다 — 길면 클라가 남은 좌표를 먼저 보내지 않은 것이다
         Long lastPointLagSec = onGoal ? null : lastPointLagSeconds(track);
         if (deferIfShort) {
-            int remaining = remainingToGoal(runningRoomId, userIdValue, room, filtered, lastPointLagSec);
+            int remaining = remainingToGoal(runningRoomId, userIdValue, room, filtered, onGoal,
+                    lastPointLagSec);
             if (remaining > 0) {
                 if (onGoal) {
                     recordRunningMetricPort.autoFinishChecked(false);
@@ -338,7 +339,7 @@ public class RunningFinisher {
     // 10m 경계로 자르기 전의 거리로 잰다 — 자른 값으로 재면 남은 거리가 최대 10m 부풀려진다.
     // 목표에 닿았으면 0이다. 목표 없는 솔로 방도 0이라 바로 확정된다
     private int remainingToGoal(Long runningRoomId, UUID userId, RunningRoom room,
-                                FilteredTrack filtered, Long lastPointLagSec) {
+                                FilteredTrack filtered, boolean onGoal, Long lastPointLagSec) {
         int target = room.getTargetDistance().map(Distance::meters).orElse(0);
         double remaining = target - filtered.totalMeters();
         if (remaining <= 0) {
@@ -346,7 +347,7 @@ public class RunningFinisher {
         }
         log.info("[러닝] 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, trigger={}, "
                         + "confirmedDistanceM={}, targetDistanceM={}, lastPointLagSec={}",
-                runningRoomId, userId, lastPointLagSec == null ? "GOAL" : "FINISH",
+                runningRoomId, userId, onGoal ? "GOAL" : "FINISH",
                 Math.round(filtered.totalMeters()), target, lastPointLagSec);
         // 0.3m만 모자라도 1m로 알린다 — 0으로 알리면 클라가 끝난 줄 안다
         return (int) Math.ceil(remaining);
@@ -358,14 +359,16 @@ public class RunningFinisher {
                            TrackFilterSummary summary) {
         log.info("[러닝] 트랙 필터 성공 - roomId={}, userId={}, trigger={}, lastPointLagSec={}, "
                         + "rawDistanceM={}, filteredDistanceM={}, accuracyDroppedCount={}, "
-                        + "spikePointCount={}, jumpEdgeCount={}, spikeRemovedDistanceM={}, "
+                        + "accuracyRemovedDistanceM={}, spikePointCount={}, "
+                        + "jumpEdgeCount={}, spikeRemovedDistanceM={}, "
                         + "gapEdgeCount={}, gapAcceptedCount={}, gapRejectedCount={}, "
                         + "gapRejectedDistanceM={}, maxGapEdgeM={}, maxGapEdgeSec={}, stopCount={}, "
                         + "stopSec={}, stopRemovedDistanceM={}, maxStopSec={}, "
                         + "maxStopDisplacementM={}, radiusClampedCount={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH", lastPointLagSec,
                 Math.round(summary.rawMeters()), Math.round(summary.filteredMeters()),
-                summary.accuracyDroppedCount(), summary.spikePointCount(),
+                summary.accuracyDroppedCount(), Math.round(summary.accuracyRemovedMeters()),
+                summary.spikePointCount(),
                 summary.jumpEdgeCount(), Math.round(summary.spikeRemovedMeters()),
                 summary.gapEdgeCount(), summary.gapAcceptedCount(), summary.gapRejectedCount(),
                 Math.round(summary.gapRejectedMeters()), Math.round(summary.maxGapEdgeMeters()),
