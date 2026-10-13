@@ -218,7 +218,6 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
         if (result.finished()) {
             send(session, RunningMessageType.RUNNING_FINISHED.message());
         }
-
     }
 
     private List<TrackPoint> toTrackPoints(RunningLocationUpdateRequest request) {
@@ -237,7 +236,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                 .toList();
     }
 
-    // 상태가 걸린 요청이라 ack가 있다 — 클라는 이걸 받고 로컬 트랙을 지운 뒤 REST로 결과를 본다
+    // 상태가 걸린 요청이라 ack가 있다 — 클라는 이걸 받고 로컬 트랙을 지운 뒤 REST로 결과를 본다.
+    // 확정하지 못한 forced=false만 ack 대신 남은 거리를 받는다
     private void handleRunningFinish(WebSocketSession session, WebSocketEnvelope envelope)
             throws IOException {
         RunningFinishRequest request;

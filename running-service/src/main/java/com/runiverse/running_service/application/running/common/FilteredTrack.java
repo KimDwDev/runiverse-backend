@@ -11,7 +11,6 @@ public record FilteredTrack(
         double[] cumulativeMeters,
         double[] cumulativeMovingSeconds,
         TrackFilterSummary summary
-
 ) {
 
     public double totalMeters() {

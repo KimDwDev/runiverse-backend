@@ -82,7 +82,6 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
                 command.runningRoomId(), userId, command.targetDistanceMeters(), updated.meters());
     }
 
-
     // 처음 보는 좌표가 왔으면 지금 뛰고 있다 — RESUME이 유실됐거나 옛 연결의 끊김이 늦게 반영된 것도
     // 여기서 풀린다. 재전송분만 온 배치는 상태를 건드리지 않는다.
     // 바뀌었어도 따로 알리지 않는다 — 바로 이 진행 통지가 새 상태를 싣고 나간다

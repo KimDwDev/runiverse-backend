@@ -1248,7 +1248,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 봉투 키는 `event`다. 아래 각 메시지 절이 보여주는 JSON은 이 봉투의 `data`에 들어가는 부분이다
 
 - **ack 규칙**: 상태가 걸린 요청에만 — `RUNNING_START`→`RUNNING_STARTED`, `RUNNING_FINISH`→`RUNNING_FINISHED`
-  - **`RUNNING_FINISH`(`forced=false`)는 ack 대신 `RUNNING_GOAL_PENDING`을 받을 수 있다.** 확정 거리가 목표에 못 미쳐 종료를 확정하지 않은 경우다 — 클라는 로컬 트랙을 지우지 않고 러닝을 이어 간다(`RUNNING_GOAL_PENDING` 절)
   - **`RUNNING_LOCATION_UPDATE`는 ack 없음**
   - **`RUNNING_FINISHED`는 요청 없이도 온다.** 목표가 있는 방에서 좌표 배치로 확정 거리가 목표를 채우면 서버가 그 자리에서 종료를 확정하고 보낸다(5-D). 클라는 `RUNNING_FINISH`의 ack와 똑같이 처리한다
   - ack의 `data`는 비운다. 예외는 `RUNNING_STARTED` 하나로, 진입·재연결 화면 복구용 스냅샷을 싣는다(5-C)
@@ -1520,7 +1519,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간, 운영값)을 통과한 트랙이면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 통과하지 못하면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 마지막 10m 경계까지로 확정한다(10m 미만 꼬리는 버린다)
 - **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
-- **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입
+- **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입. 확정하지 못한 `forced=false`는 ack 대신 `RUNNING_GOAL_PENDING`을 받는다
   - 목표가 있는 방은 이 요청 없이도 받을 수 있다 — 좌표 배치로 목표를 채우면 서버가 먼저 끝낸다(`RUNNING_LOCATION_UPDATE` 절)
 - `RUNNING_FINISH`는 멱등이다. 강제 종료·목표 도달 자동 종료나 이전 요청으로 이미 확정됐으면 기록을 덮어쓰지 않고 `RUNNING_FINISHED`를 다시 보내 로컬 트랙을 정리하게 한다
 - `RUNNING`이 된 참가자가 모두 종료 상태가 되고 기록 확정이 끝나면 방을 닫는다 — 유효 기록이 하나라도 있으면 `FINISHED`, 없으면 `CANCELLED`다. 강제 종료 시각(`start_at + 유예`)에는 한 번도 붙지 않아 `JOINED`로 남은 참가자를 확정 후 이탈로 먼저 닫고, 뛰던 참가자를 같은 규칙으로 종료 처리한다
@@ -1604,7 +1603,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
 | `isMe` | Boolean | O | 현재 사용자 여부 |
 | `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
-| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 `finishedAt − startedAt`보다 짧을 수 있다. 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
 | `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
 | `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
 | `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
@@ -1733,7 +1732,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
-| `durationSeconds` | Integer | O | 구간 소요 시간(초) |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 정지·관측하지 못한 시간은 들어가지 않는다 |
 | `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
 | `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
 | `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
