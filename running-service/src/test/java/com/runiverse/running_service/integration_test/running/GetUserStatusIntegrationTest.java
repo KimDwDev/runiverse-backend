@@ -118,6 +118,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                newRunningComboArchiver(), // RunningComboArchiver
                 event -> {          // ApplicationEventPublisher
                 },
                 FINISH_PROPERTIES

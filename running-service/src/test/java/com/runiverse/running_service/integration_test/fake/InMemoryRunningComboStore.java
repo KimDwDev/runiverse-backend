@@ -1,8 +1,11 @@
 package com.runiverse.running_service.integration_test.fake;
 
+import com.runiverse.running_service.application.running.port.out.DeleteRunningComboStatePort;
+import com.runiverse.running_service.application.running.port.out.LoadRunningComboHistoryPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboSnapshotsPort;
 import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
+import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
 import com.runiverse.running_service.application.running.port.out.RunningComboSegment;
 import com.runiverse.running_service.application.running.port.out.RunningComboSnapshot;
@@ -26,7 +29,9 @@ public class InMemoryRunningComboStore implements
         LoadRunningComboPairsPort,
         SaveRunningComboPairsPort,
         SaveRunningComboSegmentsPort,
-        MarkRunningComboPausedPort {
+        MarkRunningComboPausedPort,
+        LoadRunningComboHistoryPort,
+        DeleteRunningComboStatePort {
 
     // 관계는 정렬된 두 참가자로 한 칸을 가리킨다 — RunningComboPair가 정렬을 보장한다
     private record PairKey(UserId first, UserId second) {
@@ -89,6 +94,28 @@ public class InMemoryRunningComboStore implements
                 segments.computeIfAbsent(runningRoomId, key -> new LinkedHashMap<>());
         saved.forEach(segment -> room.put(
                 new SegmentKey(segment.first(), segment.second(), segment.startAt()), segment));
+    }
+
+    // 이어지던 관계는 시작 시각이 있는 것만 담는다 — 실제 어댑터와 같다
+    @Override
+    public RunningComboHistory loadHistory(Long runningRoomId) {
+        return new RunningComboHistory(
+                segmentsOf(runningRoomId),
+                loadPairs(runningRoomId).stream().filter(RunningComboPair::inCombo).toList());
+    }
+
+    @Override
+    public void deleteComboState(Long runningRoomId) {
+        snapshots.remove(runningRoomId);
+        paused.remove(runningRoomId);
+        pairs.remove(runningRoomId);
+        segments.remove(runningRoomId);
+    }
+
+    // 방의 콤보 상태가 남아 있는지 — 정리 확인용
+    public boolean hasStateOf(Long runningRoomId) {
+        return snapshots.containsKey(runningRoomId) || pairs.containsKey(runningRoomId)
+                || segments.containsKey(runningRoomId);
     }
 
     // 테스트가 끊긴 구간을 확인할 때 쓴다

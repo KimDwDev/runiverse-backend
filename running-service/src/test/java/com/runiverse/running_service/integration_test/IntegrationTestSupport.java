@@ -34,6 +34,9 @@ import com.runiverse.running_service.integration_test.fake.InMemoryVerificationT
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
+import com.runiverse.running_service.application.running.common.RunningComboArchiver;
+import com.runiverse.running_service.application.running.common.RunningComboWriter;
+import com.runiverse.running_service.integration_test.fake.InMemoryRunningComboArchiveStore;
 
 public abstract class IntegrationTestSupport {
 
@@ -52,6 +55,7 @@ public abstract class IntegrationTestSupport {
     protected InMemoryLiveRunningStatusStore liveRunningStatusStore;
     protected FakeRunningProgressPublisher runningProgressPublisher;
     protected InMemoryRunningComboStore runningComboStore;
+    protected InMemoryRunningComboArchiveStore runningComboArchiveStore;
     protected FakeRunningComboPublisher runningComboPublisher;
     protected InMemoryRunningRecordStore runningRecordStore;
     protected FakeGpsTrackUploader gpsTrackUploader;
@@ -80,6 +84,7 @@ public abstract class IntegrationTestSupport {
         liveRunningStatusStore = new InMemoryLiveRunningStatusStore();
         runningProgressPublisher = new FakeRunningProgressPublisher();
         runningComboStore = new InMemoryRunningComboStore();
+        runningComboArchiveStore = new InMemoryRunningComboArchiveStore();
         runningComboPublisher = new FakeRunningComboPublisher();
         runningRecordStore = new InMemoryRunningRecordStore();
         gpsTrackUploader = new FakeGpsTrackUploader();
@@ -111,6 +116,18 @@ public abstract class IntegrationTestSupport {
                 runningComboPublisher,  // PublishRunningComboPort
                 COMBO_PROPERTIES
         );
+    }
+
+    // 방이 닫힐 때 콤보를 옮기는 조립 — 러닝 종료·강제 종료가 함께 쓴다.
+    // 페이크 조립은 트랜잭션 동기화가 없어 커밋 뒤 작업이 그 자리에서 돈다
+    protected RunningComboArchiver newRunningComboArchiver() {
+        return new RunningComboArchiver(
+                new RunningComboWriter(
+                        runningComboStore,        // LoadRunningComboHistoryPort
+                        runningRecordStore,       // LoadRecordedRoutesPort
+                        runningComboArchiveStore, // CreateRunningCombosPort
+                        COMBO_PROPERTIES),
+                runningComboStore);               // DeleteRunningComboStatePort
     }
 
     // 조립할 fake가 많고 여러 테스트가 가입부터 시작하므로 여기서 한 번만 엮는다

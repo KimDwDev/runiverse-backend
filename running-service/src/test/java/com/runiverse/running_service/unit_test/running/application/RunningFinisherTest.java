@@ -66,7 +66,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.runiverse.running_service.application.running.common.RunningComboArchiver;
 
+import static org.mockito.ArgumentMatchers.anyLong;
 import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -157,6 +159,10 @@ public class RunningFinisherTest {
     @Mock
     private LiveRunningStatusChanger liveRunningStatusChanger;
 
+    // 콤보 저장은 RunningComboArchiverTest가 본다 — 여기서는 방을 닫을 때 어느 쪽을 거는지만 본다
+    @Mock
+    private RunningComboArchiver runningComboArchiver;
+
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
@@ -180,7 +186,7 @@ public class RunningFinisherTest {
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
                 existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
-                liveRunningStatusChanger, eventPublisher, PROPERTIES,
+                liveRunningStatusChanger, runningComboArchiver, eventPublisher, PROPERTIES,
                 DEFAULT_PROPERTIES, recordRunningMetricPort);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
@@ -664,6 +670,31 @@ public class RunningFinisherTest {
         }
 
         @Test
+        @DisplayName("방을 FINISHED로 닫으면 콤보 저장을 커밋 뒤로 건다")
+        void archivesCombosWhenRoomFinishes() {
+            // when
+            finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then -> 같은 트랜잭션에서 저장하면 콤보 실패가 이 종료까지 롤백시킨다
+            verify(runningComboArchiver).archiveAfterCommit(ROOM_ID);
+            verify(runningComboArchiver, never()).discardAfterCommit(anyLong());
+        }
+
+        @Test
+        @DisplayName("아직 뛰는 참가자가 있으면 콤보를 건드리지 않는다")
+        void leavesCombosWhileOthersRun() {
+            // given
+            given(existsRunningPlayerPort.existsRunning(new RunningRoomId(ROOM_ID)))
+                    .willReturn(true);
+
+            // when
+            finishIn(room(RunningRoomType.MATCH, TARGET));
+
+            // then -> 남은 사람의 콤보는 아직 바뀐다
+            verifyNoInteractions(runningComboArchiver);
+        }
+
+        @Test
         @DisplayName("남은 자리 없이 닫힌 방은 즉시 강제 종료를 요청하지 않는다")
         void doesNotRequestForceFinishWhenNobodyRemains() {
             // when
@@ -711,6 +742,9 @@ public class RunningFinisherTest {
             // then -> 완료로 남기지 않는다. 닫힌 시각은 FINISHED와 같게 함께 찍힌다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
             assertThat(room.getCloseAt()).isPresent();
+            // 남길 기록이 없어 콤보도 저장하지 않고 상태만 지운다
+            verify(runningComboArchiver).discardAfterCommit(ROOM_ID);
+            verify(runningComboArchiver, never()).archiveAfterCommit(anyLong());
         }
 
         @Test

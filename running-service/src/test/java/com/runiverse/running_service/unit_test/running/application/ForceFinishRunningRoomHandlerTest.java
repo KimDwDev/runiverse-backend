@@ -37,6 +37,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import com.runiverse.running_service.application.running.common.RunningComboArchiver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -88,6 +89,9 @@ class ForceFinishRunningRoomHandlerTest {
     @Mock
     private FinishRunningUsecase finishRunningUsecase;
 
+    @Mock
+    private RunningComboArchiver runningComboArchiver;
+
     private ForceFinishRunningRoomHandler forceFinishRunningRoomHandler;
 
     @BeforeEach
@@ -95,7 +99,7 @@ class ForceFinishRunningRoomHandlerTest {
         forceFinishRunningRoomHandler = new ForceFinishRunningRoomHandler(
                 lockRunningPlayerPort, lockRunningRoomPort, loadRunningRoomPort, loadRoomPlayerPort,
                 updateRunningRoomPort, updateRunningPlayerPort, startMatchCooldownPort,
-                existsRunningRecordPort, finishRunningUsecase, PROPERTIES);
+                existsRunningRecordPort, finishRunningUsecase, PROPERTIES, runningComboArchiver);
     }
 
     @Test
@@ -206,6 +210,8 @@ class ForceFinishRunningRoomHandlerTest {
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
         assertThat(lastUpdatedRoom().getCloseAt()).isPresent();
         verifyNoInteractions(finishRunningUsecase);
+        // 남길 기록이 없어 콤보 상태만 지운다
+        verify(runningComboArchiver).discardAfterCommit(ROOM_ID);
     }
 
     @Test
@@ -223,6 +229,8 @@ class ForceFinishRunningRoomHandlerTest {
         // then -> 다시 읽어 이미 닫힌 것을 보고 손을 뗀다. 기록을 세어볼 것도 없다
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.STARTED);
         verifyNoInteractions(existsRunningRecordPort);
+        // 콤보 정리는 방을 닫은 러닝 종료가 이미 걸었다 — 두 번 걸면 같은 방을 두 번 저장한다
+        verifyNoInteractions(runningComboArchiver);
     }
 
     @Test
@@ -242,6 +250,7 @@ class ForceFinishRunningRoomHandlerTest {
         // then
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
         assertThat(lastUpdatedRoom().getCloseAt()).isPresent();
+        verify(runningComboArchiver).archiveAfterCommit(ROOM_ID);
     }
 
     @Test

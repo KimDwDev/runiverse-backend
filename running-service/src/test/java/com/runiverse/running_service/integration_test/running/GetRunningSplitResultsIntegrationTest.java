@@ -96,6 +96,7 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 runningRecordStore, onboardingStore,
                 new LiveRunningStatusChanger(
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                newRunningComboArchiver(), // RunningComboArchiver
                 event -> {
                 },
                 PROPERTIES,

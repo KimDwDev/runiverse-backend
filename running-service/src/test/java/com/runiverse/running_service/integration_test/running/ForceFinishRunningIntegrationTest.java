@@ -125,6 +125,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,    // UpdateUserAvgPacePort
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                newRunningComboArchiver(), // RunningComboArchiver
                 event -> {          // ApplicationEventPublisher — 커밋 뒤 전달은 테스트가 직접 한다
                     if (event instanceof RunningForceFinishRequestedEvent request) {
                         forceFinishRequests.add(request);
@@ -157,7 +158,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                         this::recordCooldown, // StartMatchCooldownPort
                         runningRecordStore,   // ExistsRunningRecordPort
                         finishRunningHandler, // FinishRunningUsecase
-                        MATCH_PROPERTIES
+                        MATCH_PROPERTIES,
+                        newRunningComboArchiver()
                 );
         forceFinishListener = new RunningForceFinishListener(forceFinishRunningRoomHandler);
         runScheduledJobHandler = new RunScheduledJobHandler(
