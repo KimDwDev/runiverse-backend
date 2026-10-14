@@ -17,7 +17,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboFinishedPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RecordRunningMetricPort;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
@@ -77,7 +77,7 @@ public class RunningFinisher {
     private final UpdateUserAvgPacePort updateUserAvgPacePort;
     private final LiveRunningStatusChanger liveRunningStatusChanger;
     private final RunningComboArchiver runningComboArchiver;
-    private final MarkRunningComboPausedPort markRunningComboPausedPort;
+    private final MarkRunningComboFinishedPort markRunningComboFinishedPort;
     private final ApplicationEventPublisher eventPublisher;
     private final RunningFinishProperties runningFinishProperties;
     private final TrackFilterProperties trackFilterProperties;
@@ -187,7 +187,7 @@ public class RunningFinisher {
         // 9. 남은 참가자와의 콤보를 끊는다 — 안 끊으면 방이 닫힐 때까지 남는다.
         //    방이 닫혔으면 콤보 상태가 지워지므로 건너뛴다
         if (room.getStatus() == RunningRoomStatus.STARTED) {
-            markComboPausedAfterCommit(runningRoomId, userId);
+            markComboFinishedAfterCommit(runningRoomId, userId);
         }
         return GoalCheck.reached();
     }
@@ -328,23 +328,23 @@ public class RunningFinisher {
                 LiveRunningStatus.FINISHED);
     }
 
-    // 끝낸 사람은 콤보에서 일시정지와 같다 — 상대의 다음 배치에서 끊긴다
-    private void markComboPausedAfterCommit(Long runningRoomId, UserId userId) {
+    // 끝낸 사람은 상대의 다음 배치에서 끊기고, 늦은 좌표가 와도 다시 붙지 않는다
+    private void markComboFinishedAfterCommit(Long runningRoomId, UserId userId) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    markComboPaused(runningRoomId, userId);
+                    markComboFinished(runningRoomId, userId);
                 }
             });
             return;
         }
-        markComboPaused(runningRoomId, userId);
+        markComboFinished(runningRoomId, userId);
     }
 
-    private void markComboPaused(Long runningRoomId, UserId userId) {
+    private void markComboFinished(Long runningRoomId, UserId userId) {
         try {
-            markRunningComboPausedPort.markPaused(runningRoomId, userId);
+            markRunningComboFinishedPort.markFinished(runningRoomId, userId);
         } catch (RuntimeException e) {
             // 콤보는 곁가지다 — 종료를 실패로 만들지 않는다
             log.error("[러닝] 종료 참가자 콤보 끊기 실패: 처리하지 못한 예외 - roomId={}, userId={}",

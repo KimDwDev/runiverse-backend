@@ -97,7 +97,7 @@ public class GetRunningSplitResultsIntegrationTest extends IntegrationTestSuppor
                 new LiveRunningStatusChanger(
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
                 newRunningComboArchiver(), // RunningComboArchiver
-                runningComboStore,  // MarkRunningComboPausedPort
+                runningComboStore,  // MarkRunningComboFinishedPort
                 event -> {
                 },
                 PROPERTIES,

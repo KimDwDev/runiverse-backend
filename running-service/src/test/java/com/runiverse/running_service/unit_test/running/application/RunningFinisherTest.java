@@ -24,7 +24,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboFinishedPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
@@ -169,7 +169,7 @@ public class RunningFinisherTest {
     private RunningComboArchiver runningComboArchiver;
 
     @Mock
-    private MarkRunningComboPausedPort markRunningComboPausedPort;
+    private MarkRunningComboFinishedPort markRunningComboFinishedPort;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -194,7 +194,7 @@ public class RunningFinisherTest {
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
                 existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
-                liveRunningStatusChanger, runningComboArchiver, markRunningComboPausedPort,
+                liveRunningStatusChanger, runningComboArchiver, markRunningComboFinishedPort,
                 eventPublisher, PROPERTIES, DEFAULT_PROPERTIES, recordRunningMetricPort);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
@@ -1044,8 +1044,8 @@ public class RunningFinisherTest {
     class ComboBreakTest {
 
         @Test
-        @DisplayName("아직 뛰는 참가자가 있으면 커밋 뒤에 일시정지 표시를 남긴다")
-        void marksComboPausedAfterCommit() {
+        @DisplayName("아직 뛰는 참가자가 있으면 커밋 뒤에 종료 표시를 남긴다")
+        void marksComboFinishedAfterCommit() {
             // given -> 나만 먼저 끝냈다
             givenPlayer(player(RunningPlayerStatus.RUNNING, null));
             givenRoom(room(RunningRoomType.MATCH, TARGET));
@@ -1058,21 +1058,21 @@ public class RunningFinisherTest {
                 finish();
 
                 // then -> 롤백될 종료로 콤보를 끊으면 되돌릴 길이 없다
-                verifyNoInteractions(markRunningComboPausedPort);
+                verifyNoInteractions(markRunningComboFinishedPort);
 
                 // when -> 커밋 성공을 흉내 낸다
                 TransactionSynchronizationManager.getSynchronizations()
                         .forEach(TransactionSynchronization::afterCommit);
 
                 // then -> 표시가 없으면 끝낸 사람은 관측 없음(보류)이라 상대 화면에 콤보가 남는다
-                verify(markRunningComboPausedPort).markPaused(ROOM_ID, new UserId(USER_ID));
+                verify(markRunningComboFinishedPort).markFinished(ROOM_ID, new UserId(USER_ID));
             } finally {
                 TransactionSynchronizationManager.clearSynchronization();
             }
         }
 
         @Test
-        @DisplayName("방이 닫히면 일시정지 표시를 남기지 않는다")
+        @DisplayName("방이 닫히면 종료 표시를 남기지 않는다")
         void skipsWhenRoomCloses() {
             // given -> 마지막 한 명이 끝냈다
             givenPlayer(player(RunningPlayerStatus.RUNNING, null));
@@ -1083,11 +1083,11 @@ public class RunningFinisherTest {
             finish();
 
             // then -> 볼 사람이 없고, 콤보 상태는 방 닫힘이 지운다
-            verifyNoInteractions(markRunningComboPausedPort);
+            verifyNoInteractions(markRunningComboFinishedPort);
         }
 
         @Test
-        @DisplayName("일시정지 표시를 못 남겨도 던지지 않고 ERROR로 남긴다")
+        @DisplayName("종료 표시를 못 남겨도 던지지 않고 ERROR로 남긴다")
         void swallowsMarkFailure() {
             // given
             RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
@@ -1097,7 +1097,7 @@ public class RunningFinisherTest {
             given(existsRunningPlayerPort.existsRunning(new RunningRoomId(ROOM_ID)))
                     .willReturn(true);
             willThrow(new IllegalStateException("redis down"))
-                    .given(markRunningComboPausedPort).markPaused(ROOM_ID, new UserId(USER_ID));
+                    .given(markRunningComboFinishedPort).markFinished(ROOM_ID, new UserId(USER_ID));
             LogCapture log = LogCapture.of(RunningFinisher.class);
 
             try {
