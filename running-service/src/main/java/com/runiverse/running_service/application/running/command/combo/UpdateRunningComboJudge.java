@@ -81,7 +81,9 @@ public class UpdateRunningComboJudge {
                         speedFrom(before, signal.meters(), now),
                         signal.moved() ? now : before.movedAt(),
                         signal.observed() ? now : before.observedAt(),
-                        before.paused() && !signal.observed()))
+                        before.paused() && !signal.observed(),
+                        // 종료는 관측이 와도 그대로다 — 끝난 사람의 좌표는 늦은 배치뿐이다
+                        before.finished()))
                 // 첫 배치는 직전 값이 없어 속도가 0이다 — 방금 보고한 값이라 밀 필요도 없다
                 .orElseGet(() -> new RunningComboSnapshot(
                         sender,
@@ -90,6 +92,7 @@ public class UpdateRunningComboJudge {
                         0,
                         signal.moved() ? now : null,
                         signal.observed() ? now : null,
+                        false,
                         false));
     }
 

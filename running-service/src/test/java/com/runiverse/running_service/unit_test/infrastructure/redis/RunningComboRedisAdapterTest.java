@@ -93,7 +93,8 @@ class RunningComboRedisAdapterTest {
         // given
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
         RunningComboSnapshot saved =
-                new RunningComboSnapshot(one, 3_433.25, RECORDED_AT, 3.125, MOVED_AT, RECORDED_AT, false);
+                new RunningComboSnapshot(
+                        one, 3_433.25, RECORDED_AT, 3.125, MOVED_AT, RECORDED_AT, false, false);
 
         // when -> 쓴 것을 그대로 다시 읽힌다
         adapter.saveSnapshot(ROOM_ID, saved);
@@ -109,7 +110,8 @@ class RunningComboRedisAdapterTest {
     void snapshotWithoutTimesRoundTrips() {
         // given -> RUNNING_START의 첫 기준
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
-        RunningComboSnapshot saved = new RunningComboSnapshot(one, 0, RECORDED_AT, 0, null, null, false);
+        RunningComboSnapshot saved =
+                new RunningComboSnapshot(one, 0, RECORDED_AT, 0, null, null, false, false);
 
         // when
         adapter.saveSnapshot(ROOM_ID, saved);
@@ -121,17 +123,42 @@ class RunningComboRedisAdapterTest {
     }
 
     @Test
-    @DisplayName("스냅샷 값에는 일시정지 여부를 싣지 않는다 — 별도 칸이다")
-    void snapshotValueDoesNotCarryPause() {
+    @DisplayName("스냅샷 값에는 일시정지·종료 여부를 싣지 않는다 — 별도 칸이다")
+    void snapshotValueDoesNotCarryMarks() {
         // given
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
 
-        // when -> 일시정지였던 값을 저장해도
+        // when -> 일시정지·종료였던 값을 저장해도
         adapter.saveSnapshot(ROOM_ID,
-                new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, true));
+                new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, true, true));
 
-        // then -> 일시정지 이벤트와 위치 배치가 같은 값을 고쳐 쓰면 한쪽이 사라진다
+        // then -> 표시 이벤트와 위치 배치가 같은 값을 고쳐 쓰면 한쪽이 사라진다
         assertThat(written()).containsOnlyKeys(one.value().toString());
+    }
+
+    @Test
+    @DisplayName("종료 표시 칸을 읽어 그 참가자의 스냅샷에 붙인다")
+    void attachesFinishMarkToSnapshot() {
+        // given -> 같은 해시 안에 스냅샷 칸과 종료 칸이 함께 있다
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        given(hashOperations.entries(anyString())).willReturn(Map.of(
+                one.value().toString(), "3400.00|1788000000000|3.300|1787999996000|1788000000000",
+                one.value() + ":finished", "1788000001000",
+                other.value().toString(), "3410.00|1788000000000|3.300|1787999996000|1788000000000"));
+
+        // when
+        List<RunningComboSnapshot> loaded = adapter.loadSnapshots(ROOM_ID);
+
+        // then -> 종료 칸이 스냅샷으로 읽히면 형식 불일치로 WARN이 쏟아진다
+        assertThat(loaded).hasSize(2);
+        assertThat(loaded).filteredOn(snapshot -> snapshot.userId().equals(one))
+                .singleElement().satisfies(snapshot -> {
+                    assertThat(snapshot.finished()).isTrue();
+                    assertThat(snapshot.paused()).isFalse();
+                });
+        assertThat(loaded).filteredOn(snapshot -> snapshot.userId().equals(other))
+                .singleElement().satisfies(snapshot -> assertThat(snapshot.finished()).isFalse());
+        assertThat(log.messages(Level.WARN)).isEmpty();
     }
 
     @Test
@@ -196,6 +223,21 @@ class RunningComboRedisAdapterTest {
         // then
         verify(hashOperations).put(eq("running:combo:" + ROOM_ID + ":dist"),
                 eq(one.value() + ":paused"), anyString());
+        verify(redisTemplate).expire("running:combo:" + ROOM_ID + ":dist", TTL);
+    }
+
+    @Test
+    @DisplayName("종료 표시는 같은 해시의 별도 칸에 쓰고 TTL을 다시 건다")
+    void marksFinishInSeparateField() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+
+        // when
+        adapter.markFinished(ROOM_ID, one);
+
+        // then
+        verify(hashOperations).put(eq("running:combo:" + ROOM_ID + ":dist"),
+                eq(one.value() + ":finished"), anyString());
         verify(redisTemplate).expire("running:combo:" + ROOM_ID + ":dist", TTL);
     }
 
@@ -496,7 +538,7 @@ class RunningComboRedisAdapterTest {
     }
 
     private RunningComboSnapshot snapshot() {
-        return new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, false);
+        return new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, false, false);
     }
 
     // 어댑터가 Redis에 실제로 쓴 필드들 — 이 값을 그대로 읽기 경로에 되먹인다

@@ -175,7 +175,7 @@ class UpdateRunningComboJudgeTest {
         Instant movedAt = Instant.now().minusSeconds(12);
         Instant observedAt = Instant.now().minusSeconds(8);
         given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
-                new RunningComboSnapshot(SENDER, 900, observedAt, 0, movedAt, observedAt, false)));
+                new RunningComboSnapshot(SENDER, 900, observedAt, 0, movedAt, observedAt, false, false)));
 
         // when -> 재전송분만 온 배치
         judge.judge(ROOM_ID, SENDER, new RunningComboSignal(900, false, false));
@@ -237,6 +237,21 @@ class UpdateRunningComboJudgeTest {
 
         // then
         verify(markRunningComboPausedPort, never()).clearPaused(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("끝난 참가자의 늦은 배치가 들어와도 종료 표시는 그대로다")
+    void judge_keepsFinishedWhenObservedAgain() {
+        // given
+        given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
+                new RunningComboSnapshot(SENDER, 900, Instant.now().minusSeconds(30), 0,
+                        Instant.now().minusSeconds(30), Instant.now().minusSeconds(30), false, true)));
+
+        // when -> 종료 직후 상태 조회가 실패한 틈에 늦은 좌표가 통과했다
+        judge.judge(ROOM_ID, SENDER, RUNNING_AT_1000);
+
+        // then -> 끝난 사람은 다시 달리는 중이 될 수 없다
+        assertThat(captureSavedSnapshot().finished()).isTrue();
     }
 
     @Test
@@ -343,14 +358,15 @@ class UpdateRunningComboJudgeTest {
 
     private void givenSenderSnapshot(double meters, Instant recordedAt, double speed, boolean paused) {
         given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
-                new RunningComboSnapshot(SENDER, meters, recordedAt, speed, recordedAt, recordedAt, paused)));
+                new RunningComboSnapshot(
+                        SENDER, meters, recordedAt, speed, recordedAt, recordedAt, paused, false)));
     }
 
     // 지금 막 관측했고 의심점도 옮겨진 상대 — 달리는 중
     private void givenRunningPeer(double meters) {
         Instant now = Instant.now();
         given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
-                new RunningComboSnapshot(PEER, meters, now, 0, now, now, false)));
+                new RunningComboSnapshot(PEER, meters, now, 0, now, now, false, false)));
     }
 
     private RunningComboSnapshot captureSavedSnapshot() {

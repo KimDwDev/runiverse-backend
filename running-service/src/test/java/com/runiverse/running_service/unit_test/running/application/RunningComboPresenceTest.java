@@ -20,8 +20,14 @@ class RunningComboPresenceTest {
     private static final Duration FRESHNESS = Duration.ofSeconds(19);
 
     private static RunningComboPresence presenceOf(Instant movedAt, Instant observedAt, boolean paused) {
+        return presenceOf(movedAt, observedAt, paused, false);
+    }
+
+    private static RunningComboPresence presenceOf(
+            Instant movedAt, Instant observedAt, boolean paused, boolean finished) {
         return RunningComboPresence.of(
-                new RunningComboSnapshot(USER, 1_000, NOW, 0, movedAt, observedAt, paused), NOW, FRESHNESS);
+                new RunningComboSnapshot(USER, 1_000, NOW, 0, movedAt, observedAt, paused, finished),
+                NOW, FRESHNESS);
     }
 
     @Test
@@ -65,5 +71,12 @@ class RunningComboPresenceTest {
     @DisplayName("일시정지 표시가 있으면 다른 시각과 무관하게 일시정지다")
     void pausedWinsOverEverything() {
         assertThat(presenceOf(NOW, NOW, true)).isEqualTo(RunningComboPresence.PAUSED);
+    }
+
+    @Test
+    @DisplayName("종료 표시가 있으면 방금 관측됐어도, 일시정지 표시가 함께 있어도 종료다")
+    void finishedWinsOverEverything() {
+        assertThat(presenceOf(NOW, NOW, false, true)).isEqualTo(RunningComboPresence.FINISHED);
+        assertThat(presenceOf(NOW, NOW, true, true)).isEqualTo(RunningComboPresence.FINISHED);
     }
 }

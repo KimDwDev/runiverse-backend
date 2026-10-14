@@ -126,6 +126,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
                 newRunningComboArchiver(), // RunningComboArchiver
+                runningComboStore,  // MarkRunningComboFinishedPort
                 event -> {          // ApplicationEventPublisher — 커밋 뒤 전달은 테스트가 직접 한다
                     if (event instanceof RunningForceFinishRequestedEvent request) {
                         forceFinishRequests.add(request);
