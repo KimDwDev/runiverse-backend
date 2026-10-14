@@ -4,8 +4,12 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatusChange;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningStateMeterProperties;
 import com.runiverse.running_service.infrastructure.redis.running.LiveRunningStatusRedisAdapter;
 import com.runiverse.running_service.infrastructure.redis.running.RunningTrackProperties;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,10 +60,14 @@ class LiveRunningStatusRedisAdapterTest {
 
     private LiveRunningStatusRedisAdapter adapter;
     private UserId userId;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @BeforeEach
     void setUp() {
-        adapter = new LiveRunningStatusRedisAdapter(redisTemplate, new RunningTrackProperties(TTL));
+        // 계측은 실제 구현을 쓴다 — 어떤 상태 변경을 어느 단계로 세는지가 검증 대상이다
+        RunningStateMeter stateMeter = new RunningStateMeter(
+                meterRegistry, new RunningStateMeterProperties(Duration.ofHours(1)));
+        adapter = new LiveRunningStatusRedisAdapter(redisTemplate, new RunningTrackProperties(TTL), stateMeter);
         userId = new UserId(UuidCreator.getTimeOrderedEpoch());
     }
 
@@ -217,5 +225,57 @@ class LiveRunningStatusRedisAdapterTest {
         // when & then -> 스냅샷은 실패를 그대로 올려야 한다 — 누적 거리 조회와 같은 취급이다
         assertThatThrownBy(() -> adapter.load(ROOM_ID, userId))
                 .isInstanceOf(RedisConnectionFailureException.class);
+    }
+
+    private Timer access(String phase, String operation) {
+        return meterRegistry.get("runiverse.running.state.access")
+                .tag("store", "redis")
+                .tag("target", "status")
+                .tag("phase", phase)
+                .tag("operation", operation)
+                .tag("result", "success")
+                .timer();
+    }
+
+    @Test
+    @DisplayName("러닝 중 상태 변경은 러닝 중 쓰기로 센다")
+    void measuresRunningChangeAsRunningWrite() {
+        // given
+        scriptReturns(RUNNING.name());
+
+        // when
+        adapter.change(ROOM_ID, userId, PAUSED);
+
+        // then
+        assertThat(access("running", "write").count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("FINISHED로 바꾸는 것은 종료 쓰기로 센다")
+    void measuresFinishChangeAsFinishWrite() {
+        // given
+        scriptReturns(RUNNING.name());
+
+        // when
+        adapter.change(ROOM_ID, userId, FINISHED);
+
+        // then -> 종료 확정 뒤의 정리라 러닝 중 왕복 수에 섞이면 안 된다
+        assertThat(access("finish", "write").count()).isEqualTo(1);
+        assertThat(meterRegistry.find("runiverse.running.state.access").tag("phase", "running").timer())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("상태 조회는 러닝 중 읽기로 센다")
+    void measuresLoadAsRunningRead() {
+        // given
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn("PAUSED");
+
+        // when
+        adapter.load(ROOM_ID, userId);
+
+        // then
+        assertThat(access("running", "read").count()).isEqualTo(1);
     }
 }

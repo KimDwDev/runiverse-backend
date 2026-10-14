@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.running.application;
 
 import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.running.command.combo.RunningComboSignal;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -50,6 +50,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("러닝 위치 업데이트 단위 테스트")
@@ -94,11 +95,21 @@ public class UpdateRunningLocationHandlerTest {
     @Mock
     private UpdateRunningFinishJudge updateRunningFinishJudge;
 
-    @InjectMocks
     private UpdateRunningLocationHandler updateRunningLocationHandler;
 
     @BeforeEach
     void setUp() {
+        // 트랙 필터 설정은 값 객체라 목으로 둘 수 없다 — @InjectMocks 대신 직접 조립한다
+        updateRunningLocationHandler = new UpdateRunningLocationHandler(
+                appendRunningTrackPort,
+                loadRunningDistancePort,
+                saveRunningDistancePort,
+                changeLiveRunningStatusPort,
+                loadLiveRunningStatusPort,
+                publishRunningProgressPort,
+                updateRunningComboJudge,
+                updateRunningFinishJudge,
+                DEFAULT_PROPERTIES);
         // 좌표를 한 번도 못 받은 상태가 기본이다 — 첫 배치도 같은 경로로 흐른다.
         // 적재 실패 테스트는 여기까지 오지도 않으므로 lenient로 둔다
         lenient().when(loadRunningDistancePort.loadDistance(anyLong(), any()))
@@ -196,7 +207,7 @@ public class UpdateRunningLocationHandlerTest {
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
                 new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
-                        previous.currentPaceSecondsPerKm()));
+                        previous.currentPaceSecondsPerKm(), null, null));
         List<TrackPoint> points = List.of(trackPoint(3L), trackPoint(4L));
 
         // when
@@ -217,7 +228,7 @@ public class UpdateRunningLocationHandlerTest {
         // 그대로 더하면 거리가 두 배가 된다
         TrackPoint previous = trackPoint(2L);
         RunningDistance stored = new RunningDistance(
-                100.0, 2L, previous.latitude(), previous.longitude(), STORED_PACE);
+                100.0, 2L, previous.latitude(), previous.longitude(), STORED_PACE, null, null);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(stored);
 
         // when -> 0,1,2는 이미 반영된 순번이다
@@ -323,7 +334,7 @@ public class UpdateRunningLocationHandlerTest {
         verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
         verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
         verify(publishRunningProgressPort, never()).publish(anyLong(), any());
-        verify(updateRunningComboJudge, never()).judge(anyLong(), any(), anyDouble());
+        verify(updateRunningComboJudge, never()).judge(anyLong(), any(), any());
         verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
         verify(changeLiveRunningStatusPort, never()).change(anyLong(), any(), any());
     }
@@ -520,7 +531,7 @@ public class UpdateRunningLocationHandlerTest {
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
                 new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
-                        STORED_PACE));
+                        STORED_PACE, null, null));
 
         // when -> 0,1,2는 이미 거리에 반영된 순번이다
         updateRunningLocationHandler.handle(
@@ -591,7 +602,7 @@ public class UpdateRunningLocationHandlerTest {
                 updateRunningComboJudge, updateRunningFinishJudge);
         order.verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
         order.verify(publishRunningProgressPort).publish(anyLong(), any());
-        order.verify(updateRunningComboJudge).judge(anyLong(), any(), anyDouble());
+        order.verify(updateRunningComboJudge).judge(anyLong(), any(), any());
         order.verify(updateRunningFinishJudge).judge(anyLong(), any(), any(), anyDouble());
     }
 
@@ -609,5 +620,40 @@ public class UpdateRunningLocationHandlerTest {
         // then -> 다음 배치가 다시 판정한다
         assertThat(result.finished()).isFalse();
         verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
+    }
+
+    @Test
+    @DisplayName("콤보 판정에 누적 거리와 함께 관측·이동 여부를 넘긴다")
+    void passesObservationAndMovementToCombo() {
+        // given -> 첫 배치. 순번 0이 첫 의심점이 되고, 11m 떨어진 순번 1이 반경 밖이라 의심점이 옮겨진다
+
+        // when
+        updateRunningLocationHandler.handle(command(List.of(trackPoint(0L), trackPoint(1L))));
+
+        // then -> 누적기가 같은 좌표를 훑으며 낸 값을 그대로 넘긴다
+        ArgumentCaptor<RunningComboSignal> captor = ArgumentCaptor.forClass(RunningComboSignal.class);
+        verify(updateRunningComboJudge).judge(anyLong(), any(), captor.capture());
+        assertThat(captor.getValue().observed()).isTrue();
+        assertThat(captor.getValue().moved()).isTrue();
+        assertThat(captor.getValue().meters()).isEqualTo(captureSaved().meters());
+    }
+
+    @Test
+    @DisplayName("재전송분만 온 배치는 관측도 이동도 아니라고 넘긴다")
+    void passesNoObservationForResentBatch() {
+        // given -> 순번 2까지 이미 반영했다
+        TrackPoint previous = trackPoint(2L);
+        given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
+                new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
+                        STORED_PACE, previous.latitude(), previous.longitude()));
+
+        // when
+        updateRunningLocationHandler.handle(command(List.of(trackPoint(1L), trackPoint(2L))));
+
+        // then -> 이미 받은 좌표로 움직였다고 보면 재연결만으로 콤보가 쌓인다
+        ArgumentCaptor<RunningComboSignal> captor = ArgumentCaptor.forClass(RunningComboSignal.class);
+        verify(updateRunningComboJudge).judge(anyLong(), any(), captor.capture());
+        assertThat(captor.getValue().observed()).isFalse();
+        assertThat(captor.getValue().moved()).isFalse();
     }
 }

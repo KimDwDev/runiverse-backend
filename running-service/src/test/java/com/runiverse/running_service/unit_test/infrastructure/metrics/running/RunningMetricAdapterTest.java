@@ -1,7 +1,7 @@
-package com.runiverse.running_service.unit_test.infrastructure.metrics;
+package com.runiverse.running_service.unit_test.infrastructure.metrics.running;
 
 import com.runiverse.running_service.application.running.common.TrackFilterSummary;
-import com.runiverse.running_service.infrastructure.metrics.RunningMetricAdapter;
+import com.runiverse.running_service.infrastructure.metrics.running.RunningMetricAdapter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;

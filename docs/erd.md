@@ -8,10 +8,10 @@
 
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`만 시퀀스 — 표 참고). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`scheduled_jobs`·`colors`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`running_combos`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_splits`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`·`like_count`·`comment_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
@@ -193,6 +193,7 @@
 > CHECK `ck_running_record_elevation_gain`: `total_elevation_gain is null or total_elevation_gain between 0 and 20000`
 > CHECK `ck_running_record_weather_code`: `weather_code between 0 and 99`
 > CHECK `ck_running_record_period`: `end_at > start_at`
+> **러닝 중에는 이 테이블에 쓰지 않는다** — 좌표·누적 거리는 Redis가 원본이고, 확정할 때 러닝 하나치를 Redis에서 통째로 읽어 한 번에 넣는다(write-behind). 배치마다 행을 갱신하지 않는 근거와 관측 방법은 feature-spec GPS 트랙 절.
 > **개인 단위 진행 상태는 `running_players.status`가 갖는다.** 기록은 `COMPLETED`뿐 아니라 `RUNNING_LEFT_*`와도 함께 생성될 수 있으며, 기록 생성 가능한 트랙이 없으면 종료 상태만 남는다.
 > 결과 조회는 해당 방에서 러닝 단계에 들어간 참가자(`RUNNING`·`COMPLETED`·`RUNNING_LEFT_*`)의 세션에 `running_records`를 LEFT JOIN한다. 시작 전 이탈자는 제외하고 기록 없는 참가자는 유지한다.
 
@@ -228,6 +229,35 @@
 > **행 수가 방마다 수천 개다** — 목표 5,000m·4인 방이면 2,000행이다. 건별 INSERT가 아니라 배치로 넣는다.
 > **경계점 목록이 곧 경로라 인덱스가 구조적으로 맞물린다.** 경로가 0m부터 10m마다의 경계점이라 `N`번 구간은 언제나 `N-1`~`N`번 점이다.
 > **대가는 `running_records`와의 결합이다** — `route_polyline`을 재생성하면 점 개수가 달라져 그 기록의 모든 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. 둘 다 write-once라 재생성 자체가 예외적 상황이다.
+
+### running_combos (러닝 콤보 구간)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| running_combo_id | bigint | PK | |
+| running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | |
+| first_user_id | UUID | → users, NOT NULL | 논리 참조. 쌍을 정렬한 앞쪽 — Redis 콤보 관계(`RunningComboPair`)와 같은 순서다 |
+| second_user_id | UUID | → users, NOT NULL | 논리 참조. 정렬한 뒤쪽 |
+| segment_number | int | NOT NULL | 이 방에서 이 쌍의 몇 번째 콤보(1부터, `start_at` 순) |
+| combo_count | int | NOT NULL | 이 구간의 유지 횟수 — (`end_at` − `start_at`) ÷ 1회 길이. 1회 길이가 운영 설정이라 계산하지 않고 저장한다 |
+| first_route_polyline | text | nullable | `first_user_id`의 콤보 달성 위치 — 그 참가자의 `route_polyline`에서 고른 점들을 같은 형식(encoded polyline, precision 5)으로 담는다. i번째 점이 i콤보를 달성한 자리다. 점 개수가 `combo_count`와 같다. 각 점은 그 참가자의 `running_records.route_polyline` 경계점 중 달성 시각(`start_at` + i × 1회 길이)에 가장 가까운 점 그대로다. 그 참가자의 기록이 없으면 null |
+| second_route_polyline | text | nullable | `second_user_id` 쪽 |
+| start_at | timestamp | NOT NULL | 콤보가 붙은 시각 |
+| end_at | timestamp | NOT NULL | **쌓인 시각** — 겹쳤다고 판정된 때 두 참가자가 모두 움직였다고 확인된 마지막 순간(feature-spec 러닝 콤보). 끊긴 시각이 아니다. 봐주는 구간이나 서 있던 시간을 넣으면 함께 달리지 않은 구간이 섞인다 |
+| created_at | timestamp | NOT NULL | 방이 `FINISHED`로 닫힌 커밋 뒤, 별도 트랜잭션에서 일괄 INSERT(write-once) |
+
+> UNIQUE (running_room_id, first_user_id, second_user_id, segment_number) — 쌍마다 구간 번호 중복 방지. `second_user_id` 쪽 조회 인덱스는 [§7](#7-인덱스-조회-성능).
+> CHECK `ck_running_combo_users`: `first_user_id < second_user_id`
+> CHECK `ck_running_combo_segment_number`: `segment_number >= 1`
+> CHECK `ck_running_combo_count`: `combo_count >= 1`
+> CHECK `ck_running_combo_period`: `end_at > start_at`
+> **쌍마다 한 행이다.** A-B와 B-A를 따로 두지 않는다. 시각·횟수는 쌍의 값이고 달성 위치만 사람마다 달라 polyline을 두 칸 둔다 — 원격 러닝이라 같은 시각에 각자 다른 길 위에 있다.
+> **정렬 순서를 DB 제약으로 건다** — `<`가 정렬과 함께 같은 사용자끼리의 쌍(`<>`)도 막는다. 앱(Java `UUID.compareTo`)은 64비트씩 부호 있는 비교, Postgres는 바이트 순(부호 없는 비교)이라 상위 64비트의 첫 비트가 서로 다른 쌍에서만 결과가 갈린다. `user_id`는 UUIDv7이라 첫 비트가 타임스탬프 최상위 비트로 늘 0이므로 두 순서가 같다. **UUIDv7이 아닌 `user_id`가 들어오면 이 제약이 쌍을 거부할 수 있다.** 조회는 크기 비교를 쓰지 않는다.
+> **유지 횟수가 0인 구간은 저장하지 않는다** — 붙자마자 끊겨 함께 달린 구간이 없다.
+> **러닝 중에는 이 테이블에 쓰지 않는다** — 판정 상태와 끊긴 구간은 Redis가 원본이다. 방이 닫힐 때 Redis 구간 해시(끊긴 구간)와 관계 해시(이어지던 관계)를 읽어 한 번에 넣는다. `segment_number`는 이때 `start_at` 순으로 매기고, `end_at`은 관계가 들고 있던 쌓인 시각이다(feature-spec 러닝 콤보).
+> **콤보는 선이 아니라 점이다.** 클라는 기록의 `route_polyline`을 그리고, 그 위에 콤보 1회마다 점 하나를 찍는다. 그래서 점은 새로 보간하지 않고 `route_polyline` 경계점을 그대로 고른다 — 그려진 경로에서 벗어나지 않는다. 경계점의 시각은 `running_splits`(`route_start_index`·`route_end_index` ↔ `start_at`·`end_at`)에서 얻는다.
+> **위치는 거리가 아니라 시각으로 찾는다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 찾으면 어긋난다. 시각은 하나뿐이다.
+> **좌표를 담고 경계점 번호는 담지 않는다.** 번호로 담으면 `running_splits`처럼 `route_polyline` 재생성에 묶인다.
 
 ---
 
@@ -442,7 +472,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
@@ -456,6 +486,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
 | running_room_sessions.(user_id, is_connected) | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 타며, 현재 방 조회는 `is_connected=true`를 항상 함께 본다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다 |
+| running_combos.(running_room_id, second_user_id, segment_number) | 방 안에서 내 콤보 구간 조회의 `second_user_id` 쪽 — UNIQUE가 `first_user_id` 방향만 커버한다. 쌍을 정렬해 저장하므로 참가자가 어느 쪽에 있을지 미리 알 수 없다. `segment_number`까지 두어 구간 순서대로 읽힌다 |
 | scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작 |
 | delete_users.(email, created_at) `WHERE email IS NOT NULL` | 보관 기간 만료 정리 — 아직 신원 정보가 남은 행 조회. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다. `email`이 선두라 정리가 끝난 대다수를 인덱스 단계에서 배제한다. 행을 지우지 않는 테이블이라 시간이 갈수록 `created_at` 단독으로는 거의 전부를 읽게 된다 |
