@@ -142,7 +142,7 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | 이름 | 종류 | 기록 위치 | 상태 |
 |---|---|---|---|
 | `runiverse.http.requests` | Counter | `observability/metrics/` | 사용 중 |
-| `runiverse.auth.oauthlogin` | Counter | `OauthLoginHandler` → `AuthMetricAdapter` | 사용 중 — `provider=kakao\|google\|unknown`, `result`, `reason` |
+| `runiverse.auth.oauthlogin` | Counter | `OauthLoginHandler` → `AuthMetricAdapter` | 사용 중 — `provider=google\|kakao\|apple\|unknown`, `result`, `reason` |
 | `runiverse.websocket.messages` | Counter | 러닝 WebSocket 핸들러 | 예정 |
 | `runiverse.sse.events` | Counter | 매칭 스트림 연결 | 예정 |
 | `runiverse.running.finish.filtered` | DistributionSummary (baseUnit `meters`) | `RunningFinisher` → `RunningMetricAdapter` | 사용 중 — `filter=accuracy\|spike\|gap\|stop`. 기록 확정 1건당 트랙 필터 단계별로 뺀 거리(feature-spec 트랙 필터). 0도 기록한다. 히스토그램을 켠다(1~10,000m). 판정값 조정용 |
