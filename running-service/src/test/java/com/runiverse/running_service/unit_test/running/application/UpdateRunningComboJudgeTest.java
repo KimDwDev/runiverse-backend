@@ -240,6 +240,21 @@ class UpdateRunningComboJudgeTest {
     }
 
     @Test
+    @DisplayName("끝난 참가자의 늦은 배치가 들어와도 종료 표시는 그대로다")
+    void judge_keepsFinishedWhenObservedAgain() {
+        // given
+        given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
+                new RunningComboSnapshot(SENDER, 900, Instant.now().minusSeconds(30), 0,
+                        Instant.now().minusSeconds(30), Instant.now().minusSeconds(30), false, true)));
+
+        // when -> 종료 직후 상태 조회가 실패한 틈에 늦은 좌표가 통과했다
+        judge.judge(ROOM_ID, SENDER, RUNNING_AT_1000);
+
+        // then -> 끝난 사람은 다시 달리는 중이 될 수 없다
+        assertThat(captureSavedSnapshot().finished()).isTrue();
+    }
+
+    @Test
     @DisplayName("판정은 방금 저장한 값으로 돈다")
     void judge_evaluatesWithTheUpdatedSnapshot() {
         // given -> 저장된 목록에 보낸 사람이 없어도 이번 배치 값으로 비교해야 한다

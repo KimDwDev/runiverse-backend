@@ -137,6 +137,31 @@ class RunningComboRedisAdapterTest {
     }
 
     @Test
+    @DisplayName("종료 표시 칸을 읽어 그 참가자의 스냅샷에 붙인다")
+    void attachesFinishMarkToSnapshot() {
+        // given -> 같은 해시 안에 스냅샷 칸과 종료 칸이 함께 있다
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+        given(hashOperations.entries(anyString())).willReturn(Map.of(
+                one.value().toString(), "3400.00|1788000000000|3.300|1787999996000|1788000000000",
+                one.value() + ":finished", "1788000001000",
+                other.value().toString(), "3410.00|1788000000000|3.300|1787999996000|1788000000000"));
+
+        // when
+        List<RunningComboSnapshot> loaded = adapter.loadSnapshots(ROOM_ID);
+
+        // then -> 종료 칸이 스냅샷으로 읽히면 형식 불일치로 WARN이 쏟아진다
+        assertThat(loaded).hasSize(2);
+        assertThat(loaded).filteredOn(snapshot -> snapshot.userId().equals(one))
+                .singleElement().satisfies(snapshot -> {
+                    assertThat(snapshot.finished()).isTrue();
+                    assertThat(snapshot.paused()).isFalse();
+                });
+        assertThat(loaded).filteredOn(snapshot -> snapshot.userId().equals(other))
+                .singleElement().satisfies(snapshot -> assertThat(snapshot.finished()).isFalse());
+        assertThat(log.messages(Level.WARN)).isEmpty();
+    }
+
+    @Test
     @DisplayName("일시정지 표시 칸을 읽어 그 참가자의 스냅샷에 붙인다")
     void attachesPauseMarkToSnapshot() {
         // given -> 같은 해시 안에 스냅샷 칸과 일시정지 칸이 함께 있다
@@ -198,6 +223,21 @@ class RunningComboRedisAdapterTest {
         // then
         verify(hashOperations).put(eq("running:combo:" + ROOM_ID + ":dist"),
                 eq(one.value() + ":paused"), anyString());
+        verify(redisTemplate).expire("running:combo:" + ROOM_ID + ":dist", TTL);
+    }
+
+    @Test
+    @DisplayName("종료 표시는 같은 해시의 별도 칸에 쓰고 TTL을 다시 건다")
+    void marksFinishInSeparateField() {
+        // given
+        when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
+
+        // when
+        adapter.markFinished(ROOM_ID, one);
+
+        // then
+        verify(hashOperations).put(eq("running:combo:" + ROOM_ID + ":dist"),
+                eq(one.value() + ":finished"), anyString());
         verify(redisTemplate).expire("running:combo:" + ROOM_ID + ":dist", TTL);
     }
 

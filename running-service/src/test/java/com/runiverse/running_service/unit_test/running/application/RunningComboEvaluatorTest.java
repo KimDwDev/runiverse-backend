@@ -180,6 +180,39 @@ class RunningComboEvaluatorTest {
     }
 
     @Test
+    @DisplayName("한쪽이 끝났으면 늦은 좌표로 시각이 신선해도 바로 끊고 구간을 닫는다")
+    void evaluate_breaksImmediatelyWhenPeerFinished() {
+        // given -> B는 끝냈는데 늦은 배치가 방금 들어왔다. 거리 차도 창 안이다
+        List<RunningComboSnapshot> snapshots = List.of(moving(A, 3_405), finished(B, 3_400));
+        List<RunningComboPair> stored = List.of(pair(NOW.minusSeconds(60), NOW.minusSeconds(20), 4, 1));
+
+        // when
+        RunningComboEvaluation evaluation =
+                RunningComboEvaluator.evaluate(A, snapshots, stored, NOW, PROPERTIES);
+
+        // then -> 끝난 사람과는 더 함께 달릴 수 없다
+        assertThat(pairBetween(evaluation, A, B).inCombo()).isFalse();
+        assertThat(evaluation.segments()).containsExactly(
+                new RunningComboSegment(A, B, NOW.minusSeconds(60), NOW.minusSeconds(20), 4));
+    }
+
+    @Test
+    @DisplayName("끝난 사람과는 거리 차가 창 안이어도 다시 붙지 않는다")
+    void evaluate_neverRejoinsFinishedPeer() {
+        // given -> 이미 끊긴 관계. B의 늦은 배치가 들어와 시각만 보면 달리는 중이다
+        List<RunningComboSnapshot> snapshots = List.of(moving(A, 3_405), finished(B, 3_400));
+        List<RunningComboPair> stored = List.of(RunningComboPair.empty(A, B, 1));
+
+        // when
+        RunningComboEvaluation evaluation =
+                RunningComboEvaluator.evaluate(A, snapshots, stored, NOW, PROPERTIES);
+
+        // then -> 일시정지와 달리 좌표가 와도 풀리지 않는다
+        assertThat(pairBetween(evaluation, A, B).inCombo()).isFalse();
+        assertThat(evaluation.update().relations()).isEmpty();
+    }
+
+    @Test
     @DisplayName("한쪽이 관측 없음이면 보류한다 — 쌓지도 깎지도 않고 화면에도 그대로 남긴다")
     void evaluate_holdsWhenPeerUnobserved() {
         // given -> B가 터널에 들어가 좌표가 30초째 안 온다. 거리 차는 이미 창 밖이다
