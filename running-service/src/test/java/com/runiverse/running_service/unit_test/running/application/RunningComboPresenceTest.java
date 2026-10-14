@@ -21,7 +21,8 @@ class RunningComboPresenceTest {
 
     private static RunningComboPresence presenceOf(Instant movedAt, Instant observedAt, boolean paused) {
         return RunningComboPresence.of(
-                new RunningComboSnapshot(USER, 1_000, NOW, 0, movedAt, observedAt, paused), NOW, FRESHNESS);
+                new RunningComboSnapshot(USER, 1_000, NOW, 0, movedAt, observedAt, paused, finished),
+                NOW, FRESHNESS);
     }
 
     @Test

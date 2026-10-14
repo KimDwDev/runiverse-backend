@@ -9,6 +9,7 @@ import java.time.Instant;
 // 시각만 지나도 바뀌는 값이라(15초 전 관측은 달리는 중, 20초 전은 관측 없음) 저장하면 아무 일이 없어도 틀려진다.
 // 화면 상태(LiveRunningStatus)와 별개다 — 그쪽은 RUNNING_PROGRESS_UPDATED로 나가는 공개 값이다
 public enum RunningComboPresence {
+    FINISHED,
     PAUSED,
     UNOBSERVED,
     STANDING,
@@ -16,6 +17,10 @@ public enum RunningComboPresence {
 
     // 위에서부터 먼저 걸리는 것이다
     public static RunningComboPresence of(RunningComboSnapshot snapshot, Instant now, Duration freshness) {
+        // 끝난 사람은 더 함께 달릴 수 없다 — 늦은 좌표가 와도 그대로다
+        if (snapshot.finished()) {
+            return FINISHED;
+        }
         if (snapshot.paused()) {
             return PAUSED;
         }

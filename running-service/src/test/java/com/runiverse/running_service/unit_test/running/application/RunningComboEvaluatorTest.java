@@ -233,7 +233,7 @@ class RunningComboEvaluatorTest {
         // given -> B는 마지막 속도가 3.2m/s지만 5초 전부터 서 있다(관측은 계속된다).
         // 밀면 36m로 창 밖, 밀지 않으면 20m다
         RunningComboSnapshot standingB = new RunningComboSnapshot(
-                B, 3_420, NOW.minusSeconds(5), 3.2, LONG_AGO, NOW.minusSeconds(5), false);
+                B, 3_420, NOW.minusSeconds(5), 3.2, LONG_AGO, NOW.minusSeconds(5), false, false);
         List<RunningComboSnapshot> snapshots = List.of(moving(A, 3_400), standingB);
         List<RunningComboPair> stored = List.of(pair(NOW.minusSeconds(60), NOW.minusSeconds(20), 4, 1));
 
@@ -253,7 +253,7 @@ class RunningComboEvaluatorTest {
         // given -> A는 지금, B는 5초 전에 의심점이 옮겨졌다
         List<RunningComboSnapshot> snapshots = List.of(
                 moving(A, 3_400),
-                new RunningComboSnapshot(B, 3_420, NOW, 0, NOW.minusSeconds(5), NOW, false));
+                new RunningComboSnapshot(B, 3_420, NOW, 0, NOW.minusSeconds(5), NOW, false, false));
         List<RunningComboPair> stored = List.of(pair(NOW.minusSeconds(40), NOW.minusSeconds(10), 2, 1));
 
         // when
@@ -271,8 +271,8 @@ class RunningComboEvaluatorTest {
         // given -> 둘 다 10초 전에 의심점이 마지막으로 옮겨졌다. 아직 문턱(19초) 안이라 달리는 중이다
         Instant stoppedAt = NOW.minusSeconds(10);
         List<RunningComboSnapshot> snapshots = List.of(
-                new RunningComboSnapshot(A, 3_400, NOW, 0, stoppedAt, NOW, false),
-                new RunningComboSnapshot(B, 3_420, NOW, 0, stoppedAt, NOW, false));
+                new RunningComboSnapshot(A, 3_400, NOW, 0, stoppedAt, NOW, false, false),
+                new RunningComboSnapshot(B, 3_420, NOW, 0, stoppedAt, NOW, false, false));
         List<RunningComboPair> stored = List.of(pair(NOW.minusSeconds(70), stoppedAt, 6, 1));
 
         // when
@@ -290,8 +290,8 @@ class RunningComboEvaluatorTest {
         // given -> 이미 2초 전까지 쌓였는데, 둘의 갱신 시각은 그보다 이른 5초 전이다
         Instant moved = NOW.minusSeconds(5);
         List<RunningComboSnapshot> snapshots = List.of(
-                new RunningComboSnapshot(A, 3_400, NOW, 0, moved, NOW, false),
-                new RunningComboSnapshot(B, 3_420, NOW, 0, moved, NOW, false));
+                new RunningComboSnapshot(A, 3_400, NOW, 0, moved, NOW, false, false),
+                new RunningComboSnapshot(B, 3_420, NOW, 0, moved, NOW, false, false));
         List<RunningComboPair> stored = List.of(pair(NOW.minusSeconds(40), NOW.minusSeconds(2), 3, 1));
 
         // when
@@ -308,8 +308,8 @@ class RunningComboEvaluatorTest {
         // given -> 둘 다 5초 전에 마지막으로 움직였고 지금 처음 겹친다
         Instant moved = NOW.minusSeconds(5);
         List<RunningComboSnapshot> snapshots = List.of(
-                new RunningComboSnapshot(A, 3_400, NOW, 0, moved, NOW, false),
-                new RunningComboSnapshot(B, 3_420, NOW, 0, moved, NOW, false));
+                new RunningComboSnapshot(A, 3_400, NOW, 0, moved, NOW, false, false),
+                new RunningComboSnapshot(B, 3_420, NOW, 0, moved, NOW, false, false));
 
         // when
         RunningComboEvaluation evaluation =
@@ -599,23 +599,29 @@ class RunningComboEvaluatorTest {
 
     private static RunningComboSnapshot movingAt(
             UserId userId, double meters, Instant recordedAt, double speed) {
-        return new RunningComboSnapshot(userId, meters, recordedAt, speed, recordedAt, recordedAt, false);
+        return new RunningComboSnapshot(
+                userId, meters, recordedAt, speed, recordedAt, recordedAt, false, false);
     }
 
     // 관측은 지금도 들어오는데 의심점이 문턱보다 오래 그대로다 — 신호 대기
     private static RunningComboSnapshot standing(UserId userId, double meters) {
-        return new RunningComboSnapshot(userId, meters, NOW, 0, LONG_AGO, NOW, false);
+        return new RunningComboSnapshot(userId, meters, NOW, 0, LONG_AGO, NOW, false, false);
     }
 
     // 좌표가 문턱보다 오래 안 왔다 — 터널·연결 끊김
     private static RunningComboSnapshot unobserved(UserId userId, double meters) {
-        return new RunningComboSnapshot(userId, meters, LONG_AGO, 0, LONG_AGO, LONG_AGO, false);
+        return new RunningComboSnapshot(userId, meters, LONG_AGO, 0, LONG_AGO, LONG_AGO, false, false);
     }
 
     // 일시정지 표시가 있다 — 마지막 값은 달리던 중이었다
     private static RunningComboSnapshot paused(UserId userId, double meters) {
         return new RunningComboSnapshot(userId, meters, NOW.minusSeconds(3), 0,
-                NOW.minusSeconds(3), NOW.minusSeconds(3), true);
+                NOW.minusSeconds(3), NOW.minusSeconds(3), true, false);
+    }
+
+    // 종료 표시가 있다 — 늦은 좌표가 방금 들어와 시각만 보면 달리는 중이다
+    private static RunningComboSnapshot finished(UserId userId, double meters) {
+        return new RunningComboSnapshot(userId, meters, NOW, 0, NOW, NOW, false, true);
     }
 
     private static RunningComboPair pairBetween(

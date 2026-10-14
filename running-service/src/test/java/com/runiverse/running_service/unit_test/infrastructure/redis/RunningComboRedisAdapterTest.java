@@ -93,7 +93,8 @@ class RunningComboRedisAdapterTest {
         // given
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
         RunningComboSnapshot saved =
-                new RunningComboSnapshot(one, 3_433.25, RECORDED_AT, 3.125, MOVED_AT, RECORDED_AT, false);
+                new RunningComboSnapshot(
+                        one, 3_433.25, RECORDED_AT, 3.125, MOVED_AT, RECORDED_AT, false, false);
 
         // when -> 쓴 것을 그대로 다시 읽힌다
         adapter.saveSnapshot(ROOM_ID, saved);
@@ -109,7 +110,8 @@ class RunningComboRedisAdapterTest {
     void snapshotWithoutTimesRoundTrips() {
         // given -> RUNNING_START의 첫 기준
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
-        RunningComboSnapshot saved = new RunningComboSnapshot(one, 0, RECORDED_AT, 0, null, null, false);
+        RunningComboSnapshot saved =
+                new RunningComboSnapshot(one, 0, RECORDED_AT, 0, null, null, false, false);
 
         // when
         adapter.saveSnapshot(ROOM_ID, saved);
@@ -121,16 +123,16 @@ class RunningComboRedisAdapterTest {
     }
 
     @Test
-    @DisplayName("스냅샷 값에는 일시정지 여부를 싣지 않는다 — 별도 칸이다")
-    void snapshotValueDoesNotCarryPause() {
+    @DisplayName("스냅샷 값에는 일시정지·종료 여부를 싣지 않는다 — 별도 칸이다")
+    void snapshotValueDoesNotCarryMarks() {
         // given
         when(redisTemplate.<String, String>opsForHash()).thenReturn(hashOperations);
 
-        // when -> 일시정지였던 값을 저장해도
+        // when -> 일시정지·종료였던 값을 저장해도
         adapter.saveSnapshot(ROOM_ID,
-                new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, true));
+                new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, true, true));
 
-        // then -> 일시정지 이벤트와 위치 배치가 같은 값을 고쳐 쓰면 한쪽이 사라진다
+        // then -> 표시 이벤트와 위치 배치가 같은 값을 고쳐 쓰면 한쪽이 사라진다
         assertThat(written()).containsOnlyKeys(one.value().toString());
     }
 
@@ -496,7 +498,7 @@ class RunningComboRedisAdapterTest {
     }
 
     private RunningComboSnapshot snapshot() {
-        return new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, false);
+        return new RunningComboSnapshot(one, 100, RECORDED_AT, 1, MOVED_AT, RECORDED_AT, false, false);
     }
 
     // 어댑터가 Redis에 실제로 쓴 필드들 — 이 값을 그대로 읽기 경로에 되먹인다

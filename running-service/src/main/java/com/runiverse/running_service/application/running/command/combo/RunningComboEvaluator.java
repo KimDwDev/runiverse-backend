@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.runiverse.running_service.application.running.command.combo.RunningComboPresence.FINISHED;
 import static com.runiverse.running_service.application.running.command.combo.RunningComboPresence.MOVING;
 import static com.runiverse.running_service.application.running.command.combo.RunningComboPresence.PAUSED;
 import static com.runiverse.running_service.application.running.command.combo.RunningComboPresence.STANDING;
@@ -98,8 +99,9 @@ public final class RunningComboEvaluator {
             RunningComboPair before, Room room, Instant now, RunningComboProperties properties) {
         RunningComboPresence first = room.presence(before.first());
         RunningComboPresence second = room.presence(before.second());
-        if (first == PAUSED || second == PAUSED) {
-            // 일시정지는 사용자의 선택이다 — 봐주지 않고 바로 끊는다. 다시 달리면 새 구간이다
+        if (first == FINISHED || second == FINISHED || first == PAUSED || second == PAUSED) {
+            // 끝났거나 일시정지면 봐주지 않고 바로 끊는다 — 종료는 다시 붙지 않고,
+            // 일시정지는 사용자의 선택이라 다시 달리면 새 구간이다
             return before.inCombo() ? broken(before, properties) : before;
         }
         if (first == STANDING || second == STANDING) {
