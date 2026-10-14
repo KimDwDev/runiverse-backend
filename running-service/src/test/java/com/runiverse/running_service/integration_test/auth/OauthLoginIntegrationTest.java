@@ -191,6 +191,29 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("애플 ID 토큰으로 처음 로그인하면 애플 계정으로 가입되고 토큰을 받는다")
+    void firstAppleLoginRegistersUser() {
+        // when
+        OauthLoginResult result = appleLogin(APPLE_ID_TOKEN);
+        // then
+        assertThat(result.accessToken()).isNotBlank();
+        User saved = userStore.findById(result.userId()).orElseThrow();
+        assertThat(saved.getEmail().value()).isEqualTo(APPLE_EMAIL);
+        assertThat(saved.hasProvider(Provider.APPLE)).isTrue();
+    }
+
+    @Test
+    @DisplayName("애플 ID 토큰 검증에 실패하면 OauthLoginFailedException이 발생하고 아무것도 저장되지 않는다")
+    void appleLoginWithInvalidIdToken() {
+        // when & then
+        assertThatThrownBy(() -> appleLogin("forged-id-token"))
+                .isInstanceOf(OauthLoginFailedException.class);
+
+        assertThat(userStore.size()).isZero();
+        assertThat(refreshTokenStore.isEmpty()).isTrue();
+    }
+
+    @Test
     @DisplayName("지원하지 않는 provider면 UnsupportedProviderException이 발생하고 아무것도 저장되지 않는다")
     void oauthLoginWithUnsupportedProvider() {
         // when & then
@@ -300,6 +323,17 @@ public class OauthLoginIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(oauthLoginCounter("google", "failure", "OAUTH_LOGIN_FAILED")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("애플 ID 토큰 검증 실패는 apple로 센다")
+    void appleLoginCountsVerificationFailure() {
+        // when
+        assertThatThrownBy(() -> appleLogin("forged-id-token"))
+                .isInstanceOf(OauthLoginFailedException.class);
+
+        // then
+        assertThat(oauthLoginCounter("apple", "failure", "OAUTH_LOGIN_FAILED")).isNotNull();
     }
 
     @Test
