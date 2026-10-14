@@ -14,7 +14,9 @@ import com.runiverse.running_service.integration_test.fake.InMemoryRunningDistan
 import com.runiverse.running_service.integration_test.fake.InMemoryLiveRunningStatusStore;
 import com.runiverse.running_service.integration_test.fake.FakeGpsTrackUploader;
 import com.runiverse.running_service.integration_test.fake.FakeWeatherProvider;
-import com.runiverse.running_service.integration_test.fake.FakeOauthClient;
+import com.runiverse.running_service.integration_test.fake.FakeAppleOauthClient;
+import com.runiverse.running_service.integration_test.fake.FakeGoogleOauthClient;
+import com.runiverse.running_service.integration_test.fake.FakeKakaoOauthClient;
 import com.runiverse.running_service.integration_test.fake.FakePasswordHasher;
 import com.runiverse.running_service.integration_test.fake.FakeTokenProvider;
 import com.runiverse.running_service.integration_test.fake.FakeUserIdGenerator;
@@ -66,7 +68,9 @@ public abstract class IntegrationTestSupport {
     protected FakePasswordHasher passwordHasher;
     protected FakeTokenProvider tokenProvider;
     protected FakeUserIdGenerator userIdGenerator;
-    protected FakeOauthClient oauthClient;
+    protected FakeGoogleOauthClient googleOauthClient;
+    protected FakeKakaoOauthClient kakaoOauthClient;
+    protected FakeAppleOauthClient appleOauthClient;
     protected FakeVerificationTicketHasher verificationTicketHasher;
     protected FakeVerificationTicketGenerator verificationTicketGenerator;
     protected FakeVerificationCodeGenerator verificationCodeGenerator;
@@ -95,7 +99,9 @@ public abstract class IntegrationTestSupport {
         passwordHasher = new FakePasswordHasher();
         tokenProvider = new FakeTokenProvider();
         userIdGenerator = new FakeUserIdGenerator();
-        oauthClient = new FakeOauthClient();
+        googleOauthClient = new FakeGoogleOauthClient();
+        kakaoOauthClient = new FakeKakaoOauthClient();
+        appleOauthClient = new FakeAppleOauthClient();
         verificationTicketHasher = new FakeVerificationTicketHasher();
         verificationTicketGenerator = new FakeVerificationTicketGenerator();
         verificationCodeGenerator = new FakeVerificationCodeGenerator();
