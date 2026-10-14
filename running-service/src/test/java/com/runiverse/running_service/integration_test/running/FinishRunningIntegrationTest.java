@@ -18,6 +18,7 @@ import com.runiverse.running_service.application.running.common.RunningFinishPro
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
+import com.runiverse.running_service.application.running.port.out.RunningComboUpdate;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
@@ -120,6 +121,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
                 newRunningComboArchiver(), // RunningComboArchiver
+                runningComboStore,  // MarkRunningComboPausedPort
                 event -> {          // ApplicationEventPublisher
                 },
                 PROPERTIES
@@ -844,6 +846,27 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(storedPlayer(runningRoomId, second).getStatus())
                 .isEqualTo(RunningPlayerStatus.RUNNING);
         assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("먼저 끝낸 사람과의 콤보는 남은 사람의 다음 배치에서 끊긴다")
+    void breaksComboWithFinishedRunner() {
+        // given -> 두 사람이 나란히 달려 콤보가 붙었다
+        UUID first = onboardedUser(EMAIL, NICKNAME);
+        UUID second = onboardedUser("second@runiverse.com", "두번째러너");
+        Long runningRoomId = startedMatchRoom(first, second);
+        runTowardTarget(first, runningRoomId, 400);
+        runTowardTarget(second, runningRoomId, 400);
+        assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).hasSize(1);
+
+        // when -> 첫 번째 러너가 조기 종료하고, 두 번째 러너가 새 좌표 하나를 더 보낸다
+        handler.handle(new FinishRunningCommand(runningRoomId, first, true));
+        runTowardTarget(second, runningRoomId, 401);
+
+        // then -> 끝낸 사람은 좌표가 끊겨도 보류로 남지 않는다. 관계가 빠진 것이 곧 끊김 통지다
+        RunningComboUpdate update = runningComboPublisher.publishedIn(runningRoomId).getLast();
+        assertThat(update.recipients()).contains(second);
+        assertThat(update.relations()).isEmpty();
     }
 
     @Test

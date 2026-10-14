@@ -24,6 +24,7 @@ import com.runiverse.running_service.application.running.port.out.LoadUserWeight
 import com.runiverse.running_service.application.running.port.out.LoadWeatherPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LockRunningRoomPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
 import com.runiverse.running_service.application.running.port.out.RecentRunningPace;
 import com.runiverse.running_service.application.running.port.out.RunningTrack;
 import com.runiverse.running_service.application.running.port.out.SaveGpsTrackPort;
@@ -81,6 +82,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -167,6 +169,9 @@ public class RunningFinisherTest {
     private RunningComboArchiver runningComboArchiver;
 
     @Mock
+    private MarkRunningComboPausedPort markRunningComboPausedPort;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     // 메트릭 이름·태그는 RunningMetricAdapterTest가 본다 — 여기서는 언제 무엇을 알리는지만 본다
@@ -189,8 +194,8 @@ public class RunningFinisherTest {
                 createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
                 existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
                 existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
-                liveRunningStatusChanger, runningComboArchiver, eventPublisher, PROPERTIES,
-                DEFAULT_PROPERTIES, recordRunningMetricPort);
+                liveRunningStatusChanger, runningComboArchiver, markRunningComboPausedPort,
+                eventPublisher, PROPERTIES, DEFAULT_PROPERTIES, recordRunningMetricPort);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
         lenient().when(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
@@ -1030,6 +1035,83 @@ public class RunningFinisherTest {
                 verifyNoInteractions(liveRunningStatusChanger);
             } finally {
                 TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("콤보 끊기 테스트")
+    class ComboBreakTest {
+
+        @Test
+        @DisplayName("아직 뛰는 참가자가 있으면 커밋 뒤에 일시정지 표시를 남긴다")
+        void marksComboPausedAfterCommit() {
+            // given -> 나만 먼저 끝냈다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+            given(existsRunningPlayerPort.existsRunning(new RunningRoomId(ROOM_ID)))
+                    .willReturn(true);
+            TransactionSynchronizationManager.initSynchronization();
+            try {
+                // when
+                finish();
+
+                // then -> 롤백될 종료로 콤보를 끊으면 되돌릴 길이 없다
+                verifyNoInteractions(markRunningComboPausedPort);
+
+                // when -> 커밋 성공을 흉내 낸다
+                TransactionSynchronizationManager.getSynchronizations()
+                        .forEach(TransactionSynchronization::afterCommit);
+
+                // then -> 표시가 없으면 끝낸 사람은 관측 없음(보류)이라 상대 화면에 콤보가 남는다
+                verify(markRunningComboPausedPort).markPaused(ROOM_ID, new UserId(USER_ID));
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        @Test
+        @DisplayName("방이 닫히면 일시정지 표시를 남기지 않는다")
+        void skipsWhenRoomCloses() {
+            // given -> 마지막 한 명이 끝냈다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            finish();
+
+            // then -> 볼 사람이 없고, 콤보 상태는 방 닫힘이 지운다
+            verifyNoInteractions(markRunningComboPausedPort);
+        }
+
+        @Test
+        @DisplayName("일시정지 표시를 못 남겨도 던지지 않고 ERROR로 남긴다")
+        void swallowsMarkFailure() {
+            // given
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+            given(existsRunningPlayerPort.existsRunning(new RunningRoomId(ROOM_ID)))
+                    .willReturn(true);
+            willThrow(new IllegalStateException("redis down"))
+                    .given(markRunningComboPausedPort).markPaused(ROOM_ID, new UserId(USER_ID));
+            LogCapture log = LogCapture.of(RunningFinisher.class);
+
+            try {
+                // when -> 콤보는 곁가지다. 종료는 이미 확정됐다
+                assertThatCode(RunningFinisherTest.this::finish).doesNotThrowAnyException();
+
+                // then
+                assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.COMPLETED);
+                assertThat(log.messages(Level.ERROR)).containsExactly(
+                        "[러닝] 종료 참가자 콤보 끊기 실패: 처리하지 못한 예외 - roomId=" + ROOM_ID
+                                + ", userId=" + USER_ID);
+                assertThat(log.events(Level.ERROR).getFirst().getThrowableProxy()).isNotNull();
+            } finally {
+                log.stop();
             }
         }
     }

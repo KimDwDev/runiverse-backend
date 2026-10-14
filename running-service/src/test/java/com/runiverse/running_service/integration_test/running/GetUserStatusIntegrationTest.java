@@ -119,6 +119,7 @@ public class GetUserStatusIntegrationTest extends IntegrationTestSupport {
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
                 newRunningComboArchiver(), // RunningComboArchiver
+                runningComboStore,  // MarkRunningComboPausedPort
                 event -> {          // ApplicationEventPublisher
                 },
                 FINISH_PROPERTIES
