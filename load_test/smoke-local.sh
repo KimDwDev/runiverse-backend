@@ -6,6 +6,8 @@
 # 이미지가 없으면 먼저 빌드한다:
 #   (cd running-service && ./gradlew bootJar && docker build -t runiverse-backend:e2e .)
 # 환경 변수: RUN_ID(1) ROOMS(1) RUN_SECONDS(120) KEEP_STACK(0 — 1이면 끝나도 스택을 남긴다)
+#   시나리오 변수(SCENARIO·START_SPREAD_SECONDS·FINISH_SPREAD_SECONDS·STRICT)와
+#   K6_OUT·K6_PROMETHEUS_RW_*는 설정돼 있을 때만 k6에 넘긴다
 set -Eeuo pipefail
 
 LOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,8 +77,10 @@ k6_status=0
 docker run --rm --network "${PROJECT}_default" \
   --volume "${LOAD_DIR}/k6:/scripts:ro" \
   --env JWT_SECRET --env RUN_ID --env ROOMS --env RUN_SECONDS \
+  --env SCENARIO --env STORE --env START_SPREAD_SECONDS --env FINISH_SPREAD_SECONDS --env STRICT \
+  --env K6_PROMETHEUS_RW_SERVER_URL --env K6_PROMETHEUS_RW_TREND_STATS \
   --env WS_URL="ws://app:8080/api/v1/ws/running" \
-  "${K6_IMAGE}" run /scripts/running.js || k6_status=$?
+  "${K6_IMAGE}" run ${K6_OUT:+--out "${K6_OUT}"} /scripts/running.js || k6_status=$?
 
 echo "===== 상태 저장소 메트릭 ====="
 curl --silent "${BASE_URL}/actuator/prometheus" \

@@ -10,6 +10,18 @@ services:
     volumes:
       - ${LOAD_TEST_DIR}/stub:/stub:ro
 
+  # k6 결과(remote write)와 앱 메트릭을 함께 받는다 — COMPOSE_PROFILES=metrics일 때만 뜬다
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["metrics"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ${LOAD_TEST_DIR}/monitoring/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "19090:9090"
+
   app:
     environment:
       WEATHER_BASE_URI: http://weather-stub:8090

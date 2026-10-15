@@ -13,6 +13,9 @@
 | `k6/lib/` | 식별자 규칙(`ids.js`), 토큰 서명(`token.js`), 가상 좌표(`track.js`) |
 | `stub/weather-stub.js` | Open-Meteo 대역 — 외부 지연이 종료 응답에 섞이지 않게 한다 |
 | `smoke-local.sh` | 로컬 smoke — e2e 스택 + 날씨 스텁으로 한 번에 돌린다 |
+| `scripts/` | 서버 측정용 — 시나리오 규모(`presets.sh`), 시드(`seed.sh`), k6 실행(`k6-run.sh`) |
+| `monitoring/` | Grafana 대시보드, 로컬 확인용 Prometheus 설정 |
+| `RUNBOOK.md` | 서버 측정 실행 순서 — 준비, 회차 실행, run_id 배정, 장애 시나리오, 정리 |
 
 방 안 자리별 역할: 0·1 나란히 달리기(콤보), 2 신호 대기(제자리), 3 일시정지·재개 후 재연결(마지막 배치 재전송).
 

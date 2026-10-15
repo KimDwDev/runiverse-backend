@@ -502,6 +502,250 @@
         "type": "prometheus",
         "uid": "${datasource}"
       }
+    },
+    {
+      "type": "row",
+      "title": "k6 — 사용자 체감 (클라이언트에서 잰 왕복)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "panels": [],
+      "id": 16
+    },
+    {
+      "type": "timeseries",
+      "title": "배치 왕복 (좌표 송신 → 본인 진행 알림)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 47
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_batch_rtt_p99{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p99"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_batch_rtt_p50{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p50"
+        }
+      ],
+      "description": "k6가 테스트 시작부터 누적해 낸 값이다 — 회차 끝의 값이 그 회차의 결과다",
+      "id": 17
+    },
+    {
+      "type": "timeseries",
+      "title": "종료 왕복 (FINISH → RUNNING_FINISHED)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 47
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_finish_rtt_p99{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p99"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_finish_rtt_p50{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p50"
+        }
+      ],
+      "description": "k6가 테스트 시작부터 누적해 낸 값이다 — 회차 끝의 값이 그 회차의 결과다",
+      "id": 18
+    },
+    {
+      "type": "timeseries",
+      "title": "시작 왕복 (START → RUNNING_STARTED)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 47
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_start_rtt_p99{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p99"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_start_rtt_p50{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} p50"
+        }
+      ],
+      "description": "k6가 테스트 시작부터 누적해 낸 값이다 — 회차 끝의 값이 그 회차의 결과다",
+      "id": 19
+    },
+    {
+      "type": "timeseries",
+      "title": "동시 러너 수 (k6 VU)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 55
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_vus{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}}"
+        }
+      ],
+      "id": 20
+    },
+    {
+      "type": "timeseries",
+      "title": "에러 · 의도치 않은 끊김 (분당)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 55
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (test_scenario, run_id, store, code) (increase(k6_running_ws_errors_total{store=~\"$store\"}[1m]))",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} error {{code}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (test_scenario, run_id, store) (increase(k6_running_unexpected_disconnects_total{store=~\"$store\"}[1m]))",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}} disconnect"
+        }
+      ],
+      "id": 21
+    },
+    {
+      "type": "timeseries",
+      "title": "종료 완료율",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 55
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "k6_running_finish_completed_rate{store=~\"$store\"}",
+          "legendFormat": "{{test_scenario}} run{{run_id}} {{store}}"
+        }
+      ],
+      "id": 22
     }
   ]
 }
