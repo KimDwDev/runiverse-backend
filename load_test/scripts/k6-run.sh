@@ -36,11 +36,17 @@ echo "k6: scenario=${SCENARIO} store=${STORE} run_id=${RUN_ID} rooms=${ROOMS} ru
 JWT_SECRET="$(cat "${JWT_FILE}")"
 export JWT_SECRET
 
+# sudo는 환경 변수를 지운다 — 값은 -e 이름=값으로 직접 넘기고, 비밀값(JWT)만 preserve-env로 살린다.
+# 요약 파일을 결과 디렉터리에 쓸 수 있게 현재 사용자로 돌린다(k6 이미지 기본 사용자는 다르다)
 sudo --preserve-env=JWT_SECRET docker run --rm --network host \
+  --user "$(id -u):$(id -g)" \
   -v "${K6_DIR}:/scripts:ro" \
   -v "${RESULT_DIR}:/results" \
-  -e JWT_SECRET -e SCENARIO -e STORE -e RUN_ID -e ROOMS -e RUN_SECONDS \
-  -e START_SPREAD_SECONDS -e STRICT ${FINISH_SPREAD_SECONDS:+-e FINISH_SPREAD_SECONDS} \
+  -e JWT_SECRET \
+  -e SCENARIO="${SCENARIO}" -e STORE="${STORE}" -e RUN_ID="${RUN_ID}" \
+  -e ROOMS="${ROOMS}" -e RUN_SECONDS="${RUN_SECONDS}" \
+  -e START_SPREAD_SECONDS="${START_SPREAD_SECONDS}" -e STRICT="${STRICT}" \
+  ${FINISH_SPREAD_SECONDS:+-e FINISH_SPREAD_SECONDS="${FINISH_SPREAD_SECONDS}"} \
   -e WS_URL="ws://${APP_HOST}:8080/api/v1/ws/running" \
   -e K6_PROMETHEUS_RW_SERVER_URL="http://${PROM_HOST}:9090/api/v1/write" \
   -e K6_PROMETHEUS_RW_TREND_STATS="p(50),p(99),max" \

@@ -210,6 +210,10 @@ function onMessage(socket, runner, connection, raw) {
     case 'ERROR':
       wsErrors.add(1, { code: message.data.code });
       console.warn(`[${runner.userId}] ERROR ${message.data.code} - ${message.data.message}`);
+      // 시작이 거절되면 아무것도 보낼 수 없어 서버 유휴 제한(2분)까지 헛돈다 — 바로 멈춘다
+      if (!connection.started) {
+        abort(socket, runner, `RUNNING_START 거절(${message.data.code}) — 시드·run_id·앱 DB 설정을 확인하세요`);
+      }
       break;
     default:
       break;
