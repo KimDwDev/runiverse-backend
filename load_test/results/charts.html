@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>러닝 상태 저장소 부하 테스트 — Redis vs RDS</title>
+<style>
+  :root {
+    --surface: #fcfcfb; --surface-2: #f3f2ef; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8984;
+    --grid: #e6e5e1; --redis: #2a78d6; --db: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1a1a19; --surface-2: #242423; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8f8e86;
+      --grid: #33332f; --redis: #3987e5; --db: #d95926;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: var(--surface); color: var(--ink);
+         font: 14px/1.5 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 40px 0 4px; }
+  .sub { color: var(--ink-2); margin: 0 0 16px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+  .tile { background: var(--surface-2); border-radius: 8px; padding: 16px 20px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 30px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .tile .value small { font-size: 16px; color: var(--ink-2); font-weight: 500; }
+  .tile .note { color: var(--ink-3); font-size: 12px; }
+  .legend { display: flex; gap: 16px; color: var(--ink-2); font-size: 13px; margin: 8px 0; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; max-width: 760px; }
+  svg text { fill: var(--ink-2); font-size: 12px; }
+  svg .value-label { fill: var(--ink); font-size: 12px; font-weight: 600; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--surface);
+         padding: 6px 10px; border-radius: 6px; font-size: 12px; white-space: nowrap; opacity: 0; transition: opacity .1s; }
+  details { margin-top: 8px; color: var(--ink-2); }
+  table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  th, td { border-bottom: 1px solid var(--grid); padding: 4px 12px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  .foot { color: var(--ink-3); font-size: 12px; margin-top: 40px; max-width: 760px; }
+</style>
+</head>
+<body>
+  <h1>러닝 상태 저장소 부하 테스트 — EC2 Redis vs RDS</h1>
+  <p class="sub">k6 WebSocket 러너 최대 1,000명 · 테스트 서버 t3.small · 각 시나리오 1회 측정 (2026-10-15)</p>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">1,000명일 때 DB 커넥션 최대 사용 (풀 10)</div>
+      <div class="value">3 <small>Redis</small> → 10 <small>RDS</small></div>
+      <div class="note">체감 속도는 같았지만 RDS는 커넥션 여유가 사라졌다</div>
+    </div>
+    <div class="tile">
+      <div class="label">Redis 강제 종료 후 좌표가 끊긴 러너</div>
+      <div class="value">400 → 13 <small>/ 400</small></div>
+      <div class="note">AOF 적용 전 → 후. 남은 13명은 재시작 0.35초 동안 거절된 요청</div>
+    </div>
+    <div class="tile">
+      <div class="label">한 순간 400명 동시 종료 성공</div>
+      <div class="value">129 <small>/ 400</small></div>
+      <div class="note">저장소와 무관 — 종료 트랜잭션이 커넥션을 쥔 채 외부 호출</div>
+    </div>
+  </div>
+
+  <h2>좌표 배치 왕복 p95 (낮을수록 좋음)</h2>
+  <p class="sub">클라이언트가 좌표를 보내고 본인 진행 알림을 받기까지</p>
+  <div class="legend"><span><i style="background:var(--redis)"></i>EC2 Redis</span><span><i style="background:var(--db)"></i>RDS</span></div>
+  <div class="chart" id="batch"></div>
+  <details><summary>표로 보기</summary><table id="batch-table"></table></details>
+
+  <h2>종료 왕복 p95 (낮을수록 좋음)</h2>
+  <p class="sub">RUNNING_FINISH를 보내고 RUNNING_FINISHED를 받기까지 — S3 업로드·기록 저장 포함</p>
+  <div class="legend"><span><i style="background:var(--redis)"></i>EC2 Redis</span><span><i style="background:var(--db)"></i>RDS</span></div>
+  <div class="chart" id="finish"></div>
+  <details><summary>표로 보기</summary><table id="finish-table"></table></details>
+
+  <p class="foot">시나리오: load-400·load-1000 = 시작을 60초에 분산하고 10분 러닝 / start-storm = 400명 동시 시작 /
+    finish-storm = 400명이 1분 안에 종료. 원자료: load_test/RESULTS.md, results/*.json, Grafana 캡처.</p>
+
+<script>
+const SCENARIOS = ['load-400', 'load-1000', 'start-storm', 'finish-storm'];
+const DATA = {
+  batch:  { redis: [23, 27, 377, 20],  db: [22, 25, 43, 23] },
+  finish: { redis: [514, 613, 216, 326], db: [387, 466, 240, 366] },
+};
+// 값을 모두 적지 않고 이야기의 핵심 막대에만 숫자를 단다 — 나머지는 툴팁과 표
+const LABELED = { batch: [2], finish: [] };
+
+function niceMax(v) {
+  const step = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * step >= v) return m * step;
+  return 10 * step;
+}
+
+function groupedBar(id, key) {
+  const W = 760, H = 300, M = { t: 16, r: 16, b: 36, l: 52 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const { redis, db } = DATA[key];
+  const max = niceMax(Math.max(...redis, ...db));
+  const y = v => M.t + ih - (v / max) * ih;
+  const band = iw / SCENARIOS.length, bw = Math.min(36, band * 0.28), gap = 2;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', '100%');
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', id === 'batch' ? '배치 왕복 p95 비교' : '종료 왕복 p95 비교');
+  const add = (tag, attrs, text) => {
+    const el = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (text !== undefined) el.textContent = text;
+    svg.appendChild(el); return el;
+  };
+  for (let i = 0; i <= 4; i++) {
+    const v = max * i / 4, yy = y(v);
+    add('line', { x1: M.l, x2: W - M.r, y1: yy, y2: yy, stroke: 'var(--grid)', 'stroke-width': 1 });
+    add('text', { x: M.l - 8, y: yy + 4, 'text-anchor': 'end' }, `${Math.round(v)}ms`);
+  }
+  const chart = document.getElementById(id);
+  const tip = document.createElement('div'); tip.className = 'tip'; chart.appendChild(tip);
+  SCENARIOS.forEach((s, i) => {
+    const cx = M.l + band * i + band / 2;
+    add('text', { x: cx, y: H - 12, 'text-anchor': 'middle' }, s);
+    [['redis', 'EC2 Redis', -1], ['db', 'RDS', 1]].forEach(([k, name, side]) => {
+      const v = DATA[key][k][i];
+      const x = side < 0 ? cx - bw - gap / 2 : cx + gap / 2;
+      const top = y(v), base = y(0), r = Math.min(4, base - top);
+      // 위쪽만 둥글게 — 바닥선에 붙은 막대
+      const d = `M${x},${base} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${base} Z`;
+      add('path', { d, fill: `var(--${k})` });
+      if (LABELED[key].includes(i)) add('text', { x: x + bw / 2, y: top - 6, 'text-anchor': 'middle', class: 'value-label' }, `${v}ms`);
+      const hit = add('rect', { x: x - 4, y: M.t, width: bw + 8, height: ih, fill: 'transparent' });
+      hit.addEventListener('mousemove', e => {
+        const b = chart.getBoundingClientRect();
+        tip.textContent = `${s} · ${name}: ${v}ms`;
+        tip.style.left = `${e.clientX - b.left + 12}px`; tip.style.top = `${e.clientY - b.top - 28}px`; tip.style.opacity = 1;
+      });
+      hit.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+    });
+  });
+  add('line', { x1: M.l, x2: W - M.r, y1: y(0), y2: y(0), stroke: 'var(--ink-3)', 'stroke-width': 1 });
+  chart.insertBefore(svg, tip);
+
+  const table = document.getElementById(`${id}-table`);
+  table.innerHTML = '<tr><th>시나리오</th><th>EC2 Redis</th><th>RDS</th></tr>' +
+    SCENARIOS.map((s, i) => `<tr><td>${s}</td><td>${redis[i]}ms</td><td>${db[i]}ms</td></tr>`).join('');
+}
+groupedBar('batch', 'batch');
+groupedBar('finish', 'finish');
+</script>
+</body>
+</html>
