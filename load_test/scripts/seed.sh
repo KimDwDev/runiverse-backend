@@ -26,6 +26,6 @@ echo "시드: scenario=${SCENARIO} run_id=${RUN_ID} rooms=${ROOMS} runners=$((RO
 sudo docker run --rm \
   -v "${SQL_DIR}:/sql:ro" \
   -v "${HOME}/.pgpass:/root/.pgpass:ro" \
-  postgres:16 \
+  postgres:16-alpine \
   psql "host=${RDS_HOST} port=5432 user=admin_dev dbname=runiverse sslmode=require" \
   -v run_id="${RUN_ID}" -v rooms="${ROOMS}" -f /sql/seed.sql

@@ -53,6 +53,40 @@ APP_HOST=<테스트 서버 IP> PROM_HOST=<모니터링 서버 IP> ~/load_test/sc
 
 **앱을 (재)기동한 직후에는 워밍업 회차를 먼저 돌리고 결과를 버린다** — `load-400`을 run_id 90번대(예: redis 91, db 95)로 한 번. 1회차 run 11(100명)이 run 12(400명)보다 느렸던 원인이 JVM 워밍업이었다. 프로필을 바꿔 앱을 다시 띄우면 매번 해당한다.
 
+## 2-1. DB 프로필로 바꾸기 (실험 브랜치 `experiment/state-db`)
+
+러닝 중 상태 4종을 Redis 대신 테스트 RDS에 둔다(`infrastructure/persistence/running/state/*DbAdapter`).
+pub/sub·토큰·쿨다운은 그대로 Redis다. 같은 이미지에서 프로필만 바꿔 두 저장소를 비교한다.
+
+1. 이미지 만들기·옮기기 (내 PC)
+   ```bash
+   cd ~/swmaestro/runiverse-backend/running-service
+   ./gradlew bootJar && docker build -t runiverse-backend:state-db .
+   docker save runiverse-backend:state-db | gzip > /tmp/state-db.tar.gz
+   cd ~/swmaestro
+   scp -i ./bastion-key-runiverse-dev.pem \
+     -o ProxyCommand="ssh -i ./bastion-key-runiverse-dev.pem -W %h:%p ec2-user@<bastion IP>" \
+     /tmp/state-db.tar.gz ubuntu@<테스트 서버 IP>:~/
+   ```
+2. 테스트 서버 — 이미지 적재, 테이블 생성
+   ```bash
+   gunzip -c ~/state-db.tar.gz | sudo docker load
+   sudo docker run --rm -v "$HOME/load_test/sql:/sql:ro" -v "$HOME/.pgpass:/root/.pgpass:ro" postgres:16-alpine \
+     psql "host=<RDS 엔드포인트> user=admin_dev dbname=runiverse sslmode=require" -f /sql/state-db-schema.sql
+   ```
+3. 테스트 서버 — 앱을 프로필 지정으로 다시 띄운다(`.env`는 그대로, 프로필만 덮어쓴다)
+   ```bash
+   PROFILE=state-db   # Redis 프로필로 돌아갈 때는 PROFILE=default
+   sudo docker rm -f runiverse-backend
+   sudo docker run -d --name runiverse-backend --restart unless-stopped --network host \
+     --env-file /opt/runiverse/.env -e SPRING_PROFILES_ACTIVE="${PROFILE}" \
+     -v /var/log/runiverse:/app/logs runiverse-backend:state-db
+   for i in $(seq 1 30); do curl -sf localhost:8080/api/v1/actuator/health >/dev/null && echo UP && break; sleep 5; done
+   ```
+4. 워밍업(`load-400`, run 95, 버림) 뒤 db 회차(51~56)를 돌린다. k6는 `k6-run.sh <시나리오> db <run_id>`.
+
+**공정성:** 1회차 Redis 결과(run 11~17)는 배포 이미지(ECR)로 쟀다. db와 같은 코드로 비교하려면 2회차 Redis(21~26)는 이 실험 이미지를 `PROFILE=default`로 띄워 잰다.
+
 ## 3. Redis 장애 시나리오
 
 k6를 `redis-failure`로 시작하고 약 5분 뒤 Redis EC2에서 Redis를 재시작한다(설치 방식에 맞게 하나).
