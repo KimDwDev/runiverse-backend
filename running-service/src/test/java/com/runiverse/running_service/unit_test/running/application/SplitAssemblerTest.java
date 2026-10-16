@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.runiverse.running_service.application.running.common.BoundaryPoint;
+import com.runiverse.running_service.application.running.common.CalorieCalculator;
 import com.runiverse.running_service.application.running.common.FilteredTrack;
 import com.runiverse.running_service.application.running.common.SplitAssembler;
 import com.runiverse.running_service.application.running.common.TrackResampler;
@@ -19,6 +20,7 @@ import java.util.UUID;
 import static com.runiverse.running_service.support.TrackFilterFixtures.unfiltered;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.within;
 
 @DisplayName("구간 조립 단위 테스트")
 public class SplitAssemblerTest {
@@ -97,6 +99,22 @@ public class SplitAssemblerTest {
         assertThat(sum).isEqualTo(
                 (int) java.time.Duration.between(drafts.get(0).startAt(), last.endAt())
                         .toSeconds());
+    }
+
+    @Test
+    @DisplayName("구간 칼로리의 합이 전체 거리·시간으로 낸 칼로리와 맞는다")
+    void caloriesSumToTotalCalories() {
+        // given
+        List<SplitDraft> drafts = assemble(track(1_800, 2.8, null, null));
+        int totalDuration = drafts.stream().mapToInt(SplitDraft::duration).sum();
+
+        // when
+        int sum = drafts.stream().mapToInt(SplitDraft::calories).sum();
+
+        // then -> 10m 구간 하나는 1kcal에 못 미친다. 구간마다 반올림하면 500개가 전부 1이 돼
+        //         합이 500으로 부풀고, 누적값으로 반올림하면 전체 계산(387)과 맞는다
+        int total = CalorieCalculator.kcal(totalDuration * 1_000 / TARGET, totalDuration, WEIGHT);
+        assertThat(sum).isCloseTo(total, within(1));
     }
 
     @Test
