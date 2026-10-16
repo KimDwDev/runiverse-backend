@@ -141,6 +141,25 @@ public class TrackAnalyzerTest {
     }
 
     @Test
+    @DisplayName("좌표 사이 상승이 임계값보다 작은 완만한 오르막도 누적한다")
+    void accumulatesGentleClimbAcrossManyPoints() {
+        // given -> 처음 190점은 초당 0.2m씩 오르막(총 37.8m), 나머지는 평지
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            double altitude = i < 190 ? 10.0 + i * 0.2 : 10.0 + 189 * 0.2;
+            points.add(point(i, 37.5 + i * 2.8 / METERS_PER_DEGREE, altitude,
+                    START.plusSeconds(i)));
+        }
+
+        // when
+        TrackAnalysis analysis = analyze(points);
+
+        // then -> 바로 앞 좌표와만 비교하면 0.2m씩이라 전부 노이즈로 걸려 0이 된다.
+        //         임계값(3m)을 넘을 때마다 3.2m씩 11번 = 35m, 남은 2.6m는 임계값 아래라 세지 않는다
+        assertThat(analysis.totalElevationGainMeters()).isEqualTo(35);
+    }
+
+    @Test
     @DisplayName("누적 상승은 마지막 경계까지만 센다")
     void elevationGainStopsAtLastBoundary() {
         // given -> 총 ~557m라 기록은 550m 경계에서 끝난다. 경계 안(190~195)과
