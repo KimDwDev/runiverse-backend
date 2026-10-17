@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS running_state_status (
     PRIMARY KEY (running_room_id, user_id)
 );
 
--- 콤보 스냅샷 — 일시정지 표시만 먼저 생길 수 있어 스냅샷 칸은 비어 있을 수 있다
+-- 콤보 스냅샷 — 일시정지·종료 표시만 먼저 생길 수 있어 스냅샷 칸은 비어 있을 수 있다
 CREATE TABLE IF NOT EXISTS running_state_combo_snapshot (
     running_room_id bigint NOT NULL,
     user_id         uuid   NOT NULL,
@@ -47,8 +47,10 @@ CREATE TABLE IF NOT EXISTS running_state_combo_snapshot (
     moved_at        bigint,
     observed_at     bigint,
     paused_at       bigint,
+    finished_at     bigint,
     PRIMARY KEY (running_room_id, user_id)
 );
+
 
 -- 콤보 관계 — 정렬된 쌍당 한 행
 CREATE TABLE IF NOT EXISTS running_state_combo_pair (
