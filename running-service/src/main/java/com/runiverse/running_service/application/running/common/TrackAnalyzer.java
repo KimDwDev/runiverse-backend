@@ -71,7 +71,7 @@ public final class TrackAnalyzer {
     // 누적 상승은 실측점으로 낸다 — 경계점은 직선 보간이라 오르내림이 뭉개진다.
     // 구간의 순고도차(끝 − 시작)와 달리 올라간 것만 더하므로 구간 합과 일치하지 않는다
     private static Integer elevationGain(List<TrackPoint> points, double noiseThresholdMeters) {
-        Double previous = null;
+        Double anchor = null;
         double gain = 0;
         int samples = 0;
         for (TrackPoint point : points) {
@@ -80,10 +80,14 @@ public final class TrackAnalyzer {
                 continue;
             }
             samples++;
-            if (previous != null && altitude - previous > noiseThresholdMeters) {
-                gain += altitude - previous;
+            // 기준 고도는 임계값을 넘게 움직였을 때만 옮긴다 — 바로 앞 좌표와 비교하면
+            // 1초 간격의 완만한 오르막은 매번 임계값 아래라 전부 노이즈로 걸린다
+            if (anchor == null) {
+                anchor = altitude;
+            } else if (Math.abs(altitude - anchor) > noiseThresholdMeters) {
+                gain += Math.max(0, altitude - anchor);
+                anchor = altitude;
             }
-            previous = altitude;
         }
         if (samples < 2) {
             return null;
