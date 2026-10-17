@@ -44,11 +44,17 @@ public final class SplitAssembler {
         }
 
         List<SplitDraft> drafts = new ArrayList<>(boundaries.size() - 1);
+        // 칼로리도 시간처럼 누적값을 반올림한 차이로 낸다 — 10m 구간 하나는 1kcal에 못 미쳐서,
+        // 구간마다 반올림하면 전부 1이 돼 1km 합이 실제보다 크게 부푼다
+        double cumulativeKcal = 0;
+        long previousRoundedKcal = 0;
         for (int number = 1; number < boundaries.size(); number++) {
             BoundaryPoint from = boundaries.get(number - 1);
             BoundaryPoint to = boundaries.get(number);
             int duration = (int) (moving[number] - moving[number - 1]);
             int avgPace = Math.max(1, duration * METERS_PER_KM / intervalMeters);
+            cumulativeKcal += CalorieCalculator.unroundedKcal(avgPace, duration, weightKg);
+            long roundedKcal = Math.round(cumulativeKcal);
 
             drafts.add(SplitDraft.create(
                     number,
@@ -59,10 +65,11 @@ public final class SplitAssembler {
                     number,
                     origin.plusSeconds(real[number - 1]),
                     origin.plusSeconds(real[number]),
-                    CalorieCalculator.kcal(avgPace, duration, weightKg),
+                    (int) (roundedKcal - previousRoundedKcal),
                     averageCadence(points, from.sourceIndex(), to.sourceIndex()),
                     elevationChange(points, from.sourceIndex(), to.sourceIndex(),
                             elevationNoiseThresholdMeters)));
+            previousRoundedKcal = roundedKcal;
         }
         return drafts;
     }

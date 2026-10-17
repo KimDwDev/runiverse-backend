@@ -6,7 +6,7 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`만 시퀀스 — 표 참고). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`running_combos`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
@@ -74,7 +74,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > UNIQUE (provider, provider_id) — 같은 소셜 계정 중복 연결 방지.
-> CHECK `ck_oauth_user_provider`: `provider in ('KAKAO', 'GOOGLE')`
+> CHECK `ck_oauth_user_provider`: `provider in ('GOOGLE', 'KAKAO', 'APPLE')`
 
 ### user_devices
 
@@ -234,7 +234,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_combo_id | bigint | PK | |
+| running_combo_id | bigint | PK | 시퀀스 `running_combo_seq`로 채번한다(`allocationSize=100`) |
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | |
 | first_user_id | UUID | → users, NOT NULL | 논리 참조. 쌍을 정렬한 앞쪽 — Redis 콤보 관계(`RunningComboPair`)와 같은 순서다 |
 | second_user_id | UUID | → users, NOT NULL | 논리 참조. 정렬한 뒤쪽 |
@@ -416,7 +416,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | created_at | timestamp | NOT NULL | 스냅샷 시각 = 탈퇴 시각. `created_at - joined_at`이 체류 기간이다 |
 
 > CHECK `ck_delete_user_gender`: `gender is null or gender in ('MALE', 'FEMALE')`
-> CHECK `ck_delete_user_login_type`: `login_type in ('LOCAL', 'GOOGLE', 'KAKAO')`
+> CHECK `ck_delete_user_login_type`: `login_type in ('LOCAL', 'GOOGLE', 'KAKAO', 'APPLE')`
 > CHECK `ck_delete_user_birth_year`: `birth_year is null or birth_year >= 1900`
 > CHECK `ck_delete_user_avg_pace`: `avg_pace is null or avg_pace between 120 and 1800`
 > CHECK `ck_delete_user_bmi`: `bmi is null or bmi > 0`
@@ -463,10 +463,10 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 닫힘 — 시작 전이면 항상(인원이 0이 됐거나, 한 번도 시작되지 않은 방을 강제 종료가 닫을 때 — 이때는 인원을 줄이지 않는다), 시작 후면 유효 기록이 하나도 없을 때 |
-| oauth_users.provider | GOOGLE / KAKAO | |
+| oauth_users.provider | GOOGLE / KAKAO / APPLE | |
 | scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY / RUNNING_START / RUNNING_FORCE_FINISH | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다) / 정각 시작(`start_at`에 `MATCHED`→`STARTED`. 매칭 방에만 걸고, 참가자 상태는 바꾸지 않는다) / 강제 종료(`start_at + 유예`에 남은 참가자와 방을 닫는다. 매칭 방에만 건다) |
 | delete_users.gender | MALE / FEMALE | 온보딩 스냅샷 — 온보딩 전에 탈퇴하면 null |
-| delete_users.login_type | LOCAL / GOOGLE / KAKAO | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
+| delete_users.login_type | LOCAL / GOOGLE / KAKAO / APPLE | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
 
 ---
 

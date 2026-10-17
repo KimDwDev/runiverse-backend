@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.running.port.out.DeleteRunningC
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboHistoryPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboSnapshotsPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboFinishedPort;
 import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
 import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
@@ -48,6 +49,7 @@ public class RunningComboRedisAdapter implements
         SaveRunningComboPairsPort,
         SaveRunningComboSegmentsPort,
         MarkRunningComboPausedPort,
+        MarkRunningComboFinishedPort,
         LoadRunningComboHistoryPort,
         DeleteRunningComboStatePort {
 
@@ -56,14 +58,16 @@ public class RunningComboRedisAdapter implements
     private final RunningTrackProperties properties;
     private final RunningStateMeter stateMeter;
     // 방마다 해시 셋이다.
-    // 스냅샷: userId → 누적거리|기준시각|속도|의심점갱신시각|관측시각, userId:paused → 일시정지시각
+    // 스냅샷: userId → 누적거리|기준시각|속도|의심점갱신시각|관측시각,
+    //         userId:paused → 일시정지시각, userId:finished → 종료시각
     // 관계: first|second → 시작시각|쌓인시각|최고콤보|남은봐주기
     // 구간: first|second|시작시각 → 끝시각|유지횟수
     private static final String SEPARATOR = "|";
     private static final String SEPARATOR_PATTERN = "\\|";
     private static final String NULL = "null";
-    // 일시정지 표시는 스냅샷과 같은 해시의 별도 칸이다 — 판정이 HGETALL 한 번으로 함께 읽는다
+    // 일시정지·종료 표시는 스냅샷과 같은 해시의 별도 칸이다 — 판정이 HGETALL 한 번으로 함께 읽는다
     private static final String PAUSED_SUFFIX = ":paused";
+    private static final String FINISHED_SUFFIX = ":finished";
     private static final int SNAPSHOT_FIELD_COUNT = 5;
     // 갱신·관측 시각을 싣기 전 포맷. 배포 순간 뛰고 있던 러닝이 TTL 안에 남아 있다 —
     // 기준 시각으로 채워 달리는 중으로 본다. 비우면 그 사람들의 콤보가 배포와 함께 모두 보류된다
@@ -78,21 +82,31 @@ public class RunningComboRedisAdapter implements
     @Override
     public List<RunningComboSnapshot> loadSnapshots(Long runningRoomId) {
         Map<String, String> entries = entries(snapshotKey(runningRoomId), COMBO_SNAPSHOT, runningRoomId);
-        Set<String> paused = entries.keySet().stream()
-                .filter(field -> field.endsWith(PAUSED_SUFFIX))
-                .map(field -> field.substring(0, field.length() - PAUSED_SUFFIX.length()))
-                .collect(Collectors.toSet());
-        // 스냅샷 없이 일시정지 표시만 있는 참가자는 아직 판정에 들어온 적이 없다 — 비교 대상이 아니다
+        Set<String> paused = marked(entries, PAUSED_SUFFIX);
+        Set<String> finished = marked(entries, FINISHED_SUFFIX);
+        // 스냅샷 없이 표시 칸만 있는 참가자는 아직 판정에 들어온 적이 없다 — 비교 대상이 아니다
         return entries.entrySet().stream()
-                .filter(entry -> !entry.getKey().endsWith(PAUSED_SUFFIX))
-                .map(entry -> toSnapshot(entry, paused.contains(entry.getKey())))
+                .filter(entry -> !isMark(entry.getKey()))
+                .map(entry -> toSnapshot(entry,
+                        paused.contains(entry.getKey()), finished.contains(entry.getKey())))
                 .flatMap(Optional::stream)
                 .toList();
     }
 
+    private static Set<String> marked(Map<String, String> entries, String suffix) {
+        return entries.keySet().stream()
+                .filter(field -> field.endsWith(suffix))
+                .map(field -> field.substring(0, field.length() - suffix.length()))
+                .collect(Collectors.toSet());
+    }
+
+    private static boolean isMark(String field) {
+        return field.endsWith(PAUSED_SUFFIX) || field.endsWith(FINISHED_SUFFIX);
+    }
+
     @Override
     public void saveSnapshot(Long runningRoomId, RunningComboSnapshot snapshot) {
-        // 일시정지 여부는 싣지 않는다 — 별도 칸이라 일시정지 이벤트와 같은 값을 고쳐 쓰지 않는다
+        // 일시정지·종료 여부는 싣지 않는다 — 별도 칸이라 그 이벤트와 위치 배치가 같은 값을 고쳐 쓰지 않는다
         String value = String.format(Locale.ROOT, "%.2f|%d|%.3f|%s|%s",
                 snapshot.meters(),
                 snapshot.recordedAt().toEpochMilli(),
@@ -106,10 +120,20 @@ public class RunningComboRedisAdapter implements
     // 잡지 않고 던진다 — 부르는 쪽이 로그를 남긴다
     @Override
     public void markPaused(Long runningRoomId, UserId userId) {
+        mark(runningRoomId, pausedField(userId));
+    }
+
+    // 잡지 않고 던진다 — 부르는 쪽이 로그를 남긴다. 지우는 짝이 없다: 방이 닫힐 때 해시째 사라진다
+    @Override
+    public void markFinished(Long runningRoomId, UserId userId) {
+        mark(runningRoomId, finishedField(userId));
+    }
+
+    private void mark(Long runningRoomId, String field) {
         String key = snapshotKey(runningRoomId);
         stateMeter.write(REDIS, COMBO_SNAPSHOT, RUNNING, runningRoomId, () -> {
             redisTemplate.<String, String>opsForHash().put(
-                    key, pausedField(userId), String.valueOf(Instant.now().toEpochMilli()));
+                    key, field, String.valueOf(Instant.now().toEpochMilli()));
             redisTemplate.expire(key, properties.ttl());
         });
     }
@@ -218,7 +242,8 @@ public class RunningComboRedisAdapter implements
         }
     }
 
-    private Optional<RunningComboSnapshot> toSnapshot(Map.Entry<String, String> entry, boolean paused) {
+    private Optional<RunningComboSnapshot> toSnapshot(
+            Map.Entry<String, String> entry, boolean paused, boolean finished) {
         String[] fields = entry.getValue().split(SEPARATOR_PATTERN);
         if (fields.length != SNAPSHOT_FIELD_COUNT && fields.length != LEGACY_SNAPSHOT_FIELD_COUNT) {
             log.warn("[러닝] 콤보 스냅샷 복원 건너뜀: 저장 형식 불일치 - field={}", entry.getKey());
@@ -234,7 +259,8 @@ public class RunningComboRedisAdapter implements
                     Double.parseDouble(fields[2]),
                     legacy ? recordedAt : toInstant(fields[3]),
                     legacy ? recordedAt : toInstant(fields[4]),
-                    paused));
+                    paused,
+                    finished));
         } catch (IllegalArgumentException e) {
             // 깨진 값은 다시 읽어도 같다 — 이 참가자만 비교에서 빼고 다음 배치가 제 값으로 덮는다
             log.warn("[러닝] 콤보 스냅샷 복원 건너뜀: 저장 값 손상 - field={}", entry.getKey());
@@ -291,6 +317,10 @@ public class RunningComboRedisAdapter implements
 
     private static String pausedField(UserId userId) {
         return userId.value() + PAUSED_SUFFIX;
+    }
+
+    private static String finishedField(UserId userId) {
+        return userId.value() + FINISHED_SUFFIX;
     }
 
     private static String pairField(RunningComboPair pair) {

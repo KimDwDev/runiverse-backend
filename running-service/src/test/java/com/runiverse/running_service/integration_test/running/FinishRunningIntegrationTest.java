@@ -3,6 +3,7 @@ package com.runiverse.running_service.integration_test.running;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
+import com.runiverse.running_service.application.running.command.combo.RunningComboSignal;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningFinishJudge;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationCommand;
@@ -18,6 +19,7 @@ import com.runiverse.running_service.application.running.common.RunningFinishPro
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
+import com.runiverse.running_service.application.running.port.out.RunningComboUpdate;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
@@ -120,6 +122,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 new LiveRunningStatusChanger( // LiveRunningStatusChanger
                         liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
                 newRunningComboArchiver(), // RunningComboArchiver
+                runningComboStore,  // MarkRunningComboFinishedPort
                 event -> {          // ApplicationEventPublisher
                 },
                 PROPERTIES
@@ -844,6 +847,49 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(storedPlayer(runningRoomId, second).getStatus())
                 .isEqualTo(RunningPlayerStatus.RUNNING);
         assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("먼저 끝낸 사람과의 콤보는 남은 사람의 다음 배치에서 끊긴다")
+    void breaksComboWithFinishedRunner() {
+        // given -> 두 사람이 나란히 달려 콤보가 붙었다
+        UUID first = onboardedUser(EMAIL, NICKNAME);
+        UUID second = onboardedUser("second@runiverse.com", "두번째러너");
+        Long runningRoomId = startedMatchRoom(first, second);
+        runTowardTarget(first, runningRoomId, 400);
+        runTowardTarget(second, runningRoomId, 400);
+        assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).hasSize(1);
+
+        // when -> 첫 번째 러너가 조기 종료하고, 두 번째 러너가 새 좌표 하나를 더 보낸다
+        handler.handle(new FinishRunningCommand(runningRoomId, first, true));
+        runTowardTarget(second, runningRoomId, 401);
+
+        // then -> 끝낸 사람은 좌표가 끊겨도 보류로 남지 않는다. 관계가 빠진 것이 곧 끊김 통지다
+        RunningComboUpdate update = runningComboPublisher.publishedIn(runningRoomId).getLast();
+        assertThat(update.recipients()).contains(second);
+        assertThat(update.relations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("먼저 끝낸 사람의 늦은 좌표가 판정에 들어와도 콤보가 다시 붙지 않는다")
+    void keepsComboBrokenAfterLateBatchFromFinishedRunner() {
+        // given -> 콤보가 붙었다가 첫 번째 러너의 종료로 끊겼다
+        UUID first = onboardedUser(EMAIL, NICKNAME);
+        UUID second = onboardedUser("second@runiverse.com", "두번째러너");
+        Long runningRoomId = startedMatchRoom(first, second);
+        runTowardTarget(first, runningRoomId, 400);
+        runTowardTarget(second, runningRoomId, 400);
+        handler.handle(new FinishRunningCommand(runningRoomId, first, true));
+        runTowardTarget(second, runningRoomId, 401);
+        assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).isEmpty();
+
+        // when -> 종료 직후 상태 조회가 실패한 틈에 첫 번째 러너의 늦은 배치가 판정까지 통과했다.
+        //         누적 거리는 상대(좌표 401개 × 2.5m)와 같아 창 안이다
+        newUpdateRunningComboJudge().judge(runningRoomId, new UserId(first),
+                new RunningComboSignal(401 * 2.5, true, true));
+
+        // then -> 일시정지와 달리 좌표가 와도 풀리지 않는다
+        assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).isEmpty();
     }
 
     @Test

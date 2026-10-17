@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.running.port.out.DeleteRunningC
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboHistoryPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboSnapshotsPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboFinishedPort;
 import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
 import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
@@ -21,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// RunningComboRedisAdapter를 대신한다 — 방 단위 해시 셋과 일시정지 칸을 그대로 흉내 내
+// RunningComboRedisAdapter를 대신한다 — 방 단위 해시 셋과 일시정지·종료 칸을 그대로 흉내 내
 // 저장된 게 없으면 빈 목록을 돌려주고, 저장은 넘어온 항목만 덮어쓴다
 public class InMemoryRunningComboStore implements
         LoadRunningComboSnapshotsPort,
@@ -30,6 +31,7 @@ public class InMemoryRunningComboStore implements
         SaveRunningComboPairsPort,
         SaveRunningComboSegmentsPort,
         MarkRunningComboPausedPort,
+        MarkRunningComboFinishedPort,
         LoadRunningComboHistoryPort,
         DeleteRunningComboStatePort {
 
@@ -45,17 +47,20 @@ public class InMemoryRunningComboStore implements
 
     private final Map<Long, Map<UserId, RunningComboSnapshot>> snapshots = new LinkedHashMap<>();
     private final Map<Long, Set<UserId>> paused = new LinkedHashMap<>();
+    private final Map<Long, Set<UserId>> finished = new LinkedHashMap<>();
     private final Map<Long, Map<PairKey, RunningComboPair>> pairs = new LinkedHashMap<>();
     private final Map<Long, Map<SegmentKey, RunningComboSegment>> segments = new LinkedHashMap<>();
 
-    // 일시정지 여부는 스냅샷 값이 아니라 별도 칸에서 읽어 붙인다 — 실제 어댑터와 같다
+    // 일시정지·종료 여부는 스냅샷 값이 아니라 별도 칸에서 읽어 붙인다 — 실제 어댑터와 같다
     @Override
     public List<RunningComboSnapshot> loadSnapshots(Long runningRoomId) {
         Set<UserId> pausedUsers = paused.getOrDefault(runningRoomId, Set.of());
+        Set<UserId> finishedUsers = finished.getOrDefault(runningRoomId, Set.of());
         return snapshots.getOrDefault(runningRoomId, Map.of()).values().stream()
                 .map(snapshot -> new RunningComboSnapshot(snapshot.userId(), snapshot.meters(),
                         snapshot.recordedAt(), snapshot.speedMetersPerSecond(), snapshot.movedAt(),
-                        snapshot.observedAt(), pausedUsers.contains(snapshot.userId())))
+                        snapshot.observedAt(), pausedUsers.contains(snapshot.userId()),
+                        finishedUsers.contains(snapshot.userId())))
                 .toList();
     }
 
@@ -73,6 +78,11 @@ public class InMemoryRunningComboStore implements
     @Override
     public void clearPaused(Long runningRoomId, UserId userId) {
         paused.getOrDefault(runningRoomId, new LinkedHashSet<>()).remove(userId);
+    }
+
+    @Override
+    public void markFinished(Long runningRoomId, UserId userId) {
+        finished.computeIfAbsent(runningRoomId, key -> new LinkedHashSet<>()).add(userId);
     }
 
     @Override
@@ -108,6 +118,7 @@ public class InMemoryRunningComboStore implements
     public void deleteComboState(Long runningRoomId) {
         snapshots.remove(runningRoomId);
         paused.remove(runningRoomId);
+        finished.remove(runningRoomId);
         pairs.remove(runningRoomId);
         segments.remove(runningRoomId);
     }

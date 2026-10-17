@@ -18,16 +18,17 @@
 | 4 | POST | `/api/v1/auth/login` | 로컬 로그인 |
 | 5 | POST | `/api/v1/auth/oauth/google` | 구글 로그인 — ID 토큰 서버 검증 → 토큰 발급 |
 | 6 | POST | `/api/v1/auth/oauth/kakao` | 카카오 로그인 — 인가 코드+PKCE 서버 교환 → 토큰 발급 |
-| 7 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
-| 8 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
-| 9 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
+| 7 | POST | `/api/v1/auth/oauth/apple` | 애플 로그인 — ID 토큰+nonce 서버 검증 → 토큰 발급 |
+| 8 | POST | `/api/v1/auth/refresh` | 토큰 재발급 (rotation — accessToken·refreshToken 모두 교체) |
+| 9 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
+| 10 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
 ### 2. 공통 — 디바이스/푸시 · 유저 상태
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 10 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
-| 11 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
+| 11 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
+| 12 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 
 ### 3. 홈 화면
 
@@ -48,11 +49,11 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 12 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 13 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 14 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 15 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 16 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 13 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 14 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 15 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 16 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 17 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -79,79 +80,79 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
-| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
+| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
+| 19 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
+| 20 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 20 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 21 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 22 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 23 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 24 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 25 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 26 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 27 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 28 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 29 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 30 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 31 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 32 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 33 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 34 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 32 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 33 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 34 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 35 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 35 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 36 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
-| 37 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 38 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 39 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 40 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 41 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 42 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 43 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 44 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 45 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 43 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 44 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 45 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 46 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 46 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 47 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 48 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 49 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 50 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 51 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 52 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 53 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 51 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 54 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 55 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 56 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 57 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 56개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -175,7 +176,7 @@
 ### 공통 에러 응답
 
 인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다 — 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
-`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-7·11-3·11-8)에 헤더를 싣지 않는다.
+`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·11-3·11-8)에 헤더를 싣지 않는다.
 
 검증에 실패한 필드가 둘 이상이거나 한 필드에서 제약이 둘 이상 깨지면 `message`는 각 사유를 공백으로 이어 붙인 한 문자열이며, **문장 순서는 보장하지 않는다**. 각 엔드포인트의 400 예시는 사유를 하나씩 보여주는 것이지 나올 수 있는 조합을 모두 나열한 것이 아니다. 클라이언트는 `message`를 문서 문구와 정확히 비교하거나 파싱해 어느 필드가 틀렸는지 역추적하지 않는다 — 필드 단위 안내는 클라이언트 자체 검증으로 처리하고, 서버 `message`는 그대로 노출한다.
 
@@ -610,11 +611,80 @@
 
 - **인증**: 불필요
 
+### 1-7. `POST /api/v1/auth/oauth/apple` — 애플 로그인 (ID 토큰 + nonce)
+
+- **Request** (둘 다 필수)
+
+```json
+{
+  "idToken": "ey...",
+  "nonce": "..."
+}
+```
+
+앱은 로그인마다 무작위 `nonce`를 만들고, 그 **SHA-256 해시(소문자 hex)**를 애플 로그인 요청의 `nonce`로 넘긴 뒤, 애플이 돌려준 ID 토큰과 **해시 전 원본 `nonce`**를 그대로 보낸다.
+
+- **동작**
+  - 서버가 애플 공개키로 ID 토큰 서명을 검증하고 `iss`(애플)·`aud`(iOS 앱 번들 ID)·만료를 확인한다. 토큰의 `nonce` 클레임이 보낸 `nonce`의 SHA-256 해시와 같아야 한다 — 다른 곳에서 빼낸 토큰으로 로그인하는 것을 막는다. `email_verified`가 `true`인 이메일만 쓴다(프라이빗 릴레이 이메일도 그대로 쓴다)
+  - `provider_id`로 `oauth_users` 조회, 없으면 생성(회원가입) → 자체 토큰 발급
+- **Response `200 OK`**: 1-4 로그인과 동일 형태. 최초 가입 여부와 무관하게 토큰을 발급한다
+- **에러 (401 Unauthorized — ID 토큰 검증 실패(위조·만료·다른 앱용·`nonce` 불일치))**
+
+```json
+{
+  "code": "OAUTH_LOGIN_FAILED",
+  "message": "소셜 로그인에 실패했습니다. 다시 시도해 주세요."
+}
+```
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "ID 토큰은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "nonce는 필수입니다."
+}
+```
+
+- **에러 (403 Forbidden — 이메일 제공 미동의 — 가입 거부)** — 소유가 확인되지 않은 이메일(`email_verified`가 `true`가 아님)도 여기에 해당한다
+
+```json
+{
+  "code": "OAUTH_EMAIL_NOT_PROVIDED",
+  "message": "이메일 제공에 동의해야 소셜 로그인을 할 수 있습니다."
+}
+```
+
+- **에러 (409 Conflict — 소셜 최초 가입인데 이메일이 기존 계정(로컬 또는 다른 소셜)과 겹침)** — 자동 연동하지 않는다. 응답에 기존 가입 수단이 없으므로 클라는 수단을 특정하지 않고 아래 문구로 안내한다
+
+```json
+{
+  "code": "EMAIL_ALREADY_EXISTS",
+  "message": "이미 가입된 이메일입니다. 로그인해 주세요."
+}
+```
+
+- **에러 (503 Service Unavailable — 애플 공개키를 받아 오지 못함)** — 사용자 자격 증명 문제가 아니다. 클라는 잠시 후 다시 시도하게 한다
+
+```json
+{
+  "code": "OAUTH_PROVIDER_UNAVAILABLE",
+  "message": "소셜 로그인에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+}
+```
+
+- **인증**: 불필요
+
 ### 소셜 로그인 미지원 provider — `POST /api/v1/auth/oauth/{provider}`
 
-> 1-5(`google`)·1-6(`kakao`) 외의 경로를 받는 자리다. 호출할 API가 아니라 목록에 없는 provider를 거절하는 규칙이라 번호를 붙이지 않는다.
+> 1-5(`google`)·1-6(`kakao`)·1-7(`apple`) 외의 경로를 받는 자리다. 호출할 API가 아니라 목록에 없는 provider를 거절하는 규칙이라 번호를 붙이지 않는다.
 
-- **동작**: `{provider}`가 소문자 `google`·`kakao`가 아니면 404가 아니라 400으로 거절한다. 본문은 보지 않는다. `GOOGLE`·`KAKAO`처럼 대소문자가 다른 경로도 400이다
+- **동작**: `{provider}`가 소문자 `google`·`kakao`·`apple`이 아니면 404가 아니라 400으로 거절한다. 본문은 보지 않는다. `GOOGLE`·`KAKAO`처럼 대소문자가 다른 경로도 400이다
 - **에러 (400 Bad Request)**
 
 ```json
@@ -626,7 +696,7 @@
 
 - **인증**: 불필요
 
-### 1-7. `POST /api/v1/auth/refresh` — 토큰 재발급
+### 1-8. `POST /api/v1/auth/refresh` — 토큰 재발급
 
 - **Request**: `{ "refreshToken": "ey..." }` (필수)
 - **Response `200 OK`**
@@ -659,16 +729,16 @@
 
 - **인증**: 불필요 (refreshToken 자체가 자격증명)
 
-### 1-8. `POST /api/v1/auth/logout` — 로그아웃
+### 1-9. `POST /api/v1/auth/logout` — 로그아웃
 
 - **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별
-- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-7로 새 access 토큰을 받아 로그아웃이 무효가 된다
+- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-8로 새 access 토큰을 받아 로그아웃이 무효가 된다
 - **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 페이지 절 참고 (**[MVP 제외]**)
 - **Response**: `204 No Content`
 
 - **인증**: 필요
 
-### 1-9. `POST /api/v1/users/onboarding` — 온보딩 입력
+### 1-10. `POST /api/v1/users/onboarding` — 온보딩 입력
 
 - **Request** (전부 필수)
 
@@ -2245,7 +2315,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "userId": "550e8400-e29b-41d4-a716-446655440015",
   "email": "run@example.com",
-  "loginType": "GOOGLE",               // LOCAL | GOOGLE | KAKAO
+  "loginType": "GOOGLE",               // LOCAL | GOOGLE | KAKAO | APPLE
   "nickname": "동완러너",                // 온보딩 전이면 null
   "isOnboarded": true
 }
@@ -2253,8 +2323,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **계정 정보를 함께 싣는다** — 이메일과 로그인 수단을 쓰는 곳은 설정 화면뿐이지만, 설정에서 따로 호출하지 않고 앱 진입 때 받아 둔 값을 그대로 쓴다. 어차피 매번 타는 경로라 여기 얹으면 설정 진입에 추가 왕복이 없다
 - **`loginType` 판정**: `oauth_users`에 row가 있으면 그 `provider`, 없으면 `LOCAL`. `users.password_hash`의 null 여부로 판정하지 않는다 — 결과는 같지만 "무슨 계정인가"에 직접 답하는 데이터는 `oauth_users`다
-- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 계정과 겹치면 `409`로 거부하므로(1-5·1-6) 단일 값으로 표현된다
-- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
+- **계정은 로컬·소셜 중 하나로 배타적이다** — 소셜 최초 가입 시 이메일이 기존 계정과 겹치면 `409`로 거부하므로(1-5~1-7) 단일 값으로 표현된다
+- **클라 표시 규칙**: `LOCAL`이면 로그인 수단 문구 없이 "비밀번호 변경" 메뉴를 노출하고, 소셜이면 "구글/카카오/애플 계정으로 로그인 중"을 표시하고 메뉴를 감춘다(근거는 `feature-spec.md` 설정 페이지 절)
 - **소개글은 싣지 않는다** — 프로필 화면에서만 쓰고 10-2가 담당한다
 - **`profileImageUrl`을 내리지 않는 이유** — 11-3이 전용 조회를 제공하고, presigned URL은 TTL이 있어 표시 시점에 다시 받아야 한다. 앱 진입마다 발급하면 쓰이지 않을 URL에 S3 호출만 늘어난다
 - **`userId`는 남긴다** — `{userId}` 경로 API(10-2·10-4 등)에서 본인 여부를 가리는 데 쓴다. 액세스 토큰에도 들어 있지만 클라이언트가 토큰을 파싱하게 만들지 않는다
@@ -2654,7 +2724,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **11-5 `GET`의 `null`과 뜻이 다르다** — 여기서 빠진 필드는 "안 보냈다", 11-5의 `null`은 "아직 값이 없다"다
 - **소개글을 `""`로 지우면 응답도 `""`다** — 조회는 `null`이지만 여기서는 `null`이 "안 보냈다"라 겹쳐 쓸 수 없다
 
-- **에러 (400 Bad Request)** — 문구는 온보딩(1-9)과 같다
+- **에러 (400 Bad Request)** — 문구는 온보딩(1-10)과 같다
 
 ```json
 {
@@ -2720,7 +2790,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **바꾼 값만 돌려준다** — 본인 대상 수정이라 `userId`는 클라이언트가 이미 알고 있다(10-1·로그인 응답). 온보딩(1-9)은 `201 Created`로 리소스를 만들며 식별자를 돌려주지만, 수정은 그 자리가 아니다
+- **바꾼 값만 돌려준다** — 본인 대상 수정이라 `userId`는 클라이언트가 이미 알고 있다(10-1·로그인 응답). 온보딩(1-10)은 `201 Created`로 리소스를 만들며 식별자를 돌려주지만, 수정은 그 자리가 아니다
 - **`userId` 제거는 `api-convention.md`의 "기존 필드를 제거하지 않는다"에 대한 예외다** — 클라이언트가 아직 이 필드를 쓰지 않는 것을 확인하고 걷어냈다
 
 현재 닉네임과 같은 값을 보내면 아무것도 바꾸지 않고 그대로 반환한다(idempotent).
@@ -2766,7 +2836,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 11-8. `POST /api/v1/users/nickname/availability` — 닉네임 중복 확인
 
-저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-7·1-9의 409다. 사용 화면은 프로필 편집·온보딩이다.
+저장하기 전에 쓸 수 있는 닉네임인지 미리 확인한다. 확인과 저장 사이에 남이 선점할 수 있으므로 최종 방어는 11-7·1-10의 409다. 사용 화면은 프로필 편집·온보딩이다.
 
 - **Request**
 
