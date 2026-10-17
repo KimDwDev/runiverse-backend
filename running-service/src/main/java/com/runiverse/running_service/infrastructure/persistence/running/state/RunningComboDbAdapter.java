@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.running.port.out.DeleteRunningC
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboHistoryPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboPairsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningComboSnapshotsPort;
+import com.runiverse.running_service.application.running.port.out.MarkRunningComboFinishedPort;
 import com.runiverse.running_service.application.running.port.out.MarkRunningComboPausedPort;
 import com.runiverse.running_service.application.running.port.out.RunningComboHistory;
 import com.runiverse.running_service.application.running.port.out.RunningComboPair;
@@ -51,16 +52,17 @@ public class RunningComboDbAdapter implements
         SaveRunningComboPairsPort,
         SaveRunningComboSegmentsPort,
         MarkRunningComboPausedPort,
+        MarkRunningComboFinishedPort,
         LoadRunningComboHistoryPort,
         DeleteRunningComboStatePort {
 
-    // 일시정지 표시만 있는 참가자는 아직 판정에 들어온 적이 없다 — Redis 어댑터처럼 비교 대상에서 뺀다
+    // 일시정지·종료 표시만 있는 참가자는 아직 판정에 들어온 적이 없다 — Redis 어댑터처럼 비교 대상에서 뺀다
     private static final String SELECT_SNAPSHOTS = """
-            SELECT user_id, meters, recorded_at, speed, moved_at, observed_at, paused_at
+            SELECT user_id, meters, recorded_at, speed, moved_at, observed_at, paused_at, finished_at
             FROM running_state_combo_snapshot
             WHERE running_room_id = ? AND recorded_at IS NOT NULL
             """;
-    // 일시정지 칸은 건드리지 않는다 — 일시정지 이벤트와 같은 값을 고쳐 쓰지 않는다
+    // 일시정지·종료 칸은 건드리지 않는다 — 그 이벤트와 위치 배치가 같은 값을 고쳐 쓰지 않는다
     private static final String UPSERT_SNAPSHOT = """
             INSERT INTO running_state_combo_snapshot (running_room_id, user_id, meters, recorded_at,
                                                       speed, moved_at, observed_at)
@@ -80,6 +82,12 @@ public class RunningComboDbAdapter implements
     private static final String CLEAR_PAUSED = """
             UPDATE running_state_combo_snapshot SET paused_at = NULL
             WHERE running_room_id = ? AND user_id = ?
+            """;
+    // 지우는 짝이 없다 — 방이 닫힐 때 deleteComboState가 행째 지운다
+    private static final String MARK_FINISHED = """
+            INSERT INTO running_state_combo_snapshot (running_room_id, user_id, finished_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT (running_room_id, user_id) DO UPDATE SET finished_at = EXCLUDED.finished_at
             """;
     private static final String SELECT_PAIRS = """
             SELECT first_user_id, second_user_id, started_at, accrued_at, max_combo, miss_left
@@ -143,6 +151,13 @@ public class RunningComboDbAdapter implements
     public void clearPaused(Long runningRoomId, UserId userId) {
         stateMeter.write(DB, COMBO_SNAPSHOT, RUNNING, runningRoomId,
                 () -> jdbcTemplate.update(CLEAR_PAUSED, runningRoomId, userId.value()));
+    }
+
+    // 잡지 않고 던진다 — 부르는 쪽이 로그를 남긴다
+    @Override
+    public void markFinished(Long runningRoomId, UserId userId) {
+        stateMeter.write(DB, COMBO_SNAPSHOT, RUNNING, runningRoomId, () -> jdbcTemplate.update(MARK_FINISHED,
+                runningRoomId, userId.value(), Instant.now().toEpochMilli()));
     }
 
     @Override
@@ -218,7 +233,8 @@ public class RunningComboDbAdapter implements
             rs.getDouble("speed"),
             instant(rs, "moved_at"),
             instant(rs, "observed_at"),
-            rs.getObject("paused_at", Long.class) != null);
+            rs.getObject("paused_at", Long.class) != null,
+            rs.getObject("finished_at", Long.class) != null);
 
     private static final RowMapper<RunningComboPair> PAIR = (rs, rowNum) -> new RunningComboPair(
             userId(rs, "first_user_id"),
