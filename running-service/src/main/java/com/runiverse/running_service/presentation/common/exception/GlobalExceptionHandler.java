@@ -14,10 +14,13 @@ import com.runiverse.running_service.presentation.common.response.CooldownErrorR
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -112,6 +115,39 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // 경로는 있지만 그 메서드를 받지 않는 경우 — 받는 메서드를 Allow 헤더로 알린다
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 지원하지 않는 메서드 - method={}, path={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI());
+        markReason(request, CommonErrorCode.METHOD_NOT_ALLOWED.getCode());
+        return respond(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                CommonErrorCode.METHOD_NOT_ALLOWED.getCode(),
+                CommonErrorCode.METHOD_NOT_ALLOWED.getMessage(),
+                e.getHeaders()
+        );
+    }
+
+    // 본문의 Content-Type을 받지 않는 경우 (Content-Type 없이 JSON 본문을 보낸 경우 포함)
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 지원하지 않는 본문 형식 - method={}, path={}, contentType={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI(), request.getContentType());
+        markReason(request, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode());
+        return respond(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
+                CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage()
+        );
+    }
+
     // 예상 못한 예외
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e, HttpServletRequest request) {
@@ -156,12 +192,22 @@ public class GlobalExceptionHandler {
 
     // 노출 대상이 아닌 경우 전부 500으로 대체
     private ResponseEntity<ErrorResponse> respond(HttpStatus status, String code, String message) {
+        return respond(status, code, message, HttpHeaders.EMPTY);
+    }
+
+    // 500으로 가릴 때는 원래 상태에 딸린 헤더도 버린다
+    private ResponseEntity<ErrorResponse> respond(
+            HttpStatus status,
+            String code,
+            String message,
+            HttpHeaders headers
+    ) {
         if (!ErrorExposurePolicy.isExposed(status, code)) {
             log.warn("비노출 대상이라 500으로 대체: {} {}", status.value(), code);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ErrorExposurePolicy.masked());
         }
-        return ResponseEntity.status(status).body(new ErrorResponse(code, message));
+        return ResponseEntity.status(status).headers(headers).body(new ErrorResponse(code, message));
     }
 
     // ErrorCode가 sealed라 default 없이도 컴파일러가 누락을 잡는다
