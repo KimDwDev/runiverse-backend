@@ -49,7 +49,7 @@ public class RunningComboWriter {
                 .flatMap(Optional::stream)
                 .toList();
         List<RunningComboSegment> segments =
-                Stream.concat(history.closedSegments().stream(), closedOnFinish.stream()).toList();
+                distinct(Stream.concat(history.closedSegments().stream(), closedOnFinish.stream()));
         if (segments.isEmpty()) {
             return RunningComboArchive.empty();   // 아무와도 함께 달리지 않은 방 — 경로를 읽을 이유도 없다
         }
@@ -60,6 +60,17 @@ public class RunningComboWriter {
         List<RunningCombo> combos = toCombos(runningRoomId, segments, timelines);
         createRunningCombosPort.createAll(combos);
         return new RunningComboArchive(history.closedSegments().size(), closedOnFinish.size(), combos.size());
+    }
+
+    // 구간을 저장한 뒤 관계를 못 지운 채 방이 닫히면 같은 구간이 끊긴 쪽과 이어지던 쪽에 함께 남는다 —
+    // 쌍·시작 시각이 같으면 늦게 끝난 하나만 둔다
+    private static List<RunningComboSegment> distinct(Stream<RunningComboSegment> segments) {
+        Map<List<Object>, RunningComboSegment> byStart = segments.collect(Collectors.toMap(
+                segment -> List.of(segment.first(), segment.second(), segment.startAt()),
+                Function.identity(),
+                (kept, other) -> other.endAt().isAfter(kept.endAt()) ? other : kept,
+                LinkedHashMap::new));
+        return List.copyOf(byStart.values());
     }
 
     // 구간 번호는 쌍마다 시작 시각 순으로 1부터 매긴다

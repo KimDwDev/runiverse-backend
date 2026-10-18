@@ -149,6 +149,45 @@ class RunningComboWriterTest {
     }
 
     @Test
+    @DisplayName("끊긴 구간을 저장한 뒤 관계를 못 지운 채 닫히면 같은 구간을 한 번만 넣는다")
+    void writesSegmentOnceWhenPairWasNotCleared() {
+        // given -> 끊긴 구간은 저장됐는데 관계 저장이 실패해 같은 관계가 이어지던 채로 남았다
+        RunningComboSegment closed = new RunningComboSegment(A, B, at(20), at(70), 5);
+        RunningComboPair open = new RunningComboPair(A, B, at(20), at(70), 5, 1);
+        given(loadRunningComboHistoryPort.loadHistory(ROOM_ID))
+                .willReturn(new RunningComboHistory(List.of(closed), List.of(open)));
+        given(loadRecordedRoutesPort.loadRoutes(ROOM_ID)).willReturn(List.of(routeOfA()));
+
+        // when
+        RunningComboArchive archive = writer.write(ROOM_ID);
+
+        // then
+        assertThat(archive).isEqualTo(new RunningComboArchive(1, 1, 1));
+        List<RunningCombo> created = captureCreated();
+        assertThat(created).hasSize(1);
+        assertThat(created.getFirst().getSegmentNumber().value()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("같은 쌍·같은 시작 시각의 구간이 겹치면 늦게 끝난 구간을 남긴다")
+    void keepsLaterEndingSegmentForSameStart() {
+        // given -> 관계를 못 지운 뒤 다시 붙어 같은 관계가 이어 쌓였다
+        RunningComboSegment closed = new RunningComboSegment(A, B, at(20), at(70), 5);
+        RunningComboPair open = new RunningComboPair(A, B, at(20), at(100), 8, 1);
+        given(loadRunningComboHistoryPort.loadHistory(ROOM_ID))
+                .willReturn(new RunningComboHistory(List.of(closed), List.of(open)));
+        given(loadRecordedRoutesPort.loadRoutes(ROOM_ID)).willReturn(List.of(routeOfA()));
+
+        // when
+        writer.write(ROOM_ID);
+
+        // then
+        RunningCombo combo = captureCreated().getFirst();
+        assertThat(combo.getPeriod().endAt()).isEqualTo(local(100));
+        assertThat(combo.getComboCount().value()).isEqualTo(8);
+    }
+
+    @Test
     @DisplayName("i콤보 위치는 시작 + i × 1회 길이에 가장 가까운 기록 경계점이다")
     void picksAchievementPointsFromRecordedRoute() {
         // given -> 20초에 시작해 5콤보. 달성 시각은 30·40·50·60·70초다
