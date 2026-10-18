@@ -2525,7 +2525,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg",
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg",
   "uploadUrl": "https://..."
 }
 ```
@@ -2571,7 +2571,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg"
 }
 ```
 
@@ -2583,7 +2583,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg"
 }
 ```
 
