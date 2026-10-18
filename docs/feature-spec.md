@@ -31,7 +31,7 @@
 - Google / Kakao / Apple 로그인 버튼: 소셜 계정으로 회원가입 또는 로그인. 네이버는 **[MVP 제외]**. 애플 버튼은 iOS에만 둔다 — iOS에서 다른 소셜 로그인을 제공하면 애플 심사(4.8)가 Sign in with Apple을 요구한다.
   - 카카오는 앱이 카카오 SDK로 `authorizationCode`·`codeVerifier`를 받아 `POST /auth/oauth/kakao`에 전달하고, 서버가 코드↔토큰 교환과 유저 조회를 한다. 구글은 앱이 `google_sign_in`으로 ID 토큰을 받아 `POST /auth/oauth/google`에 전달하고, 서버가 구글 공개키로 검증한다(웹뷰는 provider가 차단). 애플은 앱이 로그인마다 만든 `nonce`의 SHA-256 해시를 애플에 넘겨 ID 토큰을 받고, 토큰과 원본 `nonce`를 `POST /auth/oauth/apple`에 전달하면 서버가 애플 공개키로 검증하고 `nonce` 해시를 대조한다. 이후 서버는 `provider_id`로 `oauth_users`를 조회하고, 없으면 생성한 뒤 자체 토큰을 발급한다.
   - 최초 가입 시 온보딩 화면을 거침 — `oauth_users` 생성 후 `user_onboardings` 입력 필요.
-  - 이메일이 없거나 미인증·만료면 403 가입 거부(`OAUTH_EMAIL_NOT_PROVIDED` — `users.email` NOT NULL 유지).
+  - 이메일이 없거나 미인증·만료면 403으로 가입·로그인을 거부한다(`OAUTH_EMAIL_NOT_PROVIDED` — `users.email` NOT NULL 유지). 이미 가입한 회원도 로그인할 때마다 검사한다.
 
 **약관 동의 화면**
 
