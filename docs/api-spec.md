@@ -376,7 +376,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "accessToken": "ey...",
   "refreshToken": "ey..."
 }
@@ -445,7 +445,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "accessToken": "ey...",
   "refreshToken": "ey..."
 }
@@ -761,7 +761,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "nickname": "완두콩"
 }
 ```
@@ -1200,7 +1200,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",
       "introduction": "즐겁게 같이 달려요!",   // users.introduction
@@ -1208,7 +1208,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "isDeleted": false                     // 탈퇴 유저 표시 — §0 공통 규칙
     },
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440013",
+      "userId": "01a0f2d4-6180-7000-8000-446655440013",
       "nickname": "철수",
       "profileImageUrl": "https://...",
       "introduction": "천천히 오래 달려요.",
@@ -1390,7 +1390,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "targetDistanceMeters": 5000,             // 목표 없는 솔로 방은 null
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "완두콩",
       "profileImageUrl": "https://...",     // 사진이 없으면 null
       "distanceMeters": 1520,               // 서버가 좌표로 누적한 값
@@ -1400,7 +1400,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   ],
   "comboPeers": [                           // RUNNING_COMBO_UPDATED의 peers와 같은 모양, 겹친 상대가 없으면 []
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440016",
+      "userId": "01a0f2d4-6180-7000-8000-446655440016",
       "gapMeters": -18,
       "comboCount": 3,
       "maxComboCount": 12
@@ -1465,7 +1465,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "distanceMeters": 1520,               // 현재까지 이동 거리(서버가 좌표로 누적)
   "targetDistanceMeters": 5000,         // 목표 거리(m). 목표 없는 솔로 방은 null
   "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km), nullable
@@ -1507,7 +1507,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "peers": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "gapMeters": -18,                 // 양수면 상대가 앞, 음수면 뒤
       "comboCount": 12,                 // 이 상대와 지금 이어지고 있는 콤보
       "maxComboCount": 30               // 이번 러닝에서 이 상대와 기록한 최고 콤보
@@ -1623,7 +1623,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   ],
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",   // nullable
       "status": "COMPLETED",              // COMPLETED | RUNNING 두 값뿐이다
@@ -1637,7 +1637,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalElevationGainMeters": 42
     },
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440031",
+      "userId": "01a0f2d4-6180-7000-8000-446655440031",
       "nickname": "러닝초보",
       "profileImageUrl": null,
       "status": "COMPLETED",
@@ -1731,7 +1731,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "finishedAt": "2026-07-25T19:30:30",
   "players": [                           // 참가자 메타데이터는 여기 한 번만 — 구간마다 반복하지 않는다
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",
       "status": "COMPLETED",             // 6-1과 같은 규칙 — COMPLETED | RUNNING
@@ -1751,7 +1751,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       ],
       "players": [
         {
-          "userId": "550e8400-e29b-41d4-a716-446655440015",  // 최상위 players와 조인
+          "userId": "01a0f2d4-6180-7000-8000-446655440015",  // 최상위 players와 조인
           "durationSeconds": 3,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
@@ -1920,7 +1920,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "feedId": 77,
   "author": {
-    "userId": "550e8400-e29b-41d4-a716-446655440015",
+    "userId": "01a0f2d4-6180-7000-8000-446655440015",
     "nickname": "동완러너",
     "profileImageUrl": "...",
     "isDeleted": false
@@ -2033,7 +2033,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "commentId": 201,
       "author": {
-        "userId": "550e8400-e29b-41d4-a716-446655440013",
+        "userId": "01a0f2d4-6180-7000-8000-446655440013",
         "nickname": "철수",
         "profileImageUrl": "...",
         "isDeleted": false
@@ -2313,7 +2313,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "email": "run@example.com",
   "loginType": "GOOGLE",               // LOCAL | GOOGLE | KAKAO | APPLE
   "nickname": "동완러너",                // 온보딩 전이면 null
@@ -2337,7 +2337,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "isMe": false,
   "nickname": "동완러너",              // 온보딩 전이면 null
   "profileImageUrl": "https://...",
