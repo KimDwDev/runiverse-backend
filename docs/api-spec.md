@@ -491,7 +491,7 @@
 }
 ```
 
-앱은 `google_sign_in`을 `serverClientId`(서버의 웹 클라이언트 ID)로 초기화하고, 로그인 결과의 ID 토큰을 그대로 보낸다.
+앱은 `google_sign_in`을 `serverClientId`(서버의 웹 클라이언트 ID)로 초기화하고, 로그인 결과의 ID 토큰을 그대로 보낸다. iOS는 iOS 클라이언트 ID를 `clientId`로 함께 넘겨야 한다 — 빠지면 토큰의 `aud`가 iOS 클라이언트 ID로 찍혀 401이다.
 
 - **동작**
   - 서버가 구글 공개키로 ID 토큰 서명을 검증하고 `iss`(구글)·`aud`(서버의 웹 클라이언트 ID)·만료를 확인한다. `email_verified`가 `true`인 이메일만 쓴다
