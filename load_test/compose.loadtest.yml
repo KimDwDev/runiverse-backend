@@ -1,4 +1,4 @@
-# e2e_test/docker-compose.yml 위에 겹쳐 쓰는 부하 테스트용 설정.
+# e2e_test/compose.yml 위에 겹쳐 쓰는 부하 테스트용 설정.
 # 앱이 실제 Open-Meteo 대신 스텁을 보게 한다.
 # 경로는 첫 compose 파일 기준으로 풀리므로 LOAD_TEST_DIR(절대 경로)을 쓴다 — smoke-local.sh가 넣어준다.
 services:
