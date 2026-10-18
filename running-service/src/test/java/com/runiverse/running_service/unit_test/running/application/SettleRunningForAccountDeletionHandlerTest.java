@@ -5,8 +5,10 @@ import com.runiverse.running_service.application.match.command.stream.MatchStrea
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
+import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -19,6 +21,7 @@ import com.runiverse.running_service.application.running.port.out.LockRunningRoo
 import com.runiverse.running_service.application.running.port.out.StartMatchCooldownPort;
 import com.runiverse.running_service.application.running.port.out.UpdateRunningPlayerPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
@@ -79,6 +82,8 @@ class SettleRunningForAccountDeletionHandlerTest {
     @Mock
     private LockRunningRoomPort lockRunningRoomPort;
     @Mock
+    private LoadMatchPlayersPort loadMatchPlayersPort;
+    @Mock
     private UpdateMatchRoomPort updateMatchRoomPort;
     @Mock
     private UpdateRunningPlayerPort updateRunningPlayerPort;
@@ -97,7 +102,7 @@ class SettleRunningForAccountDeletionHandlerTest {
     void setUp() {
         handler = new SettleRunningForAccountDeletionHandler(
                 lockMatchApplicationPort, loadMatchRoomPort, lockRunningRoomPort,
-                updateMatchRoomPort, updateRunningPlayerPort,
+                loadMatchPlayersPort, updateMatchRoomPort, updateRunningPlayerPort,
                 startMatchCooldownPort, finishRunningUsecase, roomInfoAssembler,
                 MATCH_PROPERTIES, eventPublisher);
     }
@@ -181,6 +186,56 @@ class SettleRunningForAccountDeletionHandlerTest {
         RunningRoom updated = updatedRoom();
         assertThat(updated.getPlayerCount().current()).isZero();
         assertThat(updated.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("시작 전 방에서 나가면 남은 참가자의 페이스로 방 평균을 다시 낸다")
+    void recalculatesAvgPaceWhenLeavingBeforeStart() {
+        // given -> 600인 내가 나가면 300인 상대만 남는다
+        givenActiveApplication(room(RunningRoomStatus.MATCHING, 2));
+        given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID))).willReturn(List.of(
+                new MatchPlayer(USER_ID, 600),
+                new MatchPlayer(UuidCreator.getTimeOrderedEpoch(), 300)));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        assertThat(updatedRoom().getAvgPace()).map(Pace::secondsPerKm).contains(300);
+    }
+
+    @Test
+    @DisplayName("완주자만 남은 방에서 미출석자가 나가면 인원은 남아도 방 평균은 지운다")
+    void clearsAvgPaceWhenOnlyFinishersRemain() {
+        // given -> 완주한 상대는 세션이 끊겨 참가자 조회에 없고 인원에는 남는다
+        List<SessionDraft> sessions = List.of(
+                new SessionDraft(new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true),
+                new SessionDraft(new UserId(UuidCreator.getTimeOrderedEpoch()),
+                        new RunningPlayerId(PLAYER_ID + 1), 0, false));
+        givenActiveApplication(RunningRoom.builder()
+                .runningRoomId(ROOM_ID)
+                .type(RunningRoomType.MATCH)
+                .status(RunningRoomStatus.FINISHED)
+                .startAt(LocalDateTime.now().minusHours(1))
+                .closeAt(LocalDateTime.now())
+                .targetDistance(TARGET_DISTANCE)
+                .avgPace(AVG_PACE)
+                .currentPlayerCount(2)
+                .maxPlayerCount(4)
+                .sessions(sessions)
+                .build());
+        given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
+                .willReturn(List.of(new MatchPlayer(USER_ID, AVG_PACE)));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then -> 평균은 방 화면의 참가자 목록과 같은 기준이다. 시작 후에는 후보 순위에 쓰지 않는다
+        RunningRoom updated = updatedRoom();
+        assertThat(updated.getPlayerCount().current()).isOne();
+        assertThat(updated.getAvgPace()).isEmpty();
     }
 
     @Test
