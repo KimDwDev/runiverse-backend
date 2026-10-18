@@ -173,7 +173,7 @@
 | user_id | UUID | → users, NOT NULL | |
 | avg_pace | int | NOT NULL | 초/km |
 | total_distance | int | NOT NULL | 미터. **목표 거리에서 끊는다** — 목표를 넘겨 뛰어도 `running_rooms.target_distance` 지점을 보간해 그 값으로 확정하고 `end_at`·`total_duration`도 같은 지점 기준으로 맞춘다(거리만 자르면 페이스가 틀어진다). 참가자 전원이 같은 구간 경계를 갖게 하려는 것이다 — 6-2 응답은 구간 경계를 참가자별이 아니라 구간 레벨에 둔다. 목표에 못 미치면 마지막 10m 경계까지로 확정한다 — 10m 미만 꼬리는 버려 구간 합과 어긋나지 않게 한다. **S3 원본 트랙에는 목표 이후 좌표도 전부 남긴다**(재계산용) |
-| total_duration | int | NOT NULL | 초. 구간(`running_splits.duration`)의 합. **움직인 시간**이다 — 트랙 필터가 정지·관측하지 못한 구간을 빼므로 `end_at - start_at`보다 짧을 수 있다. 멈춘 시간까지 포함한 전체 경과는 `end_at - start_at`으로 구한다(feature-spec 트랙 필터) |
+| total_duration | int | NOT NULL | 초. 구간(`running_splits.duration`)의 합. **움직인 시간**이다 — 트랙 필터가 정지·일시정지·관측하지 못한 구간을 빼므로 `end_at - start_at`보다 짧을 수 있다. 멈춘 시간까지 포함한 전체 경과는 `end_at - start_at`으로 구한다(feature-spec 트랙 필터) |
 | avg_cadence | int | nullable | spm (선택). 러닝 전체 평균 — 점별 순간 케이던스(`cadenceSpm`)는 DB에 저장하지 않는다(S3 원본 트랙에는 남는다) |
 | total_elevation_gain | int | nullable | 누적 상승 고도(미터). 기기 GPS 고도를 운영 임계값으로 필터링해 계산하며 유효 표본이 부족하면 null. 일시정지 경계에서 기준 고도를 새로 잡아 일시정지 중 이동한 고도차는 들어가지 않는다. 구간(`running_splits.elevation_change`)의 합과는 다르다 |
 | total_calories | int | NOT NULL | 종료 시 서버가 확정 거리·시간과 사용자 체중으로 계산한 kcal |
