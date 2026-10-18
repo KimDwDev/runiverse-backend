@@ -14,7 +14,7 @@
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`·`like_count`·`comment_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
-- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
+- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`·`route_segments`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **`deleted_at`**: `feeds`는 소프트 삭제, `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
@@ -178,7 +178,8 @@
 | total_elevation_gain | int | nullable | 누적 상승 고도(미터). 기기 GPS 고도를 운영 임계값으로 필터링해 계산하며 유효 표본이 부족하면 null. 일시정지 경계에서 기준 고도를 새로 잡아 일시정지 중 이동한 고도차는 들어가지 않는다. 구간(`running_splits.elevation_change`)의 합과는 다르다 |
 | total_calories | int | NOT NULL | 종료 시 서버가 확정 거리·시간과 사용자 체중으로 계산한 kcal |
 | gps_track_key | varchar(255) | NOT NULL | S3 key — 받은 좌표를 그대로(위치·시각·고도·정확도·속도·방위·케이던스·순간 페이스·일시정지 구간 번호) 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
-| route_polyline | text | NOT NULL | 10m 경계점 경로(encoded polyline, precision 5) — 원본 트랙을 0m부터 10m마다 보간한 경계점만 담는다(구간 수 + 1개). **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 상세(6-1·6-2)·기록 목록(7-1)·피드 카드가 전부 이 값을 쓴다. `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리킨다. 트랙 필터가 0으로 한 칸 위에는 경계점이 없어, **이웃한 두 점이 30m 넘게 떨어져 있으면 관측하지 못한 구간**이다 — 클라는 그 사이를 잇지 않는다(feature-spec 트랙 필터) |
+| route_polyline | text | NOT NULL | 10m 경계점 경로(encoded polyline, precision 5) — 원본 트랙을 0m부터 10m마다 보간한 경계점만 담는다(구간 수 + 1개). 끊긴 곳을 나누지 않은 한 줄이다. `running_splits`의 `route_start_index`·`route_end_index`와 콤보 점이 이 배열의 위치를 가리키고, 기록 목록(7-1)·피드 카드가 이 값을 그대로 내린다. 카드는 **이웃한 두 점이 30m 넘게 떨어져 있으면** 끊긴 곳으로 보고 잇지 않는다 |
+| route_segments | text | NOT NULL | `route_polyline`을 끊긴 곳에서 나눈 조각 목록 — JSON 배열이고 원소마다 encoded polyline(precision 5) 하나다. 예: `["u{~vF…","a|~vF…"]`. 조각은 트랙 필터가 0으로 한 칸 중 정지(④)가 아닌 것(일시정지 경계·거부한 관측 안 된 칸·GPS 튐)을 사이에 둔 이웃 경계점에서 나뉜다. **조각을 순서대로 이으면 `route_polyline`의 점과 하나도 빠짐없이 같다**(조각끼리 점을 공유하지 않는다). 끊긴 곳이 없으면 원소 하나다. 기록 상세(6-1·6-2)가 이 값으로 `routes`를 조각별로 내린다(feature-spec 트랙 필터) |
 | weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 조회에 실패하거나 값이 없으면 폴백(`0` 맑음, 기온 `15.0`)이 들어간다. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
@@ -228,7 +229,7 @@
 > **구간 경계는 방 전체가 공유한다.** 참가자별 실제 거리가 아니라 0m부터 10m씩 자르는 고정 경계라, 같은 방 참가자의 `split_number` N은 언제나 같은 거리 구간을 가리킨다. 6-2가 구간 하나에 참가자 여럿을 묶어 내려줄 수 있는 근거다.
 > **행 수가 방마다 수천 개다** — 목표 5,000m·4인 방이면 2,000행이다. 건별 INSERT가 아니라 배치로 넣는다.
 > **경계점 목록이 곧 경로라 인덱스가 구조적으로 맞물린다.** 경로가 0m부터 10m마다의 경계점이라 `N`번 구간은 언제나 `N-1`~`N`번 점이다.
-> **대가는 `running_records`와의 결합이다** — `route_polyline`을 재생성하면 점 개수가 달라져 그 기록의 모든 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. 둘 다 write-once라 재생성 자체가 예외적 상황이다.
+> **대가는 `running_records`와의 결합이다** — `route_polyline`을 재생성하면 점 개수가 달라져 그 기록의 모든 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. `route_segments`도 같은 경계점에서 나오므로 함께 갱신한다. 셋 다 write-once라 재생성 자체가 예외적 상황이다.
 
 ### running_combos (러닝 콤보 구간)
 
