@@ -14,6 +14,7 @@ import com.runiverse.running_service.presentation.common.response.CooldownErrorR
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -21,6 +22,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -41,7 +43,7 @@ public class GlobalExceptionHandler {
     }
 
     // 도메인 검증 예외
-    // 여기까지 왔다면 Request DTO 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
+    // 여기까지 왔다면 Request DTO·경로 변수 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(
             com.runiverse.running_service.domain.common.exception.BusinessException e,
@@ -71,6 +73,30 @@ public class GlobalExceptionHandler {
                 .distinct()
                 .toList();
         log.info("{} 요청 검증 실패 - fields={}", LogTag.of(request), fields);
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
+        );
+    }
+
+    // 메서드 인자에 직접 붙인 제약 위반 (예: 경로 변수의 @Min)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidationException(
+            HandlerMethodValidationException e,
+            HttpServletRequest request
+    ) {
+        String message = e.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(MessageSourceResolvable::getDefaultMessage)
+                .collect(Collectors.joining(" "));
+        // 입력값에는 개인정보가 섞일 수 있어 인자 이름만 남긴다
+        List<String> params = e.getParameterValidationResults().stream()
+                .map(result -> result.getMethodParameter().getParameterName())
+                .distinct()
+                .toList();
+        log.info("{} 요청 검증 실패 - params={}", LogTag.of(request), params);
         markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
