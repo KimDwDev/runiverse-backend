@@ -105,7 +105,7 @@
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | **방이 닫힌 시각.** `FINISHED`·`CANCELLED`로 갈 때 찍고, 그 전까지는 null이다 — 종류와 무관하게 열려 있는 방은 전부 null. 모집 마감 시각이 아니다(그건 `start_at - 오프셋`으로 계산한다) |
 | target_distance | int | nullable | 방의 목표 거리(미터). **솔로 방은 null** — 목표가 없어야 조기 종료 페널티 판정을 건너뛴다. 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 가져 후보 방 조회가 단일 테이블에서 끝난다 |
-| avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 배정 후보의 순위 재료로 쓰고(자격 조건이 아니다 — 멀어도 매칭한다), `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다. **nullable인 이유는 참가자가 0이면 평균 낼 대상이 없기 때문이다** — 마지막 값을 남기지 않고 지운다(참가자가 0이 되는 건 이탈뿐이고 — 시작 후라면 접속 전 참가자의 취소·탈퇴 — 그 방은 같은 순간 `CANCELLED`로 닫힌다 — 아래 `current_player_count`) |
+| avg_pace | int | nullable | 참가자 평균 페이스(초/km). 참가·이탈마다 갱신. 대상은 연결된 세션(`is_connected`)이라 시작 후 완주자는 인원에 남아도 빠진다. 배정 후보의 순위 재료로 쓰고(자격 조건이 아니다 — 멀어도 매칭한다), `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다. **nullable인 이유는 참가자가 0이면 평균 낼 대상이 없기 때문이다** — 마지막 값을 남기지 않고 지운다(참가자가 0이 되는 건 이탈뿐이고 — 시작 후라면 접속 전 참가자의 취소·탈퇴 — 그 방은 같은 순간 `CANCELLED`로 닫힌다 — 아래 `current_player_count`) |
 | max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`, **[MVP 제외]** 초대 `4`. 생성 시 확정·불변 |
 | current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신한다. `current_player_count < max_player_count`면 들어갈 수 있다. **`1`은 정상 상태다** — 마감 전이면 계속 모집하고 마감 후면 혼자 뛴다. **인원은 이탈로만 줄어든다** — 시작 전 이탈, 시작 후에는 접속 전(`JOINED`) 참가자의 매칭 취소·탈퇴. `0`이 되면 방을 `CANCELLED`로 닫는다(빈 방이 후보로 남지 않게). 완주·조기 종료·강제 종료로는 줄지 않고, 뛰던 참가자가 모두 종료됐을 때 유효 기록 유무로 `FINISHED`/`CANCELLED`가 갈린다(아래 생명주기). 확정 후 이탈·미출석·조기 종료 제재의 면제 판정에도 쓴다 |
 | created_at / updated_at | timestamp | NOT NULL | |
