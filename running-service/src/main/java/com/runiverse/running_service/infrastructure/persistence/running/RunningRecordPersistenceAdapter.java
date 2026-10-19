@@ -15,6 +15,7 @@ import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.RunningSegment;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,29 +126,67 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
     public List<RunningRecordRow> loadByPeriod(UserId userId, LocalDateTime startInclusive,
                                                LocalDateTime endExclusive) {
         // 숨긴 방의 기록은 목록에서도 뺀다 — 결과 조회가 그 방을 없는 방으로 본다
-        return entityManager.createQuery("""
-                        SELECT NEW com.runiverse.running_service.application.running.port.out.RunningRecordRow(
-                            record.runningRecordId, record.room.runningRoomId, record.room.type,
+        List<Tuple> records = entityManager.createQuery("""
+                        SELECT record.runningRecordId AS recordId, record.room.runningRoomId AS roomId,
+                            record.room.type AS type,
                             (SELECT COUNT(player)
                              FROM RunningRoomSessionJpaEntity session
                              JOIN RunningPlayerJpaEntity player
                                  ON player.runningPlayerId = session.runningPlayerId
                              WHERE session.room = record.room
-                               AND player.status IN :startedStatuses),
-                            record.startAt, record.totalDistance, record.totalDuration, record.avgPace,
-                            record.totalElevationGain, record.routePolyline)
+                               AND player.status IN :startedStatuses) AS playerCount,
+                            record.startAt AS startAt, record.totalDistance AS totalDistance,
+                            record.totalDuration AS totalDuration, record.avgPace AS avgPace,
+                            record.totalElevationGain AS totalElevationGain
                         FROM RunningRecordJpaEntity record
                         WHERE record.userId = :userId
                           AND record.room.deletedAt IS NULL
                           AND record.startAt >= :startInclusive
                           AND record.startAt < :endExclusive
                         ORDER BY record.startAt, record.runningRecordId
-                        """, RunningRecordRow.class)
+                        """, Tuple.class)
                 .setParameter("userId", userId.value())
                 .setParameter("startedStatuses", STARTED_STATUSES)
                 .setParameter("startInclusive", startInclusive)
                 .setParameter("endExclusive", endExclusive)
                 .getResultList();
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<String>> segments = loadSegmentPolylines(
+                records.stream().map(record -> record.get("recordId", Long.class)).toList());
+        return records.stream()
+                .map(record -> new RunningRecordRow(
+                        record.get("recordId", Long.class),
+                        record.get("roomId", Long.class),
+                        record.get("type", RunningRoomType.class),
+                        record.get("playerCount", Long.class),
+                        record.get("startAt", LocalDateTime.class),
+                        record.get("totalDistance", Integer.class),
+                        record.get("totalDuration", Integer.class),
+                        record.get("avgPace", Integer.class),
+                        record.get("totalElevationGain", Integer.class),
+                        segments.getOrDefault(record.get("recordId", Long.class), List.of())))
+                .toList();
+    }
+
+    // 기록마다 조각 polyline을 번호순으로 모은다 — 기록마다 따로 부르면 목록 건수만큼 쿼리가 나간다.
+    // uk_running_segment_record_number(running_record_id, segment_number)가 조회와 정렬을 맡는다
+    private Map<Long, List<String>> loadSegmentPolylines(Collection<Long> recordIds) {
+        return entityManager.createQuery("""
+                        SELECT segment.record.runningRecordId AS recordId,
+                            segment.routePolyline AS routePolyline
+                        FROM RunningSegmentJpaEntity segment
+                        WHERE segment.record.runningRecordId IN :recordIds
+                        ORDER BY segment.record.runningRecordId, segment.segmentNumber
+                        """, Tuple.class)
+                .setParameter("recordIds", recordIds)
+                .getResultList()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        segment -> segment.get("recordId", Long.class),
+                        Collectors.mapping(segment -> segment.get("routePolyline", String.class),
+                                Collectors.toList())));
     }
 
     // 콤보 달성 위치를 고를 재료 — 기록과 구간 시각을 두 번에 나눠 읽는다.

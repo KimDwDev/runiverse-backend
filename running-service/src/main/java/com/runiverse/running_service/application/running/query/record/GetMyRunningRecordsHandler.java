@@ -1,5 +1,7 @@
 package com.runiverse.running_service.application.running.query.record;
 
+import com.runiverse.running_service.application.running.common.PolylineDecoder;
+import com.runiverse.running_service.application.running.common.PolylineEncoder;
 import com.runiverse.running_service.application.running.port.in.GetMyRunningRecordsUsecase;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
@@ -42,6 +44,14 @@ public class GetMyRunningRecordsHandler implements GetMyRunningRecordsUsecase {
                 row.totalDurationSeconds(),
                 row.averagePaceSecondsPerKm(),
                 row.totalElevationGainMeters(),
-                row.routePolyline());
+                joinedPolyline(row.segmentPolylines()));
+    }
+
+    // 카드는 한 줄 미리보기다 — 조각을 이어 다시 인코딩한다.
+    // encoded polyline은 앞 점과의 차로 인코딩돼 문자열을 그대로 이어 붙이면 깨진다
+    private static String joinedPolyline(List<String> segmentPolylines) {
+        return PolylineEncoder.encodePoints(segmentPolylines.stream()
+                .flatMap(segment -> PolylineDecoder.decode(segment).stream())
+                .toList());
     }
 }
