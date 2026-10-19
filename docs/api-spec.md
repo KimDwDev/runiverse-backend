@@ -1490,7 +1490,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **두 경우에 나간다.**
   - `RUNNING_LOCATION_UPDATE` 배치를 처리할 때마다 — 참가자당 약 10초 간격이다. 재전송분만 온 배치라 거리가 그대로여도 나간다
   - 참가자 상태(`status`)가 바뀔 때 — 좌표 배치와 무관하게 즉시 나간다(아래 상태 표). 상태가 그대로면 나가지 않는다
-- **누적 거리 조회에 실패한 배치는 알림을 거른다.** 좌표는 저장되고 다음 배치가 최신 누적을 나른다. 이 배치로 바뀌었어야 할 상태(예: `PAUSED` → `RUNNING`)도 다음 배치에서 반영된다
+- **누적 거리 조회에 실패한 배치는 저장하지 않고 알림도 거른다.** 보낸 본인에게만 `ERROR`(`RUNNING_TRACK_UNAVAILABLE`)를 보내고, 연결은 끊지 않으며 러닝도 계속된다 — `pauseSegment`를 마지막으로 반영한 좌표와 비교할 기준이 없어서다. 원본은 로컬 트랙에 남아 재연결 재전송으로 복구된다. 이 배치로 바뀌었어야 할 상태(예: `PAUSED` → `RUNNING`)는 다음 배치에서 반영된다
+- **`pauseSegment`가 줄어든 배치는 통째로 거부한다.** 저장·누적·알림이 모두 없고 상태도 바뀌지 않는다. 보낸 본인에게만 `ERROR`(`PAUSE_SEGMENT_DECREASED`)를 보낸다
 - **갱신된 참가자 한 명만 싣는다.** 좌표 배치를 받아 진행이 바뀐 사람만 알리면 되고, 전원 스냅샷을 매번 보내면 인원수만큼 payload가 커진다
   - 클라는 참가자별 최신값을 로컬에 들고 이 메시지로 덮는다
   - **최초 진입·재연결 시 전원의 현재 진행은 `RUNNING_STARTED` 스냅샷이 나른다**(5-C) — 이 메시지는 갱신분만 실으므로 그것만으로는 화면을 복구할 수 없다
@@ -1601,7 +1602,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 확정하지 않으므로 상태·기록·트랙 버퍼 모두 그대로이고, 이 요청의 ack(`RUNNING_FINISHED`)도 나가지 않는다
 - `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다. 다만 미만이어도 방 인원(확정 인원에서 취소·탈퇴한 미출석자를 뺀 수)이 1이면 `_NO_PENALTY`다. 목표가 없는 솔로 방은 끝낸 것이 곧 완주라 `COMPLETED`다
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
-- 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 계산 전에 트랙 필터가 정지·GPS 튐·관측 안 된 칸을 거리·시간에서 뺀다([feature-spec.md](feature-spec.md) 트랙 필터) — 그래서 `totalDurationSeconds`는 움직인 시간이다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
+- 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 계산 전에 트랙 필터가 일시정지 경계(`pauseSegment`가 바뀐 칸)·정지·GPS 튐·관측 안 된 칸을 거리·시간에서 뺀다([feature-spec.md](feature-spec.md) 트랙 필터) — 그래서 `totalDurationSeconds`는 움직인 시간이다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간, 운영값)을 통과한 트랙이면 `running_records`·경로 조각(`running_segments`)·splits를 저장하고 GPS 트랙을 S3에 올린다. 통과하지 못하면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 마지막 10m 경계까지로 확정한다(10m 미만 꼬리는 버린다)
 - **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
@@ -1695,11 +1696,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
 | `isMe` | Boolean | O | 현재 사용자 여부 |
 | `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
-| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 일시정지·정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
 | `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
 | `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
 | `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
-| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null. 일시정지 중에 오른 높이는 들어가지 않는다 |
 
 - **`status`는 `COMPLETED`·`RUNNING` 두 값뿐이다** — 러닝을 끝낸 사람은 완주든 중도이탈이든 `COMPLETED`, 아직 뛰는 중이면 `RUNNING`이다. DB의 `running_players.status`(`RUNNING_LEFT_PENALTY` 등, `erd.md` §6)를 그대로 노출하지 않는다: **페널티 여부는 본인 매칭 쿨다운 판정에 쓰는 내부 값이라 남의 화면에 실을 이유가 없다.** 얼마나 뛰었는지는 `totalDistanceMeters`로 드러난다
 - `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 **시작 전 이탈자는 제외한다**. 기록이 없는 참가자는 사용자 정보와 `status`만 채워 내려가므로 화면에 "기록 없음"으로 표시한다
@@ -1792,7 +1793,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `runningRoomId` | Long | O | 러닝 방 ID |
 | `splitDistanceMeters` | Integer | O | 고정 구간 거리(m). 항상 10 |
 | `totalDistanceMeters` | Integer | X | 현재 사용자 총 거리(m). 목표를 넘겨 뛰었으면 목표 지점에서, 목표 미달이면 마지막 10m 경계에서 끊은 값이다. 기록이 없으면 null |
-| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null. 일시정지 중에 오른 높이는 들어가지 않는다 |
 | `startedAt` | String | X | 현재 사용자 기록 시작 시각. 기록이 없으면 null |
 | `finishedAt` | String | X | 현재 사용자 기록 종료 시각. 기록이 없으면 null |
 | `players` | Array | O | **기록이 있는** 참가자 목록. 참가자 메타데이터는 여기에만 담는다 |
@@ -1825,11 +1826,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
-| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 정지·관측하지 못한 시간은 들어가지 않는다 |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 일시정지·정지·관측하지 못한 시간은 들어가지 않는다 |
 | `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
 | `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
 | `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
-| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
+| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 끝 − 시작이며, 일시정지로 끊긴 구간은 조각마다의 순고도차를 더한다(일시정지 중 오르내린 높이는 빠진다). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
 
 - **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
 - **구간 경계는 방 전체가 공유한다** — 0m부터 10m씩 자르는 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
@@ -1842,7 +1843,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **끊긴 곳에 걸친 구간은 점 하나만 실린다.** 일시정지 직전 경계점은 앞 조각에, 재개 뒤 첫 경계점은 뒤 조각에 있다. 구간은 끝점이 있는 뒤 조각에 속하고 그 조각의 첫 점 하나만 가리킨다 — 선을 긋지 않는다. 거리·시간·페이스는 다른 구간과 같다
 - 경로는 구간이 속한 조각의 `running_segments.route_polyline`에서 구간 범위로 잘라 내린다 — 서버가 풀어 내리므로 S3를 조회하지 않는다. 저장된 좌표 컬럼은 없다
 - 점별 고도·정확도·순간 페이스·케이던스·시각은 반환하지 않고 구간 단위 값만 제공한다.
-- **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
+- **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, 일시정지로 끊긴 구간은 조각별 순고도차의 합, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -3038,7 +3039,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **동작 (테이블별 정책)**:
   - 탈퇴는 활성 상태 때문에 막지 않는다. `MATCHING`이면 5-A의 대기 취소, `MATCHED`이면 방 나가기를 적용하고 인원을 갱신해 남은 참가자에게 이벤트를 보낸다. `STARTED`이면 본인이 `RUNNING`일 때 마지막 수신 데이터로 5-D의 종료 처리를, `JOINED`(미접속)일 때 강제 종료와 같은 기준의 이탈 처리를 먼저 적용한다. 미접속이면 시작 후 취소처럼 인원을 줄여 남은 참가자에게 이벤트를 보내고, 0이 되면 방을 `CANCELLED`로 닫는다.
   - `delete_users` 스냅샷 후 `users`를 하드 삭제한다. `delete_users.created_at`은 스냅샷 시각이다.
-  - **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
+  - **유지**: `feeds`/`comments`/`running_records`(+segments·splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
   - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`friendships`/`user_colors`.
   - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).
