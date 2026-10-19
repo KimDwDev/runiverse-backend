@@ -1,6 +1,5 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.support.SegmentRoutes;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRecentRunningPacesPort;
@@ -74,9 +73,12 @@ public class InMemoryRunningRecordStore implements CreateRunningRecordPort, Exis
                 .filter(record -> record.getRunningRoomId().value().equals(runningRoomId))
                 .map(record -> new RecordedRoute(
                         record.getUserId().value(),
-                        SegmentRoutes.joinedPolyline(record),
+                        record.getSegments().stream()
+                                .map(segment -> segment.getRoutePolyline().value())
+                                .toList(),
                         record.getSplits().stream()
                                 .map(split -> new RecordedSplitTime(
+                                        split.getSegmentNumber().value(),
                                         split.getRouteRange().startIndex(),
                                         split.getRouteRange().endIndex(),
                                         split.getPeriod().startAt(),
