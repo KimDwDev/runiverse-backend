@@ -94,7 +94,7 @@ public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
     private RunningRecordJpaEntity(RunningRoomJpaEntity room, UUID userId, int avgPace,
                                    int totalDistance, int totalDuration, Integer avgCadence,
                                    Integer totalElevationGain, int totalCalories,
-                                   String gpsTrackKey, String routePolyline, int weatherCode,
+                                   String gpsTrackKey, int weatherCode,
                                    BigDecimal temperature, LocalDateTime startAt,
                                    LocalDateTime endAt) {
         this.room = room;
@@ -106,7 +106,6 @@ public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
         this.totalElevationGain = totalElevationGain;
         this.totalCalories = totalCalories;
         this.gpsTrackKey = gpsTrackKey;
-        this.routePolyline = routePolyline;
         this.weatherCode = weatherCode;
         this.temperature = temperature;
         this.startAt = startAt;
@@ -117,11 +116,10 @@ public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
                                                 int avgPace, int totalDistance, int totalDuration,
                                                 Integer avgCadence, Integer totalElevationGain,
                                                 int totalCalories, String gpsTrackKey,
-                                                String routePolyline, int weatherCode,
-                                                BigDecimal temperature, LocalDateTime startAt,
-                                                LocalDateTime endAt) {
+                                                int weatherCode, BigDecimal temperature,
+                                                LocalDateTime startAt, LocalDateTime endAt) {
         return new RunningRecordJpaEntity(room, userId, avgPace, totalDistance, totalDuration,
-                avgCadence, totalElevationGain, totalCalories, gpsTrackKey, routePolyline,
+                avgCadence, totalElevationGain, totalCalories, gpsTrackKey,
                 weatherCode, temperature, startAt, endAt);
     }
 }

@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.running.port.out.RunningRecordR
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
+import com.runiverse.running_service.domain.running.record.RunningSegment;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,23 +60,32 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                 record.getTotalElevationGain().map(gain -> gain.meters()).orElse(null),
                 record.getTotalCalories().kcal(),
                 record.getGpsTrackKey().value(),
-                record.getRoutePolyline().value(),
                 record.getWeatherCode().value(),
                 record.getTemperature().celsius(),
                 record.getPeriod().startAt(),
                 record.getPeriod().endAt());
-        // IDENTITY 전략이라 여기서 INSERT가 나가고 ID가 채워진다 — 구간이 이 ID를 참조한다
+        // IDENTITY 전략이라 여기서 INSERT가 나가고 ID가 채워진다 — 조각이 이 ID를 참조한다
         entityManager.persist(recordEntity);
+        // 조각도 IDENTITY라 persist마다 ID가 채워진다 — 구간이 조각 번호로 이 ID를 찾는다
+        Map<Integer, Long> segmentIds = new HashMap<>();
+        for (RunningSegment segment : record.getSegments()) {
+            RunningSegmentJpaEntity segmentEntity = RunningSegmentJpaEntity.create(
+                    recordEntity,
+                    segment.getSegmentNumber().value(),
+                    segment.getRoutePolyline().value());
+            entityManager.persist(segmentEntity);
+            segmentIds.put(segment.getSegmentNumber().value(), segmentEntity.getRunningSegmentId());
+        }
         int persisted = 0;
         for (RunningSplit split : record.getSplits()) {
-            entityManager.persist(toEntity(recordEntity, split));
+            // clear 뒤에도 쓸 수 있게 ID로 프록시를 얻는다 — 같은 ID는 컨텍스트에서 같은 프록시가 돌아온다
+            RunningSegmentJpaEntity segment = entityManager.getReference(
+                    RunningSegmentJpaEntity.class, segmentIds.get(split.getSegmentNumber().value()));
+            entityManager.persist(toEntity(segment, split));
             // 쌓아두면 방 하나에 수천 개가 컨텍스트에 남아 메모리와 flush 비용이 같이 커진다
             if (++persisted % BATCH_SIZE == 0) {
                 entityManager.flush();
                 entityManager.clear();
-                // clear가 recordEntity까지 준영속으로 만든다 — 다음 구간이 참조할 프록시를 다시 얻는다
-                recordEntity = entityManager.getReference(
-                        RunningRecordJpaEntity.class, recordEntity.getRunningRecordId());
             }
         }
     }
@@ -182,9 +193,9 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                 .toList();
     }
 
-    private RunningSplitJpaEntity toEntity(RunningRecordJpaEntity record, RunningSplit split) {
+    private RunningSplitJpaEntity toEntity(RunningSegmentJpaEntity segment, RunningSplit split) {
         return RunningSplitJpaEntity.create(
-                record,
+                segment,
                 split.getSplitNumber().value(),
                 split.getAvgPace().secondsPerKm(),
                 split.getDistance().meters(),
