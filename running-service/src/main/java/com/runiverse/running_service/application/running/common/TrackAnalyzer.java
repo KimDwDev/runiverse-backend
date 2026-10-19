@@ -3,11 +3,13 @@ package com.runiverse.running_service.application.running.common;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.running.metric.vo.ElevationGain;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
+import com.runiverse.running_service.domain.running.record.SegmentDraft;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 // 실측 트랙 하나를 기록에 넣을 값들로 바꾼다.
 // 결과가 비면 "거리·시간·경로를 산출할 수 없는 트랙"이라 기록 없이 상태만 확정한다.
@@ -30,7 +32,9 @@ public final class TrackAnalyzer {
         if (boundaries.size() < 2) {
             return Optional.empty();
         }
-        List<SplitDraft> splits = SplitAssembler.assemble(boundaries, points, interval, weightKg,
+        // 끊긴 곳에서 조각으로 나눈다 — 구간도 이 조각 기준으로 경로 범위를 잡는다
+        List<List<BoundaryPoint>> segments = RouteSegmenter.split(boundaries, track.breakEdges());
+        List<SplitDraft> splits = SplitAssembler.assemble(segments, points, interval, weightKg,
                 properties.elevationNoiseThresholdMeters());
 
         int totalDistance = boundaries.get(boundaries.size() - 1).distanceMeters();
@@ -51,9 +55,8 @@ public final class TrackAnalyzer {
                 avgPace,
                 elevationGain(recordedPoints(points, cumulative, totalDistance),
                         properties.elevationNoiseThresholdMeters()),
-                PolylineEncoder.encode(boundaries),
-                RouteSegmenter.split(boundaries, track.breakEdges()).stream()
-                        .map(PolylineEncoder::encode)
+                IntStream.range(0, segments.size())
+                        .mapToObj(i -> new SegmentDraft(i + 1, PolylineEncoder.encode(segments.get(i))))
                         .toList(),
                 splits.get(0).startAt(),
                 splits.get(splits.size() - 1).endAt(),

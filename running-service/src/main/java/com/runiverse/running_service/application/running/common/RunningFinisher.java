@@ -218,7 +218,7 @@ public class RunningFinisher {
                 .totalCalories(CalorieCalculator.kcal(
                         analysis.avgPaceSecondsPerKm(), analysis.totalDurationSeconds(), weightKg))
                 .gpsTrackKey(gpsTrackKey)
-                .routePolyline(analysis.routePolyline())
+                .segments(analysis.segments())
                 .startAt(analysis.startAt())
                 .endAt(analysis.endAt())
                 .weatherCode(weather.code())
