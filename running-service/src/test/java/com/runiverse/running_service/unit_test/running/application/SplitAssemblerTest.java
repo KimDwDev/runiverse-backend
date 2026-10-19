@@ -249,6 +249,7 @@ public class SplitAssemblerTest {
         FilteredTrack track = new FilteredTrack(points,
                 new double[]{0, 12, 12, 12, 12, 24, 36},
                 new double[]{0, 4, 4, 4, 4, 8, 12},
+                new boolean[points.size()],   // 정지는 끊지 않는다
                 null);
         List<BoundaryPoint> boundaries = TrackResampler.resample(track, TARGET, INTERVAL);
 

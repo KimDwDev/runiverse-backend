@@ -29,6 +29,7 @@ public final class TrackFilterFixtures {
                 seconds[i] = Duration.between(origin, points.get(i).recordedAt()).toMillis() / 1_000.0;
             }
         }
-        return new FilteredTrack(points, TrackDistance.cumulativeMeters(points), seconds, null);
+        return new FilteredTrack(points, TrackDistance.cumulativeMeters(points), seconds,
+                new boolean[points.size()], null);
     }
 }

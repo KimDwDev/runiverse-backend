@@ -1,5 +1,6 @@
 package com.runiverse.running_service.unit_test.running.application;
 
+import com.runiverse.running_service.application.running.common.PolylineDecoder;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.TrackAnalysis;
 import com.runiverse.running_service.application.running.common.TrackAnalyzer;
@@ -328,5 +329,43 @@ public class TrackAnalyzerTest {
         assertThat(analysis.totalDurationSeconds()).isBetween(390, 405);
         assertThat(periodSeconds).isGreaterThanOrEqualTo(450);
         assertThat(analysis.avgPaceSecondsPerKm()).isBetween(350, 365);
+    }
+
+    @Test
+    @DisplayName("끊긴 곳이 없으면 경로 조각은 폴리라인 하나와 같다")
+    void singleSegmentEqualsPolyline() {
+        // when
+        TrackAnalysis analysis = analyze(track(1_800, 2.8, null));
+
+        // then
+        assertThat(analysis.routeSegments()).containsExactly(analysis.routePolyline());
+    }
+
+    @Test
+    @DisplayName("거부한 구간에서 나뉜 경로 조각을 이으면 폴리라인의 점과 같다")
+    void segmentsConcatenateToPolyline() {
+        // given -> 2.8m/s로 600초, 60초 만에 400m 앞(택시), 다시 2.8m/s로 600초
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i <= 600; i++) {
+            points.add(point(points.size(), 37.5 + i * 2.8 / METERS_PER_DEGREE, null,
+                    START.plusSeconds(i)));
+        }
+        double resumeNorth = 600 * 2.8 + 400.0;
+        for (int i = 0; i <= 600; i++) {
+            points.add(point(points.size(), 37.5 + (resumeNorth + i * 2.8) / METERS_PER_DEGREE, null,
+                    START.plusSeconds(660 + i)));
+        }
+
+        // when -> 운영 판정값으로 실제 필터를 거친다
+        TrackAnalysis analysis = TrackAnalyzer.analyze(
+                TrackFilter.apply(points, DEFAULT_PROPERTIES), TARGET, WEIGHT, PROPERTIES)
+                .orElseThrow();
+
+        // then -> 조각은 점을 나눌 뿐이라 구간 인덱스(route_polyline 기준)가 그대로 맞는다
+        assertThat(analysis.routeSegments()).hasSize(2);
+        assertThat(analysis.routeSegments().stream()
+                .flatMap(segment -> PolylineDecoder.decode(segment).stream())
+                .toList())
+                .containsExactlyElementsOf(PolylineDecoder.decode(analysis.routePolyline()));
     }
 }

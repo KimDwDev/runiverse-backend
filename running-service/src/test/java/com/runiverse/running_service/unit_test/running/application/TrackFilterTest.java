@@ -543,4 +543,169 @@ public class TrackFilterTest {
         assertThat(one.totalMeters()).isZero();
         assertThat(one.points()).hasSize(1);
     }
+
+    // 경로를 끊는 칸의 번호 — 칸 i는 points[i-1] → points[i]다
+    private static List<Integer> breakEdges(FilteredTrack track) {
+        List<Integer> edges = new ArrayList<>();
+        boolean[] breaks = track.breakEdges();
+        for (int edge = 0; edge < breaks.length; edge++) {
+            if (breaks[edge]) {
+                edges.add(edge);
+            }
+        }
+        return edges;
+    }
+
+    @Test
+    @DisplayName("끊는 칸 배열은 점 수와 같은 길이이고 0번 칸은 끊지 않는다")
+    void breakEdgesAlignWithPoints() {
+        // given -> 첫 칸부터 택시로 옮긴다. 0번 칸은 앞 점이 없어 칸이 아니다
+        List<TrackPoint> points = new Track().at(0, 0, 0).gap(30, 300.0).run(10, 3.0).points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 길이가 어긋나면 경계점의 sourceIndex로 찾을 때 엉뚱한 칸을 본다
+        assertThat(filtered.breakEdges()).hasSize(filtered.points().size());
+        assertThat(filtered.breakEdges()[0]).isFalse();
+        assertThat(breakEdges(filtered)).containsExactly(1);
+    }
+
+    @Test
+    @DisplayName("오염 없이 달린 트랙은 끊는 칸이 없다")
+    void cleanRunHasNoBreak() {
+        // given
+        List<TrackPoint> points = new Track().at(0, 0, 0).run(100, 3.0).points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("정지 구간은 거리·시간은 빠져도 경로를 끊지 않는다")
+    void stopDoesNotBreak() {
+        // given -> stopIsRemovedFromDistanceAndTime과 같은 트랙. A~D 칸이 정지다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).at(12, 0, 4).at(14, 2, 8).at(11, -1, 12).at(13, 0, 16)
+                .at(25, 0, 20).at(37, 0, 24)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 신호등마다 경로가 토막 나면 안 된다. 제자리라 이어 그려도 반경 안의 직선이다
+        assertThat(filtered.summary().stopCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("인정한 관측 안 된 칸은 경로를 끊지 않는다")
+    void acceptedGapDoesNotBreak() {
+        // given -> tunnelGapIsAccepted와 같은 트랙
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(60, 2.8)
+                .gap(100, 300.0)
+                .run(30, 2.8)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 거리를 인정했으니 직선 위에 경계점이 찍혀 이어 그려진다
+        assertThat(filtered.summary().gapAcceptedCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("거부한 관측 안 된 칸에서 경로를 끊는다")
+    void rejectedGapBreaks() {
+        // given -> 점 0~60을 달리고 점 61이 60초 뒤 400m 앞이다 — 택시
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(60, 2.8)
+                .gap(60, 400.0)
+                .run(30, 2.8)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 이으면 타고 간 길이 달린 길처럼 그려진다
+        assertThat(filtered.summary().gapRejectedCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).containsExactly(61);
+    }
+
+    @Test
+    @DisplayName("튄 자리에서 이어 간 칸에서 경로를 끊는다")
+    void jumpEdgeBreaks() {
+        // given -> 점 0~30을 달리고 점 31이 1초 만에 500m 앞이다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .gap(1, 500.0)
+                .run(30, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then
+        assertThat(filtered.summary().jumpEdgeCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).containsExactly(31);
+    }
+
+    @Test
+    @DisplayName("튀었다 돌아온 점은 점째로 빠질 뿐 경로를 끊지 않는다")
+    void droppedSpikePointDoesNotBreak() {
+        // given -> spikeAndBackPointIsDropped와 같은 트랙
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .at(93, 200, 31)
+                .at(96, 0, 32)
+                .run(30, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 남은 이웃끼리의 칸은 정상이라 이어진다
+        assertThat(filtered.summary().spikePointCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("시계가 뒤로 간 칸에서 경로를 끊는다")
+    void backwardClockEdgeBreaks() {
+        // given -> 점 0~30을 달리고 점 31의 시각이 5초 뒤로 간다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .at(93, 0, 25)
+                .run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 시간을 믿을 수 없는 칸은 이동도 믿을 수 없다. 그 뒤 칸은 정상이다
+        assertThat(breakEdges(filtered)).containsExactly(31);
+    }
+
+    @Test
+    @DisplayName("정확도가 나쁜 점은 빠질 뿐 경로를 끊지 않는다")
+    void inaccuratePointDoesNotBreak() {
+        // given -> inaccuratePointIsDropped와 같은 트랙
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(10, 3.0)
+                .at(33, 30, 11, 80.0)
+                .at(36, 0, 12).run(9, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then
+        assertThat(filtered.summary().accuracyDroppedCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
 }
