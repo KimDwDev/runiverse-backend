@@ -55,7 +55,7 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
             throw new RunningTrackUnavailableException();
         }
         // 2. 일시정지 구간 번호가 줄면 배치 전체를 거부한다 — 저장한 뒤에 거르면 깨진 좌표가 기록에 섞인다
-        PauseSegmentGuard.validate(stored, command.points());
+        PauseSegmentGuard.validate(command.runningRoomId(), userId, stored, command.points());
         // 3. 좌표를 저장한다. 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다.
         //    처음 보는 좌표 수를 받아 둔다 — 재전송분만 온 배치인지 가르는 근거다
         int appended = appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
