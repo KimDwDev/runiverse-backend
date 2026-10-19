@@ -113,14 +113,14 @@ public class SettleRunningForAccountDeletionHandler
         LocalDateTime now = LocalDateTime.now();
         player.leave(isCancelPenalty(room, now), now);
         updateRunningPlayerPort.update(player);
+        // 평균은 시작 전에만 남은 참가자로 다시 낸다 — 시작 후에는 뛴 방의 평균으로 남긴다
+        room.recalculateAvgPace(pacesAfterLeave(room, userId));
         leaveRoom(userId, room, now);
     }
 
-    // 인원을 줄이고, 0이 되면 방이 CANCELLED로 닫힌다. 평균도 남은 참가자로 다시 낸다
+    // 인원을 줄이고, 0이 되면 방이 CANCELLED로 닫힌다
     private void leaveRoom(UserId userId, RunningRoom room, LocalDateTime now) {
-        List<Pace> remainingPaces = pacesAfterLeave(room, userId);
         room.leave(userId, now);
-        room.recalculateAvgPace(remainingPaces);
         updateMatchRoomPort.update(room);
         // 남은 참가자에게 알린다. 인원이 0이면 받을 사람이 없다
         if (room.getPlayerCount().current() > 0) {

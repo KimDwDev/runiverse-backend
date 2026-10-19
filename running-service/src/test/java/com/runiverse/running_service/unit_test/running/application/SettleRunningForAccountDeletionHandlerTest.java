@@ -206,36 +206,18 @@ class SettleRunningForAccountDeletionHandlerTest {
     }
 
     @Test
-    @DisplayName("완주자만 남은 방에서 미출석자가 나가면 인원은 남아도 방 평균은 지운다")
-    void clearsAvgPaceWhenOnlyFinishersRemain() {
-        // given -> 완주한 상대는 세션이 끊겨 참가자 조회에 없고 인원에는 남는다
-        List<SessionDraft> sessions = List.of(
-                new SessionDraft(new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true),
-                new SessionDraft(new UserId(UuidCreator.getTimeOrderedEpoch()),
-                        new RunningPlayerId(PLAYER_ID + 1), 0, false));
-        givenActiveApplication(RunningRoom.builder()
-                .runningRoomId(ROOM_ID)
-                .type(RunningRoomType.MATCH)
-                .status(RunningRoomStatus.FINISHED)
-                .startAt(LocalDateTime.now().minusHours(1))
-                .closeAt(LocalDateTime.now())
-                .targetDistance(TARGET_DISTANCE)
-                .avgPace(AVG_PACE)
-                .currentPlayerCount(2)
-                .maxPlayerCount(4)
-                .sessions(sessions)
-                .build());
-        given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
-                .willReturn(List.of(new MatchPlayer(USER_ID, AVG_PACE)));
+    @DisplayName("시작된 방에서 미출석자가 나가면 방 평균을 그대로 둔다")
+    void keepsAvgPaceWhenLeavingAfterStart() {
+        // given -> 다시 내면 세션이 끊긴 완주자가 빠진다 — 뛴 방의 평균으로 남긴다
+        givenActiveApplication(room(RunningRoomStatus.STARTED, 2));
         given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
 
         // when
         handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
 
-        // then -> 평균은 방 화면의 참가자 목록과 같은 기준이다. 시작 후에는 후보 순위에 쓰지 않는다
-        RunningRoom updated = updatedRoom();
-        assertThat(updated.getPlayerCount().current()).isOne();
-        assertThat(updated.getAvgPace()).isEmpty();
+        // then
+        assertThat(updatedRoom().getAvgPace()).map(Pace::secondsPerKm).contains(AVG_PACE);
+        verifyNoInteractions(loadMatchPlayersPort);
     }
 
     @Test

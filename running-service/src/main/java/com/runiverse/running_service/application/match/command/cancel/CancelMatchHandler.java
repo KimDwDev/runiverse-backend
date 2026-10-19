@@ -78,10 +78,12 @@ public class CancelMatchHandler implements CancelMatchUsecase {
             matchCooldownPort.start(userId, matchProperties.cooldown());
         }
         // 6. 세션을 끊고 인원을 줄인다. 0이 되면 방이 CANCELLED로 닫힌다.
-        //    평균도 남은 참가자로 다시 낸다 — 0명이면 지워진다
-        List<Pace> remainingPaces = pacesAfterLeave(roomId, userId);
+        //    평균은 시작 전에만 남은 참가자로 다시 낸다(0명이면 지운다) — 시작 후에는 뛴 방의 평균으로 남긴다.
+        //    나가면 방이 닫혀 상태가 바뀌므로 나가기 전에 본다
+        if (room.getStatus().isBeforeStart()) {
+            room.recalculateAvgPace(pacesAfterLeave(roomId, userId));
+        }
         room.leave(userId, now);
-        room.recalculateAvgPace(remainingPaces);
 
         updateMatchApplicationPort.update(player);
         updateMatchRoomPort.update(room);

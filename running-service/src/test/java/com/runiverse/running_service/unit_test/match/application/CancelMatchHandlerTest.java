@@ -249,6 +249,23 @@ class CancelMatchHandlerTest {
     }
 
     @Test
+    @DisplayName("시작된 방에서 나가면 방 평균을 그대로 둔다")
+    void keepsAvgPaceWhenLeavingAfterStart() {
+        // given -> 앱을 켜지 않아 JOINED로 남은 참가자다
+        RunningRoom room = room(LocalDateTime.now().minusMinutes(5), 2);
+        room.closeMatching();
+        room.start();
+        givenActiveMatch(room);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then -> 뛴 방의 평균으로 남긴다
+        assertThat(updatedRoom().getAvgPace()).map(Pace::secondsPerKm).contains(AVG_PACE);
+        verifyNoInteractions(loadMatchPlayersPort);
+    }
+
+    @Test
     @DisplayName("나가면 세션이 끊기고 이탈 횟수가 오른다")
     void leavingMarksSession() {
         // given
