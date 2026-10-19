@@ -1360,6 +1360,43 @@ public class RunningFinisherTest {
         }
 
         @Test
+        @DisplayName("종료를 미룰 때 일시정지 경계 수와 뺀 거리를 함께 남긴다")
+        void deferredFinishLogsPauseBoundary() {
+            // given -> 2.8m/s로 600초, 일시정지한 채 30초 동안 100m 옮겨 재개, 다시 600초 — 목표에 못 미친다.
+            // 화면은 클라 로컬 거리로 목표에 닿았는데 서버가 미루면, 원인이 일시정지인지 로그로 가른다
+            List<TrackPoint> points = new ArrayList<>();
+            for (int i = 0; i <= 600; i++) {
+                points.add(new TrackPoint(points.size(), 37.5 + i * 2.8 / METERS_PER_DEGREE, 127.0,
+                        null, 5.0, null, null, CADENCE, null, TRACK_START.plusSeconds(i), 0));
+            }
+            double resumeNorth = 600 * 2.8 + 100.0;
+            for (int i = 0; i <= 600; i++) {
+                points.add(new TrackPoint(points.size(), 37.5 + (resumeNorth + i * 2.8) / METERS_PER_DEGREE, 127.0,
+                        null, 5.0, null, null, CADENCE, null, TRACK_START.plusSeconds(630 + i), 1));
+            }
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID)))
+                    .willReturn(new RunningTrack("raw", points));
+            LogCapture log = LogCapture.of(RunningFinisher.class);
+
+            try {
+                // when
+                GoalCheck check = finisher.finish(ROOM_ID, USER_ID, false);
+
+                // then
+                assertThat(check.remainingMeters()).isPositive();
+                assertThat(log.messages(Level.INFO))
+                        .filteredOn(message -> message.contains("종료 건너뜀"))
+                        .singleElement(STRING)
+                        .contains("pauseBoundaryCount=1", "pauseRemovedDistanceM=100");
+            } finally {
+                log.stop();
+            }
+        }
+
+        @Test
         @DisplayName("이미 끝난 참가자의 재전송은 아무것도 세지 않는다")
         void recordsNothingForAlreadyFinishedPlayer() {
             // given

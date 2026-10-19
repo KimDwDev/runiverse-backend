@@ -20,10 +20,10 @@ public class RunningMetricAdapterTest {
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final RunningMetricAdapter adapter = new RunningMetricAdapter(registry);
 
-    // 정확도 10m, 튐 20m, 거부한 관측 안 된 칸 30m, 정지 40m를 뺐다. 관측 안 된 칸은 2개 인정·1개 거부
+    // 정확도 10m, 튐 20m, 거부한 관측 안 된 칸 30m, 정지 40m, 일시정지 경계 50m를 뺐다. 관측 안 된 칸은 2개 인정·1개 거부
     private static TrackFilterSummary summary() {
         return new TrackFilterSummary(
-                1_000, 900,
+                1_000, 850,
                 1, 10,
                 1, 0, 20,
                 3, 2, 1,
@@ -32,7 +32,7 @@ public class RunningMetricAdapterTest {
                 2, 40, 40,
                 25, 5,
                 0,
-                0, 0);
+                1, 50);
     }
 
     private DistributionSummary filtered(String filter) {
@@ -50,6 +50,7 @@ public class RunningMetricAdapterTest {
         assertThat(filtered("spike").totalAmount()).isEqualTo(20.0);
         assertThat(filtered("gap").totalAmount()).isEqualTo(30.0);
         assertThat(filtered("stop").totalAmount()).isEqualTo(40.0);
+        assertThat(filtered("pause").totalAmount()).isEqualTo(50.0);
         assertThat(filtered("stop").getId().getBaseUnit()).isEqualTo("meters");
     }
 
@@ -66,6 +67,8 @@ public class RunningMetricAdapterTest {
         // then -> 빠지면 "거른 게 없는 러닝"이 분포에서 사라져 비율을 낼 수 없다
         assertThat(filtered("stop").count()).isEqualTo(1);
         assertThat(filtered("stop").totalAmount()).isZero();
+        assertThat(filtered("pause").count()).isEqualTo(1);
+        assertThat(filtered("pause").totalAmount()).isZero();
     }
 
     @Test
