@@ -52,9 +52,13 @@ public final class TrackAnalyzer {
                 elevationGain(recordedPoints(points, cumulative, totalDistance),
                         properties.elevationNoiseThresholdMeters()),
                 PolylineEncoder.encode(boundaries),
+                RouteSegmenter.split(boundaries, track.breakEdges()).stream()
+                        .map(PolylineEncoder::encode)
+                        .toList(),
                 splits.get(0).startAt(),
                 splits.get(splits.size() - 1).endAt(),
                 splits));
+
     }
 
     // 누적 상승도 거리·시간·경로와 같은 절단을 따른다 — 확정 총거리 밖의 실측점은 기록 밖이다.

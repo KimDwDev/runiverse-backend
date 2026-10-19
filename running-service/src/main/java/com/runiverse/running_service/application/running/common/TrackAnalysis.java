@@ -11,6 +11,8 @@ public record TrackAnalysis(
         int avgPaceSecondsPerKm,
         Integer totalElevationGainMeters,   // 유효 표본이 부족하면 null
         String routePolyline,
+        // routePolyline을 끊긴 곳에서 나눈 조각들 — 이으면 routePolyline과 같은 점이다
+        List<String> routeSegments,
         LocalDateTime startAt,
         LocalDateTime endAt,
         List<SplitDraft> splits

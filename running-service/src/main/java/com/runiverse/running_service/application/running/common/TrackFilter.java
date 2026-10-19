@@ -35,6 +35,8 @@ public final class TrackFilter {
         // 평소 칸으로 인정한 칸의 거리·시간 — 관측 안 된 칸의 직전 속도를 여기서 낸다
         double[] runMeters = new double[size];
         double[] runSeconds = new double[size];
+        // 이 칸의 이동을 믿을 수 없거나 본 적이 없다 — 경로를 여기서 끊는다
+        boolean[] breakEdges = new boolean[size];
         for (int edge = 1; edge < size; edge++) {
             TrackPoint from = points.get(edge - 1);
             TrackPoint to = points.get(edge);
@@ -42,19 +44,24 @@ public final class TrackFilter {
             double seconds = seconds(from, to);
             boolean accepted;
             if (stopEdges[edge]) {
+                // 제자리라 끊지 않는다 — 앞뒤 경계점이 반경 안의 직선으로 이어진다
                 accepted = false;
             } else if (to.recordedAt().isBefore(from.recordedAt())) {
                 // 시계가 뒤로 간 칸이다(재부팅·시간대 변경) — 시간을 믿을 수 없어 거리도 함께 뺀다
                 accepted = false;
+                breakEdges[edge] = true;
             } else if (seconds > properties.gapMinSeconds()) {
                 accepted = acceptGap(points, runMeters, runSeconds, edge, meters, seconds,
                         properties, stats);
+                // 인정한 칸은 직선 위에 경계점이 찍혀 이어진다 — 거부한 칸만 끊는다
+                breakEdges[edge] = !accepted;
             } else if (meters / Math.max(seconds, MIN_EDGE_SECONDS)
                     > properties.maxSpeedMetersPerSecond()) {
                 // 튄 자리에서 이어 간 경우다 — 점이 아니라 이 칸 하나가 문제라 칸만 0으로 한다
                 stats.jumpEdgeCount++;
                 stats.spikeRemovedMeters += meters;
                 accepted = false;
+                breakEdges[edge] = true;
             } else {
                 runMeters[edge] = meters;
                 runSeconds[edge] = seconds;
@@ -64,7 +71,8 @@ public final class TrackFilter {
             cumulativeSeconds[edge] = cumulativeSeconds[edge - 1] + (accepted ? seconds : 0);
         }
         stats.filteredMeters = size == 0 ? 0 : cumulativeMeters[size - 1];
-        return new FilteredTrack(points, cumulativeMeters, cumulativeSeconds, stats.toSummary());
+        return new FilteredTrack(points, cumulativeMeters, cumulativeSeconds, breakEdges,
+                stats.toSummary());
     }
 
     private static List<TrackPoint> dropInaccurate(List<TrackPoint> points,
