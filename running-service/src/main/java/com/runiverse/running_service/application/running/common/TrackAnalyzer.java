@@ -79,6 +79,7 @@ public final class TrackAnalyzer {
     // 구간의 순고도차(끝 − 시작)와 달리 올라간 것만 더하므로 구간 합과 일치하지 않는다
     private static Integer elevationGain(List<TrackPoint> points, double noiseThresholdMeters) {
         Double anchor = null;
+        int anchorSegment = 0;
         double gain = 0;
         int samples = 0;
         for (TrackPoint point : points) {
@@ -88,9 +89,11 @@ public final class TrackAnalyzer {
             }
             samples++;
             // 기준 고도는 임계값을 넘게 움직였을 때만 옮긴다 — 바로 앞 좌표와 비교하면
-            // 1초 간격의 완만한 오르막은 매번 임계값 아래라 전부 노이즈로 걸린다
-            if (anchor == null) {
+            // 1초 간격의 완만한 오르막은 매번 임계값 아래라 전부 노이즈로 걸린다.
+            // 일시정지 경계를 넘으면 기준을 새로 잡는다 — 일시정지 중 오르내린 고도는 넣지 않는다
+            if (anchor == null || point.pauseSegment() != anchorSegment) {
                 anchor = altitude;
+                anchorSegment = point.pauseSegment();
             } else if (Math.abs(altitude - anchor) > noiseThresholdMeters) {
                 gain += Math.max(0, altitude - anchor);
                 anchor = altitude;

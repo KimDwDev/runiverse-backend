@@ -128,26 +128,45 @@ public final class SplitAssembler {
         return count == 0 ? null : sum / count;
     }
 
+    // 일시정지를 걸친 구간은 경계 앞과 뒤의 순고도차를 따로 내서 더한다 —
+    // 구간 끝 − 시작으로 내면 일시정지 중 오르내린 고도가 들어간다
     private static Integer elevationChange(List<TrackPoint> points, int fromExclusive,
                                            int toInclusive, double noiseThresholdMeters) {
+        double change = 0;
+        boolean measured = false;
         Double first = null;
         Double last = null;
+        int segment = 0;
         int count = 0;
         for (int i = fromExclusive + 1; i <= toInclusive; i++) {
-            Double altitude = points.get(i).altitudeMeters();
+            TrackPoint point = points.get(i);
+            Double altitude = point.altitudeMeters();
             if (altitude == null || !Double.isFinite(altitude)) {
                 continue;
             }
+            // 경계를 넘으면 앞쪽 조각의 순고도차를 닫고 새로 잰다
+            if (first != null && point.pauseSegment() != segment) {
+                if (count >= 2) {
+                    change += last - first;
+                    measured = true;
+                }
+                first = null;
+                count = 0;
+            }
             if (first == null) {
                 first = altitude;
+                segment = point.pauseSegment();
             }
             last = altitude;
             count++;
         }
-        if (count < 2) {
-            return null;   // 표본이 없거나 하나뿐이면 변화를 말할 수 없다
+        if (count >= 2) {
+            change += last - first;
+            measured = true;
         }
-        double change = last - first;
+        if (!measured) {
+            return null;   // 어느 쪽에도 표본이 둘 이상 없으면 변화를 말할 수 없다
+        }
         // 임계값 이하는 GPS 수직 오차로 본다 — 10m 구간에서는 대체로 여기 걸려 null이 된다
         if (Math.abs(change) <= noiseThresholdMeters) {
             return null;
