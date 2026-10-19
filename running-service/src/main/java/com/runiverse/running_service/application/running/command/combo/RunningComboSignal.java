@@ -6,11 +6,13 @@ public record RunningComboSignal(
         // 정확도 상한 이하의 새 좌표가 있었나
         boolean observed,
         // 의심점이 옮겨졌나
-        boolean moved
+        boolean moved,
+        // 이 배치가 일시정지 경계를 넘었나 — 일시정지 신호가 유실되거나 판정 전에 재개해도 끊는 근거다
+        boolean pauseCrossed
 ) {
 
-    // RUNNING_START의 첫 판정 — 좌표 없이 기준만 세운다. 관측도 이동도 아니다
+    // RUNNING_START의 첫 판정 — 좌표 없이 기준만 세운다. 관측도 이동도 경계도 아니다
     public static RunningComboSignal baseline(double meters) {
-        return new RunningComboSignal(meters, false, false);
+        return new RunningComboSignal(meters, false, false, false);
     }
 }
