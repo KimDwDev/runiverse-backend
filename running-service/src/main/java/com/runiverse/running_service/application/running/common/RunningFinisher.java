@@ -381,10 +381,14 @@ public class RunningFinisher {
         if (remaining <= 0) {
             return 0;
         }
+        // 화면은 목표 도달인데 서버가 미루는 원인이 일시정지인지 가른다 — 클라 로컬 거리가 경계 칸을 더했을 수 있다
         log.info("[러닝] 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, trigger={}, "
-                        + "confirmedDistanceM={}, targetDistanceM={}, lastPointLagSec={}",
+                        + "confirmedDistanceM={}, targetDistanceM={}, lastPointLagSec={}, "
+                        + "pauseBoundaryCount={}, pauseRemovedDistanceM={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH",
-                Math.round(filtered.totalMeters()), target, lastPointLagSec);
+                Math.round(filtered.totalMeters()), target, lastPointLagSec,
+                filtered.summary().pauseBoundaryCount(),
+                Math.round(filtered.summary().pauseRemovedMeters()));
         // 0.3m만 모자라도 1m로 알린다 — 0으로 알리면 클라가 끝난 줄 안다
         return (int) Math.ceil(remaining);
     }
