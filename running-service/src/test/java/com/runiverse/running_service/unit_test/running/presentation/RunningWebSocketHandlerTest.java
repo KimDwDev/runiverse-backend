@@ -836,6 +836,24 @@ class RunningWebSocketHandlerTest {
     }
 
     @Test
+    @DisplayName("일시정지 구간 번호가 줄면 적재하지 않고 PAUSE_SEGMENT_DECREASED로 응답한다")
+    void respondsPauseSegmentDecreased() throws Exception {
+        // given -> 형식은 맞지만 순번 순으로 1 → 0으로 줄었다. 클라 로컬 트랙이 깨졌다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s,%s]}""".formatted(
+                pointWithPauseSegment(0, "1"), pointWithPauseSegment(1, "0"))));
+
+        // then -> 형식 오류(INVALID_REQUEST)와 가른다 — 같은 배치를 다시 보내도 계속 거부된다
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "PAUSE_SEGMENT_DECREASED", "RUNNING_LOCATION_UPDATE");
+    }
+
+    @Test
     @DisplayName("좌표 저장에 실패하면 코드로 알리되 러닝을 끊지 않는다")
     void respondsTrackUnavailableWithoutClosing() throws Exception {
         // given -> 원본은 클라 로컬 트랙에 남아 있어 재연결로 복구된다.
@@ -1138,7 +1156,7 @@ class RunningWebSocketHandlerTest {
     // 누적이 주어진 값 그대로 판정에 쓰인다
     private void givenStoredDistance(double meters) {
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
-                .willReturn(new RunningDistance(meters, 0L, 35.1795543, 129.0756416, 345, null, null));
+                .willReturn(new RunningDistance(meters, 0L, 0, 35.1795543, 129.0756416, 345, null, null));
     }
 
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다

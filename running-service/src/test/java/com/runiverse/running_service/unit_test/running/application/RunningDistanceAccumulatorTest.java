@@ -27,11 +27,15 @@ class RunningDistanceAccumulatorTest {
 
     // 기준점에서 북쪽으로 meters만큼 떨어진 좌표
     private static TrackPoint point(long sequence, double meters, double accuracyMeters) {
+        return point(sequence, meters, accuracyMeters, 0);
+    }
+
+    private static TrackPoint point(long sequence, double meters, double accuracyMeters, int pauseSegment) {
         return new TrackPoint(
                 sequence,
                 BASE_LATITUDE + meters * METER_IN_LATITUDE,
                 BASE_LONGITUDE,
-                38.5, accuracyMeters, 2.8, 0.0, 170, 357, RECORDED_AT.plusSeconds(sequence), 0);
+                38.5, accuracyMeters, 2.8, 0.0, 170, 357, RECORDED_AT.plusSeconds(sequence), pauseSegment);
     }
 
     private static TrackPoint point(long sequence, double meters) {
@@ -41,7 +45,7 @@ class RunningDistanceAccumulatorTest {
     // 의심점이 기준점에 있는 누적 — 직전 배치까지 순번 0을 받았다
     private static RunningDistance anchoredAtOrigin() {
         TrackPoint origin = point(0, 0);
-        return new RunningDistance(0, 0, origin.latitude(), origin.longitude(), 357,
+        return new RunningDistance(0, 0, 0, origin.latitude(), origin.longitude(), 357,
                 origin.latitude(), origin.longitude());
     }
 
@@ -160,19 +164,45 @@ class RunningDistanceAccumulatorTest {
     }
 
     @Test
-    @DisplayName("의심점이 없는 옛 누적이면 다음 관측 좌표가 첫 의심점이 된다")
-    void legacyDistanceWithoutAnchorStartsFromNextObservation() {
-        // given -> 의심점을 싣기 전 포맷에서 읽은 누적
+    @DisplayName("의심점이 아직 없는 누적이면 다음 관측 좌표가 첫 의심점이 된다")
+    void distanceWithoutAnchorStartsFromNextObservation() {
+        // given -> 지금까지 정확도가 나쁜 좌표만 받아 의심점이 없다
         TrackPoint previous = point(0, 0);
-        RunningDistance legacy = new RunningDistance(500, 0, previous.latitude(), previous.longitude(),
+        RunningDistance withoutAnchor = new RunningDistance(500, 0, 0, previous.latitude(), previous.longitude(),
                 357, null, null);
 
         // when
         TrackPoint next = point(1, 11);
-        RunningDistanceAccumulation result = accumulate(legacy, next);
+        RunningDistanceAccumulation result = accumulate(withoutAnchor, next);
 
         // then -> 이번 배치는 기준을 세울 뿐이고, 다음 배치부터 움직임을 판정한다
         assertThat(result.moved()).isFalse();
         assertThat(result.distance().anchorLatitude()).isEqualTo(next.latitude());
+    }
+
+    @Test
+    @DisplayName("거리에 반영한 마지막 좌표의 일시정지 구간 번호를 남긴다")
+    void keepsPauseSegmentOfLastAppliedPoint() {
+        // given -> 두 좌표 사이에서 일시정지 버튼을 한 번 눌렀다
+        RunningDistanceAccumulation result = accumulate(RunningDistance.empty(),
+                point(0, 0, GOOD_ACCURACY, 0), point(1, 3, GOOD_ACCURACY, 1));
+
+        // then -> 다음 배치가 이 번호보다 작으면 거부된다
+        assertThat(result.distance().lastPauseSegment()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("재전송분만 온 배치는 일시정지 구간 번호를 바꾸지 않는다")
+    void resentBatchKeepsPauseSegment() {
+        // given -> 순번 0까지 반영했고 그때 번호는 2였다
+        TrackPoint origin = point(0, 0, GOOD_ACCURACY, 2);
+        RunningDistance stored = new RunningDistance(0, 0, 2, origin.latitude(), origin.longitude(), 357,
+                origin.latitude(), origin.longitude());
+
+        // when -> 같은 순번이 다른 번호로 다시 와도 거리에 반영하지 않는다
+        RunningDistanceAccumulation result = accumulate(stored, point(0, 0, GOOD_ACCURACY, 0));
+
+        // then
+        assertThat(result.distance().lastPauseSegment()).isEqualTo(2);
     }
 }

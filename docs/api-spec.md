@@ -1467,6 +1467,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`) — `runningRoomId`는 세션이 들고 있는 값이다
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
   - 저장소 장애로 배치를 담지 못하면 `RUNNING_TRACK_UNAVAILABLE`을 보내되 **연결은 끊지 않고 러닝도 계속한다.** 원본이 로컬 트랙에 남아 있어 재연결로 복구되기 때문이다
+  - **누적 상태(마지막 `sequence`·`pauseSegment`)를 읽지 못해도 배치를 저장하지 않고 `RUNNING_TRACK_UNAVAILABLE`을 보낸다.** 줄어든 `pauseSegment`를 걸러낼 기준이 없어 검증하지 않은 좌표를 받지 않는다 — 재연결 재전송으로 다시 온 배치가 그때 검증된다
   - 장애가 이어지면 배치마다 `ERROR`가 나간다. 클라는 건별 알림 대신 "저장 실패 중" 상태 표시 하나로 다룬다
 - 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 처음과 같은 `pauseSegment`로 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
 - **목표 거리를 채우면 서버가 러닝을 끝낸다.** 서버가 누적한 거리(`RUNNING_PROGRESS_UPDATED`의 `distanceMeters`와 같은 값)가 목표 이상이 되면, 그 배치를 저장하고 진행을 알린 뒤 저장된 트랙을 트랙 필터로 분석해 **확정 거리**를 낸다. 확정 거리도 목표 이상이면 `RUNNING_FINISH`(`forced=false`)와 같은 규칙으로 종료를 확정하고 `RUNNING_FINISHED`를 보낸다. 클라는 받으면 좌표 전송을 멈추고 로컬 트랙을 지운 뒤 결과 화면으로 간다

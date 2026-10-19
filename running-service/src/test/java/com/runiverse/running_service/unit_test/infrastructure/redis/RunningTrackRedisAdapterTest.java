@@ -338,37 +338,6 @@ class RunningTrackRedisAdapterTest {
     }
 
     @Test
-    @DisplayName("배포 전에 쌓인 열 칸짜리 좌표는 일시정지 구간 0으로 읽는다")
-    void readsLegacyPointWithoutPauseSegmentAsZero() {
-        // given -> 배포 순간 뛰던 러닝은 TTL 동안 옛 형식이 버퍼에 남는다.
-        // 열한 번째 칸을 무조건 읽으면 그 러닝은 종료할 때 터진다
-        givenStoredBatches(
-                "[[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d]]".formatted(EPOCH_SECOND));
-
-        // when
-        TrackPoint restored = adapter.load(ROOM_ID, userId).points().getFirst();
-
-        // then -> 그 러닝은 일시정지 번호를 보낸 적이 없다
-        assertThat(restored).isEqualTo(point(7, 0));
-    }
-
-    @Test
-    @DisplayName("한 러닝에 옛 형식과 새 형식이 섞여 있어도 순번 순서로 함께 읽는다")
-    void readsMixedLegacyAndCurrentPoints() {
-        // given -> 배포 전 배치 하나, 배포 뒤 배치 하나
-        String current = compacted(point(8, 0));
-        givenStoredBatches(
-                "[[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d]]".formatted(EPOCH_SECOND),
-                "[" + current + "]");
-
-        // when
-        List<TrackPoint> points = adapter.load(ROOM_ID, userId).points();
-
-        // then
-        assertThat(points).containsExactly(point(7, 0), point(8, 0));
-    }
-
-    @Test
     @DisplayName("단말이 못 잰 값은 null로 되살린다")
     void restoresMissingValuesAsNull() {
         // given
