@@ -150,7 +150,7 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                 .getResultList();
     }
 
-    // 기록마다 조각 polyline을 번호순으로 모은다 — 기록마다 따로 부르면 목록 건수만큼 쿼리가 나간다.
+    // 기록마다 조각 polyline을 번호순으로 모은다 — 기록마다 따로 부르면 기록 수만큼 쿼리가 나간다.
     // uk_running_segment_record_number(running_record_id, segment_number)가 조회와 정렬을 맡는다
     private Map<Long, List<String>> loadSegmentPolylines(Collection<Long> recordIds) {
         return entityManager.createQuery("""
