@@ -379,6 +379,9 @@ class RunningWebSocketHandlerTest {
         Map<?, ?> data = (Map<?, ?>) captureSent().data();
         assertThat(data.get("runningRoomId")).isEqualTo((int) ROOM_ID);
         assertThat(data.get("targetDistanceMeters")).isEqualTo(TARGET_DISTANCE_METERS);
+        // 로컬 트랙을 잃은 앱(재설치)이 이어 쓸 본인 번호다
+        assertThat(data.get("nextSequence")).isEqualTo(120);
+        assertThat(data.get("pauseSegment")).isEqualTo(2);
         List<?> players = (List<?>) data.get("players");
         assertThat(players).hasSize(1);
         Map<?, ?> player = (Map<?, ?>) players.get(0);
@@ -1322,6 +1325,8 @@ class RunningWebSocketHandlerTest {
                 ROOM_ID,
                 LocalDateTime.of(2026, 7, 25, 19, 0),
                 TARGET_DISTANCE_METERS,
+                120L,
+                2,
                 List.of(new GetRunningSnapshotResult.Player(
                         USER_ID, "완두콩", "https://example.test/p.png", 1_520, 345,
                         LiveRunningStatus.RUNNING)),

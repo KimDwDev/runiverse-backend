@@ -1347,7 +1347,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
   | `INVALID_REQUEST` | `data` 검증 실패 |
   | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
-  | `PAUSE_SEGMENT_DECREASED` | `RUNNING_LOCATION_UPDATE`의 `pauseSegment`가 `sequence` 순서를 거슬러 줄었다 — 검증 실패 계열(REST의 400에 해당)이다. 클라 로컬 트랙이 깨졌다는 뜻이라 같은 배치를 다시 보내도 계속 거부된다 |
+  | `PAUSE_SEGMENT_DECREASED` | `RUNNING_LOCATION_UPDATE`의 `pauseSegment`가 `sequence` 순서를 거슬러 줄었다 — 검증 실패 계열(REST의 400에 해당)이다. 클라 로컬 트랙이 깨졌다는 뜻이라 같은 배치를 다시 보내도 계속 거부된다. 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다 |
   | `RUNNING_SESSION_UNAVAILABLE` | 외부 저장소 장애로 세션을 등록하지 못함 — 이 연결로는 러닝 메시지를 처리할 수 없다(참가자 상태는 이미 `RUNNING`일 수 있다). 잠시 뒤 `RUNNING_START`를 다시 보낸다 — 멱등이다 |
   | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
@@ -1393,6 +1393,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "startedAt": "2026-07-25T19:00:00",       // 방의 start_at — 경과 시간의 기준
   "targetDistanceMeters": 5000,             // 목표 없는 솔로 방은 null
+  "nextSequence": 120,                      // 본인 기준 — 서버가 받은 마지막 sequence + 1. 받은 좌표가 없으면 0
+  "pauseSegment": 2,                        // 본인 기준 — 서버가 받은 마지막 좌표의 pauseSegment. 받은 좌표가 없으면 0
   "players": [
     {
       "userId": "550e8400-e29b-41d4-a716-446655440015",
@@ -1416,6 +1418,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **`RoomInfo`를 재사용하지 않는다.** 그쪽은 매칭 대기방을 그리려고 만든 구조라 진행 상황이라는 개념이 없고, 러닝 중에는 `closeAt`·`teamAveragePace`가 의미를 잃는다. 대신 `players[]`가 **`RoomInfo`의 프로필 + `RUNNING_PROGRESS_UPDATED`의 진행**을 합친 모양이라, 클라는 **이 스냅샷으로 채우고 갱신분으로 덮는** 한 쌍으로 다룬다
 - **본인도 `players`에 담는다.** 본인 진행은 클라가 직접 계산하지만, 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다. 다만 **클라는 화면 표시에 로컬 계산값을 우선**하고 이 값은 복구용으로만 쓴다
+- **`nextSequence`·`pauseSegment`는 로컬 트랙을 잃은 클라가 번호를 이어 쓰는 값이다.** 클라는 다음에 붙일 `sequence`와 현재 `pauseSegment`를 각각 로컬 값과 이 값 중 **큰 쪽**으로 맞춘다
+  - 평소(재연결·앱 재시작)에는 로컬 값이 항상 같거나 커서 바뀌는 것이 없다. 앱 재설치처럼 로컬 트랙을 잃었을 때만 서버 값으로 올라간다 — 맞추지 않으면 `sequence`는 이미 받은 순번으로 조용히 버려지고, `pauseSegment`는 `PAUSE_SEGMENT_DECREASED`로 계속 거부된다
+  - `pauseSegment`는 서버가 `PAUSE_SEGMENT_DECREASED`를 판정할 때 비교하는 값과 같다. 그래서 이 값 이상으로 이어 쓰면 거부되지 않는다
+  - 한계: 일시정지 중에 재설치하면 클라는 일시정지 상태를 잃는다. 그 사이 이동은 일시정지가 아니라 관측하지 못한 이동으로 처리된다
 - **이미 이탈·완주한 참가자는 담지 않는다.** 러닝 화면에는 그들을 그릴 자리가 없다. 연결만 끊긴 참가자는 그대로 담고 `status`가 `DISCONNECTED`로 실린다
 - **`players[].status`는 각 참가자의 현재 화면 상태다.** 상태가 기록된 적 없는 참가자(매칭 방에 배정됐지만 `RUNNING_START`를 보낸 적 없는 사람)는 `DISCONNECTED`로 싣는다. 요청한 본인은 서버 처리 6번에서 이미 `RUNNING`으로 바뀌었으므로 항상 `RUNNING`이다
   - 이탈·완주자를 담지 않으므로 `FINISHED`는 종료 확정과 세션 정리 사이의 짧은 틈에만 나올 수 있다
@@ -1461,6 +1467,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - `sequence`는 일시정지와 무관하게 이어서 센다
   - 값은 좌표와 함께 로컬 트랙에 저장한다 — 재전송할 때 처음과 같은 값이어야 한다. 서버는 같은 `sequence`의 좌표를 먼저 받은 것으로 남긴다
   - **`sequence` 순으로 줄어들 수 없다.** 서버는 배치 안을 `sequence` 순으로 놓았을 때 값이 줄거나, 마지막으로 반영한 좌표보다 큰 `sequence`의 값이 그 좌표의 값보다 작으면 배치 전체를 `PAUSE_SEGMENT_DECREASED`로 거부한다. 번호가 되돌아가면 일시정지가 아닌 구간이 일시정지로 빠지거나, 일시정지 구간이 거리로 들어갈 수 있다
+  - **이 오류를 받으면 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다.** 같은 값을 다시 보내도 풀리지 않는다. 재설치로 번호를 잃는 경우는 `RUNNING_STARTED`의 `nextSequence`·`pauseSegment`로 막으므로, 남는 원인은 클라의 번호 관리 오류다. 서버는 거부할 때마다 원인과 순번을 INFO 로그로 남긴다
   - 일시정지 신호(`RUNNING_PAUSE`)가 아니라 이 값으로 계산하는 이유: 좌표와 함께 저장·재전송되므로 유실되지 않고, 좌표와 같은 시계·같은 순서를 따른다
 - 페이스·거리·케이던스·진행 시간은 러닝 중 표시용으로 클라이언트가 계산한다. 칼로리는 러닝 중 표시·전송하지 않고 종료 시 서버가 계산한다
   - **클라 로컬 거리도 일시정지 경계 칸을 더하지 않는다.** `pauseSegment`가 바뀐 칸(일시정지 직전 → 재개 직후)은 서버가 거리에서 빼므로, 클라가 더하면 화면으로는 목표에 닿았는데 서버 확정 거리는 모자라 종료가 미뤄진다(`RUNNING_GOAL_PENDING`)
@@ -1469,7 +1476,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 저장소 장애로 배치를 담지 못하면 `RUNNING_TRACK_UNAVAILABLE`을 보내되 **연결은 끊지 않고 러닝도 계속한다.** 원본이 로컬 트랙에 남아 있어 재연결로 복구되기 때문이다
   - **누적 상태(마지막 `sequence`·`pauseSegment`)를 읽지 못해도 배치를 저장하지 않고 `RUNNING_TRACK_UNAVAILABLE`을 보낸다.** 줄어든 `pauseSegment`를 걸러낼 기준이 없어 검증하지 않은 좌표를 받지 않는다 — 재연결 재전송으로 다시 온 배치가 그때 검증된다
   - 장애가 이어지면 배치마다 `ERROR`가 나간다. 클라는 건별 알림 대신 "저장 실패 중" 상태 표시 하나로 다룬다
-- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 처음과 같은 `pauseSegment`로 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
+- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 처음과 같은 `pauseSegment`로 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). 앱 재설치로 로컬 트랙을 잃었으면 `RUNNING_STARTED`의 `nextSequence`·`pauseSegment`로 번호를 이어 쓴다. ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
 - **목표 거리를 채우면 서버가 러닝을 끝낸다.** 서버가 누적한 거리(`RUNNING_PROGRESS_UPDATED`의 `distanceMeters`와 같은 값)가 목표 이상이 되면, 그 배치를 저장하고 진행을 알린 뒤 저장된 트랙을 트랙 필터로 분석해 **확정 거리**를 낸다. 확정 거리도 목표 이상이면 `RUNNING_FINISH`(`forced=false`)와 같은 규칙으로 종료를 확정하고 `RUNNING_FINISHED`를 보낸다. 클라는 받으면 좌표 전송을 멈추고 로컬 트랙을 지운 뒤 결과 화면으로 간다
   - **목표가 없는 솔로 방은 해당 없다.** 사용자가 `RUNNING_FINISH`를 보내야 끝난다
   - **확정 거리가 목표 미만이면 끝내지 않고 아무것도 보내지 않는다.** 러닝 중 누적과 확정 거리는 어긋날 수 있다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와 서버가 끊은 러닝이 조기 종료로 남는다. 러닝은 그대로 계속되고 다음 배치가 다시 확인한다
