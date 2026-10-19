@@ -13,6 +13,7 @@ import java.util.List;
 
 import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 @DisplayName("러닝 누적 거리 누적기 단위 테스트")
 class RunningDistanceAccumulatorTest {
@@ -204,5 +205,77 @@ class RunningDistanceAccumulatorTest {
 
         // then
         assertThat(result.distance().lastPauseSegment()).isEqualTo(2);
+    }
+
+    // 일시정지 구간 번호를 붙인 좌표 — 정확도는 좋은 값이다
+    private static TrackPoint paused(long sequence, double meters, int pauseSegment) {
+        return point(sequence, meters, GOOD_ACCURACY, pauseSegment);
+    }
+
+    @Test
+    @DisplayName("배치 안에서 일시정지 구간 번호가 바뀐 칸은 누적에 더하지 않는다")
+    void skipsPauseBoundaryWithinBatch() {
+        // given -> 0m → 10m를 달리고, 일시정지한 채 200m를 옮겨 재개한 뒤 10m를 더 달렸다
+        TrackPoint a = paused(0, 0, 0);
+        TrackPoint b = paused(1, 10, 0);
+        TrackPoint c = paused(2, 210, 1);
+        TrackPoint d = paused(3, 220, 1);
+
+        // when
+        RunningDistanceAccumulation result = accumulate(RunningDistance.empty(), a, b, c, d);
+
+        // then -> 일시정지 중 이동(200m)이 섞이면 상대 화면이 튀고 목표에 일찍 닿는다
+        double expected = TrackDistance.between(a, b) + TrackDistance.between(c, d);
+        assertThat(result.distance().meters()).isCloseTo(expected, within(1e-6));
+    }
+
+    @Test
+    @DisplayName("직전 배치 마지막 좌표와 번호가 다르면 배치 사이 칸도 더하지 않는다")
+    void skipsPauseBoundaryAcrossBatches() {
+        // given -> 직전 배치는 순번 0, 번호 0에서 끝났다
+        TrackPoint origin = paused(0, 0, 0);
+        RunningDistance stored = new RunningDistance(0, 0, 0, origin.latitude(), origin.longitude(), 357,
+                origin.latitude(), origin.longitude());
+        TrackPoint resumed = paused(1, 200, 1);
+        TrackPoint next = paused(2, 210, 1);
+
+        // when -> 이번 배치의 첫 좌표가 일시정지 뒤 재개 지점이다
+        RunningDistanceAccumulation result = accumulate(stored, resumed, next);
+
+        // then -> 재개 지점부터 이어 센다
+        assertThat(result.distance().meters()).isCloseTo(TrackDistance.between(resumed, next), within(1e-6));
+        assertThat(result.distance().lastPauseSegment()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("경계를 건너뛴 뒤의 마지막 좌표는 재개 지점이다")
+    void movesLastPointToResumedPosition() {
+        // given -> 경계 칸 하나만 있는 배치
+        TrackPoint before = paused(0, 0, 0);
+        TrackPoint resumed = paused(1, 200, 1);
+
+        // when
+        RunningDistanceAccumulation result = accumulate(RunningDistance.empty(), before, resumed);
+
+        // then -> 다음 배치의 첫 칸이 일시정지 전 자리에서 이어지면 200m가 다시 들어온다
+        assertThat(result.distance().meters()).isZero();
+        assertThat(result.distance().lastLatitude()).isEqualTo(resumed.latitude());
+        assertThat(result.distance().lastLongitude()).isEqualTo(resumed.longitude());
+    }
+
+    @Test
+    @DisplayName("번호가 같으면 지금처럼 이어서 더한다")
+    void addsWithinSameSegment() {
+        // given -> 일시정지 버튼을 한 번 누른 뒤로 계속 같은 구간이다
+        TrackPoint a = paused(0, 0, 2);
+        TrackPoint b = paused(1, 10, 2);
+        TrackPoint c = paused(2, 20, 2);
+
+        // when
+        RunningDistanceAccumulation result = accumulate(RunningDistance.empty(), a, b, c);
+
+        // then
+        assertThat(result.distance().meters())
+                .isCloseTo(TrackDistance.between(a, b) + TrackDistance.between(b, c), within(1e-6));
     }
 }
