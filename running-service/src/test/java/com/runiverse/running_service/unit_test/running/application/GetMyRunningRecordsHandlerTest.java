@@ -1,10 +1,7 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.running.common.PolylineDecoder;
-import com.runiverse.running_service.application.running.common.PolylineEncoder;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
-import com.runiverse.running_service.application.running.port.out.RoutePoint;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
 import com.runiverse.running_service.application.running.query.record.GetMyRunningRecordsHandler;
 import com.runiverse.running_service.application.running.query.record.GetMyRunningRecordsQuery;
@@ -38,11 +35,6 @@ class GetMyRunningRecordsHandlerTest {
     private static final LocalDate TO = LocalDate.of(2026, 10, 3);
     private static final LocalDateTime FROM_START = LocalDateTime.of(2026, 9, 27, 0, 0);
     private static final LocalDateTime AFTER_TO_START = LocalDateTime.of(2026, 10, 4, 0, 0);
-    // 일시정지 앞 두 점과 재개 뒤 한 점 — 카드에는 한 줄로 이어 나간다
-    private static final List<RoutePoint> BEFORE_PAUSE = List.of(
-            new RoutePoint(35.17955, 129.07564), new RoutePoint(35.17960, 129.07571));
-    private static final List<RoutePoint> AFTER_PAUSE = List.of(new RoutePoint(35.18012, 129.07620));
-    private static final String SEGMENT = PolylineEncoder.encodePoints(BEFORE_PAUSE);
 
     @Mock
     private LoadMyRunningRecordsPort loadMyRunningRecordsPort;
@@ -92,7 +84,7 @@ class GetMyRunningRecordsHandlerTest {
         given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
                 .willReturn(List.of(new RunningRecordRow(
                         501L, 125L, RunningRoomType.MATCH, 3L, startedAt,
-                        5020, 1800, 359, 42, List.of(SEGMENT))));
+                        5020, 1800, 359, 42)));
 
         // when
         GetMyRunningRecordsResult result = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO));
@@ -108,27 +100,6 @@ class GetMyRunningRecordsHandlerTest {
         assertThat(record.totalDurationSeconds()).isEqualTo(1800);
         assertThat(record.averagePaceSecondsPerKm()).isEqualTo(359);
         assertThat(record.totalElevationGainMeters()).isEqualTo(42);
-        assertThat(record.routePolyline()).isEqualTo(SEGMENT);
-    }
-
-    @Test
-    @DisplayName("조각이 여럿이면 이어서 한 줄로 다시 인코딩한다 -> 카드는 한 줄 미리보기다")
-    void 조각을_이어_한_줄로_내린다() {
-        // given -> 일시정지로 두 조각에 나뉜 기록이다
-        given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
-                .willReturn(List.of(new RunningRecordRow(
-                        501L, 125L, RunningRoomType.SOLO, 1L, LocalDateTime.of(2026, 9, 28, 19, 0),
-                        5020, 1800, 359, 42,
-                        List.of(SEGMENT, PolylineEncoder.encodePoints(AFTER_PAUSE)))));
-
-        // when
-        String routePolyline = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO))
-                .runningRecords().get(0).routePolyline();
-
-        // then -> 문자열을 그대로 이으면 뒤 조각이 앞 점과의 차로 읽혀 엉뚱한 곳에 찍힌다
-        assertThat(PolylineDecoder.decode(routePolyline))
-                .containsExactly(BEFORE_PAUSE.get(0), BEFORE_PAUSE.get(1), AFTER_PAUSE.get(0));
-        assertThat(routePolyline).isNotEqualTo(SEGMENT + PolylineEncoder.encodePoints(AFTER_PAUSE));
     }
 
     @Test
@@ -138,7 +109,7 @@ class GetMyRunningRecordsHandlerTest {
         given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
                 .willReturn(List.of(new RunningRecordRow(
                         501L, 125L, RunningRoomType.SOLO, 1L, LocalDateTime.of(2026, 9, 28, 19, 0),
-                        5020, 1800, 359, null, List.of(SEGMENT))));
+                        5020, 1800, 359, null)));
 
         // when
         GetMyRunningRecordsResult result = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO));
@@ -183,6 +154,6 @@ class GetMyRunningRecordsHandlerTest {
     private static RunningRecordRow row(long runningRecordId, LocalDateTime startedAt) {
         return new RunningRecordRow(
                 runningRecordId, 125L, RunningRoomType.SOLO, 1L, startedAt,
-                5020, 1800, 359, 42, List.of(SEGMENT));
+                5020, 1800, 359, 42);
     }
 }

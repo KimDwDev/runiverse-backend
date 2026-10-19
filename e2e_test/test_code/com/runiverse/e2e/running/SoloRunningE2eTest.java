@@ -142,7 +142,8 @@ class SoloRunningE2eTest extends E2eTestSupport {
         assertThat(record.get("startedAt")).isEqualTo(results.text("startedAt"));
         assertThat(record.get("totalDistanceMeters")).isEqualTo(me.get("totalDistanceMeters"));
         assertThat(record.get("totalDurationSeconds")).isEqualTo(me.get("totalDurationSeconds"));
-        assertThat((String) record.get("routePolyline")).isNotBlank();
+        // 목록은 경로를 싣지 않는다 — 경로는 6-1·6-2에서만 본다
+        assertThat(record).doesNotContainKey("routePolyline");
     }
 
     @Test
