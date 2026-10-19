@@ -1,6 +1,5 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.support.SegmentRoutes;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -59,7 +58,9 @@ public class InMemoryRunningRecordListStore implements LoadMyRunningRecordsPort 
                 record.getTotalDuration().seconds(),
                 record.getAvgPace().secondsPerKm(),
                 record.getTotalElevationGain().map(ElevationGain::meters).orElse(null),
-                SegmentRoutes.joinedPolyline(record));
+                record.getSegments().stream()
+                        .map(segment -> segment.getRoutePolyline().value())
+                        .toList());
     }
 
     private long startedPlayerCount(RunningRoom room) {
