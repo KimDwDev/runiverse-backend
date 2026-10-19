@@ -57,6 +57,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
             DELETE FROM running_state_track_point WHERE running_room_id = ? AND user_id = ?
             """;
     private static final Pattern POINT = Pattern.compile("\\[([^\\[\\]]+)]");
+    // RunningTrackRedisAdapter와 같다 — 칸이 하나 적은 옛 형식은 일시정지 번호 0으로 읽는다
+    private static final int LEGACY_FIELD_COUNT = 10;
 
     private final JdbcTemplate jdbcTemplate;
     private final RunningStateMeter stateMeter;
@@ -119,7 +121,7 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
     private static String compact(TrackPoint point) {
         return String.format(
                 Locale.ROOT,
-                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d]",
+                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d,%d]",
                 point.sequence(),
                 point.latitude(),
                 point.longitude(),
@@ -129,7 +131,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                 nullable(point.headingDegrees(), "%.1f"),
                 nullable(point.cadenceSpm(), "%d"),
                 nullable(point.currentPaceSecondsPerKm(), "%d"),
-                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond());
+                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),   // ← 변경: 끝에 쉼표
+                point.pauseSegment());                                               // ← 변경: 추가
     }
 
     private static String nullable(Number value, String format) {
@@ -154,7 +157,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                     toInteger(fields[8]),
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
-                            ZoneId.systemDefault())));
+                            ZoneId.systemDefault()),                                 // ← 변경: 괄호 하나 줄이고 쉼표
+                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));   // ← 변경: 추가
         }
         return points;
     }

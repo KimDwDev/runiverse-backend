@@ -67,6 +67,8 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
     private static final String POINTS_FIELD = "points";
     // 중첩이 한 겹뿐이라 대괄호 안에 대괄호가 없는 덩어리가 좌표 하나다
     private static final Pattern POINT = Pattern.compile("\\[([^\\[\\]]+)]");
+    // 배포 직전에 쌓인 버퍼는 칸이 하나 적다 — 그 러닝은 일시정지 번호를 보낸 적이 없으니 0이다
+    private static final int LEGACY_FIELD_COUNT = 10;
 
     @Override
     public int append(Long runningRoomId, UserId userId, List<TrackPoint> points) {
@@ -101,7 +103,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
     private String compact(TrackPoint point) {
         return String.format(
                 Locale.ROOT,
-                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d]",
+                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d,%d]",
                 point.sequence(),
                 point.latitude(),
                 point.longitude(),
@@ -111,7 +113,8 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                 nullable(point.headingDegrees(), "%.1f"),
                 nullable(point.cadenceSpm(), "%d"),
                 nullable(point.currentPaceSecondsPerKm(), "%d"),
-                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond());
+                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),
+                point.pauseSegment());
     }
 
     // 못 잰 값은 JSON null로 적어 자리를 지킨다 — 배열이라 칸을 비우면 뒤가 밀린다.
@@ -172,7 +175,9 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                     toInteger(fields[8]),
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
-                            ZoneId.systemDefault())));
+                            ZoneId.systemDefault()),
+                    // 일시정지 구간 번호 — 옛 형식이면 0
+                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));
         }
         return points;
     }
