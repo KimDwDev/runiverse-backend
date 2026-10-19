@@ -81,7 +81,9 @@ public class UpdateRunningComboJudge {
                         speedFrom(before, signal.meters(), now),
                         signal.moved() ? now : before.movedAt(),
                         signal.observed() ? now : before.observedAt(),
-                        before.paused() && !signal.observed(),
+                        // 경계를 넘은 배치는 표시가 없어도 이 판정에서 일시정지다 — 저장하지 않는 값이라
+                        // 다음 배치부터는 표시·관측으로만 정해진다. 대가로 재개 후 첫 배치에서는 붙지 않는다
+                        (before.paused() && !signal.observed()) || signal.pauseCrossed(),
                         // 종료는 관측이 와도 그대로다 — 끝난 사람의 좌표는 늦은 배치뿐이다
                         before.finished()))
                 // 첫 배치는 직전 값이 없어 속도가 0이다 — 방금 보고한 값이라 밀 필요도 없다
@@ -92,7 +94,7 @@ public class UpdateRunningComboJudge {
                         0,
                         signal.moved() ? now : null,
                         signal.observed() ? now : null,
-                        false,
+                        signal.pauseCrossed(),
                         false));
     }
 

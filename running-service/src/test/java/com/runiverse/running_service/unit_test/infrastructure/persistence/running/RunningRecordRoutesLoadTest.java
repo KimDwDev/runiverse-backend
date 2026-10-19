@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -42,22 +43,33 @@ class RunningRecordRoutesLoadTest {
     private TypedQuery<Tuple> recordQuery;
 
     @Mock
+    private TypedQuery<Tuple> segmentQuery;
+
+    @Mock
     private TypedQuery<Tuple> splitQuery;
 
     @InjectMocks
     private RunningRecordPersistenceAdapter adapter;
 
-    private static Tuple record(long recordId, UUID userId, String polyline) {
+    private static Tuple record(long recordId, UUID userId) {
         Tuple tuple = mock(Tuple.class);
         given(tuple.get("recordId", Long.class)).willReturn(recordId);
         given(tuple.get("userId", UUID.class)).willReturn(userId);
+        return tuple;
+    }
+
+    // 조각은 기록 번호·조각 번호 순으로 온다
+    private static Tuple segment(long recordId, String polyline) {
+        Tuple tuple = mock(Tuple.class);
+        given(tuple.get("recordId", Long.class)).willReturn(recordId);
         given(tuple.get("routePolyline", String.class)).willReturn(polyline);
         return tuple;
     }
 
-    private static Tuple split(long recordId, int startIndex, int seconds) {
+    private static Tuple split(long recordId, int segmentNumber, int startIndex, int seconds) {
         Tuple tuple = mock(Tuple.class);
         given(tuple.get("recordId", Long.class)).willReturn(recordId);
+        given(tuple.get("segmentNumber", Integer.class)).willReturn(segmentNumber);
         given(tuple.get("routeStartIndex", Integer.class)).willReturn(startIndex);
         given(tuple.get("routeEndIndex", Integer.class)).willReturn(startIndex + 1);
         given(tuple.get("startAt", LocalDateTime.class)).willReturn(START.plusSeconds(seconds));
@@ -65,23 +77,28 @@ class RunningRecordRoutesLoadTest {
         return tuple;
     }
 
-    private void givenQueries(List<Tuple> records, List<Tuple> splits) {
-        given(entityManager.createQuery(anyString(), eq(Tuple.class))).willReturn(recordQuery, splitQuery);
+    // 기록 → 조각 → 구간 순으로 세 번 읽는다
+    private void givenQueries(List<Tuple> records, List<Tuple> segments, List<Tuple> splits) {
+        given(entityManager.createQuery(anyString(), eq(Tuple.class)))
+                .willReturn(recordQuery, segmentQuery, splitQuery);
         given(recordQuery.setParameter("roomId", ROOM_ID)).willReturn(recordQuery);
         given(recordQuery.getResultList()).willReturn(records);
         if (!records.isEmpty()) {
+            given(segmentQuery.setParameter(eq("recordIds"), any())).willReturn(segmentQuery);
+            given(segmentQuery.getResultList()).willReturn(segments);
             given(splitQuery.setParameter("roomId", ROOM_ID)).willReturn(splitQuery);
             given(splitQuery.getResultList()).willReturn(splits);
         }
     }
 
     @Test
-    @DisplayName("기록마다 경로와 구간 시각을 묶는다 — 구간 순서는 쿼리 순서 그대로다")
-    void groupsSplitsByRecord() {
-        // given -> 기록 둘, 구간은 기록 번호·구간 번호 순으로 온다
+    @DisplayName("기록마다 조각과 구간 시각을 묶는다 — 조각·구간 순서는 쿼리 순서 그대로다")
+    void groupsSegmentsAndSplitsByRecord() {
+        // given -> 기록 둘. A는 일시정지로 조각이 둘이고, 구간 2는 2번 조각에 걸친다
         givenQueries(
-                List.of(record(1L, A, "polyline-a"), record(2L, B, "polyline-b")),
-                List.of(split(1L, 0, 0), split(1L, 1, 3), split(2L, 0, 0)));
+                List.of(record(1L, A), record(2L, B)),
+                List.of(segment(1L, "polyline-a1"), segment(1L, "polyline-a2"), segment(2L, "polyline-b")),
+                List.of(split(1L, 1, 0, 0), split(1L, 2, 0, 3), split(2L, 1, 0, 0)));
 
         // when
         List<RecordedRoute> routes = adapter.loadRoutes(ROOM_ID);
@@ -89,19 +106,20 @@ class RunningRecordRoutesLoadTest {
         // then
         assertThat(routes).hasSize(2);
         RecordedRoute routeOfA = routes.stream().filter(route -> route.userId().equals(A)).findFirst().orElseThrow();
-        assertThat(routeOfA.routePolyline()).isEqualTo("polyline-a");
+        assertThat(routeOfA.segmentPolylines()).containsExactly("polyline-a1", "polyline-a2");
         assertThat(routeOfA.splits()).containsExactly(
-                new RecordedSplitTime(0, 1, START, START.plusSeconds(3)),
-                new RecordedSplitTime(1, 2, START.plusSeconds(3), START.plusSeconds(6)));
+                new RecordedSplitTime(1, 0, 1, START, START.plusSeconds(3)),
+                new RecordedSplitTime(2, 0, 1, START.plusSeconds(3), START.plusSeconds(6)));
         RecordedRoute routeOfB = routes.stream().filter(route -> route.userId().equals(B)).findFirst().orElseThrow();
+        assertThat(routeOfB.segmentPolylines()).containsExactly("polyline-b");
         assertThat(routeOfB.splits()).hasSize(1);
     }
 
     @Test
-    @DisplayName("기록이 하나도 없으면 구간을 읽지 않는다")
+    @DisplayName("기록이 하나도 없으면 조각·구간을 읽지 않는다")
     void skipsSplitsWithoutRecords() {
         // given
-        givenQueries(List.of(), List.of());
+        givenQueries(List.of(), List.of(), List.of());
 
         // when & then
         assertThat(adapter.loadRoutes(ROOM_ID)).isEmpty();

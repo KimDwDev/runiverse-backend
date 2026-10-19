@@ -196,12 +196,13 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
         GetRunningResultsResult result =
                 handler.handle(new GetRunningResultsQuery(runningRoomId, userId));
 
-        // then -> 북쪽으로만 달렸으므로 경도는 그대로고 위도만 커진다
-        assertThat(result.routes()).isNotEmpty();
-        assertThat(result.routes().get(0).latitude()).isCloseTo(37.5, within(PRECISION));
-        assertThat(result.routes().get(0).longitude()).isCloseTo(127.0, within(PRECISION));
-        assertThat(result.routes().get(result.routes().size() - 1).latitude())
-                .isGreaterThan(result.routes().get(0).latitude());
+        // then -> 끊긴 곳 없이 달렸으니 조각 하나다. 북쪽으로만 달렸으므로 경도는 그대로고 위도만 커진다
+        assertThat(result.routes()).hasSize(1);
+        var route = result.routes().get(0);
+        assertThat(route).isNotEmpty();
+        assertThat(route.get(0).latitude()).isCloseTo(37.5, within(PRECISION));
+        assertThat(route.get(0).longitude()).isCloseTo(127.0, within(PRECISION));
+        assertThat(route.get(route.size() - 1).latitude()).isGreaterThan(route.get(0).latitude());
     }
 
     @Test
@@ -317,7 +318,7 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, null, points));

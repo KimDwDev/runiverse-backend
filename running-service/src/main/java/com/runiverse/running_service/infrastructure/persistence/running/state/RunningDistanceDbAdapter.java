@@ -25,19 +25,20 @@ import static com.runiverse.running_service.infrastructure.metrics.running.Runni
 public class RunningDistanceDbAdapter implements LoadRunningDistancePort, SaveRunningDistancePort {
 
     private static final String SELECT = """
-            SELECT meters, last_sequence, last_latitude, last_longitude, last_pace,
+            SELECT meters, last_sequence, last_pause_segment, last_latitude, last_longitude, last_pace,
                    anchor_latitude, anchor_longitude
             FROM running_state_distance
             WHERE running_room_id = ? AND user_id = ?
             """;
     private static final String UPSERT = """
             INSERT INTO running_state_distance (running_room_id, user_id, meters, last_sequence,
-                                                last_latitude, last_longitude, last_pace,
-                                                anchor_latitude, anchor_longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                last_pause_segment, last_latitude, last_longitude,
+                                                last_pace, anchor_latitude, anchor_longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (running_room_id, user_id) DO UPDATE SET
                 meters = EXCLUDED.meters,
                 last_sequence = EXCLUDED.last_sequence,
+                last_pause_segment = EXCLUDED.last_pause_segment,
                 last_latitude = EXCLUDED.last_latitude,
                 last_longitude = EXCLUDED.last_longitude,
                 last_pace = EXCLUDED.last_pace,
@@ -56,6 +57,7 @@ public class RunningDistanceDbAdapter implements LoadRunningDistancePort, SaveRu
                         ? new RunningDistance(
                         rs.getDouble("meters"),
                         rs.getLong("last_sequence"),
+                        rs.getInt("last_pause_segment"),
                         rs.getObject("last_latitude", Double.class),
                         rs.getObject("last_longitude", Double.class),
                         rs.getObject("last_pace", Integer.class),
@@ -70,7 +72,7 @@ public class RunningDistanceDbAdapter implements LoadRunningDistancePort, SaveRu
         try {
             stateMeter.write(DB, DISTANCE, RUNNING, runningRoomId, () -> jdbcTemplate.update(UPSERT,
                     runningRoomId, userId.value(),
-                    distance.meters(), distance.lastSequence(),
+                    distance.meters(), distance.lastSequence(), distance.lastPauseSegment(),
                     distance.lastLatitude(), distance.lastLongitude(), distance.lastPaceSecondsPerKm(),
                     distance.anchorLatitude(), distance.anchorLongitude()));
         } catch (RuntimeException e) {

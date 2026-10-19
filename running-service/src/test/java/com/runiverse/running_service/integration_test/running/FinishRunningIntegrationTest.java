@@ -165,7 +165,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         // 솔로 방은 목표 거리가 없다
         updateRunningLocationHandler.handle(
@@ -176,7 +176,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     private static TrackPoint sensorPoint(int i, Integer cadenceSpm, Double altitudeMeters,
                                           LocalDateTime recordedAt) {
         return new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                altitudeMeters, 5.0, null, null, cadenceSpm, null, recordedAt);
+                altitudeMeters, 5.0, null, null, cadenceSpm, null, recordedAt, 0);
     }
 
     private void runWith(UUID userId, Long runningRoomId, List<TrackPoint> points) {
@@ -332,7 +332,11 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 .orElseThrow();
         assertThat(record.getTotalDistance().meters()).isEqualTo(990);
         assertThat(record.getSplits()).hasSize(99);
-        assertThat(record.getRoutePolyline().value()).isNotBlank();
+        // 끊긴 곳 없이 달렸으니 조각 하나에 모든 구간이 붙는다
+        assertThat(record.getSegments()).singleElement()
+                .satisfies(segment -> assertThat(segment.getRoutePolyline().value()).isNotBlank());
+        assertThat(record.getSplits()).allSatisfy(split ->
+                assertThat(split.getSegmentNumber().value()).isEqualTo(1));
         assertThat(record.getGpsTrackKey().value())
                 .isEqualTo("gps-tracks/%s/%d/2026-08-27.json".formatted(userId, runningRoomId));
         assertThat(record.getWeatherCode().value()).isZero();
@@ -678,7 +682,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         return updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));
@@ -737,7 +741,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         int running = 1_900;
         for (int i = 0; i < running; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         double stopLatitude = 37.5 + (running - 1) * 2.5 / METERS_PER_DEGREE;
         double metersPerDegreeLongitude = METERS_PER_DEGREE * Math.cos(Math.toRadians(37.5));
@@ -745,7 +749,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
             double east = i % 2 == 0 ? 3.0 : -3.0;
             points.add(new TrackPoint(running - 1 + i, stopLatitude,
                     127.0 + east / metersPerDegreeLongitude, null, 5.0, null, null, 168, null,
-                    TRACK_START.plusSeconds(running - 1 + i)));
+                    TRACK_START.plusSeconds(running - 1 + i), 0));
         }
         return updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));
@@ -886,7 +890,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         // when -> 종료 직후 상태 조회가 실패한 틈에 첫 번째 러너의 늦은 배치가 판정까지 통과했다.
         //         누적 거리는 상대(좌표 401개 × 2.5m)와 같아 창 안이다
         newUpdateRunningComboJudge().judge(runningRoomId, new UserId(first),
-                new RunningComboSignal(401 * 2.5, true, true));
+                new RunningComboSignal(401 * 2.5, true, true, false));
 
         // then -> 일시정지와 달리 좌표가 와도 풀리지 않는다
         assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).isEmpty();

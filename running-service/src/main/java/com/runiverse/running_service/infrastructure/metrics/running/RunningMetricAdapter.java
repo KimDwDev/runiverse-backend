@@ -23,6 +23,7 @@ public class RunningMetricAdapter implements RecordRunningMetricPort {
 
     @Override
     public void trackFiltered(TrackFilterSummary summary) {
+        recordFiltered("pause", summary.pauseRemovedMeters());
         recordFiltered("accuracy", summary.accuracyRemovedMeters());
         recordFiltered("spike", summary.spikeRemovedMeters());
         recordFiltered("gap", summary.gapRejectedMeters());

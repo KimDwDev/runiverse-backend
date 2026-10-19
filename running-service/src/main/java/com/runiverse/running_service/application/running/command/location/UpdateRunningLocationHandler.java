@@ -3,6 +3,7 @@ package com.runiverse.running_service.application.running.command.location;
 import com.runiverse.running_service.application.running.command.combo.RunningComboSignal;
 import com.runiverse.running_service.application.running.command.combo.UpdateRunningComboJudge;
 import com.runiverse.running_service.application.running.common.TrackFilterProperties;
+import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.in.UpdateRunningLocationUsecase;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
@@ -43,27 +44,28 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
         if (isFinished(command.runningRoomId(), userId)) {
             return UpdateRunningLocationResult.ofFinished();
         }
-        // 1. 좌표를 저장한다 — 가장 먼저다. 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다.
-        //    처음 보는 좌표 수를 받아 둔다 — 재전송분만 온 배치인지 가르는 근거다
-        int appended = appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
-        // 2. 누적 거리를 이어 센다
+        // 1. 누적 상태를 먼저 읽는다 — 일시정지 구간 번호를 마지막으로 반영한 좌표와 비교해야 저장할지 정할 수 있다.
+        //    못 읽으면 검증할 수 없으니 저장하지 않는다 — 원본은 클라 로컬 트랙에 남아 재연결로 다시 온다
         RunningDistance stored;
         try {
             stored = loadRunningDistancePort.loadDistance(command.runningRoomId(), userId);
         } catch (RuntimeException e) {
-            // 누적을 못 읽으면 이번 배치의 진행 표시만 거른다 — 좌표는 이미 저장됐고 저장된 누적도 그대로다.
-            // 건너뛴 배치의 곡선은 다음 배치가 직선으로 이어 라이브 표시에서만 빠진다 — 최종 기록이 바로잡는다
             log.error("[러닝] 누적 거리 조회 실패: 처리하지 못한 예외 - roomId={}, userId={}",
                     command.runningRoomId(), userId.value(), e);
-            // 누적을 모르면 목표 도달도 판정할 수 없다 — 다음 배치가 다시 판정한다
-            return UpdateRunningLocationResult.ofRunning();
+            throw new RunningTrackUnavailableException();
         }
+        // 2. 일시정지 구간 번호가 줄면 배치 전체를 거부한다 — 저장한 뒤에 거르면 깨진 좌표가 기록에 섞인다
+        PauseSegmentGuard.validate(command.runningRoomId(), userId, stored, command.points());
+        // 3. 좌표를 저장한다. 여기서 던지면 진행 통지도 건너뛰고 클라가 ERROR를 받는다.
+        //    처음 보는 좌표 수를 받아 둔다 — 재전송분만 온 배치인지 가르는 근거다
+        int appended = appendRunningTrackPort.append(command.runningRoomId(), userId, command.points());
+        // 4. 누적 거리를 이어 센다
 
         RunningDistanceAccumulation accumulation =
                 RunningDistanceAccumulator.accumulate(stored, command.points(), trackFilterProperties);
         RunningDistance updated = accumulation.distance();
         saveRunningDistancePort.saveDistance(command.runningRoomId(), userId, updated);
-        // 3. 방 참가자에게 진행 상황을 알린다
+        // 5. 방 참가자에게 진행 상황을 알린다
         publishRunningProgressPort.publish(command.runningRoomId(), new RunningProgress(
                 command.userId(),
                 updated.metersRounded(),
@@ -72,11 +74,12 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
                 // 직전 값이 그대로 유지된다
                 updated.lastPaceSecondsPerKm(),
                 liveStatus(command.runningRoomId(), userId, appended)));
-        // 4. 콤보를 판정한다 — 진행 통지 뒤에 둔다. 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다.
+        // 6. 콤보를 판정한다 — 진행 통지 뒤에 둔다. 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다.
         //    관측·이동 여부는 누적기가 같은 좌표를 훑으며 낸 값이다
         updateRunningComboJudge.judge(command.runningRoomId(), userId, new RunningComboSignal(
-                updated.meters(), accumulation.observed(), accumulation.moved()));
-        // 5. 목표 도달을 판정한다 — 맨 마지막이다. 목표를 넘은 이 배치까지 트랙에 저장되고
+                updated.meters(), accumulation.observed(), accumulation.moved(),
+                accumulation.pauseCrossed()));
+        // 7. 목표 도달을 판정한다 — 맨 마지막이다. 목표를 넘은 이 배치까지 트랙에 저장되고
         //    진행 통지도 나간 뒤여야 한다
         return updateRunningFinishJudge.judge(
                 command.runningRoomId(), userId, command.targetDistanceMeters(), updated.meters());

@@ -8,13 +8,13 @@
 
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_splits`·`running_combos`·`scheduled_jobs`·`colors`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`·`like_count`·`comment_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
-- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
+- **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **`deleted_at`**: `feeds`는 소프트 삭제, `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
@@ -173,12 +173,11 @@
 | user_id | UUID | → users, NOT NULL | |
 | avg_pace | int | NOT NULL | 초/km |
 | total_distance | int | NOT NULL | 미터. **목표 거리에서 끊는다** — 목표를 넘겨 뛰어도 `running_rooms.target_distance` 지점을 보간해 그 값으로 확정하고 `end_at`·`total_duration`도 같은 지점 기준으로 맞춘다(거리만 자르면 페이스가 틀어진다). 참가자 전원이 같은 구간 경계를 갖게 하려는 것이다 — 6-2 응답은 구간 경계를 참가자별이 아니라 구간 레벨에 둔다. 목표에 못 미치면 마지막 10m 경계까지로 확정한다 — 10m 미만 꼬리는 버려 구간 합과 어긋나지 않게 한다. **S3 원본 트랙에는 목표 이후 좌표도 전부 남긴다**(재계산용) |
-| total_duration | int | NOT NULL | 초. 구간(`running_splits.duration`)의 합. **움직인 시간**이다 — 트랙 필터가 정지·관측하지 못한 구간을 빼므로 `end_at - start_at`보다 짧을 수 있다. 멈춘 시간까지 포함한 전체 경과는 `end_at - start_at`으로 구한다(feature-spec 트랙 필터) |
+| total_duration | int | NOT NULL | 초. 구간(`running_splits.duration`)의 합. **움직인 시간**이다 — 트랙 필터가 정지·일시정지·관측하지 못한 구간을 빼므로 `end_at - start_at`보다 짧을 수 있다. 멈춘 시간까지 포함한 전체 경과는 `end_at - start_at`으로 구한다(feature-spec 트랙 필터) |
 | avg_cadence | int | nullable | spm (선택). 러닝 전체 평균 — 점별 순간 케이던스(`cadenceSpm`)는 DB에 저장하지 않는다(S3 원본 트랙에는 남는다) |
-| total_elevation_gain | int | nullable | 누적 상승 고도(미터). 기기 GPS 고도를 운영 임계값으로 필터링해 계산하며 유효 표본이 부족하면 null. 구간(`running_splits.elevation_change`)의 합과는 다르다 |
+| total_elevation_gain | int | nullable | 누적 상승 고도(미터). 기기 GPS 고도를 운영 임계값으로 필터링해 계산하며 유효 표본이 부족하면 null. 일시정지 경계에서 기준 고도를 새로 잡아 일시정지 중 이동한 고도차는 들어가지 않는다. 구간(`running_splits.elevation_change`)의 합과는 다르다 |
 | total_calories | int | NOT NULL | 종료 시 서버가 확정 거리·시간과 사용자 체중으로 계산한 kcal |
-| gps_track_key | varchar(255) | NOT NULL | S3 key — 받은 좌표를 그대로(위치·시각·고도·정확도·속도·방위·케이던스·순간 페이스) 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
-| route_polyline | text | NOT NULL | 10m 경계점 경로(encoded polyline, precision 5) — 원본 트랙을 0m부터 10m마다 보간한 경계점만 담는다(구간 수 + 1개). **API가 내려주는 유일한 경로 데이터**. 대시보드·기록 상세(6-1·6-2)·기록 목록(7-1)·피드 카드가 전부 이 값을 쓴다. `running_splits`의 `route_start_index`·`route_end_index`가 이 배열의 위치를 가리킨다. 트랙 필터가 0으로 한 칸 위에는 경계점이 없어, **이웃한 두 점이 30m 넘게 떨어져 있으면 관측하지 못한 구간**이다 — 클라는 그 사이를 잇지 않는다(feature-spec 트랙 필터) |
+| gps_track_key | varchar(255) | NOT NULL | S3 key — 받은 좌표를 그대로(위치·시각·고도·정확도·속도·방위·케이던스·순간 페이스·일시정지 구간 번호) 담은 **원본 트랙**. 재계산·분석용이라 **API 응답에는 쓰지 않는다** |
 | weather_code | int | NOT NULL | WMO 4677 코드(0~99) — 날씨 API 원본값 그대로. 조회에 실패하거나 값이 없으면 폴백(`0` 맑음, 기온 `15.0`)이 들어간다. 악조건 여부는 저장하지 않고 판정 시 계산한다 |
 | temperature | numeric(3,1) | NOT NULL | 섭씨. 영하 포함 |
 | start_at / end_at | timestamp | NOT NULL | |
@@ -196,26 +195,45 @@
 > **러닝 중에는 이 테이블에 쓰지 않는다** — 좌표·누적 거리는 Redis가 원본이고, 확정할 때 러닝 하나치를 Redis에서 통째로 읽어 한 번에 넣는다(write-behind). 배치마다 행을 갱신하지 않는 근거와 관측 방법은 feature-spec GPS 트랙 절.
 > **개인 단위 진행 상태는 `running_players.status`가 갖는다.** 기록은 `COMPLETED`뿐 아니라 `RUNNING_LEFT_*`와도 함께 생성될 수 있으며, 기록 생성 가능한 트랙이 없으면 종료 상태만 남는다.
 > 결과 조회는 해당 방에서 러닝 단계에 들어간 참가자(`RUNNING`·`COMPLETED`·`RUNNING_LEFT_*`)의 세션에 `running_records`를 LEFT JOIN한다. 시작 전 이탈자는 제외하고 기록 없는 참가자는 유지한다.
+> **경로는 이 테이블에 없다** — 끊긴 곳마다 나뉜 조각으로 `running_segments`에 있다. 일시정지가 있어도 기록은 러닝 한 번에 한 행이고, 위 합계 값은 러닝 전체 기준이다.
+
+### running_segments (경로 조각)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| running_segment_id | bigint | PK | 기록당 몇 개뿐이라 IDENTITY로 둔다 — 구간이 이 ID를 참조하므로 구간보다 먼저 INSERT한다 |
+| running_record_id | bigint | FK → running_records, NOT NULL, ON DELETE CASCADE | |
+| segment_number | int | NOT NULL | 이 기록에서 몇 번째 조각(1부터, 달린 순서). 끊긴 곳이 없으면 1 하나뿐이다 |
+| route_polyline | text | NOT NULL | 이 조각의 10m 경계점(encoded polyline, precision 5). 원본 트랙을 0m부터 인정 거리 10m마다 보간한 경계점을 끊긴 곳에서 나눈 것이다. 조각 안의 점 번호는 조각마다 0부터 센다 — `running_splits.route_start_index`·`route_end_index`가 이 번호다. **API가 내려주는 유일한 경로 데이터**다 |
+| created_at | timestamp | NOT NULL | 기록과 함께 일괄 INSERT(write-once) |
+
+> UNIQUE (running_record_id, segment_number) — 기록당 조각 번호 중복 방지. 기록의 조각을 순서대로 읽는 조회도 커버한다.
+> CHECK `ck_running_segment_number`: `segment_number >= 1`
+> **조각은 트랙 필터가 경로를 끊은 곳에서 나뉜다** — 이웃한 두 경계점 사이에 0으로 한 칸이 있고 그것이 정지(④)가 아닐 때다(일시정지 경계·GPS 튐·거부한 관측 안 된 칸·시계 역행). 정지는 제자리라 끊지 않는다(feature-spec 트랙 필터).
+> **조각을 번호순으로 이으면 기록의 경계점 전체다** — 조각끼리 점을 공유하지 않고, 점을 더하거나 빼지 않는다. 그래서 전 조각의 점 수 합은 구간 수 + 1이다.
+> **점이 하나뿐인 조각도 있다** — 출발 직후 첫 칸에서 끊기면 1번 조각은 0m 경계점 하나다. 그 조각에는 구간이 붙지 않는다(구간은 끝 경계점이 있는 조각에 속한다 — `running_splits`).
+> **응답에서**: 기록 상세(6-1)는 조각마다 좌표 배열 하나로 내려 클라가 조각 사이를 잇지 않는다. 피드 카드(8-1)는 조각을 풀어 한 줄로 다시 인코딩해 `routePolyline`으로 내린다 — encoded polyline은 앞 점과의 차로 인코딩돼 문자열을 그대로 이어 붙이면 깨진다. 기록 목록(7-1)은 경로를 싣지 않는다.
 
 ### running_splits (구간별)
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_split_id | bigint | PK | 시퀀스 `running_split_seq`로 채번한다(`allocationSize=100`) — IDENTITY면 Hibernate가 배치 INSERT를 끈다 |
-| running_record_id | bigint | FK → running_records, NOT NULL, ON DELETE CASCADE | |
-| split_number | int | NOT NULL | 구간 번호(1부터). API `splitNumber` |
+| running_segment_id | bigint | FK → running_segments, NOT NULL, ON DELETE CASCADE | 이 구간이 속한 경로 조각 — **끝 경계점이 있는 조각**이다. 기록은 조각을 거쳐 찾는다(`running_segments.running_record_id`) — 구간에 기록 FK를 따로 두지 않는다 |
+| split_number | int | NOT NULL | 구간 번호(1부터). 조각이 바뀌어도 기록 전체에서 이어서 센다. API `splitNumber` |
 | avg_pace | int | NOT NULL | 초/km |
 | distance | int | NOT NULL | 구간 거리(미터) — **10m 고정**. 경계는 0-10, 10-20…으로 끊고, 정확히 10m가 되도록 경계 지점을 보간해 만든다. 목표 5,000m면 구간이 500개다. 목표 미달로 끝난 참가자는 도달한 구간까지만 행이 생긴다 |
 | duration | int | NOT NULL | 구간 소요 시간(초) — **움직인 시간**이다. 트랙 필터가 뺀 정지·관측하지 못한 시간은 들어가지 않아, 실제 시각인 `start_at`·`end_at`의 차와 다를 수 있다 |
 | avg_cadence | int | nullable | spm (선택). 구간 평균 |
-| elevation_change | int | nullable | 필터링한 기기 GPS 고도의 **순고도차**(미터) — 끝 고도 − 시작 고도라 음수가 될 수 있다. 유효 표본이 부족하면 null이며 `total_elevation_gain`과는 다른 값이다. **10m 구간에서는 대체로 null이다** — 구간에 실측점이 3~4개뿐인데 GPS 수직 오차가 수 m라 노이즈 임계값을 넘는 표본이 거의 없다 |
+| elevation_change | int | nullable | 필터링한 기기 GPS 고도의 **순고도차**(미터) — 끝 고도 − 시작 고도라 음수가 될 수 있다. 일시정지를 걸친 구간은 경계 앞과 뒤의 순고도차를 더한다. 유효 표본이 부족하면 null이며 `total_elevation_gain`과는 다른 값이다. **10m 구간에서는 대체로 null이다** — 구간에 실측점이 3~4개뿐인데 GPS 수직 오차가 수 m라 노이즈 임계값을 넘는 표본이 거의 없다 |
 | calories | int | NOT NULL | 종료 시 서버가 계산한 구간 kcal |
-| route_start_index | int | NOT NULL | `running_records.route_polyline`에서 이 구간이 시작하는 점 번호(0부터). 구간 경로를 텍스트로 중복 저장하지 않고 위치만 가리킨다 |
-| route_end_index | int | NOT NULL | 끝나는 점 번호(포함). 구간 N의 끝점은 구간 N+1의 시작점과 같아 값이 하나 겹친다 — 한 행만 읽어도 구간을 자를 수 있게 둘 다 저장한다 |
+| route_start_index | int | NOT NULL | 소속 조각(`running_segments.route_polyline`)에서 이 구간이 시작하는 점 번호(0부터). 구간 경로를 텍스트로 중복 저장하지 않고 위치만 가리킨다 |
+| route_end_index | int | NOT NULL | 끝나는 점 번호(포함). 같은 조각 안에서 구간 N의 끝점은 구간 N+1의 시작점과 같아 값이 하나 겹친다 — 한 행만 읽어도 구간을 자를 수 있게 둘 다 저장한다. 끊긴 곳에 걸친 구간은 시작과 같다(아래) |
 | start_at / end_at | timestamp | NOT NULL | 실제 시각(경계점 보간값). `duration`과 달리 멈춘 시간을 빼지 않는다 |
 | created_at | timestamp | NOT NULL | |
 
-> UNIQUE (running_record_id, split_number) — 기록당 구간 번호 중복 방지.
+> UNIQUE (running_segment_id, split_number) — 조각 안에서 구간 번호 중복 방지. 조각의 구간을 번호순으로 읽는 조회도 커버한다.
+> **기록 안에서 구간 번호가 겹치지 않는 것은 앱이 보장한다** — 기록 FK가 없어 DB 제약으로는 조각 단위까지만 막는다. 구간은 종료 시 한 번에 만들어져 1부터 이어 번호를 매기므로(도메인 검증) 다른 조각과 겹칠 경로가 없다.
 > CHECK `ck_running_split_number`: `split_number >= 1`
 > CHECK `ck_running_split_avg_pace`: `avg_pace between 1 and 86400000`
 > CHECK `ck_running_split_distance`: `distance between 1 and 500000`
@@ -227,8 +245,10 @@
 > CHECK `ck_running_split_period`: `end_at > start_at`
 > **구간 경계는 방 전체가 공유한다.** 참가자별 실제 거리가 아니라 0m부터 10m씩 자르는 고정 경계라, 같은 방 참가자의 `split_number` N은 언제나 같은 거리 구간을 가리킨다. 6-2가 구간 하나에 참가자 여럿을 묶어 내려줄 수 있는 근거다.
 > **행 수가 방마다 수천 개다** — 목표 5,000m·4인 방이면 2,000행이다. 건별 INSERT가 아니라 배치로 넣는다.
-> **경계점 목록이 곧 경로라 인덱스가 구조적으로 맞물린다.** 경로가 0m부터 10m마다의 경계점이라 `N`번 구간은 언제나 `N-1`~`N`번 점이다.
-> **대가는 `running_records`와의 결합이다** — `route_polyline`을 재생성하면 점 개수가 달라져 그 기록의 모든 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. 둘 다 write-once라 재생성 자체가 예외적 상황이다.
+> **경계점 목록이 곧 경로라 인덱스가 구조적으로 맞물린다.** 경로가 0m부터 10m마다의 경계점이라, 조각을 이은 전체에서 `N`번 구간은 언제나 `N-1`~`N`번 점이다. 조각 안의 번호로는 같은 조각의 구간끼리 `[i-1, i]`로 이어진다.
+> **끊긴 곳에 걸친 구간은 뒤 조각의 첫 점 하나만 가리킨다(`[0, 0]`).** 일시정지 직전 경계점은 앞 조각의 끝, 재개 뒤 첫 경계점은 뒤 조각의 처음이라 그 사이 10m 구간은 두 조각에 걸친다. 구간 N은 경계점 N에 닿는 순간 끝나므로 끝점이 있는 뒤 조각에 넣고, 범위를 그 조각 안에 둔다 — 다른 조각을 가리키는 예외를 만들지 않는다. 그래서 2번 이후 조각은 항상 `[0, 0]` 구간으로 시작하고, 6-2는 이 구간에 점 하나만 실어 선을 긋지 않는다. 거리·시간·페이스는 다른 구간과 같다 — 10m 고정이고 `duration`은 일시정지를 뺀 움직인 시간이다.
+> **구간 번호는 조각과 무관하게 이어 센다** — 조각마다 1부터 세면 같은 번호가 참가자마다 다른 거리를 가리켜 위의 "방 전체가 공유하는 경계"가 깨진다.
+> **대가는 `running_segments`와의 결합이다** — 조각의 `route_polyline`을 재생성하면 점 개수가 달라져 그 조각의 구간 인덱스가 무효가 되므로 항상 함께 갱신한다. 둘 다 write-once라 재생성 자체가 예외적 상황이다.
 
 ### running_combos (러닝 콤보 구간)
 
@@ -240,7 +260,7 @@
 | second_user_id | UUID | → users, NOT NULL | 논리 참조. 정렬한 뒤쪽 |
 | segment_number | int | NOT NULL | 이 방에서 이 쌍의 몇 번째 콤보(1부터, `start_at` 순) |
 | combo_count | int | NOT NULL | 이 구간의 유지 횟수 — (`end_at` − `start_at`) ÷ 1회 길이. 1회 길이가 운영 설정이라 계산하지 않고 저장한다 |
-| first_route_polyline | text | nullable | `first_user_id`의 콤보 달성 위치 — 그 참가자의 `route_polyline`에서 고른 점들을 같은 형식(encoded polyline, precision 5)으로 담는다. i번째 점이 i콤보를 달성한 자리다. 점 개수가 `combo_count`와 같다. 각 점은 그 참가자의 `running_records.route_polyline` 경계점 중 달성 시각(`start_at` + i × 1회 길이)에 가장 가까운 점 그대로다. 그 참가자의 기록이 없으면 null |
+| first_route_polyline | text | nullable | `first_user_id`의 콤보 달성 위치 — 그 참가자의 경로에서 고른 점들을 같은 형식(encoded polyline, precision 5)으로 담는다. i번째 점이 i콤보를 달성한 자리다. 점 개수가 `combo_count`와 같다. 각 점은 그 참가자 기록의 10m 경계점 중 달성 시각(`start_at` + i × 1회 길이)에 가장 가까운 점 그대로다. 그 참가자의 기록이 없으면 null |
 | second_route_polyline | text | nullable | `second_user_id` 쪽 |
 | start_at | timestamp | NOT NULL | 콤보가 붙은 시각 |
 | end_at | timestamp | NOT NULL | **쌓인 시각** — 겹쳤다고 판정된 때 두 참가자가 모두 움직였다고 확인된 마지막 순간(feature-spec 러닝 콤보). 끊긴 시각이 아니다. 봐주는 구간이나 서 있던 시간을 넣으면 함께 달리지 않은 구간이 섞인다 |
@@ -255,9 +275,9 @@
 > **정렬 순서를 DB 제약으로 건다** — `<`가 정렬과 함께 같은 사용자끼리의 쌍(`<>`)도 막는다. 앱(Java `UUID.compareTo`)은 64비트씩 부호 있는 비교, Postgres는 바이트 순(부호 없는 비교)이라 상위 64비트의 첫 비트가 서로 다른 쌍에서만 결과가 갈린다. `user_id`는 UUIDv7이라 첫 비트가 타임스탬프 최상위 비트로 늘 0이므로 두 순서가 같다. **UUIDv7이 아닌 `user_id`가 들어오면 이 제약이 쌍을 거부할 수 있다.** 조회는 크기 비교를 쓰지 않는다.
 > **유지 횟수가 0인 구간은 저장하지 않는다** — 붙자마자 끊겨 함께 달린 구간이 없다.
 > **러닝 중에는 이 테이블에 쓰지 않는다** — 판정 상태와 끊긴 구간은 Redis가 원본이다. 방이 닫힐 때 Redis 구간 해시(끊긴 구간)와 관계 해시(이어지던 관계)를 읽어 한 번에 넣는다. `segment_number`는 이때 `start_at` 순으로 매기고, `end_at`은 관계가 들고 있던 쌓인 시각이다(feature-spec 러닝 콤보).
-> **콤보는 선이 아니라 점이다.** 클라는 기록의 `route_polyline`을 그리고, 그 위에 콤보 1회마다 점 하나를 찍는다. 그래서 점은 새로 보간하지 않고 `route_polyline` 경계점을 그대로 고른다 — 그려진 경로에서 벗어나지 않는다. 경계점의 시각은 `running_splits`(`route_start_index`·`route_end_index` ↔ `start_at`·`end_at`)에서 얻는다.
-> **위치는 거리가 아니라 시각으로 찾는다.** 콤보 판정은 필터 전 누적 거리로, `route_polyline`은 필터 후 거리로 만들어져 거리로 찾으면 어긋난다. 시각은 하나뿐이다.
-> **좌표를 담고 경계점 번호는 담지 않는다.** 번호로 담으면 `running_splits`처럼 `route_polyline` 재생성에 묶인다.
+> **콤보는 선이 아니라 점이다.** 클라는 기록의 경로를 그리고, 그 위에 콤보 1회마다 점 하나를 찍는다. 그래서 점은 새로 보간하지 않고 경계점을 그대로 고른다 — 그려진 경로에서 벗어나지 않는다. 경계점의 시각은 구간의 `start_at`·`end_at`에서 얻는다. 어느 조각의 점인지는 담지 않는다 — 콤보는 그 자리에서 이뤄졌다는 점일 뿐이다.
+> **위치는 거리가 아니라 시각으로 찾는다.** 콤보 판정은 필터 전 누적 거리로, 경계점은 필터 후 거리로 만들어져 거리로 찾으면 어긋난다. 시각은 하나뿐이다.
+> **좌표를 담고 경계점 번호는 담지 않는다.** 번호로 담으면 `running_splits`처럼 경로 재생성에 묶인다.
 
 ---
 
@@ -472,7 +492,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_splits (running_record_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_segments (running_record_id, segment_number)`·`running_splits (running_segment_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다. 구간은 기록 → 조각 → 구간 순으로 찾는다 — 두 UNIQUE가 각 단계의 FK 조회와 연쇄 삭제를 커버한다.
 
 | 인덱스 대상 | 용도 |
 |---|---|

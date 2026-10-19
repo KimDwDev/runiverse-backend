@@ -31,18 +31,29 @@ class RouteTimelineTest {
     }
 
     private static RecordedRoute route(int pointCount, int splitCount) {
+        List<RecordedSplitTime> splits = new ArrayList<>();
+        for (int i = 0; i < splitCount; i++) {
+            splits.add(split(1, i, i + 1, i));
+        }
+        return new RecordedRoute(USER, List.of(polyline(0, pointCount)), splits);
+    }
+
+    // p_from ~ p_(toExclusive-1)를 한 조각으로 인코딩한다
+    private static String polyline(int from, int toExclusive) {
         List<BoundaryPoint> points = new ArrayList<>();
-        for (int i = 0; i < pointCount; i++) {
+        for (int i = from; i < toExclusive; i++) {
             points.add(new BoundaryPoint(i * 10, latitudeOf(i), 127.0,
                     START.plusSeconds((long) i * SECONDS_PER_POINT), i * SECONDS_PER_POINT, i));
         }
-        List<RecordedSplitTime> splits = new ArrayList<>();
-        for (int i = 0; i < splitCount; i++) {
-            splits.add(new RecordedSplitTime(i, i + 1,
-                    START.plusSeconds((long) i * SECONDS_PER_POINT),
-                    START.plusSeconds((long) (i + 1) * SECONDS_PER_POINT)));
-        }
-        return new RecordedRoute(USER, PolylineEncoder.encode(points), splits);
+        return PolylineEncoder.encode(points);
+    }
+
+    // 구간 number+1은 p_number → p_(number+1)을 지났다. 경로 범위는 segmentNumber 조각 안의 번호다
+    private static RecordedSplitTime split(int segmentNumber, int routeStartIndex, int routeEndIndex,
+                                           int number) {
+        return new RecordedSplitTime(segmentNumber, routeStartIndex, routeEndIndex,
+                START.plusSeconds((long) number * SECONDS_PER_POINT),
+                START.plusSeconds((long) (number + 1) * SECONDS_PER_POINT));
     }
 
     private static RouteTimeline timeline() {
@@ -93,7 +104,7 @@ class RouteTimelineTest {
     @DisplayName("구간이 경로 밖 번호를 가리키면 점을 고를 수 없다")
     void rejectsSplitBeyondRoute() {
         // when -> 점은 4개인데 구간은 5번 점까지 가리킨다
-        RecordedRoute broken = new RecordedRoute(USER, route(4, 3).routePolyline(),
+        RecordedRoute broken = new RecordedRoute(USER, route(4, 3).segmentPolylines(),
                 route(POINT_COUNT, POINT_COUNT - 1).splits());
 
         // then
@@ -103,6 +114,65 @@ class RouteTimelineTest {
     @Test
     @DisplayName("경로가 비어 있으면 점을 고를 수 없다")
     void rejectsEmptyRoute() {
-        assertThat(RouteTimeline.of(new RecordedRoute(USER, "", List.of()))).isEmpty();
+        assertThat(RouteTimeline.of(new RecordedRoute(USER, List.of(), List.of()))).isEmpty();
+        assertThat(RouteTimeline.of(new RecordedRoute(USER, List.of(""), List.of()))).isEmpty();
+    }
+
+    // p0~p2가 1번 조각, p3~p5가 2번 조각이다. 구간 3(p2→p3)이 끊긴 곳에 걸쳐 2번 조각 [0, 0]이다
+    private static RecordedRoute pausedRoute() {
+        return new RecordedRoute(USER, List.of(polyline(0, 3), polyline(3, POINT_COUNT)), List.of(
+                split(1, 0, 1, 0), split(1, 1, 2, 1),
+                split(2, 0, 0, 2),
+                split(2, 0, 1, 3), split(2, 1, 2, 4)));
+    }
+
+    @Test
+    @DisplayName("조각을 이어 경계점 전체로 편다 -> 콤보 점은 조각을 모른다")
+    void flattensSegments() {
+        // given
+        RouteTimeline timeline = RouteTimeline.of(pausedRoute()).orElseThrow();
+
+        // when & then -> 조각이 바뀌어도 시각 순서대로 점을 고른다
+        assertPoint(timeline.nearest(START.plusSeconds(6)), 2);
+        assertPoint(timeline.nearest(START.plusSeconds(9)), 3);
+        assertPoint(timeline.nearest(START.plusSeconds(15)), 5);
+    }
+
+    @Test
+    @DisplayName("걸친 구간의 시작 시각은 앞 조각의 마지막 점에 붙는다")
+    void acrossSplitStartsAtPreviousSegmentEnd() {
+        // given -> 1번 조각은 출발점 하나뿐이다. 첫 구간부터 2번 조각에 걸친다([0, 0])
+        RecordedRoute route = new RecordedRoute(USER, List.of(polyline(0, 1), polyline(1, POINT_COUNT)),
+                List.of(split(2, 0, 0, 0), split(2, 0, 1, 1), split(2, 1, 2, 2),
+                        split(2, 2, 3, 3), split(2, 3, 4, 4)));
+
+        // when -> 시작 시각을 p1에 덮어쓰면 p0의 시각이 비어 이 참가자의 콤보 점이 통째로 빠진다
+        RouteTimeline timeline = RouteTimeline.of(route).orElseThrow();
+
+        // then
+        assertPoint(timeline.nearest(START), 0);
+        assertPoint(timeline.nearest(START.plusSeconds(3)), 1);
+    }
+
+    @Test
+    @DisplayName("구간이 기록에 없는 조각을 가리키면 점을 고를 수 없다")
+    void rejectsSplitOfMissingSegment() {
+        // given -> 조각은 하나뿐인데 2번 조각을 가리킨다
+        RecordedRoute broken = new RecordedRoute(USER, List.of(polyline(0, POINT_COUNT)),
+                List.of(split(1, 0, 1, 0), split(2, 0, 0, 1)));
+
+        // then
+        assertThat(RouteTimeline.of(broken)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("구간이 자기 조각 밖 번호를 가리키면 점을 고를 수 없다 -> 이어 붙인 전체로는 맞아도 거부한다")
+    void rejectsSplitBeyondItsSegment() {
+        // given -> 1번 조각은 p0~p2 셋인데 [2, 3]을 가리킨다. 이으면 p3이 있어 전체 길이로만 보면 통과한다
+        RecordedRoute broken = new RecordedRoute(USER, List.of(polyline(0, 3), polyline(3, POINT_COUNT)),
+                List.of(split(1, 0, 1, 0), split(1, 1, 2, 1), split(1, 2, 3, 2)));
+
+        // then
+        assertThat(RouteTimeline.of(broken)).isEmpty();
     }
 }

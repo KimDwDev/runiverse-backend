@@ -10,7 +10,9 @@ public record TrackFilterSummary(
         double maxGapEdgeMeters, double maxGapEdgeSeconds,
         int stopCount, double stopSeconds, double stopRemovedMeters,
         double maxStopSeconds, double maxStopDisplacementMeters,
-        int radiusClampedCount
+        int radiusClampedCount,
+        // ⓪ 일시정지 경계 — 버튼 일시정지로 관측하지 않은 칸의 수와 그 칸들의 거리
+        int pauseBoundaryCount, double pauseRemovedMeters
 ) {
 
 }

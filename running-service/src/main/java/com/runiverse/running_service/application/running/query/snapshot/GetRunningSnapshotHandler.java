@@ -51,14 +51,24 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
         // 프로필은 한 번에 읽는다 — 참가자마다 조회하면 인원수만큼 쿼리가 나간다
         Map<UUID, PlayerProfile> profiles = loadPlayerProfilesPort.loadProfiles(
                 actives.stream().map(UserId::value).toList());
+        UserId requester = new UserId(query.userId());
+        // 이어 쓸 번호는 일시정지 구간 번호 검사와 같은 값이어야 한다 — 그래야 재설치한 앱이 이어 써도 거부되지 않는다
+        RunningDistance mine = loadRunningDistancePort.loadDistance(query.runningRoomId(), requester);
         return new GetRunningSnapshotResult(
                 query.runningRoomId(),
                 room.getStartAt(),
                 room.getTargetDistance().map(Distance::meters).orElse(null),
+                mine.lastSequence() + 1,      // 받은 좌표가 없으면 lastSequence가 -1이라 0이 된다
+                mine.lastPauseSegment(),
                 actives.stream()
-                        .map(userId -> toPlayer(query.runningRoomId(), userId, profiles))
+                        .map(userId -> toPlayer(query.runningRoomId(), userId,
+                                // 본인은 위에서 읽은 값을 다시 쓴다 — 같은 키를 두 번 읽지 않는다
+                                userId.equals(requester)
+                                        ? mine
+                                        : loadRunningDistancePort.loadDistance(query.runningRoomId(), userId),
+                                profiles))
                         .toList(),
-                runningComboReader.read(query.runningRoomId(), new UserId(query.userId())).stream()
+                runningComboReader.read(query.runningRoomId(), requester).stream()
                         // 끝난 참가자의 콤보는 상대의 다음 배치가 끊을 때까지 남는다 — 목록에 없는 상대는 싣지 않는다
                         .filter(peer -> actives.contains(new UserId(peer.userId())))
                         .toList());
@@ -66,8 +76,7 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
 
     // 본인도 담는다 — 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
     private GetRunningSnapshotResult.Player toPlayer(
-            Long runningRoomId, UserId userId, Map<UUID, PlayerProfile> profiles) {
-        RunningDistance distance = loadRunningDistancePort.loadDistance(runningRoomId, userId);
+            Long runningRoomId, UserId userId, RunningDistance distance, Map<UUID, PlayerProfile> profiles) {
         // 신청은 남고 사용자만 사라진다 — users 행이 없으면 탈퇴다
         PlayerProfile profile = profiles.get(userId.value());
         boolean deleted = profile == null;

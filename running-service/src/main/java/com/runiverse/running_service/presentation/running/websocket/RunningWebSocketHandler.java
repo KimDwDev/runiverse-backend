@@ -232,7 +232,8 @@ public class RunningWebSocketHandler extends TextWebSocketHandler {
                         location.headingDegrees(),
                         location.cadenceSpm(),
                         location.currentPaceSecondsPerKm(),
-                        location.recordedAt()))
+                        location.recordedAt(),
+                        location.pauseSegment()))
                 .toList();
     }
 

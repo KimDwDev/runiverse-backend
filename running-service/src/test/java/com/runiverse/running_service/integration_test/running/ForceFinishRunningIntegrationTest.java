@@ -436,7 +436,7 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, roomId, TARGET_DISTANCE, points));

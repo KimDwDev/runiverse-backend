@@ -101,7 +101,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
     private String compact(TrackPoint point) {
         return String.format(
                 Locale.ROOT,
-                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d]",
+                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d,%d]",
                 point.sequence(),
                 point.latitude(),
                 point.longitude(),
@@ -111,7 +111,8 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                 nullable(point.headingDegrees(), "%.1f"),
                 nullable(point.cadenceSpm(), "%d"),
                 nullable(point.currentPaceSecondsPerKm(), "%d"),
-                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond());
+                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),
+                point.pauseSegment());
     }
 
     // 못 잰 값은 JSON null로 적어 자리를 지킨다 — 배열이라 칸을 비우면 뒤가 밀린다.
@@ -172,7 +173,8 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                     toInteger(fields[8]),
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
-                            ZoneId.systemDefault())));
+                            ZoneId.systemDefault()),
+                    Integer.parseInt(fields[10])));      // 일시정지 구간 번호
         }
         return points;
     }

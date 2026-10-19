@@ -23,11 +23,26 @@ public final class SplitAssembler {
     private SplitAssembler() {
     }
 
-    public static List<SplitDraft> assemble(List<BoundaryPoint> boundaries, List<TrackPoint> points,
-                                            int intervalMeters, BigDecimal weightKg,
+    // 구간 N은 경계점 N-1 → N이다. 끝 경계점이 있는 조각에 속하고, 경로 범위는 그 조각 안의 번호다.
+    // 시작 경계점이 앞 조각에 있으면(끊긴 곳에 걸친 구간) 이 조각의 첫 점 하나만 가리킨다 — [0, 0]
+    public static List<SplitDraft> assemble(List<List<BoundaryPoint>> segments,
+                                            List<TrackPoint> points, int intervalMeters,
+                                            BigDecimal weightKg,
                                             double elevationNoiseThresholdMeters) {
+        // 시각·시간·센서값은 조각과 무관하게 이어진 경계점 위에서 낸다
+        List<BoundaryPoint> boundaries = segments.stream().flatMap(List::stream).toList();
         if (boundaries.size() < 2) {
             return List.of();
+        }
+        // 경계점마다 몇 번 조각의 몇 번째 점인지 — 조각 번호는 1부터, 조각 안의 번호는 0부터다
+        int[] segmentOf = new int[boundaries.size()];
+        int[] indexInSegment = new int[boundaries.size()];
+        int position = 0;
+        for (int segment = 0; segment < segments.size(); segment++) {
+            for (int index = 0; index < segments.get(segment).size(); index++, position++) {
+                segmentOf[position] = segment + 1;
+                indexInSegment[position] = index;
+            }
         }
         LocalDateTime origin = boundaries.get(0).recordedAt();
         // 시각은 실제 시각, 시간은 움직인 시간이다 — 멈춘 시간을 빼야 구간 페이스가 실제로 뛴 속도가 되고,
@@ -55,14 +70,19 @@ public final class SplitAssembler {
             int avgPace = Math.max(1, duration * METERS_PER_KM / intervalMeters);
             cumulativeKcal += CalorieCalculator.unroundedKcal(avgPace, duration, weightKg);
             long roundedKcal = Math.round(cumulativeKcal);
+            int routeEnd = indexInSegment[number];
+            int routeStart = segmentOf[number - 1] == segmentOf[number]
+                    ? indexInSegment[number - 1]
+                    : routeEnd;
 
             drafts.add(SplitDraft.create(
                     number,
+                    segmentOf[number],
                     avgPace,
                     intervalMeters,
                     duration,
-                    number - 1,     // 폴리라인이 곧 경계점 목록이라 인덱스가 구간 번호를 그대로 따른다
-                    number,
+                    routeStart,
+                    routeEnd,
                     origin.plusSeconds(real[number - 1]),
                     origin.plusSeconds(real[number]),
                     (int) (roundedKcal - previousRoundedKcal),
@@ -73,6 +93,7 @@ public final class SplitAssembler {
         }
         return drafts;
     }
+
 
     // 시작점부터의 경과 초를 미리 확정한다. 구간마다 따로 반올림하면 500개에서 오차가 쌓여
     // 구간 시간의 합이 총 시간과 어긋난다 — total_duration은 구간 duration의 합이다.
@@ -107,26 +128,45 @@ public final class SplitAssembler {
         return count == 0 ? null : sum / count;
     }
 
+    // 일시정지를 걸친 구간은 경계 앞과 뒤의 순고도차를 따로 내서 더한다 —
+    // 구간 끝 − 시작으로 내면 일시정지 중 오르내린 고도가 들어간다
     private static Integer elevationChange(List<TrackPoint> points, int fromExclusive,
                                            int toInclusive, double noiseThresholdMeters) {
+        double change = 0;
+        boolean measured = false;
         Double first = null;
         Double last = null;
+        int segment = 0;
         int count = 0;
         for (int i = fromExclusive + 1; i <= toInclusive; i++) {
-            Double altitude = points.get(i).altitudeMeters();
+            TrackPoint point = points.get(i);
+            Double altitude = point.altitudeMeters();
             if (altitude == null || !Double.isFinite(altitude)) {
                 continue;
             }
+            // 경계를 넘으면 앞쪽 조각의 순고도차를 닫고 새로 잰다
+            if (first != null && point.pauseSegment() != segment) {
+                if (count >= 2) {
+                    change += last - first;
+                    measured = true;
+                }
+                first = null;
+                count = 0;
+            }
             if (first == null) {
                 first = altitude;
+                segment = point.pauseSegment();
             }
             last = altitude;
             count++;
         }
-        if (count < 2) {
-            return null;   // 표본이 없거나 하나뿐이면 변화를 말할 수 없다
+        if (count >= 2) {
+            change += last - first;
+            measured = true;
         }
-        double change = last - first;
+        if (!measured) {
+            return null;   // 어느 쪽에도 표본이 둘 이상 없으면 변화를 말할 수 없다
+        }
         // 임계값 이하는 GPS 수직 오차로 본다 — 10m 구간에서는 대체로 여기 걸려 null이 된다
         if (Math.abs(change) <= noiseThresholdMeters) {
             return null;
