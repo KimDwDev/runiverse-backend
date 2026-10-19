@@ -15,7 +15,6 @@ import com.runiverse.running_service.domain.running.record.RunningRecord;
 import com.runiverse.running_service.domain.running.record.RunningSegment;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
@@ -126,48 +125,29 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
     public List<RunningRecordRow> loadByPeriod(UserId userId, LocalDateTime startInclusive,
                                                LocalDateTime endExclusive) {
         // 숨긴 방의 기록은 목록에서도 뺀다 — 결과 조회가 그 방을 없는 방으로 본다
-        List<Tuple> records = entityManager.createQuery("""
-                        SELECT record.runningRecordId AS recordId, record.room.runningRoomId AS roomId,
-                            record.room.type AS type,
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.running.port.out.RunningRecordRow(
+                            record.runningRecordId, record.room.runningRoomId, record.room.type,
                             (SELECT COUNT(player)
                              FROM RunningRoomSessionJpaEntity session
                              JOIN RunningPlayerJpaEntity player
                                  ON player.runningPlayerId = session.runningPlayerId
                              WHERE session.room = record.room
-                               AND player.status IN :startedStatuses) AS playerCount,
-                            record.startAt AS startAt, record.totalDistance AS totalDistance,
-                            record.totalDuration AS totalDuration, record.avgPace AS avgPace,
-                            record.totalElevationGain AS totalElevationGain
+                               AND player.status IN :startedStatuses),
+                            record.startAt, record.totalDistance, record.totalDuration, record.avgPace,
+                            record.totalElevationGain)
                         FROM RunningRecordJpaEntity record
                         WHERE record.userId = :userId
                           AND record.room.deletedAt IS NULL
                           AND record.startAt >= :startInclusive
                           AND record.startAt < :endExclusive
                         ORDER BY record.startAt, record.runningRecordId
-                        """, Tuple.class)
+                        """, RunningRecordRow.class)
                 .setParameter("userId", userId.value())
                 .setParameter("startedStatuses", STARTED_STATUSES)
                 .setParameter("startInclusive", startInclusive)
                 .setParameter("endExclusive", endExclusive)
                 .getResultList();
-        if (records.isEmpty()) {
-            return List.of();
-        }
-        Map<Long, List<String>> segments = loadSegmentPolylines(
-                records.stream().map(record -> record.get("recordId", Long.class)).toList());
-        return records.stream()
-                .map(record -> new RunningRecordRow(
-                        record.get("recordId", Long.class),
-                        record.get("roomId", Long.class),
-                        record.get("type", RunningRoomType.class),
-                        record.get("playerCount", Long.class),
-                        record.get("startAt", LocalDateTime.class),
-                        record.get("totalDistance", Integer.class),
-                        record.get("totalDuration", Integer.class),
-                        record.get("avgPace", Integer.class),
-                        record.get("totalElevationGain", Integer.class),
-                        segments.getOrDefault(record.get("recordId", Long.class), List.of())))
-                .toList();
     }
 
     // 기록마다 조각 polyline을 번호순으로 모은다 — 기록마다 따로 부르면 목록 건수만큼 쿼리가 나간다.
