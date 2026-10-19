@@ -127,7 +127,7 @@ class PauseSegmentGuardTest {
 
         // then -> 사용자 상태가 깨진 것이라 ERROR가 아니다
         assertThat(logs.messages(Level.INFO)).containsExactly(
-                "[러닝] 좌표 저장 실패: 배치 안에서 일시정지 구간 번호 감소 - roomId=125, userId=" + USER.value()
+                "[러닝] 트랙 저장 실패: 배치 안에서 일시정지 구간 번호 감소 - roomId=125, userId=" + USER.value()
                         + ", sequence=1, pauseSegment=0, previousPauseSegment=1");
         assertThat(logs.messages(Level.ERROR)).isEmpty();
     }
@@ -142,7 +142,7 @@ class PauseSegmentGuardTest {
 
         // then
         assertThat(logs.messages(Level.INFO)).containsExactly(
-                "[러닝] 좌표 저장 실패: 저장된 일시정지 구간 번호보다 작음 - roomId=125, userId=" + USER.value()
+                "[러닝] 트랙 저장 실패: 저장된 일시정지 구간 번호보다 작음 - roomId=125, userId=" + USER.value()
                         + ", sequence=120, pauseSegment=0, lastSequence=119, lastPauseSegment=2");
     }
 

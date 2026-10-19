@@ -61,7 +61,12 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
                 mine.lastSequence() + 1,      // 받은 좌표가 없으면 lastSequence가 -1이라 0이 된다
                 mine.lastPauseSegment(),
                 actives.stream()
-                        .map(userId -> toPlayer(query.runningRoomId(), userId, profiles))
+                        .map(userId -> toPlayer(query.runningRoomId(), userId,
+                                // 본인은 위에서 읽은 값을 다시 쓴다 — 같은 키를 두 번 읽지 않는다
+                                userId.equals(requester)
+                                        ? mine
+                                        : loadRunningDistancePort.loadDistance(query.runningRoomId(), userId),
+                                profiles))
                         .toList(),
                 runningComboReader.read(query.runningRoomId(), requester).stream()
                         // 끝난 참가자의 콤보는 상대의 다음 배치가 끊을 때까지 남는다 — 목록에 없는 상대는 싣지 않는다
@@ -71,8 +76,7 @@ public class GetRunningSnapshotHandler implements GetRunningSnapshotUsecase {
 
     // 본인도 담는다 — 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다
     private GetRunningSnapshotResult.Player toPlayer(
-            Long runningRoomId, UserId userId, Map<UUID, PlayerProfile> profiles) {
-        RunningDistance distance = loadRunningDistancePort.loadDistance(runningRoomId, userId);
+            Long runningRoomId, UserId userId, RunningDistance distance, Map<UUID, PlayerProfile> profiles) {
         // 신청은 남고 사용자만 사라진다 — users 행이 없으면 탈퇴다
         PlayerProfile profile = profiles.get(userId.value());
         boolean deleted = profile == null;

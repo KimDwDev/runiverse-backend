@@ -41,6 +41,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 // RUNNING_STARTED가 나르는 진입·재연결 화면 복구용 스냅샷을 조립한다(api-spec 5-C).
@@ -395,6 +397,26 @@ class GetRunningSnapshotHandlerTest {
         // then -> 일시정지 구간 번호 검사가 비교하는 값과 같아야 이어 써도 거부되지 않는다
         assertThat(result.nextSequence()).isEqualTo(120L);
         assertThat(result.pauseSegment()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("본인 누적 상태는 한 번만 읽는다 -> 이어 쓸 번호와 본인 진행이 같은 값을 쓴다")
+    void readsRequesterDistanceOnce() {
+        // given
+        givenRoom(connected(ME), connected(PEER));
+        givenProfiles(profile(ME, "완두콩", null), profile(PEER, "강낭콩", null));
+        givenDistance(ME, 1_520, 345);
+        givenDistance(PEER, 1_480, 352);
+        given(runningComboReader.read(anyLong(), any())).willReturn(List.of());
+
+        // when
+        GetRunningSnapshotResult result = handler.handle(new GetRunningSnapshotQuery(ME, ROOM_ID));
+
+        // then -> 본인은 번호를 내려고 읽은 값을 진행에도 다시 쓴다. 상대는 따로 읽는다
+        verify(loadRunningDistancePort, times(1)).loadDistance(ROOM_ID, new UserId(ME));
+        verify(loadRunningDistancePort, times(1)).loadDistance(ROOM_ID, new UserId(PEER));
+        assertThat(playerOf(result, ME).distanceMeters()).isEqualTo(1_520);
+        assertThat(playerOf(result, PEER).distanceMeters()).isEqualTo(1_480);
     }
 
     @Test

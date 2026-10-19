@@ -26,7 +26,7 @@ public final class PauseSegmentGuard {
             TrackPoint previous = ordered.get(i - 1);
             TrackPoint point = ordered.get(i);
             if (point.pauseSegment() < previous.pauseSegment()) {
-                log.info("[러닝] 좌표 저장 실패: 배치 안에서 일시정지 구간 번호 감소 - roomId={}, userId={}, "
+                log.info("[러닝] 트랙 저장 실패: 배치 안에서 일시정지 구간 번호 감소 - roomId={}, userId={}, "
                                 + "sequence={}, pauseSegment={}, previousPauseSegment={}",
                         roomId, userId.value(), point.sequence(), point.pauseSegment(), previous.pauseSegment());
                 throw new PauseSegmentDecreasedException();
@@ -37,7 +37,7 @@ public final class PauseSegmentGuard {
         for (TrackPoint point : ordered) {
             if (point.sequence() > stored.lastSequence()
                     && point.pauseSegment() < stored.lastPauseSegment()) {
-                log.info("[러닝] 좌표 저장 실패: 저장된 일시정지 구간 번호보다 작음 - roomId={}, userId={}, "
+                log.info("[러닝] 트랙 저장 실패: 저장된 일시정지 구간 번호보다 작음 - roomId={}, userId={}, "
                                 + "sequence={}, pauseSegment={}, lastSequence={}, lastPauseSegment={}",
                         roomId, userId.value(), point.sequence(), point.pauseSegment(),
                         stored.lastSequence(), stored.lastPauseSegment());
