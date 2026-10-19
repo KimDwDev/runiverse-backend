@@ -12,7 +12,7 @@ set -Eeuo pipefail
 
 LOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "${LOAD_DIR}")"
-COMPOSE_FILE="${ROOT_DIR}/e2e_test/docker-compose.yml"
+COMPOSE_FILE="${ROOT_DIR}/e2e_test/compose.yml"
 ENV_FILE="${ROOT_DIR}/e2e_test/.env.test"
 PROJECT="runiverse-loadtest"
 BASE_URL="http://localhost:8080/api/v1"

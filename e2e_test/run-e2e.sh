@@ -3,7 +3,7 @@
 # 로컬과 GitHub Actions가 같은 경로를 타도록 양쪽 모두 이 스크립트만 부른다.
 set -Eeuo pipefail
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="${E2E_DIR}/docker-compose.yml"
+COMPOSE_FILE="${E2E_DIR}/compose.yml"
 # 래퍼는 새로 만들지 않고 running-service 것을 빌려 쓴다
 GRADLEW="$(dirname "${E2E_DIR}")/running-service/gradlew"
 # compose의 ${E2E_IMAGE} 치환은 셸 환경변수만 읽는다 (.env.test는 컨테이너 안으로만 들어간다).

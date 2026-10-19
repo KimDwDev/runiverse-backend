@@ -39,7 +39,7 @@ cd running-service
 > 앱 실행에는 `running-service/.env` 파일이 필요합니다. 단위 테스트는 `.env` 없이 돌아갑니다.
 
 ```bash
-./e2e_test/run-e2e.sh   # E2E — 배포 이미지를 Docker로 띄워 실행
+./e2e_test/run-e2e.sh   # E2E — 저장소 루트에서, 배포 이미지를 Docker로 띄워 실행
 ```
 
 ## 부하 테스트
