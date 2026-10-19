@@ -332,7 +332,11 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 .orElseThrow();
         assertThat(record.getTotalDistance().meters()).isEqualTo(990);
         assertThat(record.getSplits()).hasSize(99);
-        assertThat(record.getRoutePolyline().value()).isNotBlank();
+        // 끊긴 곳 없이 달렸으니 조각 하나에 모든 구간이 붙는다
+        assertThat(record.getSegments()).singleElement()
+                .satisfies(segment -> assertThat(segment.getRoutePolyline().value()).isNotBlank());
+        assertThat(record.getSplits()).allSatisfy(split ->
+                assertThat(split.getSegmentNumber().value()).isEqualTo(1));
         assertThat(record.getGpsTrackKey().value())
                 .isEqualTo("gps-tracks/%s/%d/2026-08-27.json".formatted(userId, runningRoomId));
         assertThat(record.getWeatherCode().value()).isZero();

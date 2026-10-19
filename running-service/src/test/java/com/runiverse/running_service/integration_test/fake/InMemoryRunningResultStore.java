@@ -1,5 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
+import com.runiverse.running_service.support.SegmentRoutes;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultPlayersPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningSplitsPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningResultRecordPort;
@@ -49,7 +50,7 @@ public class InMemoryRunningResultStore
     public Optional<RunningResultRecord> loadRecord(RunningRoomId runningRoomId, UserId userId) {
         return recordStore.find(runningRoomId.value(), userId)
                 .map(record -> new RunningResultRecord(
-                        record.getRoutePolyline().value(),
+                        SegmentRoutes.joinedPolyline(record),
                         record.getPeriod().startAt(),
                         record.getPeriod().endAt(),
                         record.getTotalDistance().meters(),

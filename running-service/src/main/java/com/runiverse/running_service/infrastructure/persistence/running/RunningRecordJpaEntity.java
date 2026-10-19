@@ -78,9 +78,6 @@ public class RunningRecordJpaEntity extends BaseCreatedAtEntity {
     // S3 원본 트랙 키. 재계산·분석용이라 API 응답에는 쓰지 않는다
     @Column(name = "gps_track_key", nullable = false, updatable = false)
     private String gpsTrackKey;
-    // API가 내려주는 유일한 경로 데이터. 구간 인덱스가 이 배열의 위치를 가리킨다
-    @Column(name = "route_polyline", nullable = false, updatable = false, columnDefinition = "text")
-    private String routePolyline;
     // WMO 4677 코드 — 악조건 여부는 저장하지 않고 판정 시 계산한다
     @Column(name = "weather_code", nullable = false, updatable = false)
     private int weatherCode;

@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.running.common.TrackAnalyzer;
 import com.runiverse.running_service.application.running.common.TrackFilter;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
+import com.runiverse.running_service.domain.running.record.SegmentDraft;
 import com.runiverse.running_service.domain.running.record.SplitDraft;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -98,9 +99,9 @@ public class TrackAnalyzerTest {
         TrackAnalysis analysis = analyze(track(1_800, 2.8, null));
 
         // then -> 구간 인덱스가 이 배열의 위치를 가리키므로 개수가 어긋나면 구간이 깨진다
-        assertThat(analysis.routePolyline()).isNotBlank();
-        assertThat(countPolylinePoints(analysis.routePolyline()))
-                .isEqualTo(analysis.splits().size() + 1);
+        String polyline = analysis.segments().getFirst().routePolyline();
+        assertThat(polyline).isNotBlank();
+        assertThat(countPolylinePoints(polyline)).isEqualTo(analysis.splits().size() + 1);
     }
 
     @Test
@@ -266,7 +267,7 @@ public class TrackAnalyzerTest {
                 .totalDuration(analysis.totalDurationSeconds())
                 .totalCalories(368)
                 .gpsTrackKey("gps-tracks/u/125/2026-08-27.json")
-                .routePolyline(analysis.routePolyline())
+                .segments(analysis.segments())
                 .startAt(analysis.startAt())
                 .endAt(analysis.endAt())
                 .weatherCode(0)
@@ -332,18 +333,19 @@ public class TrackAnalyzerTest {
     }
 
     @Test
-    @DisplayName("끊긴 곳이 없으면 경로 조각은 폴리라인 하나와 같다")
-    void singleSegmentEqualsPolyline() {
+    @DisplayName("끊긴 곳이 없으면 경로 조각 하나에 모든 구간이 속한다")
+    void noBreakMakesSingleSegment() {
         // when
         TrackAnalysis analysis = analyze(track(1_800, 2.8, null));
 
         // then
-        assertThat(analysis.routeSegments()).containsExactly(analysis.routePolyline());
+        assertThat(analysis.segments()).extracting(SegmentDraft::segmentNumber).containsExactly(1);
+        assertThat(analysis.splits()).allSatisfy(split -> assertThat(split.segmentNumber()).isEqualTo(1));
     }
 
     @Test
-    @DisplayName("거부한 구간에서 나뉜 경로 조각을 이으면 폴리라인의 점과 같다")
-    void segmentsConcatenateToPolyline() {
+    @DisplayName("거부한 구간에서 경로가 두 조각으로 나뉘고 구간은 끝점이 있는 조각에 속한다")
+    void rejectedGapSplitsRouteIntoSegments() {
         // given -> 2.8m/s로 600초, 60초 만에 400m 앞(택시), 다시 2.8m/s로 600초
         List<TrackPoint> points = new ArrayList<>();
         for (int i = 0; i <= 600; i++) {
@@ -361,11 +363,56 @@ public class TrackAnalyzerTest {
                 TrackFilter.apply(points, DEFAULT_PROPERTIES), TARGET, WEIGHT, PROPERTIES)
                 .orElseThrow();
 
-        // then -> 조각은 점을 나눌 뿐이라 구간 인덱스(route_polyline 기준)가 그대로 맞는다
-        assertThat(analysis.routeSegments()).hasSize(2);
-        assertThat(analysis.routeSegments().stream()
-                .flatMap(segment -> PolylineDecoder.decode(segment).stream())
-                .toList())
-                .containsExactlyElementsOf(PolylineDecoder.decode(analysis.routePolyline()));
+        // then -> 조각은 점을 나눌 뿐이라 전 조각의 점 수 합이 구간 수 + 1이다
+        List<SegmentDraft> segments = analysis.segments();
+        assertThat(segments).extracting(SegmentDraft::segmentNumber).containsExactly(1, 2);
+        int firstSegmentPoints = PolylineDecoder.decode(segments.get(0).routePolyline()).size();
+        int totalPoints = segments.stream()
+                .mapToInt(segment -> PolylineDecoder.decode(segment.routePolyline()).size())
+                .sum();
+        assertThat(totalPoints).isEqualTo(analysis.splits().size() + 1);
+        // 택시를 탄 칸에 걸친 구간은 2번 조각의 첫 점 하나만 가리킨다
+        SplitDraft across = analysis.splits().get(firstSegmentPoints - 1);
+        assertThat(across.segmentNumber()).isEqualTo(2);
+        assertThat(across.routeStartIndex()).isZero();
+        assertThat(across.routeEndIndex()).isZero();
+        assertThat(analysis.splits().get(firstSegmentPoints - 2).segmentNumber()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("두 조각으로 나뉜 분석 결과로 기록을 만들 수 있다")
+    void segmentedAnalysisSatisfiesRecordInvariants() {
+        // given -> 2.8m/s로 600초, 60초 만에 400m 앞(택시), 다시 2.8m/s로 600초
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i <= 600; i++) {
+            points.add(point(points.size(), 37.5 + i * 2.8 / METERS_PER_DEGREE, null,
+                    START.plusSeconds(i)));
+        }
+        double resumeNorth = 600 * 2.8 + 400.0;
+        for (int i = 0; i <= 600; i++) {
+            points.add(point(points.size(), 37.5 + (resumeNorth + i * 2.8) / METERS_PER_DEGREE, null,
+                    START.plusSeconds(660 + i)));
+        }
+        TrackAnalysis analysis = TrackAnalyzer.analyze(
+                TrackFilter.apply(points, DEFAULT_PROPERTIES), TARGET, WEIGHT, PROPERTIES)
+                .orElseThrow();
+
+        // when & then -> 필터 → 조각 → 구간 → 기록 검증이 한 줄로 이어지는지 보는 관문이다
+        assertThat(analysis.segments()).hasSize(2);
+        assertThatCode(() -> RunningRecord.finish()
+                .runningRoomId(125L)
+                .userId(USER_ID)
+                .avgPace(analysis.avgPaceSecondsPerKm())
+                .totalDistance(analysis.totalDistanceMeters())
+                .totalDuration(analysis.totalDurationSeconds())
+                .totalCalories(368)
+                .gpsTrackKey("gps-tracks/u/125/2026-08-27.json")
+                .segments(analysis.segments())
+                .startAt(analysis.startAt())
+                .endAt(analysis.endAt())
+                .weatherCode(0)
+                .temperature(new BigDecimal("15.0"))
+                .splits(analysis.splits())
+                .build()).doesNotThrowAnyException();
     }
 }

@@ -1,5 +1,6 @@
 package com.runiverse.running_service.integration_test.running;
 
+import com.runiverse.running_service.support.SegmentRoutes;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
@@ -163,7 +164,7 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
         assertThat(listed.totalDistanceMeters()).isEqualTo(record.getTotalDistance().meters());
         assertThat(listed.totalDurationSeconds()).isEqualTo(record.getTotalDuration().seconds());
         assertThat(listed.averagePaceSecondsPerKm()).isEqualTo(record.getAvgPace().secondsPerKm());
-        assertThat(listed.routePolyline()).isEqualTo(record.getRoutePolyline().value());
+        assertThat(listed.routePolyline()).isEqualTo(SegmentRoutes.joinedPolyline(record));
     }
 
     @Test

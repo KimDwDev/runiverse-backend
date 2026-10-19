@@ -518,7 +518,8 @@ public class RunningFinisherTest {
             // then -> 목표를 넘겨 뛰었으므로 목표 지점에서 끊긴다
             assertThat(record.getTotalDistance().meters()).isEqualTo(TARGET);
             assertThat(record.getSplits()).hasSize(TARGET / PROPERTIES.splitDistanceMeters());
-            assertThat(record.getRoutePolyline().value()).isNotBlank();
+            assertThat(record.getSegments()).singleElement()
+                    .satisfies(segment -> assertThat(segment.getRoutePolyline().value()).isNotBlank());
             assertThat(record.getGpsTrackKey().value()).isEqualTo(GPS_TRACK_KEY);
         }
 
