@@ -462,4 +462,48 @@ public class TrackAnalyzerTest {
                 .splits(analysis.splits())
                 .build()).doesNotThrowAnyException();
     }
+
+    // 북쪽으로 초당 2.8m 달리는 좌표 — 고도와 일시정지 구간 번호를 정한다. 위치는 끊김 없이 이어진다
+    private static TrackPoint climbing(int i, double altitude, int pauseSegment) {
+        return new TrackPoint(i, 37.5 + i * 2.8 / METERS_PER_DEGREE, 127.0, altitude, 5.0,
+                null, null, 168, null, START.plusSeconds(i), pauseSegment);
+    }
+
+    @Test
+    @DisplayName("일시정지 중 오른 고도는 누적 상승에 넣지 않는다")
+    void elevationGainSkipsClimbDuringPause() {
+        // given -> 고도 10m 평지를 200초 달리고 일시정지, 30m 위(40m)에서 재개해 200초 평지를 달린다
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            points.add(climbing(i, 10.0, 0));
+        }
+        for (int i = 200; i < 400; i++) {
+            points.add(climbing(i, 40.0, 1));
+        }
+
+        // when
+        TrackAnalysis analysis = analyze(points);
+
+        // then -> 경계에서 기준을 새로 잡지 않으면 30m가 상승으로 들어간다
+        assertThat(analysis.totalElevationGainMeters()).isZero();
+    }
+
+    @Test
+    @DisplayName("재개 뒤 오르막은 새 기준 고도에서 센다")
+    void elevationGainCountsClimbAfterResume() {
+        // given -> 10m 평지 200초, 일시정지 후 40m에서 재개해 200초 동안 60m까지 오른다
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            points.add(climbing(i, 10.0, 0));
+        }
+        for (int i = 200; i < 400; i++) {
+            points.add(climbing(i, 40.0 + (i - 200) * 0.1, 1));
+        }
+
+        // when
+        TrackAnalysis analysis = analyze(points);
+
+        // then -> 일시정지 중 30m는 빠지고 뛰어서 오른 약 20m만 남는다(노이즈 임계값 단위로 끊겨 센다)
+        assertThat(analysis.totalElevationGainMeters()).isBetween(17, 20);
+    }
 }

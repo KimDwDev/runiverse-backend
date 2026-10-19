@@ -351,4 +351,75 @@ public class SplitAssemblerTest {
                 .splits(drafts)
                 .build()).doesNotThrowAnyException();
     }
+
+    // 북쪽으로 초당 0.5m 걷는 좌표 — 10m 구간 하나에 표본이 스무 개쯤 들어가 앞뒤 순고도차를 따로 잴 수 있다
+    private static TrackPoint walking(int i, Double altitude, int pauseSegment) {
+        return new TrackPoint(i, 37.5 + i * 0.5 / METERS_PER_DEGREE, 127.0, altitude, 5.0,
+                null, null, null, null, START.plusSeconds(i), pauseSegment);
+    }
+
+    // 점 0~29는 일시정지 전, 점 30부터는 재개 뒤다. 재개하면서 고도가 100m로 뛴다(일시정지 중 오른 것).
+    // 두 쪽 모두 점마다 0.5m씩 오른다
+    private static List<TrackPoint> pausedWalk(boolean altitudeBeforePause) {
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i <= 60; i++) {
+            Double altitude = i < 30
+                    ? (altitudeBeforePause ? Double.valueOf(i * 0.5) : null)
+                    : Double.valueOf(100.0 + (i - 30) * 0.5);
+            points.add(walking(i, altitude, i < 30 ? 0 : 1));
+        }
+        return points;
+    }
+
+    private static List<SplitDraft> assembleWalk(List<TrackPoint> points) {
+        List<BoundaryPoint> boundaries = TrackResampler.resample(unfiltered(points), TARGET, INTERVAL);
+        return SplitAssembler.assemble(List.of(boundaries), points, INTERVAL, WEIGHT, ELEVATION_NOISE);
+    }
+
+    @Test
+    @DisplayName("일시정지를 걸친 구간의 순고도차는 경계 앞과 뒤를 따로 내서 더한다")
+    void elevationChangeAcrossPauseSumsBothSides() {
+        // when -> 2번 구간(약 10~20m)이 점 30의 경계를 걸친다
+        List<SplitDraft> drafts = assembleWalk(pausedWalk(true));
+
+        // then -> 앞쪽 약 +4.5m와 뒤쪽 약 +5m의 합이다. 끝 − 시작으로 내면 일시정지 중 오른 고도까지 +94m쯤 된다
+        assertThat(drafts.get(1).elevationChange()).isBetween(8, 11);
+    }
+
+    @Test
+    @DisplayName("경계 한쪽에만 고도 표본이 있으면 그쪽 순고도차만 쓴다")
+    void elevationChangeUsesOneSideWhenOtherHasNoSamples() {
+        // when -> 일시정지 전에는 단말이 고도를 못 쟀다
+        List<SplitDraft> drafts = assembleWalk(pausedWalk(false));
+
+        // then -> 재개 뒤 약 +5m만 남는다
+        assertThat(drafts.get(1).elevationChange()).isBetween(4, 6);
+    }
+
+    @Test
+    @DisplayName("경계를 걸치지 않은 구간은 지금처럼 끝 − 시작이다")
+    void elevationChangeWithoutPauseIsUnchanged() {
+        // when -> 1번 구간(약 0~10m)은 일시정지 전이다
+        List<SplitDraft> drafts = assembleWalk(pausedWalk(true));
+
+        // then -> 점마다 0.5m씩 스무 칸쯤 올라 약 +10m다
+        assertThat(drafts.get(0).elevationChange()).isBetween(9, 11);
+    }
+
+    @Test
+    @DisplayName("경계 앞뒤에 표본이 하나씩뿐이면 순고도차를 말할 수 없다")
+    void elevationChangeIsNullWithSingleSampleEachSide() {
+        // given -> 2번 구간 안에서 경계 바로 앞 점 하나와 바로 뒤 점 하나만 고도가 있다
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i <= 60; i++) {
+            Double altitude = i == 29 ? Double.valueOf(14.0) : i == 30 ? Double.valueOf(100.0) : null;
+            points.add(walking(i, altitude, i < 30 ? 0 : 1));
+        }
+
+        // when
+        List<SplitDraft> drafts = assembleWalk(points);
+
+        // then -> 지금 규칙이면 둘을 끝 − 시작으로 이어 +86m가 된다
+        assertThat(drafts.get(1).elevationChange()).isNull();
+    }
 }
