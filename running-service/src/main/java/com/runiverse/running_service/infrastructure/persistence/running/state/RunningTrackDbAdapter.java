@@ -131,8 +131,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                 nullable(point.headingDegrees(), "%.1f"),
                 nullable(point.cadenceSpm(), "%d"),
                 nullable(point.currentPaceSecondsPerKm(), "%d"),
-                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),   // ← 변경: 끝에 쉼표
-                point.pauseSegment());                                               // ← 변경: 추가
+                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),
+                point.pauseSegment());
     }
 
     private static String nullable(Number value, String format) {
@@ -157,8 +157,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                     toInteger(fields[8]),
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
-                            ZoneId.systemDefault()),                                 // ← 변경: 괄호 하나 줄이고 쉼표
-                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));   // ← 변경: 추가
+                            ZoneId.systemDefault()),
+                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));
         }
         return points;
     }
