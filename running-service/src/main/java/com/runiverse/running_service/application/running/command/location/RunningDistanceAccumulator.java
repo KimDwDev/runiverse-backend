@@ -38,7 +38,9 @@ public final class RunningDistanceAccumulator {
             if (point.sequence() <= lastSequence) {
                 continue;
             }
-            if (lastLatitude != null) {
+            // 일시정지 구간 번호가 바뀐 칸은 일시정지 동안 관측하지 않은 이동이다 — 누적에서도 뺀다.
+            // 빼지 않으면 일시정지 중 이동으로 목표에 닿거나 앞선 참가자와 콤보가 붙는다
+            if (lastLatitude != null && point.pauseSegment() == lastPauseSegment) {
                 meters += TrackDistance.between(
                         lastLatitude, lastLongitude, point.latitude(), point.longitude());
             }
