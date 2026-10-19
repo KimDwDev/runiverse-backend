@@ -135,7 +135,7 @@ public class UpdateRunningLocationHandlerTest {
                 181.0,
                 174,
                 paceSecondsPerKm,
-                LocalDateTime.of(2026, 8, 25, 7, 30, (int) sequence));
+                LocalDateTime.of(2026, 8, 25, 7, 30, (int) sequence), 0);
     }
 
     private UpdateRunningLocationCommand command(List<TrackPoint> points) {

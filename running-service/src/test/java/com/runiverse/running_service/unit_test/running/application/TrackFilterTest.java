@@ -51,7 +51,7 @@ public class TrackFilterTest {
             points.add(new TrackPoint(points.size(),
                     37.5 + north / METERS_PER_DEGREE_LATITUDE,
                     127.0 + east / METERS_PER_DEGREE_LONGITUDE,
-                    null, accuracy, null, null, null, null, START.plusSeconds(second)));
+                    null, accuracy, null, null, null, null, START.plusSeconds(second), 0));
             return this;
         }
 

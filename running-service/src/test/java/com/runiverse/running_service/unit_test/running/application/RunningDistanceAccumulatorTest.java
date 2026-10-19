@@ -31,7 +31,7 @@ class RunningDistanceAccumulatorTest {
                 sequence,
                 BASE_LATITUDE + meters * METER_IN_LATITUDE,
                 BASE_LONGITUDE,
-                38.5, accuracyMeters, 2.8, 0.0, 170, 357, RECORDED_AT.plusSeconds(sequence));
+                38.5, accuracyMeters, 2.8, 0.0, 170, 357, RECORDED_AT.plusSeconds(sequence), 0);
     }
 
     private static TrackPoint point(long sequence, double meters) {

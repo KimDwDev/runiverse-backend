@@ -215,6 +215,6 @@ public class RouteSegmenterTest {
     // 출발점에서 북쪽으로 north 미터, 출발부터 second초
     private static TrackPoint point(long sequence, double north, long second) {
         return new TrackPoint(sequence, 37.5 + north / METERS_PER_DEGREE, 127.0,
-                null, 5.0, null, null, null, null, START.plusSeconds(second));
+                null, 5.0, null, null, null, null, START.plusSeconds(second), 0);
     }
 }

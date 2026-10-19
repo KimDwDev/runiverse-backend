@@ -80,16 +80,20 @@ class RunningTrackRedisAdapterTest {
         log.stop();
     }
 
-    // 단말이 모두 측정한 좌표 — 인자 순서는 [순번,위도,경도,고도,정확도,속도,방위,케이던스,페이스,시각]
+    // 단말이 모두 측정한 좌표 — 인자 순서는 [순번,위도,경도,고도,정확도,속도,방위,케이던스,페이스,시각,일시정지 구간]
     private static TrackPoint point(long sequence) {
+        return point(sequence, 0);
+    }
+
+    private static TrackPoint point(long sequence, int pauseSegment) {
         return new TrackPoint(
-                sequence, 35.17955, 129.07564, 18.4, 6.2, 2.8, 85.3, 165, 345, RECORDED_AT);
+                sequence, 35.17955, 129.07564, 18.4, 6.2, 2.8, 85.3, 165, 345, RECORDED_AT, pauseSegment);
     }
 
     // 고도·속도·방위·케이던스·페이스를 못 잰 좌표 — Location.isValid()가 막지 않는 조합이다
     private static TrackPoint pointWithoutOptionalFields(long sequence) {
         return new TrackPoint(
-                sequence, 35.17955, 129.07564, null, 6.2, null, null, null, null, RECORDED_AT);
+                sequence, 35.17955, 129.07564, null, 6.2, null, null, null, null, RECORDED_AT, 0);
     }
 
     // execute(script, keys, args...)는 가변 인자라 매처로 잡기 까다롭다 — 실제 호출을 직접 읽는다
@@ -150,10 +154,10 @@ class RunningTrackRedisAdapterTest {
         // when
         adapter.append(ROOM_ID, userId, List.of(point(7)));
 
-        // then -> [순번,위도,경도,고도,정확도,속도,방위,케이던스,페이스,시각]
+        // then -> [순번,위도,경도,고도,정확도,속도,방위,케이던스,페이스,시각,일시정지 구간]
         assertThat(scriptArgs()[2]).isEqualTo("7");
         assertThat(scriptArgs()[3]).isEqualTo(
-                "[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d]".formatted(EPOCH_SECOND));
+                "[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d,0]".formatted(EPOCH_SECOND));
     }
 
     @Test
@@ -167,7 +171,7 @@ class RunningTrackRedisAdapterTest {
 
         // then -> 값이 없다는 사실이 남아야 읽는 쪽이 표본에서 제외할 수 있다
         assertThat(scriptArgs()[3]).isEqualTo(
-                "[0,35.17955,129.07564,null,6.2,null,null,null,null,%d]".formatted(EPOCH_SECOND));
+                "[0,35.17955,129.07564,null,6.2,null,null,null,null,%d,0]".formatted(EPOCH_SECOND));
     }
 
     @Test
@@ -305,6 +309,63 @@ class RunningTrackRedisAdapterTest {
         assertThat(track.points()).containsExactly(point(3), point(4), point(5), point(6));
         assertThat(track.raw()).isEqualTo(
                 "[" + third + "," + fourth + "," + fifth + "," + sixth + "]");
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호를 맨 끝 칸에 적는다")
+    void writesPauseSegmentLast() {
+        // when
+        adapter.append(ROOM_ID, userId, List.of(point(7, 3)));
+
+        // then -> 맨 끝에 붙여야 앞 열 칸의 자리가 옛 형식과 같다
+        assertThat(scriptArgs()[3]).isEqualTo(
+                "[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d,3]".formatted(EPOCH_SECOND));
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호를 값 그대로 되읽는다")
+    void roundTripsPauseSegment() {
+        // given -> 0이 아닌 값이어야 자리가 어긋나거나 0으로 메워진 것을 가린다
+        TrackPoint original = point(7, 3);
+        givenStoredBatches("[" + compacted(original) + "]");
+
+        // when
+        TrackPoint restored = adapter.load(ROOM_ID, userId).points().getFirst();
+
+        // then
+        assertThat(restored).isEqualTo(original);
+        assertThat(restored.pauseSegment()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("배포 전에 쌓인 열 칸짜리 좌표는 일시정지 구간 0으로 읽는다")
+    void readsLegacyPointWithoutPauseSegmentAsZero() {
+        // given -> 배포 순간 뛰던 러닝은 TTL 동안 옛 형식이 버퍼에 남는다.
+        // 열한 번째 칸을 무조건 읽으면 그 러닝은 종료할 때 터진다
+        givenStoredBatches(
+                "[[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d]]".formatted(EPOCH_SECOND));
+
+        // when
+        TrackPoint restored = adapter.load(ROOM_ID, userId).points().getFirst();
+
+        // then -> 그 러닝은 일시정지 번호를 보낸 적이 없다
+        assertThat(restored).isEqualTo(point(7, 0));
+    }
+
+    @Test
+    @DisplayName("한 러닝에 옛 형식과 새 형식이 섞여 있어도 순번 순서로 함께 읽는다")
+    void readsMixedLegacyAndCurrentPoints() {
+        // given -> 배포 전 배치 하나, 배포 뒤 배치 하나
+        String current = compacted(point(8, 0));
+        givenStoredBatches(
+                "[[7,35.17955,129.07564,18.4,6.2,2.80,85.3,165,345,%d]]".formatted(EPOCH_SECOND),
+                "[" + current + "]");
+
+        // when
+        List<TrackPoint> points = adapter.load(ROOM_ID, userId).points();
+
+        // then
+        assertThat(points).containsExactly(point(7, 0), point(8, 0));
     }
 
     @Test

@@ -253,7 +253,7 @@ public class RunningFinisherTest {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * stepMeters / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, cadenceSpm, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, cadenceSpm, null, TRACK_START.plusSeconds(i), 0));
         }
         return new RunningTrack("raw", points);
     }
@@ -1128,7 +1128,7 @@ public class RunningFinisherTest {
             int running = 1_700;
             for (int i = 0; i < running; i++) {
                 points.add(new TrackPoint(i, 37.5 + i * 2.8 / METERS_PER_DEGREE, 127.0,
-                        null, 5.0, null, null, CADENCE, null, TRACK_START.plusSeconds(i)));
+                        null, 5.0, null, null, CADENCE, null, TRACK_START.plusSeconds(i), 0));
             }
             double stopLatitude = 37.5 + (running - 1) * 2.8 / METERS_PER_DEGREE;
             double metersPerDegreeLongitude = METERS_PER_DEGREE * Math.cos(Math.toRadians(37.5));
@@ -1136,7 +1136,7 @@ public class RunningFinisherTest {
                 double east = i % 2 == 0 ? 3.0 : -3.0;
                 points.add(new TrackPoint(running - 1 + i, stopLatitude,
                         127.0 + east / metersPerDegreeLongitude, null, 5.0, null, null, CADENCE, null,
-                        TRACK_START.plusSeconds(running - 1 + i)));
+                        TRACK_START.plusSeconds(running - 1 + i), 0));
             }
             return new RunningTrack("raw", points);
         }

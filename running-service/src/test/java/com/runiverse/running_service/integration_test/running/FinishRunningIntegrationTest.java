@@ -165,7 +165,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         // 솔로 방은 목표 거리가 없다
         updateRunningLocationHandler.handle(
@@ -176,7 +176,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     private static TrackPoint sensorPoint(int i, Integer cadenceSpm, Double altitudeMeters,
                                           LocalDateTime recordedAt) {
         return new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                altitudeMeters, 5.0, null, null, cadenceSpm, null, recordedAt);
+                altitudeMeters, 5.0, null, null, cadenceSpm, null, recordedAt, 0);
     }
 
     private void runWith(UUID userId, Long runningRoomId, List<TrackPoint> points) {
@@ -682,7 +682,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         return updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));
@@ -741,7 +741,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         int running = 1_900;
         for (int i = 0; i < running; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
         }
         double stopLatitude = 37.5 + (running - 1) * 2.5 / METERS_PER_DEGREE;
         double metersPerDegreeLongitude = METERS_PER_DEGREE * Math.cos(Math.toRadians(37.5));
@@ -749,7 +749,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
             double east = i % 2 == 0 ? 3.0 : -3.0;
             points.add(new TrackPoint(running - 1 + i, stopLatitude,
                     127.0 + east / metersPerDegreeLongitude, null, 5.0, null, null, 168, null,
-                    TRACK_START.plusSeconds(running - 1 + i)));
+                    TRACK_START.plusSeconds(running - 1 + i), 0));
         }
         return updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, TARGET_DISTANCE, points));

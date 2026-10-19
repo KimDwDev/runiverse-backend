@@ -39,7 +39,7 @@ public class SplitAssemblerTest {
     private static TrackPoint point(long sequence, double latitude, Double altitude,
                                     Integer cadence, LocalDateTime at) {
         return new TrackPoint(sequence, latitude, 127.0, altitude, 5.0, null, null, cadence,
-                null, at);
+                null, at, 0);
     }
 
     // 북쪽으로 초당 stepMeters씩 달리는 트랙

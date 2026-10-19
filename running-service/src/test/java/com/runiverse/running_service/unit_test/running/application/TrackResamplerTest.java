@@ -28,7 +28,7 @@ public class TrackResamplerTest {
 
     private static TrackPoint point(long sequence, double latitude, double longitude,
                                     LocalDateTime at) {
-        return new TrackPoint(sequence, latitude, longitude, null, 5.0, null, null, null, null, at);
+        return new TrackPoint(sequence, latitude, longitude, null, 5.0, null, null, null, null, at, 0);
     }
 
     // 북쪽으로 일정 간격 달리는 트랙 — 1초에 stepMeters씩

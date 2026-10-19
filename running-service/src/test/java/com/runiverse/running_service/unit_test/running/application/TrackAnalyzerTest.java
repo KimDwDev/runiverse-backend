@@ -41,7 +41,7 @@ public class TrackAnalyzerTest {
 
     private static TrackPoint point(long sequence, double latitude, Double altitude,
                                     LocalDateTime at) {
-        return new TrackPoint(sequence, latitude, 127.0, altitude, 5.0, null, null, 168, null, at);
+        return new TrackPoint(sequence, latitude, 127.0, altitude, 5.0, null, null, 168, null, at, 0);
     }
 
     // 북쪽으로 초당 stepMeters씩 달리는 트랙
