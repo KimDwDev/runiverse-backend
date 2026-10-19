@@ -138,6 +138,29 @@ class GlobalExceptionHandlerMetricsTest {
     }
 
     @Test
+    @DisplayName("받지 않는 메서드는 405와 Allow 헤더로 응답하고 METHOD_NOT_ALLOWED를 원인으로 남긴다")
+    void methodNotAllowed() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/probe/business")).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(405);
+        assertThat(response.getHeader("Allow")).isEqualTo("POST");
+        assertThat(response.getContentAsString()).contains("\"code\":\"METHOD_NOT_ALLOWED\"");
+        assertThat(only("reason")).isEqualTo("METHOD_NOT_ALLOWED");
+    }
+
+    @Test
+    @DisplayName("받지 않는 본문 형식은 415로 응답하고 UNSUPPORTED_MEDIA_TYPE을 원인으로 남긴다")
+    void unsupportedMediaType() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(
+                post("/probe/validated").contentType(MediaType.TEXT_PLAIN).content("name")
+        ).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(415);
+        assertThat(response.getContentAsString()).contains("\"code\":\"UNSUPPORTED_MEDIA_TYPE\"");
+        assertThat(only("reason")).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
+    }
+
+    @Test
     @DisplayName("예상 못 한 예외는 INTERNAL_SERVER_ERROR를 원인으로 남긴다")
     void unexpectedException() throws Exception {
         perform(post("/probe/unexpected"));

@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.presentation;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
+import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
 import com.runiverse.running_service.presentation.common.exception.SecurityErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -80,6 +81,21 @@ public class ErrorExposurePolicyTest {
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.CONFLICT,
                 UserErrorCode.ONBOARDING_NOT_COMPLETED.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("받지 않는 메서드는 405 그대로 노출한다")
+    void methodNotAllowedIsExposed() {
+        // 노출 목록에서 빠지면 클라 잘못이 500 서버 오류로 바뀐다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.METHOD_NOT_ALLOWED, CommonErrorCode.METHOD_NOT_ALLOWED.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("받지 않는 본문 형식은 415 그대로 노출한다")
+    void unsupportedMediaTypeIsExposed() {
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode())).isTrue();
     }
 
     @Test
