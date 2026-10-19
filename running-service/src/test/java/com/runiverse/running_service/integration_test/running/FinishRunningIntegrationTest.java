@@ -890,7 +890,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         // when -> 종료 직후 상태 조회가 실패한 틈에 첫 번째 러너의 늦은 배치가 판정까지 통과했다.
         //         누적 거리는 상대(좌표 401개 × 2.5m)와 같아 창 안이다
         newUpdateRunningComboJudge().judge(runningRoomId, new UserId(first),
-                new RunningComboSignal(401 * 2.5, true, true));
+                new RunningComboSignal(401 * 2.5, true, true, false));
 
         // then -> 일시정지와 달리 좌표가 와도 풀리지 않는다
         assertThat(runningComboPublisher.publishedIn(runningRoomId).getLast().relations()).isEmpty();

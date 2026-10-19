@@ -688,6 +688,19 @@ public class UpdateRunningLocationHandlerTest {
         assertThat(captor.getValue().observed()).isTrue();
         assertThat(captor.getValue().moved()).isTrue();
         assertThat(captor.getValue().meters()).isEqualTo(captureSaved().meters());
+        assertThat(captor.getValue().pauseCrossed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("일시정지 경계를 넘은 배치는 콤보 판정에 경계를 넘었다고 넘긴다")
+    void passesPauseCrossingToCombo() {
+        // when -> 두 좌표 사이에서 일시정지 버튼을 눌렀다
+        updateRunningLocationHandler.handle(command(List.of(pausedPoint(0L, 0), pausedPoint(1L, 1))));
+
+        // then -> 일시정지 신호가 유실돼도 이 판정에서 콤보를 끊는 근거다
+        ArgumentCaptor<RunningComboSignal> captor = ArgumentCaptor.forClass(RunningComboSignal.class);
+        verify(updateRunningComboJudge).judge(anyLong(), any(), captor.capture());
+        assertThat(captor.getValue().pauseCrossed()).isTrue();
     }
 
     @Test

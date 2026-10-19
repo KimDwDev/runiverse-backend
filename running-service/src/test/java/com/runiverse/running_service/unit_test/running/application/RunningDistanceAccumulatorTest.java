@@ -278,4 +278,75 @@ class RunningDistanceAccumulatorTest {
         assertThat(result.distance().meters())
                 .isCloseTo(TrackDistance.between(a, b) + TrackDistance.between(b, c), within(1e-6));
     }
+
+    @Test
+    @DisplayName("일시정지 경계를 넘으면 의심점을 비우고 경계 뒤 첫 관측을 이동으로 보지 않는다")
+    void clearsAnchorAtPauseBoundary() {
+        // given -> 의심점은 출발점이다. 일시정지한 채 200m 옮겨 재개했다
+        TrackPoint resumed = paused(1, 200, 1);
+
+        // when
+        RunningDistanceAccumulation result = accumulate(anchoredAtOrigin(), resumed);
+
+        // then -> 의심점 반경 밖이지만 옮겨진 것이 아니다 — 일시정지 중 이동은 달린 것이 아니다
+        assertThat(result.pauseCrossed()).isTrue();
+        assertThat(result.moved()).isFalse();
+        assertThat(result.observed()).isTrue();
+        assertThat(result.distance().anchorLatitude()).isEqualTo(resumed.latitude());
+        assertThat(result.distance().anchorLongitude()).isEqualTo(resumed.longitude());
+    }
+
+    @Test
+    @DisplayName("경계 뒤 첫 좌표가 관측이 아니면 의심점을 비운 채 저장한다")
+    void keepsAnchorEmptyWhenFirstPointAfterBoundaryIsNotObserved() {
+        // given -> 재개 첫 좌표의 정확도가 상한보다 나쁘다
+        TrackPoint inaccurate = point(1, 200, 80.0, 1);
+
+        // when
+        RunningDistanceAccumulation result = accumulate(anchoredAtOrigin(), inaccurate);
+
+        // then -> 옛 의심점이 남으면 다음 관측이 반경 밖이라 옮겨진 것으로 잡힌다
+        assertThat(result.pauseCrossed()).isTrue();
+        assertThat(result.observed()).isFalse();
+        assertThat(result.distance().anchorLatitude()).isNull();
+        assertThat(result.distance().anchorLongitude()).isNull();
+    }
+
+    @Test
+    @DisplayName("비운 의심점은 다음 배치의 첫 관측이 채우고 그것도 이동으로 보지 않는다")
+    void nextBatchFillsEmptiedAnchorWithoutMoving() {
+        // given -> 직전 배치가 경계를 넘었고 관측이 없어 의심점이 비어 있다
+        TrackPoint inaccurate = point(1, 200, 80.0, 1);
+        RunningDistance emptied = accumulate(anchoredAtOrigin(), inaccurate).distance();
+
+        // when -> 같은 일시정지 구간 안에서 관측이 들어온다
+        TrackPoint observed = paused(2, 203, 1);
+        RunningDistanceAccumulation result = accumulate(emptied, observed);
+
+        // then -> 경계는 이미 지났다
+        assertThat(result.pauseCrossed()).isFalse();
+        assertThat(result.moved()).isFalse();
+        assertThat(result.distance().anchorLatitude()).isEqualTo(observed.latitude());
+    }
+
+    @Test
+    @DisplayName("러닝의 첫 좌표는 번호가 0이 아니어도 경계가 아니다")
+    void firstPointOfRunIsNotBoundary() {
+        // given -> 첫 배치를 받기 전에 일시정지를 눌렀다 — 앞 좌표가 없어 칸이 없다
+        RunningDistanceAccumulation result = accumulate(RunningDistance.empty(), paused(0, 0, 1));
+
+        // then
+        assertThat(result.pauseCrossed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("같은 일시정지 구간 안이면 경계를 넘은 것이 아니다")
+    void sameSegmentIsNotBoundary() {
+        // when
+        RunningDistanceAccumulation result = accumulate(anchoredAtOrigin(), paused(1, 11, 0));
+
+        // then -> 지금처럼 반경 밖이면 옮겨진다
+        assertThat(result.pauseCrossed()).isFalse();
+        assertThat(result.moved()).isTrue();
+    }
 }
