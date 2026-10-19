@@ -43,7 +43,14 @@ public final class TrackFilter {
             double meters = TrackDistance.between(from, to);
             double seconds = seconds(from, to);
             boolean accepted;
-            if (stopEdges[edge]) {
+            if (from.pauseSegment() != to.pauseSegment()) {
+                // ⓪ 일시정지 경계 — 일시정지 동안 관측하지 않은 칸이다. 이동 거리·속도와 무관하게 다른 판정보다 먼저 뺀다.
+                // ③으로 판정하면 일시정지한 채 뛰는 속도로 옮긴 거리가 인정된다
+                stats.pauseBoundaryCount++;
+                stats.pauseRemovedMeters += meters;
+                accepted = false;
+                breakEdges[edge] = true;
+            } else if (stopEdges[edge]) {
                 // 제자리라 끊지 않는다 — 앞뒤 경계점이 반경 안의 직선으로 이어진다
                 accepted = false;
             } else if (to.recordedAt().isBefore(from.recordedAt())) {
@@ -95,7 +102,10 @@ public final class TrackFilter {
             if (!kept.isEmpty() && i + 1 < points.size()) {
                 TrackPoint previous = kept.getLast();
                 TrackPoint next = points.get(i + 1);
-                if (tooFast(previous, point, properties) && tooFast(point, next, properties)
+                // 같은 일시정지 구간 안에서만 비교한다 — 경계 너머 점과 비교하면 일시정지 중 이동이 튐처럼 보인다.
+                // 경계 바로 옆에서 튄 점은 남고, 그 칸이 ⓪이나 튐 칸으로 0이 된다
+                if (sameSegment(previous, point, next)
+                        && tooFast(previous, point, properties) && tooFast(point, next, properties)
                         && !tooFast(previous, next, properties)) {
                     stats.spikePointCount++;
                     stats.spikeRemovedMeters += TrackDistance.between(previous, point)
@@ -121,6 +131,14 @@ public final class TrackFilter {
         int anchor = 0;
         int inside = 0;
         for (int i = 1; i < points.size(); i++) {
+            // 경계를 넘으면 머문 시간 판정을 마치고 경계 뒤 첫 좌표를 새 기준점으로 삼는다.
+            // 반경 비교보다 먼저 본다 — 반경 안에서 재개하면 경계 칸이 정지 범위에 들어가 같은 칸을 두 번 뺀다
+            if (points.get(i).pauseSegment() != points.get(anchor).pauseSegment()) {
+                markStop(points, anchor, inside, stopEdges, properties, stats);
+                anchor = i;
+                inside = i;
+                continue;
+            }
             double fromAnchor = TrackDistance.between(points.get(anchor), points.get(i));
             if (fromAnchor <= radius(points.get(i), properties, stats)) {
                 inside = i;
@@ -195,6 +213,11 @@ public final class TrackFilter {
         return seconds == 0 ? OptionalDouble.empty() : OptionalDouble.of(meters / seconds);
     }
 
+    private static boolean sameSegment(TrackPoint previous, TrackPoint point, TrackPoint next) {
+        return previous.pauseSegment() == point.pauseSegment()
+                && point.pauseSegment() == next.pauseSegment();
+    }
+
     private static boolean tooFast(TrackPoint from, TrackPoint to, TrackFilterProperties properties) {
         return TrackDistance.between(from, to) / Math.max(seconds(from, to), MIN_EDGE_SECONDS)
                 > properties.maxSpeedMetersPerSecond();
@@ -237,6 +260,8 @@ public final class TrackFilter {
         double maxStopSeconds;
         double maxStopDisplacementMeters;
         int radiusClampedCount;
+        int pauseBoundaryCount;
+        double pauseRemovedMeters;
 
         void recordGap(double meters, double seconds, boolean accepted) {
             gapEdgeCount++;
@@ -266,7 +291,7 @@ public final class TrackFilter {
                     gapEdgeCount, gapAcceptedCount, gapRejectedCount,
                     gapAcceptedMeters, gapRejectedMeters, maxGapEdgeMeters, maxGapEdgeSeconds,
                     stopCount, stopSeconds, stopRemovedMeters, maxStopSeconds, maxStopDisplacementMeters,
-                    radiusClampedCount);
+                    radiusClampedCount, pauseBoundaryCount, pauseRemovedMeters);
         }
     }
 }

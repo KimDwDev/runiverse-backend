@@ -394,7 +394,8 @@ public class RunningFinisher {
     private void logFilter(Long runningRoomId, UUID userId, boolean onGoal, Long lastPointLagSec,
                            TrackFilterSummary summary) {
         log.info("[러닝] 트랙 필터 성공 - roomId={}, userId={}, trigger={}, lastPointLagSec={}, "
-                        + "rawDistanceM={}, filteredDistanceM={}, accuracyDroppedCount={}, "
+                        + "rawDistanceM={}, filteredDistanceM={}, pauseBoundaryCount={}, "
+                        + "pauseRemovedDistanceM={}, accuracyDroppedCount={}, "
                         + "accuracyRemovedDistanceM={}, spikePointCount={}, "
                         + "jumpEdgeCount={}, spikeRemovedDistanceM={}, "
                         + "gapEdgeCount={}, gapAcceptedCount={}, gapRejectedCount={}, "
@@ -403,6 +404,7 @@ public class RunningFinisher {
                         + "maxStopDisplacementM={}, radiusClampedCount={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH", lastPointLagSec,
                 Math.round(summary.rawMeters()), Math.round(summary.filteredMeters()),
+                summary.pauseBoundaryCount(), Math.round(summary.pauseRemovedMeters()),
                 summary.accuracyDroppedCount(), Math.round(summary.accuracyRemovedMeters()),
                 summary.spikePointCount(),
                 summary.jumpEdgeCount(), Math.round(summary.spikeRemovedMeters()),
