@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS running_state_distance (
     user_id          uuid             NOT NULL,
     meters           double precision NOT NULL,
     last_sequence    bigint           NOT NULL,
+    last_pause_segment integer        NOT NULL,
     last_latitude    double precision,
     last_longitude   double precision,
     last_pace        integer,

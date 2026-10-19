@@ -67,8 +67,6 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
     private static final String POINTS_FIELD = "points";
     // 중첩이 한 겹뿐이라 대괄호 안에 대괄호가 없는 덩어리가 좌표 하나다
     private static final Pattern POINT = Pattern.compile("\\[([^\\[\\]]+)]");
-    // 배포 직전에 쌓인 버퍼는 칸이 하나 적다 — 그 러닝은 일시정지 번호를 보낸 적이 없으니 0이다
-    private static final int LEGACY_FIELD_COUNT = 10;
 
     @Override
     public int append(Long runningRoomId, UserId userId, List<TrackPoint> points) {
@@ -176,8 +174,7 @@ public class RunningTrackRedisAdapter implements AppendRunningTrackPort, LoadRun
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
                             ZoneId.systemDefault()),
-                    // 일시정지 구간 번호 — 옛 형식이면 0
-                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));
+                    Integer.parseInt(fields[10])));      // 일시정지 구간 번호
         }
         return points;
     }

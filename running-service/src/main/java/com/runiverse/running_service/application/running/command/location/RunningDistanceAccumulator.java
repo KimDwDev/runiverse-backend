@@ -20,6 +20,7 @@ public final class RunningDistanceAccumulator {
             RunningDistance from, List<TrackPoint> points, TrackFilterProperties filter) {
         double meters = from.meters();
         long lastSequence = from.lastSequence();
+        int lastPauseSegment = from.lastPauseSegment();
         Double lastLatitude = from.lastLatitude();
         Double lastLongitude = from.lastLongitude();
         Integer lastPace = from.lastPaceSecondsPerKm();
@@ -42,6 +43,7 @@ public final class RunningDistanceAccumulator {
                         lastLatitude, lastLongitude, point.latitude(), point.longitude());
             }
             lastSequence = point.sequence();
+            lastPauseSegment = point.pauseSegment();
             lastLatitude = point.latitude();
             lastLongitude = point.longitude();
             // 거리에 반영한 좌표의 페이스만 남긴다 — 건너뛴 재전송분의 페이스를
@@ -67,8 +69,8 @@ public final class RunningDistanceAccumulator {
             }
         }
         return new RunningDistanceAccumulation(
-                new RunningDistance(meters, lastSequence, lastLatitude, lastLongitude, lastPace,
-                        anchorLatitude, anchorLongitude),
+                new RunningDistance(meters, lastSequence, lastPauseSegment, lastLatitude, lastLongitude,
+                        lastPace, anchorLatitude, anchorLongitude),
                 observed,
                 moved);
     }

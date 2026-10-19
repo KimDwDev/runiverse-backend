@@ -57,8 +57,6 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
             DELETE FROM running_state_track_point WHERE running_room_id = ? AND user_id = ?
             """;
     private static final Pattern POINT = Pattern.compile("\\[([^\\[\\]]+)]");
-    // RunningTrackRedisAdapter와 같다 — 칸이 하나 적은 옛 형식은 일시정지 번호 0으로 읽는다
-    private static final int LEGACY_FIELD_COUNT = 10;
 
     private final JdbcTemplate jdbcTemplate;
     private final RunningStateMeter stateMeter;
@@ -158,7 +156,7 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
                             ZoneId.systemDefault()),
-                    fields.length == LEGACY_FIELD_COUNT ? 0 : Integer.parseInt(fields[10])));
+                    Integer.parseInt(fields[10])));
         }
         return points;
     }

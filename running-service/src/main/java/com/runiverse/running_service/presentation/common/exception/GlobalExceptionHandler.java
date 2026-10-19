@@ -226,6 +226,8 @@ public class GlobalExceptionHandler {
             case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
             case RUNNING_SESSION_UNAVAILABLE,
                  RUNNING_TRACK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            // WS 전용이라 이 경로로 나갈 일이 없다 — 검증 실패 계열이라 400에 둔다
+            case PAUSE_SEGMENT_DECREASED -> HttpStatus.BAD_REQUEST;
         };
     }
 
