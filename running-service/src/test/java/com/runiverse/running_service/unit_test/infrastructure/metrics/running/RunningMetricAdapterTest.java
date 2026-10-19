@@ -31,7 +31,8 @@ public class RunningMetricAdapterTest {
                 300, 60,
                 2, 40, 40,
                 25, 5,
-                0);
+                0,
+                0, 0);
     }
 
     private DistributionSummary filtered(String filter) {
@@ -57,7 +58,7 @@ public class RunningMetricAdapterTest {
     void recordsZeroRemovedMeters() {
         // given -> 아무것도 거르지 않은 러닝
         TrackFilterSummary clean = new TrackFilterSummary(
-                1_000, 1_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+                1_000, 1_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         // when
         adapter.trackFiltered(clean);

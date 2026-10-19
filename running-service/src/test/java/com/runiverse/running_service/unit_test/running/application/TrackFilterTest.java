@@ -39,6 +39,7 @@ public class TrackFilterTest {
         private double north;
         private double east;
         private long second;
+        private int pauseSegment;
 
         Track at(double north, double east, long second) {
             return at(north, east, second, ACCURACY);
@@ -51,7 +52,13 @@ public class TrackFilterTest {
             points.add(new TrackPoint(points.size(),
                     37.5 + north / METERS_PER_DEGREE_LATITUDE,
                     127.0 + east / METERS_PER_DEGREE_LONGITUDE,
-                    null, accuracy, null, null, null, null, START.plusSeconds(second), 0));
+                    null, accuracy, null, null, null, null, START.plusSeconds(second), pauseSegment));
+            return this;
+        }
+
+        // 일시정지 버튼 — 다음 좌표부터 일시정지 구간 번호가 하나 오른다
+        Track pause() {
+            pauseSegment++;
             return this;
         }
 
@@ -707,5 +714,144 @@ public class TrackFilterTest {
         // then
         assertThat(filtered.summary().accuracyDroppedCount()).isEqualTo(1);
         assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("일시정지 경계 칸은 자기 페이스로 옮겼어도 거리·시간 모두 빠진다")
+    void pauseBoundaryIsRemovedRegardlessOfSpeed() {
+        // given -> 2.8m/s로 60초, 일시정지한 채 60초 동안 168m(2.8m/s) 옮겨 재개, 다시 30초.
+        // 관측 안 된 칸으로 판정했다면 자기 페이스와 같아 인정됐다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(60, 2.8)
+                .pause().gap(60, 168.0)
+                .run(30, 2.8)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 경계는 다른 판정보다 먼저다 — 관측 안 된 칸으로 세지 않는다
+        assertThat(filtered.summary().pauseBoundaryCount()).isEqualTo(1);
+        assertThat(filtered.summary().pauseRemovedMeters()).isCloseTo(168.0, within(TOLERANCE_METERS));
+        assertThat(filtered.summary().gapEdgeCount()).isZero();
+        assertThat(filtered.totalMeters()).isCloseTo(90 * 2.8, within(TOLERANCE_METERS));
+        assertThat(totalSeconds(filtered)).isEqualTo(90.0);
+        assertThat(breakEdges(filtered)).containsExactly(61);
+    }
+
+    @Test
+    @DisplayName("일시정지 직후 바로 재개해 칸이 짧아도 경계 칸은 빠진다")
+    void shortPauseBoundaryIsRemoved() {
+        // given -> 1초 간격으로 3m — 평소 칸과 구별되지 않는 칸이다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(10, 3.0)
+                .pause().run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 이동 거리·속도와 무관하다. 번호가 다르면 관측하지 않은 칸이다
+        assertThat(filtered.summary().pauseBoundaryCount()).isEqualTo(1);
+        assertThat(filtered.totalMeters()).isCloseTo(19 * 3.0, within(TOLERANCE_METERS));
+        assertThat(totalSeconds(filtered)).isEqualTo(19.0);
+        assertThat(breakEdges(filtered)).containsExactly(11);
+    }
+
+    @Test
+    @DisplayName("경계 바로 옆에서 튄 점은 점째로 빠지지 않고 그 칸들이 0이 된다")
+    void spikeNextToBoundaryIsNotDroppedAsPoint() {
+        // given -> 점 0~30을 달리고 일시정지. 재개 첫 점(31)만 동쪽으로 200m 튀었다가 원래 선으로 돌아온다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 3.0)
+                .pause()
+                .at(93, 200, 31)
+                .at(96, 0, 32)
+                .run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 경계 너머 점과 비교해 튐으로 빼면 일시정지 중 이동이 튐 거리로 세진다.
+        // 30→31은 경계 칸, 31→32는 튄 자리에서 이어 간 칸이다
+        assertThat(filtered.summary().spikePointCount()).isZero();
+        assertThat(filtered.points()).hasSize(points.size());
+        assertThat(filtered.summary().pauseBoundaryCount()).isEqualTo(1);
+        assertThat(filtered.summary().jumpEdgeCount()).isEqualTo(1);
+        assertThat(breakEdges(filtered)).containsExactly(31, 32);
+        assertThat(filtered.totalMeters()).isCloseTo(30 * 3.0 + 10 * 3.0, within(TOLERANCE_METERS));
+    }
+
+    @Test
+    @DisplayName("멈춘 자리에서 일시정지했다가 그 자리에서 재개해도 경계 칸을 정지로 두 번 빼지 않는다")
+    void resumingInsideStopRadiusDoesNotCountBoundaryAsStop() {
+        // given -> 30m를 달린 뒤 제자리에서 20초 흔들리다 일시정지, 같은 자리에서 재개해 20초 흔들린 뒤 달린다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(10, 3.0)
+                .jitter(20, 1.0)
+                .pause()
+                .jitter(20, 1.0)
+                .run(10, 3.0)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 경계에서 정지 판정을 끊으므로 정지가 둘로 나뉘고, 경계 칸은 일시정지로만 빠진다.
+        // 정지가 경계를 걸치면 일시정지 시간까지 머문 시간에 들어가고, 뺀 거리를 더하면 원본보다 많아진다
+        TrackFilterSummary summary = filtered.summary();
+        assertThat(summary.pauseBoundaryCount()).isEqualTo(1);
+        assertThat(summary.stopCount()).isEqualTo(2);
+        assertThat(summary.stopSeconds()).isLessThanOrEqualTo(40.0);
+        double removed = summary.accuracyRemovedMeters() + summary.spikeRemovedMeters()
+                + summary.gapRejectedMeters() + summary.stopRemovedMeters() + summary.pauseRemovedMeters();
+        assertThat(summary.rawMeters() - summary.filteredMeters()).isCloseTo(removed, within(1e-6));
+    }
+
+    @Test
+    @DisplayName("같은 일시정지 구간 안의 정지는 지금처럼 판정하고 경로를 끊지 않는다")
+    void stopWithinSameSegmentIsUnchanged() {
+        // given -> stopIsRemovedFromDistanceAndTime과 같은 트랙을 일시정지 한 번 뒤의 구간에서 달린다
+        List<TrackPoint> points = new Track()
+                .pause()
+                .at(0, 0, 0).at(12, 0, 4).at(14, 2, 8).at(11, -1, 12).at(13, 0, 16)
+                .at(25, 0, 20).at(37, 0, 24)
+                .points();
+
+        // when
+        FilteredTrack filtered = TrackFilter.apply(points, PROPERTIES);
+
+        // then -> 번호가 0이 아니어도 바뀌지 않으면 경계가 아니다
+        assertThat(filtered.summary().pauseBoundaryCount()).isZero();
+        assertThat(filtered.summary().stopCount()).isEqualTo(1);
+        assertThat(filtered.totalMeters()).isCloseTo(36.0, within(TOLERANCE_METERS));
+        assertThat(breakEdges(filtered)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("일시정지까지 섞여도 단계별로 뺀 거리를 더하면 원본 거리와 필터 거리의 차이다")
+    void removedMetersAddUpWithPause() {
+        // given -> 정확도 나쁜 점, 정지, 일시정지, 택시를 한 트랙에 섞는다
+        List<TrackPoint> points = new Track()
+                .at(0, 0, 0).run(30, 2.8)
+                .at(87, 20, 31, 80.0)
+                .at(89.8, 0, 32).run(9, 2.8)
+                .jitter(30, 1.0)
+                .pause().gap(120, 300.0)
+                .run(10, 2.8)
+                .gap(60, 400.0)
+                .run(10, 2.8)
+                .points();
+
+        // when
+        TrackFilterSummary summary = TrackFilter.apply(points, PROPERTIES).summary();
+
+        // then
+        double removed = summary.accuracyRemovedMeters() + summary.spikeRemovedMeters()
+                + summary.gapRejectedMeters() + summary.stopRemovedMeters() + summary.pauseRemovedMeters();
+        assertThat(summary.pauseBoundaryCount()).isEqualTo(1);
+        assertThat(summary.gapRejectedCount()).isEqualTo(1);
+        assertThat(summary.rawMeters() - summary.filteredMeters()).isCloseTo(removed, within(1e-6));
     }
 }

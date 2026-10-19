@@ -415,4 +415,51 @@ public class TrackAnalyzerTest {
                 .splits(analysis.splits())
                 .build()).doesNotThrowAnyException();
     }
+
+    @Test
+    @DisplayName("일시정지에서 경로가 두 조각으로 나뉘고 걸친 구간은 뒤 조각의 첫 점 하나다")
+    void pauseSplitsRouteIntoSegments() {
+        // given -> 2.8m/s로 600초, 일시정지한 채 60초 동안 168m(자기 페이스) 옮겨 재개, 다시 2.8m/s로 600초
+        List<TrackPoint> points = new ArrayList<>();
+        for (int i = 0; i <= 600; i++) {
+            points.add(new TrackPoint(points.size(), 37.5 + i * 2.8 / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, START.plusSeconds(i), 0));
+        }
+        double resumeNorth = 600 * 2.8 + 168.0;
+        for (int i = 0; i <= 600; i++) {
+            points.add(new TrackPoint(points.size(), 37.5 + (resumeNorth + i * 2.8) / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, START.plusSeconds(660 + i), 1));
+        }
+
+        // when -> 운영 판정값으로 실제 필터를 거친다
+        TrackAnalysis analysis = TrackAnalyzer.analyze(
+                TrackFilter.apply(points, DEFAULT_PROPERTIES), TARGET, WEIGHT, PROPERTIES)
+                .orElseThrow();
+
+        // then -> 옮긴 168m는 거리·시간·경로 어디에도 들어가지 않는다
+        assertThat(analysis.segments()).extracting(SegmentDraft::segmentNumber).containsExactly(1, 2);
+        assertThat(analysis.totalDistanceMeters()).isBetween(3_350, 3_360);
+        assertThat(analysis.totalDurationSeconds()).isBetween(1_195, 1_205);
+        int firstSegmentPoints = PolylineDecoder.decode(analysis.segments().get(0).routePolyline()).size();
+        SplitDraft across = analysis.splits().get(firstSegmentPoints - 1);
+        assertThat(across.segmentNumber()).isEqualTo(2);
+        assertThat(across.routeStartIndex()).isZero();
+        assertThat(across.routeEndIndex()).isZero();
+        // 기록 검증까지 한 줄로 이어지는지 본다
+        assertThatCode(() -> RunningRecord.finish()
+                .runningRoomId(125L)
+                .userId(USER_ID)
+                .avgPace(analysis.avgPaceSecondsPerKm())
+                .totalDistance(analysis.totalDistanceMeters())
+                .totalDuration(analysis.totalDurationSeconds())
+                .totalCalories(250)
+                .gpsTrackKey("gps-tracks/u/125/2026-08-27.json")
+                .segments(analysis.segments())
+                .startAt(analysis.startAt())
+                .endAt(analysis.endAt())
+                .weatherCode(0)
+                .temperature(new BigDecimal("15.0"))
+                .splits(analysis.splits())
+                .build()).doesNotThrowAnyException();
+    }
 }
