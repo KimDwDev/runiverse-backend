@@ -18,7 +18,7 @@ k6 값은 클라이언트에서 잰 왕복이다(ms). 서버 쪽 값은 아래 "
 
 ## DB 프로필
 
-실험 브랜치 `experiment/state-db` 이미지, `SPRING_PROFILES_ACTIVE=state-db`. 상태 테이블은 테스트 RDS(`load_test/sql/state-db-schema.sql`).
+`state-db` 프로필 이미지, `SPRING_PROFILES_ACTIVE=state-db`. 상태 테이블은 테스트 RDS(`load_test/sql/state-db-schema.sql`).
 
 | run | 시나리오 | 러너 | 에러 | 완료 | 배치 med / p95 / max | 종료 med / p95 / max | 시작 med / p95 |
 |---|---|---|---|---|---|---|---|

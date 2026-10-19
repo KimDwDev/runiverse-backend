@@ -8,6 +8,7 @@ import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFil
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -102,6 +103,15 @@ class GlobalExceptionHandlerMetricsTest {
     }
 
     @Test
+    @DisplayName("경로 변수 제약 위반은 500이 아니라 400으로 응답하고 INVALID_REQUEST를 원인으로 남긴다")
+    void methodValidationFailure() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/probe/rooms/{roomId}", 0)).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(only("reason")).isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
     @DisplayName("본문을 읽지 못하면 MALFORMED_REQUEST_BODY를 원인으로 남긴다")
     void malformedBody() throws Exception {
         perform(post("/probe/validated").contentType(MediaType.APPLICATION_JSON).content("{ 깨진"));
@@ -175,6 +185,11 @@ class GlobalExceptionHandlerMetricsTest {
 
         @GetMapping("/probe/users/{userId}")
         String user(@PathVariable UUID userId) {
+            return "ok";
+        }
+
+        @GetMapping("/probe/rooms/{roomId}")
+        String room(@PathVariable @Min(1) Long roomId) {
             return "ok";
         }
 
