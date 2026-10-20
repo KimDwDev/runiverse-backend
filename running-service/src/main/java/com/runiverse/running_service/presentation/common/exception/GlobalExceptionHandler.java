@@ -321,6 +321,7 @@ public class GlobalExceptionHandler {
 
     private HttpStatus toStatus(MatchErrorCode code) {
         return switch (code) {
+            case INVALID_MATCH_OPTION -> HttpStatus.BAD_REQUEST;
             case MATCH_ALREADY_IN_PROGRESS,
                  MATCH_COOLDOWN,
                  MATCH_SLOT_CLOSED,

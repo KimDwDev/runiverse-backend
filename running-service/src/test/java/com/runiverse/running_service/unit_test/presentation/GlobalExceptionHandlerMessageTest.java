@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.auth.exception.EmailAlreadyExis
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.BusinessException;
 import com.runiverse.running_service.application.common.exception.ErrorCode;
+import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,16 @@ class GlobalExceptionHandlerMessageTest {
                 .andExpect(content().string(not(containsString(CUSTOM_MESSAGE))));
     }
 
+    @Test
+    @DisplayName("매칭 선택지 위반은 요청 검증 실패와 같은 400 INVALID_REQUEST로 응답한다")
+    void respondsInvalidMatchOptionAsInvalidRequest() throws Exception {
+        // when & then -> 검증 위치가 DTO에서 유스케이스로 옮겨 가도 클라가 받는 모양은 같다
+        mockMvc.perform(post("/probe/match-option"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value(CUSTOM_MESSAGE));
+    }
+
     // 문구 생성자는 protected라 테스트 전용 하위 클래스로 연다
     static class CustomMessageException extends BusinessException {
 
@@ -88,6 +99,11 @@ class GlobalExceptionHandlerMessageTest {
         @PostMapping("/probe/masked")
         void masked() {
             throw new CustomMessageException(UserErrorCode.USER_NOT_FOUND, CUSTOM_MESSAGE);
+        }
+
+        @PostMapping("/probe/match-option")
+        void matchOption() {
+            throw new CustomMessageException(MatchErrorCode.INVALID_MATCH_OPTION, CUSTOM_MESSAGE);
         }
     }
 }
