@@ -75,10 +75,14 @@ public class UpdateRunningLocationHandler implements UpdateRunningLocationUsecas
                 updated.lastPaceSecondsPerKm(),
                 liveStatus(command.runningRoomId(), userId, appended)));
         // 6. 콤보를 판정한다 — 진행 통지 뒤에 둔다. 곁가지라 앞에 두면 판정이 느려질 때 진행 표시까지 늦어진다.
-        //    관측·이동 여부는 누적기가 같은 좌표를 훑으며 낸 값이다
-        updateRunningComboJudge.judge(command.runningRoomId(), userId, new RunningComboSignal(
-                updated.meters(), accumulation.observed(), accumulation.moved(),
-                accumulation.pauseCrossed()));
+        //    관측·이동 여부는 누적기가 같은 좌표를 훑으며 낸 값이다.
+        //    재전송분만 온 배치는 판정하지 않는다 — 재연결하면 클라가 트랙 전체를 짧은 간격으로 다시 보내는데,
+        //    이 배치가 속도를 0으로 덮으면 다음 배치의 밀린 거리가 그 짧은 간격에 뛴 것으로 계산된다
+        if (updated.lastSequence() > stored.lastSequence()) {
+            updateRunningComboJudge.judge(command.runningRoomId(), userId, new RunningComboSignal(
+                    updated.meters(), accumulation.observed(), accumulation.moved(),
+                    accumulation.pauseCrossed()));
+        }
         // 7. 목표 도달을 판정한다 — 맨 마지막이다. 목표를 넘은 이 배치까지 트랙에 저장되고
         //    진행 통지도 나간 뒤여야 한다
         return updateRunningFinishJudge.judge(
