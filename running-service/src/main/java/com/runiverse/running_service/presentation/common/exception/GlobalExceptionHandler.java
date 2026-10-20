@@ -25,6 +25,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -172,6 +173,18 @@ public class GlobalExceptionHandler {
                 CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
                 CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage()
         );
+    }
+
+    // 응답을 더 쓸 수 없게 된 요청 — 대개 앱이 매칭 SSE를 닫은 뒤의 쓰기 실패다.
+    // null을 돌려줘야 끊긴 응답에 상태·본문을 쓰지 않는다(void는 본문 변환 경로를 탄다)
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public ResponseEntity<Void> handleAsyncRequestNotUsable(
+            AsyncRequestNotUsableException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 응답 건너뜀: 응답 사용 불가 - method={}, path={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI());
+        return null;
     }
 
     // 예상 못한 예외

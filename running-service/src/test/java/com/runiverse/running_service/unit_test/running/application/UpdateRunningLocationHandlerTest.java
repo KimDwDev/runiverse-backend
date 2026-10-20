@@ -704,8 +704,8 @@ public class UpdateRunningLocationHandlerTest {
     }
 
     @Test
-    @DisplayName("재전송분만 온 배치는 관측도 이동도 아니라고 넘긴다")
-    void passesNoObservationForResentBatch() {
+    @DisplayName("재전송분만 온 배치는 콤보를 판정하지 않는다")
+    void skipsComboForResentBatch() {
         // given -> 순번 2까지 이미 반영했다
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
@@ -715,10 +715,28 @@ public class UpdateRunningLocationHandlerTest {
         // when
         updateRunningLocationHandler.handle(command(List.of(trackPoint(1L), trackPoint(2L))));
 
-        // then -> 이미 받은 좌표로 움직였다고 보면 재연결만으로 콤보가 쌓인다
+        // then -> 판정하면 속도가 0으로 덮여, 바로 뒤 배치의 밀린 거리가 수백 m/s로 계산된다
+        verify(updateRunningComboJudge, never()).judge(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("재전송분에 새 좌표가 섞인 배치는 새 좌표만으로 관측·이동을 넘긴다")
+    void judgesComboWhenResentBatchHasFreshPoints() {
+        // given -> 순번 2까지 이미 반영했다
+        TrackPoint previous = trackPoint(2L);
+        given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
+                new RunningDistance(100.0, 2L, 0, previous.latitude(), previous.longitude(),
+                        STORED_PACE, previous.latitude(), previous.longitude()));
+
+        // when -> 1·2는 재전송분, 3은 11m 떨어진 새 좌표다
+        updateRunningLocationHandler.handle(
+                command(List.of(trackPoint(1L), trackPoint(2L), trackPoint(3L))));
+
+        // then
         ArgumentCaptor<RunningComboSignal> captor = ArgumentCaptor.forClass(RunningComboSignal.class);
         verify(updateRunningComboJudge).judge(anyLong(), any(), captor.capture());
-        assertThat(captor.getValue().observed()).isFalse();
-        assertThat(captor.getValue().moved()).isFalse();
+        assertThat(captor.getValue().observed()).isTrue();
+        assertThat(captor.getValue().moved()).isTrue();
+        assertThat(captor.getValue().meters()).isEqualTo(captureSaved().meters());
     }
 }
