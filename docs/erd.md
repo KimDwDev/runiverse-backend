@@ -89,6 +89,25 @@
 | is_active | boolean | NOT NULL, default true | 재로그인 시 devices API가 true 갱신. 기기 단위 비활성화(로그아웃 시 false)는 **[MVP 제외]** — 로그아웃은 토큰 블랙리스트만 |
 | created_at / updated_at | timestamp | NOT NULL | |
 
+### app_versions (앱 버전 정책)
+
+> **도메인 테이블이 아니라 운영 설정 테이블이다** — 플랫폼마다 "몇 버전부터 쓸 수 있고 최신은 몇 버전인가"만 담는다. 유저·기기에 속하지 않아 FK가 없다. 도메인 A 아래 두는 것은 같은 플랫폼 값을 쓰는 `user_devices` 옆이기 때문이다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| app_version_id | bigint | PK | |
+| platform | enum | UNIQUE, NOT NULL | 플랫폼당 한 행 |
+| minimum_version | varchar | NOT NULL | 이보다 낮은 앱은 쓸 수 없다. API `minimumVersion` |
+| latest_version | varchar | NOT NULL | 스토어에 공개된 최신 버전. API `latestVersion` |
+| created_at / updated_at | timestamp | NOT NULL | |
+
+> CHECK `ck_app_version_platform`: `platform in ('IOS', 'ANDROID')`
+> CHECK `ck_app_version_format`: `minimum_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$' and latest_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$'`
+> CHECK `ck_app_version_order`: `string_to_array(minimum_version, '.')::int[] <= string_to_array(latest_version, '.')::int[]` — 부분마다 정수로 비교한다(문자열 비교면 `1.10.0` < `1.9.0`)
+> **값은 운영이 SQL로 직접 바꾼다** — 관리 API가 없어 애플리케이션 검증을 거치지 않으므로 형식·대소 관계를 DB가 막는다. 서버가 캐시 없이 요청마다 읽으므로 바꾸면 바로 반영된다 — 버전 확인 API와 구버전 요청 거절이 같은 값을 본다.
+> **행은 배포 SQL이 미리 넣는다** — 두 플랫폼 행이 항상 있다. 행을 지우거나 더하지 않고 UPDATE만 한다.
+> `minimum_version`은 스토어에서 실제로 설치할 수 있는 버전으로만 올린다 — 아직 공개되지 않은 버전을 요구하면 그 플랫폼 사용자가 전부 막힌다.
+
 ---
 
 ## 2. 도메인 B — 매칭 · 러닝
@@ -480,6 +499,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
+| app_versions.platform | IOS / ANDROID | `user_devices.platform`과 같은 값 |
 | running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 닫힘 — 시작 전이면 항상(인원이 0이 됐거나, 한 번도 시작되지 않은 방을 강제 종료가 닫을 때 — 이때는 인원을 줄이지 않는다), 시작 후면 유효 기록이 하나도 없을 때 |

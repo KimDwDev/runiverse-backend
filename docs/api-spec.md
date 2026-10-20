@@ -23,12 +23,13 @@
 | 9 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
 | 10 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
-### 2. 공통 — 디바이스/푸시 · 유저 상태
+### 2. 공통 — 디바이스/푸시 · 유저 상태 · 앱 버전
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 11 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
 | 12 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
+| 13 | GET | `/api/v1/app-versions` | 플랫폼별 최소·최신 앱 버전 — 업데이트 강제·안내 판정, 인증 불필요 — 사용 화면: 앱 진입(스플래시)·포그라운드 복귀 |
 
 ### 3. 홈 화면
 
@@ -49,11 +50,11 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 13 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 14 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 15 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 16 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 17 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 14 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 15 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 16 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 17 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 18 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -80,79 +81,79 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 18 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
-| 19 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
+| 19 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
+| 20 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 20 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
+| 21 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 22 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 23 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 24 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 25 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 26 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 27 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 28 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 29 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 30 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 31 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 22 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 23 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 24 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 25 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 26 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 27 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 28 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 29 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 30 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 31 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 32 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 32 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 33 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 34 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 35 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 33 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 34 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 35 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 36 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 36 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 37 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
-| 38 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 39 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 40 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 41 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 42 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 43 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 44 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 45 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 46 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 40 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 41 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 42 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 43 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 44 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
+| 45 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 46 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 47 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 47 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 48 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 49 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 50 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 51 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 48 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 49 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 50 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 51 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 52 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 53 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 54 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 55 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 56 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 57 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 58 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 59 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 58개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -176,11 +177,19 @@
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담는다 — 11-6에서 보내지 않은 필드는 키째 빠진다(11-2·11-7은 필드가 하나뿐이다).
 - **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 예외로 보낸 필드만 담는다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
+- **앱 버전 헤더**: 앱은 서버로 가는 모든 요청(REST·SSE·WebSocket 연결)에 `X-App-Version`(버전 이름, 예: `1.1.0`)과 `X-App-Platform`(`IOS` | `ANDROID`)을 싣는다. 서버는 버전이 그 플랫폼의 최소 버전(2-3 `minimumVersion`)보다 낮으면 **요청을 처리하기 전에** `403 APP_UPDATE_REQUIRED`로 거절한다 — 호환을 깨는 배포 뒤에 구버전 요청이 기록·상태를 틀어지게 하지 않기 위해서다. 앱이 켤 때·돌아올 때 하는 확인(2-3)은 화면을 막을 뿐, 그 사이 이미 떠 있던 앱의 요청은 막지 못한다.
+  - **헤더가 없거나 형식이 틀리면 거절하지 않고 그대로 처리한다** — 헤더를 싣기 전 버전(안드로이드 `1.0.0`)과 구분할 수 없고, 앱 실수 하나로 전원이 막히지 않게 한다. 두 헤더 중 하나만 있어도 마찬가지다
+  - **최소 버전을 읽지 못하면 통과시키지 않는다** — 다른 DB 오류와 같이 `500`이다. 통과시키면 막아야 할 요청이 들어온다
+  - **토큰 검증보다 먼저 검사한다** — 업데이트가 필요하면 토큰 상태와 무관하게 이 에러가 나간다
+  - **검사하지 않는 경로**: 2-3(구버전도 업데이트가 필요하다는 답을 받아야 한다), 헬스 체크·메트릭(`/actuator/*`)
+  - **WebSocket은 연결할 때만 검사한다** — 이미 열린 연결은 끊지 않는다. 호환을 깨는 배포는 서버 교체로 연결이 끊기므로 다시 연결할 때 걸린다
+  - 서버는 요청마다 최소 버전을 읽는다(캐시 없음) — 바꾸면 다음 요청부터 바로 반영된다
 
 ### 공통 에러 응답
 
 인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다. 경로는 있지만 받지 않는 메서드는 **405** `METHOD_NOT_ALLOWED`이고 `Allow` 헤더에 받는 메서드를 담는다. 받지 않는 본문 형식(`Content-Type`)은 **415** `UNSUPPORTED_MEDIA_TYPE`이다. 셋 다 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
-`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·11-3·11-8)에 헤더를 싣지 않는다.
+`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·2-3·11-3·11-8)에 헤더를 싣지 않는다.
+앱 버전 헤더가 그 플랫폼의 최소 버전보다 낮으면 2-3·`/actuator/*`를 뺀 모든 경로 → **403** `APP_UPDATE_REQUIRED`(위 공통 규칙의 앱 버전 헤더). 클라이언트는 이 에러를 받으면 화면과 무관하게 업데이트 화면으로 보낸다.
 
 검증에 실패한 필드가 둘 이상이거나 한 필드에서 제약이 둘 이상 깨지면 `message`는 각 사유를 공백으로 이어 붙인 한 문자열이며, **문장 순서는 보장하지 않는다**. 각 엔드포인트의 400 예시는 사유를 하나씩 보여주는 것이지 나올 수 있는 조합을 모두 나열한 것이 아니다. 클라이언트는 `message`를 문서 문구와 정확히 비교하거나 파싱해 어느 필드가 틀렸는지 역추적하지 않는다 — 필드 단위 안내는 클라이언트 자체 검증으로 처리하고, 서버 `message`는 그대로 노출한다.
 
@@ -205,6 +214,15 @@
 {
   "code": "AUTHENTICATION_REQUIRED",
   "message": "인증이 필요합니다."
+}
+```
+
+- **에러 (403 Forbidden — 앱 업데이트 필요)**
+
+```json
+{
+  "code": "APP_UPDATE_REQUIRED",
+  "message": "앱 업데이트가 필요합니다."
 }
 ```
 
@@ -898,7 +916,7 @@
 
 - **인증**: 필요
 
-## 2. 공통 — 디바이스/푸시 · 유저 상태
+## 2. 공통 — 디바이스/푸시 · 유저 상태 · 앱 버전
 
 ### 2-1. `POST /api/v1/devices` — 디바이스 등록/갱신
 
@@ -953,6 +971,55 @@
 - **`type`에 `INVITE`는 나가지 않는다** — 미래 예약값이라 계약에 포함하지 않는다
 - **`WAITING`은 `MATCH`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
 - **인증**: 필요
+
+### 2-3. `GET /api/v1/app-versions` — 앱 버전 확인
+
+- **화면**: 앱 진입(스플래시)·포그라운드 복귀 — 스플래시에서는 토큰 복원보다 먼저 부른다
+- **Query**: `platform`(필수, `IOS` | `ANDROID`, 대소문자 무시)
+- **Response `200 OK`**
+
+```json
+{
+  "minimumVersion": "1.1.0",
+  "latestVersion": "1.2.0"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `minimumVersion` | String | O | 이 버전보다 낮으면 앱을 쓸 수 없다 |
+| `latestVersion` | String | O | 스토어에 공개된 최신 버전. `minimumVersion` 이상이다 |
+
+- **화면 판정은 클라이언트가 한다** — 앱 자기 버전과 두 값을 비교한다. 서버가 최소 버전 미만 요청을 거절하는 것은 별개다(0. 공통 규칙의 앱 버전 헤더) — 이 API는 그 검사에서 빠진다
+
+| 앱 버전 | 클라이언트 동작 |
+|---|---|
+| `minimumVersion` 미만 | 업데이트 화면. 닫을 수 없고 스토어 이동만 둔다. 화면이 떠 있는 동안에도 포그라운드 복귀·재시도 때 다시 확인해, 최소 버전이 내려가 있으면 풀어 준다 |
+| `minimumVersion` 이상, `latestVersion` 미만 | 업데이트 안내. 닫고 계속 쓸 수 있다 |
+| `latestVersion` 이상 | 그대로 진행 |
+
+- **버전은 `MAJOR.MINOR.PATCH` 숫자 세 부분이다.** 부분마다 정수로 비교한다 — 문자열로 비교하면 `1.10.0`이 `1.9.0`보다 낮게 나온다
+- **비교 대상은 빌드 번호가 아니라 버전 이름이다**(스토어에 표시되는 버전). 빌드 번호는 업로드 순번이라 기준으로 쓰지 않는다 — 대신 운영에 내보내는 빌드는 버전 이름을 반드시 올린다
+- **값은 플랫폼마다 따로 둔다** — 심사·공개 시점이 플랫폼마다 달라, 한쪽에만 나온 버전을 다른 쪽에 요구하지 않기 위해서다
+- **스토어 주소는 내려주지 않는다** — 바뀌지 않는 값이라 앱이 가진다
+- **`Authorization` 헤더를 싣지 않는다** — 공개 API도 헤더가 있으면 토큰을 검증하므로, 만료된 토큰을 실으면 버전 확인이 401로 막힌다
+- 스플래시에서 서버에 닿지 못하면 다른 요청과 같이 재시도한다 — 판정 없이 진입시키지 않는다. 포그라운드 복귀 때 실패하면 쓰던 화면을 그대로 둔다
+
+- **에러 (400 Bad Request)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "플랫폼은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "플랫폼은 IOS 또는 ANDROID이어야 합니다."
+}
+```
+
+- **인증**: 불필요
 
 ## 3. 홈 화면 — 날씨
 
