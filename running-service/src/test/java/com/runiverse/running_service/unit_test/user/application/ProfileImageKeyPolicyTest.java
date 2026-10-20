@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.user.application;
 
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ public class ProfileImageKeyPolicyTest {
     @DisplayName("key는 소유자 prefix 아래에 mimeType으로 정한 확장자로 만든다")
     void createBuildsKeyUnderOwnerPrefix() {
         // when
-        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ProfileImageContentType.PNG).value();
+        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ImageContentType.PNG).value();
 
         // then
         assertThat(key).isEqualTo("profiles/%s/%s.png".formatted(OWNER, IMAGE_ID));
@@ -29,7 +30,7 @@ public class ProfileImageKeyPolicyTest {
     @DisplayName("자기 prefix로 만든 key는 소유자로 인정한다")
     void ownKeyIsOwned() {
         // given
-        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ProfileImageContentType.JPEG).value();
+        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ImageContentType.JPEG).value();
 
         // when & then
         assertThat(ProfileImageKeyPolicy.isOwnedBy(key, OWNER)).isTrue();
@@ -39,7 +40,7 @@ public class ProfileImageKeyPolicyTest {
     @DisplayName("다른 사용자의 key는 소유자로 인정하지 않는다")
     void otherUsersKeyIsNotOwned() {
         // given
-        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ProfileImageContentType.JPEG).value();
+        String key = ProfileImageKeyPolicy.create(OWNER, IMAGE_ID, ImageContentType.JPEG).value();
 
         // when & then -> 남의 key를 자기 프로필로 붙이는 것을 막는 지점이다
         assertThat(ProfileImageKeyPolicy.isOwnedBy(key, OTHER)).isFalse();

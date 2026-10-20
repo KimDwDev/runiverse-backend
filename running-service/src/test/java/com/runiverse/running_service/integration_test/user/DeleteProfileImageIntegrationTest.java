@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.user.command.profileimage.Chang
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.integration_test.fake.FakeUploadedImageStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryProfileImageStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ public class DeleteProfileImageIntegrationTest {
 
     private static String keyOf(UUID owner) {
         return ProfileImageKeyPolicy.create(
-                owner, UuidCreator.getTimeOrderedEpoch(), ProfileImageContentType.JPEG).value();
+                owner, UuidCreator.getTimeOrderedEpoch(), ImageContentType.JPEG).value();
     }
 
     // 업로드 확정까지 마친 상태를 만든다

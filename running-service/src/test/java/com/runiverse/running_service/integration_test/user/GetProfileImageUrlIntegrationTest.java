@@ -8,6 +8,7 @@ import com.runiverse.running_service.application.user.command.profileimage.Chang
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.application.user.exception.ProfileNotFoundException;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlHandler;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
@@ -65,7 +66,7 @@ public class GetProfileImageUrlIntegrationTest extends IntegrationTestSupport {
     // 업로드까지 마친 key를 반영한다 — 발급만 받은 key는 변경 핸들러가 막는다
     private String registerProfileImage(UUID userId) {
         String key = ProfileImageKeyPolicy.create(
-                userId, UuidCreator.getTimeOrderedEpoch(), ProfileImageContentType.JPEG).value();
+                userId, UuidCreator.getTimeOrderedEpoch(), ImageContentType.JPEG).value();
         uploadedImageStore.register(key, SIZE_BYTES, JPEG);
         changeProfileImageHandler.handle(new ChangeProfileImageCommand(userId, key));
         return key;

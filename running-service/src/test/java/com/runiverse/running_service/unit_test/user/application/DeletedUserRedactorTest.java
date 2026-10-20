@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.user.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.command.accountdeletion.DeletedUserRedactor;
+import com.runiverse.running_service.application.user.port.out.DeleteImagesPort;
 import com.runiverse.running_service.application.user.port.out.RedactDeletedUserPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +28,7 @@ import static org.mockito.Mockito.verify;
 class DeletedUserRedactorTest {
 
     @Mock
-    private DeleteProfileImagesPort deleteProfileImagesPort;
+    private DeleteImagesPort deleteImagesPort;
     @Mock
     private RedactDeletedUserPort redactDeletedUserPort;
 
@@ -44,8 +45,8 @@ class DeletedUserRedactorTest {
         redactor.redact(userId);
 
         // then -> 기록을 먼저 비우면 다음 실행에서 걸리지 않아 사진만 남는다
-        InOrder order = inOrder(deleteProfileImagesPort, redactDeletedUserPort);
-        order.verify(deleteProfileImagesPort).deleteAllByPrefix(prefixOf(userId));
+        InOrder order = inOrder(deleteImagesPort, redactDeletedUserPort);
+        order.verify(deleteImagesPort).deleteAllByPrefix(prefixOf(userId));
         order.verify(redactDeletedUserPort).redact(userId);
     }
 
@@ -60,7 +61,7 @@ class DeletedUserRedactorTest {
 
         // then -> 프리픽스가 좁아지거나 넓어지면 남의 사진까지 지운다
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(deleteProfileImagesPort).deleteAllByPrefix(captor.capture());
+        verify(deleteImagesPort).deleteAllByPrefix(captor.capture());
         assertThat(captor.getValue()).isEqualTo("profiles/" + userId.value() + "/");
     }
 
@@ -70,7 +71,7 @@ class DeletedUserRedactorTest {
         // given -> 기록이 남아야 다음 실행이 이 유저를 다시 집어 간다
         UserId userId = new UserId(UuidCreator.getTimeOrderedEpoch());
         doThrow(new IllegalStateException("S3 삭제 실패"))
-                .when(deleteProfileImagesPort).deleteAllByPrefix(prefixOf(userId));
+                .when(deleteImagesPort).deleteAllByPrefix(prefixOf(userId));
 
         // when & then
         assertThatThrownBy(() -> redactor.redact(userId))
