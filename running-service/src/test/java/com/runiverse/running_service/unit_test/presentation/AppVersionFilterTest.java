@@ -120,7 +120,7 @@ class AppVersionFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/app-versions", "/actuator/health", "/actuator/prometheus"})
+    @ValueSource(strings = {"/app/version", "/actuator/health", "/actuator/prometheus"})
     @DisplayName("버전 확인 API와 actuator는 구버전이어도 검사하지 않는다")
     void skipsExcludedPaths(String path) throws Exception {
         // when -> 구버전도 업데이트가 필요하다는 답을 받아야 하고, 헬스 체크·수집이 막히면 안 된다
@@ -129,6 +129,22 @@ class AppVersionFilterTest {
         // then
         assertThat(chain.getRequest()).isNotNull();
         verifyNoInteractions(checkAppVersionUsecase);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/app/notices", "/app/version/latest", "/app-versions"})
+    @DisplayName("버전 확인 주소와 앞부분만 같은 경로는 검사한다")
+    void checksPathsSimilarToExcludedOne(String path) throws Exception {
+        // given -> 빼는 건 버전 확인 주소 하나뿐이다. /app 아래 새 API가 검사에서 빠지면 안 된다
+        given(checkAppVersionUsecase.handle(new CheckAppVersionQuery("ANDROID", "0.0.1")))
+                .willReturn(new CheckAppVersionResult(true));
+
+        // when
+        filter.doFilter(request(path, "ANDROID", "0.0.1"), response, chain);
+
+        // then
+        assertThat(chain.getRequest()).isNull();
+        assertThat(response.getStatus()).isEqualTo(403);
     }
 
     @Test

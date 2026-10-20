@@ -21,8 +21,8 @@ class AppVersionE2eTest extends E2eTestSupport {
     @DisplayName("플랫폼마다 따로 둔 최소·최신 버전을 내린다")
     void returnsVersionsPerPlatform() {
         // when - 실제 DB에서 플랫폼으로 조회한다
-        Response android = get("/app-versions?platform=android", null);
-        Response ios = get("/app-versions?platform=IOS", null);
+        Response android = get("/app/version?platform=android", null);
+        Response ios = get("/app/version?platform=IOS", null);
 
         // then
         assertThat(android.status()).isEqualTo(200);
@@ -37,7 +37,7 @@ class AppVersionE2eTest extends E2eTestSupport {
     @DisplayName("플랫폼이 없으면 400 필수 문구다")
     void missingPlatformIs400() {
         // when
-        Response response = get("/app-versions", null);
+        Response response = get("/app/version", null);
 
         // then
         assertThat(response.status()).isEqualTo(400);
@@ -49,7 +49,7 @@ class AppVersionE2eTest extends E2eTestSupport {
     @DisplayName("구버전 앱도 버전 확인 API는 답을 받는다")
     void oldAppStillGetsVersions() {
         // when - 이 API까지 막으면 앱이 업데이트가 필요하다는 것도 알 수 없다
-        Response response = get("/app-versions?platform=ANDROID", null, appVersion("ANDROID", "1.0.0"));
+        Response response = get("/app/version?platform=ANDROID", null, appVersion("ANDROID", "1.0.0"));
 
         // then
         assertThat(response.status()).isEqualTo(200);

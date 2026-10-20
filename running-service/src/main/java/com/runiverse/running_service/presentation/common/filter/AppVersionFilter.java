@@ -37,8 +37,8 @@ public class AppVersionFilter extends OncePerRequestFilter {
     // VersionName과 같은 규칙 — 부분마다 9자리까지
     private static final Pattern VERSION_NAME_FORMAT =
             Pattern.compile("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$");
-    // 구버전도 업데이트가 필요하다는 답을 받아야 한다
-    private static final String APP_VERSIONS_PATH = "/app-versions";
+    // 구버전도 업데이트가 필요하다는 답을 받아야 한다 — 이 주소 하나만 뺀다. /app 아래 다른 API는 검사한다
+    private static final String APP_VERSION_PATH = "/app/version";
     private static final String ACTUATOR_PATH = "/actuator/";
 
     private final CheckAppVersionUsecase checkAppVersionUsecase;
@@ -48,7 +48,7 @@ public class AppVersionFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
-        return uri.equals(contextPath + APP_VERSIONS_PATH) || uri.startsWith(contextPath + ACTUATOR_PATH);
+        return uri.equals(contextPath + APP_VERSION_PATH) || uri.startsWith(contextPath + ACTUATOR_PATH);
     }
 
     @Override

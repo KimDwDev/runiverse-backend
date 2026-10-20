@@ -3,7 +3,7 @@ package com.runiverse.running_service.unit_test.app.presentation;
 import com.runiverse.running_service.application.app.port.in.GetAppVersionUsecase;
 import com.runiverse.running_service.application.app.query.version.GetAppVersionQuery;
 import com.runiverse.running_service.application.app.query.version.GetAppVersionResult;
-import com.runiverse.running_service.presentation.app.controller.AppVersionController;
+import com.runiverse.running_service.presentation.app.controller.AppController;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,9 +28,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("앱 버전 확인 컨트롤러 단위 테스트")
-class AppVersionControllerTest {
+class AppControllerTest {
 
-    private static final String PATH = "/app-versions";
+    private static final String PATH = "/app/version";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     @Mock
@@ -40,7 +40,7 @@ class AppVersionControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AppVersionController(getAppVersionUsecase))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AppController(getAppVersionUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
                 .build();

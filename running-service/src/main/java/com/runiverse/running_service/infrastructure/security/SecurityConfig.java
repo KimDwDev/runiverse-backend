@@ -33,7 +33,7 @@ public class SecurityConfig {
             "/auth/oauth/**",
             "/auth/email/**",
             "/users/nickname/availability",
-            "/app-versions"
+            "/app/version"
     };
 
     @Bean
