@@ -50,7 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers(RegexRequestMatcher.regexMatcher(
                                 HttpMethod.GET,
-                                "/users/[0-9a-fA-F-]{36}/profile-image")).permitAll() // uuid일때만 jwt 검증 생략
+                                "/users/[0-9a-fA-F-]{36}/(profile|background)-image")).permitAll() // uuid일때만 jwt 검증 생략
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

@@ -38,6 +38,7 @@
 | alert_consent | boolean | NOT NULL | 전체 알림 on/off 단일 토글 — 모든 푸시 관장 (설정 12-2/12-3) |
 | profile_visibility | enum | NOT NULL | 지인 마스킹 on/off |
 | profile_image_key | varchar(255) | nullable | S3 key(Presigned 업로드). 미등록이면 null |
+| background_image_key | varchar(255) | nullable | 프로필 배경 S3 key(Presigned 업로드). 미등록이면 null — 기본 배경은 클라가 그린다 |
 | introduction | varchar(100) | nullable | 소개글. 비우면 null |
 | created_at / updated_at | timestamp | NOT NULL | |
 

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.storage;
 
-import com.runiverse.running_service.application.user.port.out.DeleteProfileImagesPort;
+import com.runiverse.running_service.application.user.port.out.DeleteImagesPort;
 import com.runiverse.running_service.application.user.port.out.GenerateUploadUrlPort;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.application.user.port.out.LoadUploadedImagePort;
@@ -28,7 +28,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImagePort, GenerateViewUrlPort,
-        DeleteProfileImagesPort {
+        DeleteImagesPort {
 
     private final S3Presigner s3Presigner;
     private final S3Properties properties;

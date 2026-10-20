@@ -30,6 +30,9 @@ public abstract class E2eTestSupport {
             System.getenv().getOrDefault("E2E_BASE_URL", "http://localhost:8080/api/v1");
     private static final String APP_CONTAINER =
             System.getenv().getOrDefault("E2E_APP_CONTAINER", "runiverse-e2e-app");
+    // compose가 container_name 없이 붙이는 기본 이름이다 — compose.yml의 프로젝트명·서비스명과 같아야 한다
+    private static final String S3_CONTAINER =
+            System.getenv().getOrDefault("E2E_S3_CONTAINER", "runiverse-e2e-localstack-1");
     // 핸들러가 등록된 경로(application.properties의 websocket.running-endpoint)를 컨텍스트 경로 뒤에 붙인다
     private static final String RUNNING_WEBSOCKET_URL =
             BASE_URL.replaceFirst("^http", "ws") + "/ws/running";
@@ -198,6 +201,33 @@ public abstract class E2eTestSupport {
             }
         }
         return null;
+    }
+
+    /**
+     * 사용자 자산 버킷에 객체를 직접 넣는다. presigned URL의 호스트는 컨테이너 안에서만 풀려
+     * 테스트가 그 URL로 올릴 수 없다 — 대신 localstack 안에서 같은 key·형식·크기로 올린다.
+     * 서버가 반영 때 보는 것은 HeadObject의 크기와 Content-Type뿐이라 판정에는 차이가 없다.
+     */
+    protected void uploadUserAsset(String key, String contentType, int sizeBytes) {
+        // key는 셸 문자열에 섞지 않고 위치 인자로 넘긴다
+        String script = "head -c \"$3\" /dev/zero > /tmp/e2e-upload"
+                + " && awslocal s3api put-object --bucket \"$E2E_USER_ASSET_BUCKET\""
+                + " --key \"$1\" --content-type \"$2\" --body /tmp/e2e-upload > /dev/null";
+        try {
+            Process process = new ProcessBuilder("docker", "exec", S3_CONTAINER,
+                    "sh", "-c", script, "sh", key, contentType, String.valueOf(sizeBytes))
+                    .redirectErrorStream(true)
+                    .start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (process.waitFor() != 0) {
+                throw new IllegalStateException("S3 업로드에 실패했습니다: " + output);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("S3 업로드가 중단되었습니다", e);
+        }
     }
 
     private static String containerLogs() {

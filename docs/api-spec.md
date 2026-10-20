@@ -142,17 +142,21 @@
 | 52 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
 | 53 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
 | 54 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 55 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
+| 56 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
+| 57 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
+| 58 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 55 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 56 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 57 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 58 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 59 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 60 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 61 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 62 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 57개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 61개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -173,14 +177,14 @@
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "01a0f2d4-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
-- **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담는다 — 11-6에서 보내지 않은 필드는 키째 빠진다(11-2·11-7은 필드가 하나뿐이다).
-- **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 예외로 보낸 필드만 담는다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
+- **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7·11-10)은 보낸 필드만 담는다 — 11-6에서 보내지 않은 필드는 키째 빠진다(11-2·11-7·11-10은 필드가 하나뿐이다).
+- **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 네 API(11-2·11-6·11-7·11-10)는 예외로 보낸 필드만 담는다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 
 ### 공통 에러 응답
 
 인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다. 경로는 있지만 받지 않는 메서드는 **405** `METHOD_NOT_ALLOWED`이고 `Allow` 헤더에 받는 메서드를 담는다. 받지 않는 본문 형식(`Content-Type`)은 **415** `UNSUPPORTED_MEDIA_TYPE`이다. 셋 다 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
-`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·11-3·11-8)에 헤더를 싣지 않는다.
+`인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·11-3·11-8·11-11)에 헤더를 싣지 않는다.
 
 검증에 실패한 필드가 둘 이상이거나 한 필드에서 제약이 둘 이상 깨지면 `message`는 각 사유를 공백으로 이어 붙인 한 문자열이며, **문장 순서는 보장하지 않는다**. 각 엔드포인트의 400 예시는 사유를 하나씩 보여주는 것이지 나올 수 있는 조합을 모두 나열한 것이 아니다. 클라이언트는 `message`를 문서 문구와 정확히 비교하거나 파싱해 어느 필드가 틀렸는지 역추적하지 않는다 — 필드 단위 안내는 클라이언트 자체 검증으로 처리하고, 서버 `message`는 그대로 노출한다.
 
@@ -2937,6 +2941,158 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **인증**: 불필요
 - **인증을 요구하지 않는 이유는 확인이 필요하다.** 회원가입 폼에서 닉네임을 받던 설계(토큰 발급 전이라 공개가 필요했다)의 잔재로 보인다. 지금은 닉네임을 온보딩에서 받고 그 시점엔 토큰이 있어, 사용 화면인 온보딩·프로필 편집 어느 쪽도 공개를 필요로 하지 않는다
 - **공개로 두면 닉네임 존재 여부를 토큰 없이 무한히 조회할 수 있다.** 인증이 없어 `userId` 기준 호출 제한을 걸 축도 없다(이 서비스에 IP 기준 제한 장치는 없다). 정리하려면 `SecurityConfig`의 `PUBLIC_ENDPOINTS`에서 이 경로를 빼면 되고, 화면 흐름상 잃는 것은 없다
+
+### 11-9. `POST /api/v1/users/me/background-image/presigned-url` — 배경 사진 업로드 URL
+
+11-1과 같은 흐름이다 — 키 prefix와 응답 필드 이름만 다르다.
+
+- **Request**
+
+```json
+{
+  "mimeType": "image/jpeg",
+  "fileSizeBytes": 204800
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `mimeType` | String | 필수. `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
+| `fileSizeBytes` | Long | 필수. 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
+
+- **Response `200 OK`**
+
+```json
+{
+  "backgroundImageKey": "backgrounds/01a0f2d4-.../9f1c2b7e-....jpg",
+  "uploadUrl": "https://..."
+}
+```
+
+`backgroundImageKey` 포맷은 `backgrounds/{userId}/{imageId}.{확장자}` — 프로필 사진(`profiles/`)과 prefix가 달라 서로의 키로 반영할 수 없다. 확장자·업로드 헤더·`uploadUrl` 유효 시간 규칙은 11-1과 같다.
+
+- **에러 (400 Bad Request)** — 11-1과 같다
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지 형식은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 크기는 1바이트 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 10MB 이하만 업로드할 수 있습니다."
+}
+```
+
+- **인증**: 필요
+
+### 11-10. `PATCH /api/v1/users/me/background-image` — 배경 사진 반영
+
+11-9로 받은 `uploadUrl`에 업로드를 마친 뒤 호출한다. 서버가 S3에 실제로 올라왔는지 확인하고 `users.background_image_key`를 갱신한다.
+
+- **Request**
+
+```json
+{
+  "backgroundImageKey": "backgrounds/01a0f2d4-.../9f1c2b7e-....jpg"
+}
+```
+
+| 필드 | 타입 | 제약 |
+|---|---|---|
+| `backgroundImageKey` | String | 필수, 255자 이하. 11-9가 발급한 키 그대로 |
+
+- **Response `200 OK`**
+
+```json
+{
+  "backgroundImageKey": "backgrounds/01a0f2d4-.../9f1c2b7e-....jpg"
+}
+```
+
+- **에러 (400 Bad Request — 요청 검증)**
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "배경 이미지 키는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "배경 이미지 키는 255자 이하여야 합니다."
+}
+```
+
+- **에러 (400 Bad Request — 본인 키가 아니거나(프로필 사진 키 포함), 올라간 파일이 10MB를 넘거나 `Content-Type`이 허용값이 아님)**
+
+```json
+{
+  "code": "INVALID_BACKGROUND_IMAGE",
+  "message": "배경 이미지가 올바르지 않습니다."
+}
+```
+
+- **에러 (400 Bad Request — 키에 해당하는 객체가 S3에 없음)**
+
+```json
+{
+  "code": "BACKGROUND_IMAGE_NOT_UPLOADED",
+  "message": "업로드되지 않은 이미지입니다."
+}
+```
+
+- **인증**: 필요
+
+### 11-11. `GET /api/v1/users/{userId}/background-image` — 배경 사진 URL 조회
+
+- **Response `200 OK`**
+
+```json
+{
+  "backgroundImageUrl": "https://..."
+}
+```
+
+사진이 등록돼 있지 않으면 `backgroundImageUrl`은 `null`이다 — 기본 배경은 클라가 그린다. URL은 운영값(현재 1시간) 동안만 유효하다.
+
+- **10-2에 싣지 않고 따로 둔다** — 10-2는 프로필 화면 밖(매칭·러닝 중)에서도 불리는데 거기선 배경이 필요 없다. 실으면 쓰지 않는 URL을 매번 서명한다
+
+- **에러 (404 Not Found — 대상 사용자 없음)**
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
+}
+```
+
+- **인증**: 불필요
+
+### 11-12. `DELETE /api/v1/users/me/background-image` — 배경 사진 삭제
+
+`users.background_image_key`를 비운다. **S3 객체는 지우지 않고 DB의 키 연결만 끊는다.** 사진이 없는 상태에서 호출해도 에러 없이 성공한다(idempotent).
+
+- **Request**: 본문 없음
+- **Response `204 No Content`**
+
+- **인증**: 필요
 
 ## 12. 설정 페이지
 

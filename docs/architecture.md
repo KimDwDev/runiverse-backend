@@ -30,6 +30,7 @@ application/
   <domain>/port/in/     *Usecase — Handler가 구현
   <domain>/port/out/    아웃바운드 인터페이스 · 전용 입출력 모델
   <domain>/exception/   외부 확인이 필요한 실패
+  <domain>/common/      한 도메인 안의 여러 유스케이스가 함께 쓰는 정책·조립기 (포트는 두지 않는다)
   common/exception/     BusinessException · ErrorCode (유스케이스용)
   common/port/out/      도메인에 매이지 않는 공통 아웃바운드 포트
 

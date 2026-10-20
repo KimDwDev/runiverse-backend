@@ -182,4 +182,110 @@ class UserProfileE2eTest extends E2eTestSupport {
         // then
         assertThat(response.status()).isEqualTo(400);
     }
+
+    @Test
+    @DisplayName("배경 사진을 올려 반영하면 토큰 없이 서명 URL로 조회되고, 삭제하면 null로 돌아온다")
+    void backgroundImageFlow() {
+        // given - 발급받은 key로 실제 업로드까지 마친다
+        TestUser user = signUpAndOnboard();
+        Response issued = post("/users/me/background-image/presigned-url", Map.of(
+                "mimeType", "image/png",
+                "fileSizeBytes", 1024
+        ), user.accessToken());
+        assertThat(issued.status()).isEqualTo(200);
+        String key = issued.text("backgroundImageKey");
+        assertThat(key).startsWith("backgrounds/" + user.userId() + "/").endsWith(".png");
+        assertThat(issued.text("uploadUrl")).startsWith("http");
+        uploadUserAsset(key, "image/png", 1024);
+
+        // when
+        Response changed = patch("/users/me/background-image",
+                Map.of("backgroundImageKey", key), user.accessToken());
+
+        // then - 수정 응답은 보낸 key만 돌려준다
+        assertThat(changed.status()).isEqualTo(200);
+        assertThat(changed.body()).containsOnlyKeys("backgroundImageKey");
+        assertThat(changed.text("backgroundImageKey")).isEqualTo(key);
+        // 남의 프로필 화면에서 부르는 경로라 토큰 없이 열린다
+        Response viewed = get("/users/" + user.userId() + "/background-image", null);
+        assertThat(viewed.status()).isEqualTo(200);
+        assertThat(viewed.text("backgroundImageUrl")).startsWith("http").contains(key);
+        // 배경은 프로필 사진 자리로 새지 않는다
+        assertThat(get("/users/" + user.userId() + "/profile-image", null)
+                .text("profileImageUrl")).isNull();
+
+        // 삭제하면 다시 null이고, 한 번 더 지워도 통과한다
+        assertThat(delete("/users/me/background-image", user.accessToken()).status()).isEqualTo(204);
+        Response afterDelete = get("/users/" + user.userId() + "/background-image", null);
+        assertThat(afterDelete.body()).containsKey("backgroundImageUrl");
+        assertThat(afterDelete.text("backgroundImageUrl")).isNull();
+        assertThat(delete("/users/me/background-image", user.accessToken()).status()).isEqualTo(204);
+    }
+
+    @Test
+    @DisplayName("업로드하지 않은 키로는 배경을 반영할 수 없다")
+    void unuploadedBackgroundImageKeyIsRejected() {
+        // given - URL만 받고 실제 업로드는 하지 않는다
+        TestUser user = signUpAndOnboard();
+        String key = post("/users/me/background-image/presigned-url", Map.of(
+                "mimeType", "image/jpeg",
+                "fileSizeBytes", 1024
+        ), user.accessToken()).text("backgroundImageKey");
+
+        // when
+        Response response = patch("/users/me/background-image",
+                Map.of("backgroundImageKey", key), user.accessToken());
+
+        // then
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.text("code")).isEqualTo("BACKGROUND_IMAGE_NOT_UPLOADED");
+        assertThat(get("/users/" + user.userId() + "/background-image", null)
+                .text("backgroundImageUrl")).isNull();
+    }
+
+    @Test
+    @DisplayName("올려 둔 프로필 사진 key로는 배경을 반영할 수 없다")
+    void profileImageKeyCannotBecomeBackground() {
+        // given - 본인 것이고 S3에 실제로 있는 프로필 사진이다
+        TestUser user = signUpAndOnboard();
+        String profileKey = post("/users/me/profile-image/presigned-url", Map.of(
+                "mimeType", "image/png",
+                "fileSizeBytes", 1024
+        ), user.accessToken()).text("profileImageKey");
+        uploadUserAsset(profileKey, "image/png", 1024);
+
+        // when
+        Response response = patch("/users/me/background-image",
+                Map.of("backgroundImageKey", profileKey), user.accessToken());
+
+        // then - prefix가 달라 S3를 보기 전에 막힌다
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.text("code")).isEqualTo("INVALID_BACKGROUND_IMAGE");
+    }
+
+    @Test
+    @DisplayName("배경 조회만 공개되고, 쓰기와 me 경로는 토큰이 필요하다")
+    void onlyBackgroundImageLookupIsPublic() {
+        // given
+        TestUser user = signUpAndOnboard();
+
+        // when & then - 없는 사용자는 404다
+        Response notFound = get("/users/00000000-0000-7000-8000-000000000000/background-image", null);
+        assertThat(notFound.status()).isEqualTo(404);
+        assertThat(notFound.text("code")).isEqualTo("NOT_FOUND");
+        // 공개 정규식이 me·쓰기 메서드까지 열지 않는다
+        assertThat(get("/users/me/background-image", null).status()).isEqualTo(401);
+        assertThat(patch("/users/me/background-image",
+                Map.of("backgroundImageKey", "backgrounds/x/y.png"), null).status()).isEqualTo(401);
+        assertThat(delete("/users/me/background-image", null).status()).isEqualTo(401);
+        assertThat(post("/users/me/background-image/presigned-url", Map.of(
+                "mimeType", "image/png",
+                "fileSizeBytes", 1024
+        ), null).status()).isEqualTo(401);
+        // 토큰이 있어도 형식 검증은 그대로다
+        assertThat(post("/users/me/background-image/presigned-url", Map.of(
+                "mimeType", "image/gif",
+                "fileSizeBytes", 1024
+        ), user.accessToken()).status()).isEqualTo(400);
+    }
 }
