@@ -8,7 +8,16 @@ BEGIN;
 
 DELETE FROM running_combos WHERE running_room_id >= 900000000;
 
+-- 구간은 경로 조각에, 조각은 기록에 붙는다 — 자식부터 지운다
 DELETE FROM running_splits
+WHERE running_segment_id IN (
+    SELECT running_segment_id FROM running_segments
+    WHERE running_record_id IN (
+        SELECT running_record_id FROM running_records WHERE running_room_id >= 900000000
+    )
+);
+
+DELETE FROM running_segments
 WHERE running_record_id IN (
     SELECT running_record_id FROM running_records WHERE running_room_id >= 900000000
 );

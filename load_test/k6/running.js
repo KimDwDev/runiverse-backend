@@ -20,7 +20,7 @@ import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { mintAccessToken } from './lib/token.js';
 import { roomIdOf, slotOf, userIdOf, RUNNERS_PER_ROOM } from './lib/ids.js';
-import { createTrack, holdPosition, nextPoint } from './lib/track.js';
+import { createTrack, holdPosition, nextPoint, startPause } from './lib/track.js';
 
 const WS_URL = __ENV.WS_URL || 'ws://localhost:8080/api/v1/ws/running';
 const JWT_SECRET = __ENV.JWT_SECRET;
@@ -146,6 +146,7 @@ function tick(socket, runner, connection) {
 
   if (runner.slot === 3) {
     if (!runner.pauseDone && runner.pausedAt === null && elapsed >= duration * PAUSE_AT) {
+      startPause(runner.track);
       flush(socket, runner);
       send(socket, 'RUNNING_PAUSE', {});
       runner.pausedAt = now;

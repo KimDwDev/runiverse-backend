@@ -21,6 +21,8 @@ export function createTrack(roomOrdinal, lane) {
     laneMeters: lane * 3,
     distance: 0,
     sequence: 0,
+    // 일시정지할 때마다 하나씩 오른다 — 서버가 번호가 바뀐 칸을 거리·시간에서 뺀다
+    pauseSegment: 0,
     lastMs: null,
   };
 }
@@ -46,7 +48,13 @@ export function nextPoint(track, nowMs, standing) {
     altitudeMeters: 30,
     speedMetersPerSecond: standing ? 0 : RUN_SPEED,
     headingDegrees: 0,
+    pauseSegment: track.pauseSegment,
   };
+}
+
+// 일시정지 버튼을 누른 순간 번호를 올린다 — 이미 만든 점은 만들 때의 번호를 그대로 들고 간다
+export function startPause(track) {
+  track.pauseSegment += 1;
 }
 
 // 일시정지 동안 흘러간 시간만큼 전진하지 않도록 기준 시각만 옮긴다
