@@ -548,6 +548,70 @@ public class UserPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("배경 이미지 key를 바꾸면 조회한 엔티티에 반영하고 프로필 key는 그대로 둔다")
+    void updateBackgroundImageChangesOnlyBackgroundKey() {
+        // given -> 두 key가 한 행에 있어 한쪽 변경이 다른 쪽을 덮으면 안 된다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), null, ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.updateBackgroundImage(
+                new UserId(userId), new BackgroundImageKey(backgroundImageKeyOf(userId)));
+
+        // then -> 별도 저장 호출 없이 엔티티 상태만 바꾼다
+        assertThat(entity.getBackgroundImageKey()).isEqualTo(backgroundImageKeyOf(userId));
+        assertThat(entity.getProfileImageKey()).isEqualTo(profileImageKeyOf(userId));
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 배경 이미지를 바꾸지 않고 예외를 던진다")
+    void updateBackgroundImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.updateBackgroundImage(
+                new UserId(userId), new BackgroundImageKey(backgroundImageKeyOf(userId))))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("배경 이미지를 지우면 배경 key만 null로 만든다")
+    void clearBackgroundImageRemovesOnlyBackgroundKey() {
+        // given -> S3 객체는 그대로 두고 DB의 연결만 끊는다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        UserJpaEntity entity = UserJpaEntity.create(
+                userId, "runner@runiverse.com", PASSWORD_HASH, true,
+                profileImageKeyOf(userId), backgroundImageKeyOf(userId), ProfileVisibility.PUBLIC, ""
+        );
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(entity);
+
+        // when
+        userPersistenceAdapter.clearBackgroundImage(new UserId(userId));
+
+        // then
+        assertThat(entity.getBackgroundImageKey()).isNull();
+        assertThat(entity.getProfileImageKey()).isEqualTo(profileImageKeyOf(userId));
+    }
+
+    @Test
+    @DisplayName("사용자가 없으면 배경 이미지를 지우지 않고 예외를 던진다")
+    void clearBackgroundImageThrowsWhenUserNotFound() {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(entityManager.find(UserJpaEntity.class, userId)).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> userPersistenceAdapter.clearBackgroundImage(new UserId(userId)))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("소개글을 빈 문자열로 지우면 컬럼을 null로 비운다")
     void updateIntroductionConvertsEmptyToNull() {
         // given -> 도메인은 소개글 없음을 빈 문자열로 들고 있지만 컬럼에는 남기지 않는다
