@@ -92,6 +92,14 @@ class UserProfileE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("닉네임 중복 확인만 공개되고, 닉네임 변경은 토큰이 필요하다")
+    void onlyNicknameAvailabilityIsPublic() {
+        // when & then - 공개 경로가 /users/**로 넓어지면 변경까지 토큰 없이 통과한다
+        assertThat(patch("/users/me/nickname", Map.of("nickname", uniqueNickname()), null).status())
+                .isEqualTo(401);
+    }
+
+    @Test
     @DisplayName("비밀번호를 바꾸면 새 비밀번호로만 로그인된다")
     void passwordIsChanged() {
         // given
@@ -147,6 +155,20 @@ class UserProfileE2eTest extends E2eTestSupport {
         assertThat(found.text("profileImageUrl")).isNull();
         assertThat(notFound.status()).isEqualTo(404);
         assertThat(notFound.text("code")).isEqualTo("NOT_FOUND");
+    }
+
+    @Test
+    @DisplayName("프로필 사진 조회만 공개되고, 쓰기와 me 경로는 토큰이 필요하다")
+    void onlyProfileImageLookupIsPublic() {
+        // when & then - 공개 정규식이 me·쓰기 메서드까지 열지 않는다
+        assertThat(get("/users/me/profile-image", null).status()).isEqualTo(401);
+        assertThat(patch("/users/me/profile-image",
+                Map.of("profileImageKey", "profiles/x/y.png"), null).status()).isEqualTo(401);
+        assertThat(delete("/users/me/profile-image", null).status()).isEqualTo(401);
+        assertThat(post("/users/me/profile-image/presigned-url", Map.of(
+                "mimeType", "image/png",
+                "fileSizeBytes", 1024
+        ), null).status()).isEqualTo(401);
     }
 
     @Test

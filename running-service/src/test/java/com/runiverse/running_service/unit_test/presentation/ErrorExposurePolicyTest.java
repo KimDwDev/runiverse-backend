@@ -57,6 +57,14 @@ public class ErrorExposurePolicyTest {
     }
 
     @Test
+    @DisplayName("앱 업데이트 필요는 403 그대로 노출한다")
+    void appUpdateRequiredIsExposed() {
+        // 가려지면 500으로 바뀌어 클라가 업데이트 화면으로 보내지 못한다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.FORBIDDEN, CommonErrorCode.APP_UPDATE_REQUIRED.getCode())).isTrue();
+    }
+
+    @Test
     @DisplayName("방 참가자가 아닌 조회 거부는 403 그대로 노출한다")
     void notRoomPlayerIsExposed() {
         // 6-1이 REST로 던지는 코드다 — 목록에서 빠지면 500으로 바뀌어 클라가 권한 문제인지 알 수 없다

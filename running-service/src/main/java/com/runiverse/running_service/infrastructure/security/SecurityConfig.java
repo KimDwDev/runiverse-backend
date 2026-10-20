@@ -32,7 +32,8 @@ public class SecurityConfig {
             "/auth/refresh",
             "/auth/oauth/**",
             "/auth/email/**",
-            "/users/nickname/availability"
+            "/users/nickname/availability",
+            "/app/version"
     };
 
     @Bean
