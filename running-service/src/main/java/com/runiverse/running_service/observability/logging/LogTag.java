@@ -13,7 +13,7 @@ public final class LogTag {
             "user", "[회원]",
             "match", "[매칭]",
             "running", "[러닝]",
-            "appversion", "[버전]",
+            "device", "[버전]",
             RequestDomain.COMMON, "[공통]"
     );
 

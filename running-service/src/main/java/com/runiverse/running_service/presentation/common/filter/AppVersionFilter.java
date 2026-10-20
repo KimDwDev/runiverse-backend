@@ -1,7 +1,7 @@
 package com.runiverse.running_service.presentation.common.filter;
 
-import com.runiverse.running_service.application.appversion.port.in.CheckAppVersionUsecase;
-import com.runiverse.running_service.application.appversion.query.version.CheckAppVersionQuery;
+import com.runiverse.running_service.application.device.port.in.CheckAppVersionUsecase;
+import com.runiverse.running_service.application.device.query.version.CheckAppVersionQuery;
 import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFilter;
 import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
