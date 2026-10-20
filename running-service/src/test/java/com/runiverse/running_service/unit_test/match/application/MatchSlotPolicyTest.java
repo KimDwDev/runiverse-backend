@@ -1,7 +1,9 @@
 package com.runiverse.running_service.unit_test.match.application;
 
+import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
+import com.runiverse.running_service.application.match.exception.InvalidMatchOptionException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -22,12 +24,17 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // 신청 검증과 슬롯 조회가 이 판정 하나를 함께 쓴다 — 여기가 어긋나면 고를 수 있는 슬롯이 신청에서 거절된다
 @DisplayName("매칭 신청 선택지 정책 단위 테스트")
 class MatchSlotPolicyTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 9, 11);
+    // api-spec.md 매칭 신청 400 문구 — 운영 설정이면 이 문장 그대로 나가야 클라 계약이 유지된다
+    private static final String START_TIME_MESSAGE = "시작 시각은 18:00부터 22:00까지 30분 간격으로만 선택할 수 있습니다.";
+    private static final String DISTANCE_MESSAGE = "목표 거리는 3000, 5000, 10000 중 하나여야 합니다.";
 
     private static ValidatorFactory validatorFactory;
     private static Validator validator;
@@ -121,6 +128,42 @@ class MatchSlotPolicyTest {
             // when & then
             assertThat(policy.allowsDistance(distance)).isFalse();
         }
+
+        @Test
+        @DisplayName("선택지 안의 시각·거리면 신청 검증을 통과한다")
+        void validatePassesAllowedOption() {
+            // when & then
+            assertThatCode(() -> policy.validate(DATE.atTime(19, 0), 5_000)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("시각만 어긋나면 시각 문구 하나로 거절한다")
+        void validateRejectsStartTimeOnly() {
+            // when & then -> 운영 설정이면 명세 문구와 글자까지 같다
+            assertThatThrownBy(() -> policy.validate(DATE.atTime(19, 15), 5_000))
+                    .isInstanceOf(InvalidMatchOptionException.class)
+                    .hasMessage(START_TIME_MESSAGE)
+                    .extracting(e -> ((InvalidMatchOptionException) e).getErrorCode())
+                    .isEqualTo(MatchErrorCode.INVALID_MATCH_OPTION);
+        }
+
+        @Test
+        @DisplayName("거리만 어긋나면 거리 문구 하나로 거절한다")
+        void validateRejectsDistanceOnly() {
+            // when & then
+            assertThatThrownBy(() -> policy.validate(DATE.atTime(19, 0), 7_000))
+                    .isInstanceOf(InvalidMatchOptionException.class)
+                    .hasMessage(DISTANCE_MESSAGE);
+        }
+
+        @Test
+        @DisplayName("둘 다 어긋나면 시각·거리 순으로 두 문장을 공백으로 이어 한 번에 거절한다")
+        void validateRejectsBothAtOnce() {
+            // when & then -> 하나 고치고 다시 보내야 나머지를 알게 하지 않는다
+            assertThatThrownBy(() -> policy.validate(DATE.atTime(23, 0), 7_000))
+                    .isInstanceOf(InvalidMatchOptionException.class)
+                    .hasMessage(START_TIME_MESSAGE + " " + DISTANCE_MESSAGE);
+        }
     }
 
     @Nested
@@ -142,6 +185,20 @@ class MatchSlotPolicyTest {
             assertThat(policy.allowsStartAt(DATE.atTime(19, 0))).isFalse();
             assertThat(policy.allowsDistance(7_000)).isTrue();
             assertThat(policy.allowsDistance(5_000)).isFalse();
+        }
+
+        @Test
+        @DisplayName("거절 문구도 새 값을 따르고 거리는 설정 순서대로 나간다")
+        void messageFollowsChangedSettings() {
+            // given -> 설정만 바꾸고 안내가 옛 값을 말하면 안 된다. 거리는 일부러 정렬하지 않은 순서로 둔다
+            MatchSlotPolicy policy = policyOf(
+                    LocalTime.of(6, 0), LocalTime.of(9, 0), Duration.ofMinutes(90), List.of(10_000, 3_000));
+
+            // when & then
+            assertThatThrownBy(() -> policy.validate(DATE.atTime(7, 0), 5_000))
+                    .isInstanceOf(InvalidMatchOptionException.class)
+                    .hasMessage("시작 시각은 06:00부터 09:00까지 90분 간격으로만 선택할 수 있습니다."
+                            + " 목표 거리는 10000, 3000 중 하나여야 합니다.");
         }
 
         @Test
