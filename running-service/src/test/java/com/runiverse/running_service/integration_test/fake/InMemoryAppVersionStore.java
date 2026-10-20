@@ -1,8 +1,8 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.device.port.out.LoadAppVersionPort;
-import com.runiverse.running_service.domain.device.AppVersion;
-import com.runiverse.running_service.domain.device.vo.Platform;
+import com.runiverse.running_service.application.app.port.out.LoadAppVersionPort;
+import com.runiverse.running_service.domain.app.AppVersion;
+import com.runiverse.running_service.domain.common.vo.Platform;
 
 import java.util.EnumMap;
 import java.util.Map;

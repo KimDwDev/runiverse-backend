@@ -1,7 +1,7 @@
 package com.runiverse.running_service.presentation.common.filter;
 
-import com.runiverse.running_service.application.device.port.in.CheckAppVersionUsecase;
-import com.runiverse.running_service.application.device.query.version.CheckAppVersionQuery;
+import com.runiverse.running_service.application.app.port.in.CheckAppVersionUsecase;
+import com.runiverse.running_service.application.app.query.version.CheckAppVersionQuery;
 import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFilter;
 import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;
 import com.runiverse.running_service.presentation.common.exception.ErrorExposurePolicy;
@@ -72,7 +72,7 @@ public class AppVersionFilter extends OncePerRequestFilter {
         } catch (RuntimeException e) {
             // 최소 버전을 모르면 통과시키지 않는다 — 막아야 할 요청이 들어온다.
             // 필터의 예외는 중앙 예외 핸들러가 받지 않아 여기서 공통 500으로 응답한다
-            log.error("[기기] 버전 확인 실패: 최소 버전 조회 오류 - platform={}", platform, e);
+            log.error("[앱] 버전 확인 실패: 최소 버전 조회 오류 - platform={}", platform, e);
             reject(request, response, HttpStatus.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR);
             return;
         }
