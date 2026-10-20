@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.user.command.profileimage;
 
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
 import com.runiverse.running_service.application.user.port.out.GenerateImageIdPort;
 import com.runiverse.running_service.application.user.port.out.GenerateUploadUrlPort;
@@ -16,7 +17,7 @@ public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUpl
     @Override
     public CreateProfileImageUploadUrlResult handle(CreateProfileImageUploadUrlCommand command) {
         // 0. 허용된 형식인지 확인하고 확장자를 얻음
-        ProfileImageContentType contentType = ProfileImageContentType.from(command.mimeType());
+        ImageContentType contentType = ImageContentType.from(command.mimeType());
 
         // 1. 이미지 저장을 위한 키네임 생성
         // prefix에 userId를 넣어 프로필 소유자 검증

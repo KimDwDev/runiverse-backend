@@ -1,13 +1,14 @@
 package com.runiverse.running_service.application.user.command.profileimage;
 
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.application.user.exception.InvalidProfileImageException;
 import com.runiverse.running_service.application.user.exception.ProfileImageNotUploadedException;
 import com.runiverse.running_service.application.user.port.in.ChangeProfileImageUsecase;
 import com.runiverse.running_service.application.user.port.out.LoadUploadedImagePort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.UploadedImage;
-import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,7 +48,7 @@ public class ChangeProfileImageHandler implements ChangeProfileImageUsecase {
 
     private void requireSupported(String contentType) {
         try {
-            ProfileImageContentType.from(contentType);
+            ImageContentType.from(contentType);
         } catch (IllegalArgumentException e) {
             throw new InvalidProfileImageException();
         }

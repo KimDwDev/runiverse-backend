@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.user.command.profileimage;
 
+import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 
 import java.util.UUID;
@@ -11,7 +12,7 @@ public final class ProfileImageKeyPolicy {
     private ProfileImageKeyPolicy() {
     }
 
-    public static ProfileImageKey create(UUID userId, UUID imageId, ProfileImageContentType contentType) {
+    public static ProfileImageKey create(UUID userId, UUID imageId, ImageContentType contentType) {
         return new ProfileImageKey("%s%s.%s".formatted(prefixOf(userId), imageId, contentType.getExtension()));
     }
 
