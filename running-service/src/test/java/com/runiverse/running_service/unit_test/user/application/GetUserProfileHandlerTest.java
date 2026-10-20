@@ -53,7 +53,7 @@ public class GetUserProfileHandlerTest {
 
     private static User userWith(UUID userId, String profileImageKey, String introduction) {
         return new User(userId, "runner@runiverse.com", PASSWORD_HASH, true,
-                profileImageKey, ProfileVisibility.PUBLIC, introduction);
+                profileImageKey, null, ProfileVisibility.PUBLIC, introduction);
     }
 
     private static String keyOf(UUID userId) {

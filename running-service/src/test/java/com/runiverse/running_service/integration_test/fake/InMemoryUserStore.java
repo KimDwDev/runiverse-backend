@@ -13,6 +13,7 @@ import com.runiverse.running_service.application.user.port.out.UpdatePasswordPor
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
 import com.runiverse.running_service.domain.user.User;
+import com.runiverse.running_service.domain.user.vo.BackgroundImageKey;
 import com.runiverse.running_service.domain.user.vo.Introduction;
 import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
@@ -98,6 +99,7 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
                 user.getPasswordHash().value(),
                 user.isAlertConsent(),
                 user.getProfileImageKey().map(ProfileImageKey::value).orElse(null),
+                user.getBackgroundImageKey().map(BackgroundImageKey::value).orElse(null),
                 user.getProfileVisibility(),
                 introduction.value()
         );
@@ -120,6 +122,7 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
                 user.getPasswordHash().value(),
                 alertConsent == null ? user.isAlertConsent() : alertConsent,
                 user.getProfileImageKey().map(ProfileImageKey::value).orElse(null),
+                user.getBackgroundImageKey().map(BackgroundImageKey::value).orElse(null),
                 profileVisibility == null ? user.getProfileVisibility() : profileVisibility,
                 user.getIntroduction().value()
         );
@@ -151,6 +154,7 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
                 user.getPasswordHash().value(),
                 user.isAlertConsent(),
                 profileImageKey,
+                user.getBackgroundImageKey().map(BackgroundImageKey::value).orElse(null),
                 user.getProfileVisibility(),
                 user.getIntroduction().value()
         );

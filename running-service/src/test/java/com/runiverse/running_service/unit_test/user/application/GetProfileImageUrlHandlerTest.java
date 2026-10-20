@@ -48,7 +48,7 @@ public class GetProfileImageUrlHandlerTest {
 
     private static User userWith(UUID userId, String profileImageKey) {
         return new User(userId, "runner@runiverse.com", PASSWORD_HASH, true,
-                profileImageKey, ProfileVisibility.PUBLIC, "");
+                profileImageKey, null, ProfileVisibility.PUBLIC, "");
     }
 
     private static String keyOf(UUID userId) {
