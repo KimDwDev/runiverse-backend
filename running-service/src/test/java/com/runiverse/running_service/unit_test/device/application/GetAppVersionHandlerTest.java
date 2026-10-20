@@ -1,10 +1,10 @@
 package com.runiverse.running_service.unit_test.device.application;
 
-import com.runiverse.running_service.application.device.port.out.LoadAppVersionPolicyPort;
+import com.runiverse.running_service.application.device.port.out.LoadAppVersionPort;
 import com.runiverse.running_service.application.device.query.version.GetAppVersionHandler;
 import com.runiverse.running_service.application.device.query.version.GetAppVersionQuery;
 import com.runiverse.running_service.application.device.query.version.GetAppVersionResult;
-import com.runiverse.running_service.domain.device.AppVersionPolicy;
+import com.runiverse.running_service.domain.device.AppVersion;
 import com.runiverse.running_service.domain.device.exception.UnsupportedPlatformException;
 import com.runiverse.running_service.domain.device.vo.Platform;
 import org.junit.jupiter.api.DisplayName;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class GetAppVersionHandlerTest {
 
     @Mock
-    private LoadAppVersionPolicyPort loadAppVersionPolicyPort;
+    private LoadAppVersionPort loadAppVersionPort;
 
     @InjectMocks
     private GetAppVersionHandler handler;
@@ -35,8 +35,8 @@ class GetAppVersionHandlerTest {
     @DisplayName("요청한 플랫폼의 최소·최신 버전을 돌려준다")
     void returnsVersionsOfPlatform() {
         // given -> 소문자로 와도 VO가 IOS로 읽어 조회한다
-        given(loadAppVersionPolicyPort.load(Platform.IOS))
-                .willReturn(Optional.of(policy(Platform.IOS, "1.1.0", "1.2.0")));
+        given(loadAppVersionPort.load(Platform.IOS))
+                .willReturn(Optional.of(appVersion(Platform.IOS, "1.1.0", "1.2.0")));
 
         // when
         GetAppVersionResult result = handler.handle(new GetAppVersionQuery("ios"));
@@ -49,7 +49,7 @@ class GetAppVersionHandlerTest {
     @DisplayName("플랫폼 행이 없으면 운영 실수로 보고 예외를 던진다")
     void missingRowFails() {
         // given -> 배포 SQL이 두 행을 미리 넣는다. 없는 값을 지어내 내리지 않는다
-        given(loadAppVersionPolicyPort.load(Platform.ANDROID)).willReturn(Optional.empty());
+        given(loadAppVersionPort.load(Platform.ANDROID)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> handler.handle(new GetAppVersionQuery("ANDROID")))
@@ -62,11 +62,11 @@ class GetAppVersionHandlerTest {
         // when & then -> 요청 DTO가 400으로 거르지만 VO가 마지막 방어선이다
         assertThatThrownBy(() -> handler.handle(new GetAppVersionQuery("WEB")))
                 .isInstanceOf(UnsupportedPlatformException.class);
-        verifyNoInteractions(loadAppVersionPolicyPort);
+        verifyNoInteractions(loadAppVersionPort);
     }
 
-    private static AppVersionPolicy policy(Platform platform, String minimumVersion, String latestVersion) {
-        return AppVersionPolicy.builder()
+    private static AppVersion appVersion(Platform platform, String minimumVersion, String latestVersion) {
+        return AppVersion.builder()
                 .platform(platform)
                 .minimumVersion(minimumVersion)
                 .latestVersion(latestVersion)

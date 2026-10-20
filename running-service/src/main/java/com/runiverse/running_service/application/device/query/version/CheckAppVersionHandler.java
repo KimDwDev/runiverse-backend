@@ -1,8 +1,8 @@
 package com.runiverse.running_service.application.device.query.version;
 
 import com.runiverse.running_service.application.device.port.in.CheckAppVersionUsecase;
-import com.runiverse.running_service.application.device.port.out.LoadAppVersionPolicyPort;
-import com.runiverse.running_service.domain.device.AppVersionPolicy;
+import com.runiverse.running_service.application.device.port.out.LoadAppVersionPort;
+import com.runiverse.running_service.domain.device.AppVersion;
 import com.runiverse.running_service.domain.device.vo.Platform;
 import com.runiverse.running_service.domain.device.vo.VersionName;
 import lombok.RequiredArgsConstructor;
@@ -16,20 +16,20 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CheckAppVersionHandler implements CheckAppVersionUsecase {
 
-    private final LoadAppVersionPolicyPort loadAppVersionPolicyPort;
+    private final LoadAppVersionPort loadAppVersionPort;
 
     @Override
     public CheckAppVersionResult handle(CheckAppVersionQuery query) {
         Platform platform = Platform.from(query.platform());
-        VersionName versionName = new VersionName(query.appVersion());
+        VersionName versionName = new VersionName(query.versionName());
 
         // 캐시 없이 매번 읽는다 — 운영이 최소 버전을 올리면 다음 요청부터 바로 걸린다
-        AppVersionPolicy policy = loadAppVersionPolicyPort.load(platform)
+        AppVersion appVersion = loadAppVersionPort.load(platform)
                 .orElseThrow(() -> new IllegalStateException("앱 버전 행이 없다 — platform=" + platform));
-        boolean updateRequired = policy.requiresUpdate(versionName);
+        boolean updateRequired = appVersion.requiresUpdate(versionName);
         if (updateRequired) {
-            log.info("[기기] 버전 확인 실패: 최소 버전 미만 - platform={}, appVersion={}, minimumVersion={}",
-                    platform, versionName.value(), policy.getMinimumVersion().value());
+            log.info("[기기] 버전 확인 실패: 최소 버전 미만 - platform={}, versionName={}, minimumVersion={}",
+                    platform, versionName.value(), appVersion.getMinimumVersion().value());
         }
         return new CheckAppVersionResult(updateRequired);
     }

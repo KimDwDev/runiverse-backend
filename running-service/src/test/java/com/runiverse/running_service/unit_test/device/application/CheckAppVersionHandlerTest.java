@@ -1,9 +1,9 @@
 package com.runiverse.running_service.unit_test.device.application;
 
-import com.runiverse.running_service.application.device.port.out.LoadAppVersionPolicyPort;
+import com.runiverse.running_service.application.device.port.out.LoadAppVersionPort;
 import com.runiverse.running_service.application.device.query.version.CheckAppVersionHandler;
 import com.runiverse.running_service.application.device.query.version.CheckAppVersionQuery;
-import com.runiverse.running_service.domain.device.AppVersionPolicy;
+import com.runiverse.running_service.domain.device.AppVersion;
 import com.runiverse.running_service.domain.device.exception.UnsupportedPlatformException;
 import com.runiverse.running_service.domain.device.vo.Platform;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class CheckAppVersionHandlerTest {
 
     @Mock
-    private LoadAppVersionPolicyPort loadAppVersionPolicyPort;
+    private LoadAppVersionPort loadAppVersionPort;
 
     @InjectMocks
     private CheckAppVersionHandler handler;
@@ -45,12 +45,12 @@ class CheckAppVersionHandlerTest {
     @ParameterizedTest
     @ValueSource(strings = {"1.1.0", "1.1.1", "2.0.0"})
     @DisplayName("최소 버전 이상이면 업데이트가 필요 없다")
-    void atOrAboveMinimumPasses(String appVersion) {
+    void atOrAboveMinimumPasses(String versionName) {
         // given
         givenMinimum(Platform.ANDROID, "1.1.0");
 
         // when & then
-        assertThat(handler.handle(new CheckAppVersionQuery("ANDROID", appVersion)).updateRequired()).isFalse();
+        assertThat(handler.handle(new CheckAppVersionQuery("ANDROID", versionName)).updateRequired()).isFalse();
     }
 
     @Test
@@ -67,7 +67,7 @@ class CheckAppVersionHandlerTest {
     @DisplayName("플랫폼 행이 없으면 통과시키지 않고 예외를 던진다")
     void missingRowFails() {
         // given -> 통과시키면 막아야 할 요청이 들어온다
-        given(loadAppVersionPolicyPort.load(Platform.IOS)).willReturn(Optional.empty());
+        given(loadAppVersionPort.load(Platform.IOS)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> handler.handle(new CheckAppVersionQuery("IOS", "1.0.0")))
@@ -80,11 +80,11 @@ class CheckAppVersionHandlerTest {
         // when & then -> 필터가 형식을 먼저 거르지만 VO가 마지막 방어선이다
         assertThatThrownBy(() -> handler.handle(new CheckAppVersionQuery("WEB", "1.0.0")))
                 .isInstanceOf(UnsupportedPlatformException.class);
-        verifyNoInteractions(loadAppVersionPolicyPort);
+        verifyNoInteractions(loadAppVersionPort);
     }
 
     private void givenMinimum(Platform platform, String minimumVersion) {
-        given(loadAppVersionPolicyPort.load(platform)).willReturn(Optional.of(AppVersionPolicy.builder()
+        given(loadAppVersionPort.load(platform)).willReturn(Optional.of(AppVersion.builder()
                 .platform(platform)
                 .minimumVersion(minimumVersion)
                 .latestVersion("9.0.0")

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.device;
 
-import com.runiverse.running_service.domain.device.AppVersionPolicy;
+import com.runiverse.running_service.domain.device.AppVersion;
 import com.runiverse.running_service.domain.device.vo.Platform;
 import com.runiverse.running_service.domain.device.vo.VersionName;
 import com.runiverse.running_service.infrastructure.persistence.device.AppVersionJpaEntity;
@@ -43,16 +43,16 @@ class AppVersionPersistenceAdapterTest {
 
     @Test
     @DisplayName("플랫폼 행을 도메인으로 바꿔 돌려준다")
-    void loadsPolicyOfPlatform() {
+    void loadsAppVersionOfPlatform() {
         // given
         givenQueryResult(List.of(entity(Platform.IOS, "1.1.0", "1.2.0")));
 
         // when
-        Optional<AppVersionPolicy> policy = appVersionPersistenceAdapter.load(Platform.IOS);
+        Optional<AppVersion> appVersion = appVersionPersistenceAdapter.load(Platform.IOS);
 
         // then
         verify(query).setParameter("platform", Platform.IOS);
-        assertThat(policy).hasValueSatisfying(loaded -> {
+        assertThat(appVersion).hasValueSatisfying(loaded -> {
             assertThat(loaded.getPlatform()).isEqualTo(Platform.IOS);
             assertThat(loaded.getMinimumVersion()).isEqualTo(new VersionName("1.1.0"));
             assertThat(loaded.getLatestVersion()).isEqualTo(new VersionName("1.2.0"));

@@ -35,7 +35,7 @@ public class AppVersionFilter extends OncePerRequestFilter {
 
     private static final Pattern PLATFORM_FORMAT = Pattern.compile("^(?i)(IOS|ANDROID)$");
     // VersionName과 같은 규칙 — 부분마다 9자리까지
-    private static final Pattern APP_VERSION_FORMAT =
+    private static final Pattern VERSION_NAME_FORMAT =
             Pattern.compile("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$");
     // 구버전도 업데이트가 필요하다는 답을 받아야 한다
     private static final String APP_VERSIONS_PATH = "/app-versions";
@@ -58,16 +58,16 @@ public class AppVersionFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String platform = request.getHeader(PLATFORM_HEADER);
-        String appVersion = request.getHeader(APP_VERSION_HEADER);
+        String versionName = request.getHeader(APP_VERSION_HEADER);
         // 헤더가 없거나 틀리면 거절하지 않는다 — 헤더를 싣기 전 버전과 구분할 수 없고, 앱 실수 하나로 전원이 막히지 않게 한다
-        if (!isWellFormed(platform, appVersion)) {
+        if (!isWellFormed(platform, versionName)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         boolean updateRequired;
         try {
-            updateRequired = checkAppVersionUsecase.handle(new CheckAppVersionQuery(platform, appVersion))
+            updateRequired = checkAppVersionUsecase.handle(new CheckAppVersionQuery(platform, versionName))
                     .updateRequired();
         } catch (RuntimeException e) {
             // 최소 버전을 모르면 통과시키지 않는다 — 막아야 할 요청이 들어온다.
@@ -83,9 +83,9 @@ public class AppVersionFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private static boolean isWellFormed(String platform, String appVersion) {
-        return platform != null && appVersion != null
-                && PLATFORM_FORMAT.matcher(platform).matches() && APP_VERSION_FORMAT.matcher(appVersion).matches();
+    private static boolean isWellFormed(String platform, String versionName) {
+        return platform != null && versionName != null
+                && PLATFORM_FORMAT.matcher(platform).matches() && VERSION_NAME_FORMAT.matcher(versionName).matches();
     }
 
     // 중앙 예외 핸들러를 거치지 않으므로 메트릭 원인·노출 정책을 여기서 맞춘다

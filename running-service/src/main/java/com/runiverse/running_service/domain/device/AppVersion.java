@@ -9,14 +9,14 @@ import lombok.Getter;
 // 플랫폼마다 몇 버전부터 쓸 수 있고 최신은 몇 버전인가 — 운영이 SQL로 바꾸는 값이라 앱은 읽기만 한다.
 // 최소 ≤ 최신은 DB가 막는다
 @Getter
-public class AppVersionPolicy {
+public class AppVersion {
 
     private final Platform platform;
     private final VersionName minimumVersion;
     private final VersionName latestVersion;
 
     @Builder
-    private AppVersionPolicy(Platform platform, String minimumVersion, String latestVersion) {
+    private AppVersion(Platform platform, String minimumVersion, String latestVersion) {
         if (platform == null) {
             throw new PlatformRequiredException();
         }

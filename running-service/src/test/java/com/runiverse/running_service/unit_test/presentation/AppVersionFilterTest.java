@@ -60,7 +60,7 @@ class AppVersionFilterTest {
         verifyNoInteractions(checkAppVersionUsecase);
     }
 
-    @ParameterizedTest(name = "platform={0}, appVersion={1}")
+    @ParameterizedTest(name = "platform={0}, versionName={1}")
     @CsvSource({
             "IOS,",
             ",1.0.0",
@@ -73,9 +73,9 @@ class AppVersionFilterTest {
             "IOS, ' 1.0.0'"
     })
     @DisplayName("헤더가 하나뿐이거나 형식이 틀리면 거절하지 않고 그대로 처리한다")
-    void passesMalformedHeaders(String platform, String appVersion) throws Exception {
+    void passesMalformedHeaders(String platform, String versionName) throws Exception {
         // when -> 앱 실수 하나로 전원이 막히지 않게 한다
-        filter.doFilter(request("/users/me", platform, appVersion), response, chain);
+        filter.doFilter(request("/users/me", platform, versionName), response, chain);
 
         // then
         assertThat(chain.getRequest()).isNotNull();
@@ -152,14 +152,14 @@ class AppVersionFilterTest {
     }
 
     // 배포와 같이 컨텍스트 경로 아래로 들어온 요청 — 헤더는 null이면 싣지 않는다
-    private static MockHttpServletRequest request(String path, String platform, String appVersion) {
+    private static MockHttpServletRequest request(String path, String platform, String versionName) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", CONTEXT_PATH + path);
         request.setContextPath(CONTEXT_PATH);
         if (platform != null) {
             request.addHeader(AppVersionFilter.PLATFORM_HEADER, platform);
         }
-        if (appVersion != null) {
-            request.addHeader(AppVersionFilter.APP_VERSION_HEADER, appVersion);
+        if (versionName != null) {
+            request.addHeader(AppVersionFilter.APP_VERSION_HEADER, versionName);
         }
         return request;
     }
