@@ -24,6 +24,7 @@ public final class ErrorExposurePolicy {
             ResourceErrorCode.NOT_FOUND.getCode(),
             CommonErrorCode.METHOD_NOT_ALLOWED.getCode(),
             CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
+            CommonErrorCode.APP_UPDATE_REQUIRED.getCode(),
             UserErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             UserErrorCode.ACCOUNT_DELETION_UNAVAILABLE.getCode(),
             AuthErrorCode.INVALID_CREDENTIALS.getCode(),
