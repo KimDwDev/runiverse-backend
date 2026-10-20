@@ -1138,10 +1138,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `scheduledStartAt` | String | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`). 필수 |
-| `targetDistanceMeters` | Integer | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나. 필수 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
+| `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
 - **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
@@ -1155,9 +1155,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `runningRoomId` | Long | 배정된 방 ID. 이 값으로 SSE 스트림에 연결한다 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningRoomId` | Integer | O | 배정된 방 ID. 이 값으로 SSE 스트림에 연결한다 |
 
 - **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각(`closeAt`)은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
@@ -1724,7 +1724,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+| `runningRoomId` | Integer | O | 조회할 러닝 방 ID (path) |
 
 - **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - 방이 아직 `STARTED`면 종료하지 않은 참가자는 `status='RUNNING'`, 기록 지표는 null인 현재 스냅샷을 반환한다. 다시 조회하면 최신 상태를 받고 방이 `FINISHED`면 최종 결과가 된다
@@ -1780,7 +1780,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `runningRoomId` | Long | O | 러닝 방 ID |
+| `runningRoomId` | Integer | O | 러닝 방 ID |
 | `startedAt` | String | X | 현재 사용자 기록의 시작 시각. 기록이 없으면 null |
 | `finishedAt` | String | X | 현재 사용자 기록의 종료 시각. 기록이 없으면 null |
 | `routes` | Number[][][] | X | 현재 사용자 경로. 조각 배열이고, 조각마다 `[[위도, 경도], …]`를 달린 순서대로 담는다. 조각도 달린 순서다. 가장 안쪽 배열은 길이 2, 위도가 먼저다(GeoJSON과 반대). 좌표는 소수점 5자리(약 1m)까지. 첫 조각의 첫 원소가 시작 지점, 끝 조각의 끝 원소가 종료 지점이라 마커용 좌표를 따로 싣지 않는다. 본인 기록이 없으면 null(빈 배열이 아니다) |
@@ -1790,7 +1790,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `userId` | UUID | O | 참가자 ID |
+| `userId` | String | O | 참가자 ID |
 | `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
 | `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
 | `status` | String | O | 참가자 상태 — `RUNNING`(진행 중)·`COMPLETED`(종료) 두 값뿐. 중도 이탈도 종료 뒤에는 `COMPLETED`다 |
@@ -1841,7 +1841,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `runningRoomId` | Long | O | 조회할 러닝 방 ID (path) |
+| `runningRoomId` | Integer | O | 조회할 러닝 방 ID (path) |
 
 - **조회자는 토큰에서만 온다** — 클라가 사용자 식별자를 보내지 않는다
 - **Response `200 OK`** (구조 요약)
@@ -1891,7 +1891,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `runningRoomId` | Long | O | 러닝 방 ID |
+| `runningRoomId` | Integer | O | 러닝 방 ID |
 | `splitDistanceMeters` | Integer | O | 고정 구간 거리(m). 항상 10 |
 | `totalDistanceMeters` | Integer | X | 현재 사용자 총 거리(m). 목표를 넘겨 뛰었으면 목표 지점에서, 목표 미달이면 마지막 10m 경계에서 끊은 값이다. 기록이 없으면 null |
 | `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null. 일시정지 중에 오른 높이는 들어가지 않는다 |
@@ -1904,7 +1904,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `userId` | UUID | O | 참가자 ID |
+| `userId` | String | O | 참가자 ID |
 | `nickname` | String | O | 닉네임. 탈퇴한 사용자는 `탈퇴한 사용자` |
 | `profileImageUrl` | String | X | 프로필 이미지 URL. 사진이 없거나 탈퇴한 사용자면 null |
 | `status` | String | O | 참가자 상태 — `RUNNING`·`COMPLETED` 두 값뿐 (6-1과 같은 규칙) |
@@ -1926,7 +1926,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
+| `userId` | String | O | 참가자 ID. 최상위 `players`와 조인한다 |
 | `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 일시정지·정지·관측하지 못한 시간은 들어가지 않는다 |
 | `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
 | `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
@@ -2641,10 +2641,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `mimeType` | String | 필수. `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
-| `fileSizeBytes` | Long | 필수. 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
+| `fileSizeBytes` | Integer | O | 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
 
 - **Response `200 OK`**
 
@@ -2700,9 +2700,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `profileImageKey` | String | 필수, 255자 이하. 11-1이 발급한 키 그대로 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `profileImageKey` | String | O | 255자 이하. 11-1이 발급한 키 그대로 |
 
 - **Response `200 OK`**
 
@@ -2791,10 +2791,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `mimeType` | String | 필수. `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
-| `fileSizeBytes` | Long | 필수. 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) |
+| `fileSizeBytes` | Integer | O | 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
 
 - **Response `200 OK`**
 
@@ -2850,9 +2850,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `backgroundImageKey` | String | 필수, 255자 이하. 11-5가 발급한 키 그대로 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `backgroundImageKey` | String | O | 255자 이하. 11-5가 발급한 키 그대로 |
 
 - **Response `200 OK`**
 
@@ -2948,13 +2948,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 설명 | 출처 |
+| 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `introduction` | String | 소개글. 없으면 `null` | `users` |
-| `gender` | String | `MALE` \| `FEMALE`. 온보딩 전이면 `null` | `user_onboardings` |
-| `birthday` | String | `YYYY-MM-DD`. 온보딩 전이면 `null` | `user_onboardings` |
-| `weightKg` | Number | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` | `user_onboardings` |
-| `heightCm` | Number | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` | `user_onboardings` |
+| `introduction` | String | X | 소개글. 없으면 `null` (`users`에서 읽는다) |
+| `gender` | String | X | `MALE` \| `FEMALE`. 온보딩 전이면 `null` (`user_onboardings`에서 읽는다) |
+| `birthday` | String | X | `YYYY-MM-DD`. 온보딩 전이면 `null` (`user_onboardings`에서 읽는다) |
+| `weightKg` | Number | X | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` (`user_onboardings`에서 읽는다) |
+| `heightCm` | Number | X | 저장된 값(소수점 첫째 자리). 온보딩 전이면 `null` (`user_onboardings`에서 읽는다) |
 
 - **닉네임·사진은 여기 없다** — 편집 화면에 함께 있지만 저장 흐름이 달라 엔드포인트가 갈린다(11-3·11-11)
 - **온보딩 전에도 `200`이다** — `user_onboardings`에 행이 없으면 그 출처의 네 필드가 `null`로 나가고 소개글만 채워진다. 11-10이 소개글만 보내는 요청을 온보딩 전에도 받아주므로 여기서도 막지 않는다
@@ -2977,13 +2977,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 | 저장 위치 |
+| 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `introduction` | String | 선택. 100자 이하. 빈 문자열이면 소개글을 지운다 | `users` |
-| `gender` | String | 선택. `MALE` \| `FEMALE`(대소문자 무시, 저장·응답은 대문자) | `user_onboardings` |
-| `birthday` | String | 선택. `YYYY-MM-DD`, 1900-01-01 이후이며 미래일 수 없다. 만 14세 이상 | `user_onboardings` |
-| `weightKg` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
-| `heightCm` | Number | 선택. 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 | `user_onboardings` |
+| `introduction` | String | X | 100자 이하. 빈 문자열이면 소개글을 지운다 (`users`에 저장) |
+| `gender` | String | X | `MALE` \| `FEMALE`(대소문자 무시, 저장·응답은 대문자) (`user_onboardings`에 저장) |
+| `birthday` | String | X | `YYYY-MM-DD`, 1900-01-01 이후이며 미래일 수 없다. 만 14세 이상 (`user_onboardings`에 저장) |
+| `weightKg` | Number | X | 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 (`user_onboardings`에 저장) |
+| `heightCm` | Number | X | 20 이상 300 이하. 소수점 둘째 자리 이하는 반올림해 저장한다 (`user_onboardings`에 저장) |
 
 - **필드를 생략하면 현재 값을 그대로 둔다.** 소개글만 빈 문자열(`""`)로 지울 수 있고, 나머지 넷은 온보딩에서 필수라 지우는 개념이 없다
 - **키·몸무게는 소수점 첫째 자리로 정규화한다.** `70.55`를 보내면 거부하지 않고 `70.6`으로 저장하며, 응답에도 정규화된 값이 나가 클라이언트가 저장된 값을 알 수 있다. 정상 범위의 값을 자릿수만으로 400으로 막지 않기 위해서다
@@ -3057,9 +3057,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `nickname` | String | 필수, 2~16자, 한글·영문·숫자·`_`만 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `nickname` | String | O | 2~16자, 한글·영문·숫자·`_`만 |
 
 - **Response `200 OK`**
 
@@ -3125,9 +3125,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `nickname` | String | 필수, 2~16자, 한글·영문·숫자·`_`만 |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `nickname` | String | O | 2~16자, 한글·영문·숫자·`_`만 |
 
 - **Response `200 OK`**
 
@@ -3259,10 +3259,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-| 필드 | 타입 | 제약 |
-|---|---|---|
-| `alertConsent` | Boolean | 선택. 전체 알림 on/off |
-| `profileVisibility` | String | 선택. `FRIENDS` \| `PUBLIC`(대소문자 무시, 저장·응답은 대문자) |
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `alertConsent` | Boolean | X | 전체 알림 on/off |
+| `profileVisibility` | String | X | `FRIENDS` \| `PUBLIC`(대소문자 무시, 저장·응답은 대문자) |
 
 - **Response `200 OK`** — 12-2와 같은 형식으로 저장 후 설정 전체를 담는다
 
@@ -3294,7 +3294,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - `delete_users` 스냅샷 후 `users`를 하드 삭제한다. `delete_users.created_at`은 스냅샷 시각이다.
   - **유지**: `feeds`/`comments`/`running_records`(+segments·splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
   - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`friendships`/`user_colors`.
-  - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
+  - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필·배경 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).
 - **Response**: `204 No Content` (토큰 즉시 무효화)
 - **에러 (503 Service Unavailable — 진행 중인 러닝을 정리하다 저장소 장애)** — 탈퇴는 통째로 되돌려진다. 클라는 잠시 후 다시 시도하게 한다
