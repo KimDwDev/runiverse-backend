@@ -516,7 +516,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         // when
         finish(userId, runningRoomId);
 
-        // then -> 버퍼가 남으면 재연결 재전송이 끝난 러닝에 다시 쌓인다
+        // then
         assertThat(gpsTrackUploader.uploads()).hasSize(1);
         assertThat(gpsTrackUploader.uploads().get(0).raw()).startsWith("[[0,");
         assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isTrue();
