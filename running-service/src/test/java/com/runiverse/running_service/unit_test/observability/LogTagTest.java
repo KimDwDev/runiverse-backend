@@ -30,7 +30,7 @@ public class LogTagTest {
                 Arguments.of(UserController.class, "[회원]"),
                 Arguments.of(RunningMatchController.class, "[매칭]"),
                 Arguments.of(RunningRoomController.class, "[러닝]"),
-                Arguments.of(AppVersionController.class, "[버전]")
+                Arguments.of(AppVersionController.class, "[기기]")
         );
     }
 

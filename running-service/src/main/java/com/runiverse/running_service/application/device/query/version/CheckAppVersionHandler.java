@@ -28,7 +28,7 @@ public class CheckAppVersionHandler implements CheckAppVersionUsecase {
                 .orElseThrow(() -> new IllegalStateException("앱 버전 행이 없다 — platform=" + platform));
         boolean updateRequired = policy.requiresUpdate(appVersion);
         if (updateRequired) {
-            log.info("[버전] 버전 확인 실패: 최소 버전 미만 - platform={}, appVersion={}, minimumVersion={}",
+            log.info("[기기] 버전 확인 실패: 최소 버전 미만 - platform={}, appVersion={}, minimumVersion={}",
                     platform, appVersion.value(), policy.getMinimumVersion().value());
         }
         return new CheckAppVersionResult(updateRequired);
