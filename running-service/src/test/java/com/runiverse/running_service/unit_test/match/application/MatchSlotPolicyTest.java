@@ -157,6 +157,22 @@ class MatchSlotPolicyTest {
         }
 
         @Test
+        @DisplayName("슬롯 조회는 허용 거리면 통과한다")
+        void validateDistancePassesListedDistance() {
+            // when & then
+            assertThatCode(() -> policy.validateDistance(10_000)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("슬롯 조회는 목록 밖 거리를 신청과 같은 문구로 거절한다")
+        void validateDistanceRejectsWithSameMessage() {
+            // when & then -> 두 API의 거리 안내가 갈라지지 않는다
+            assertThatThrownBy(() -> policy.validateDistance(7_000))
+                    .isInstanceOf(InvalidMatchOptionException.class)
+                    .hasMessage(DISTANCE_MESSAGE);
+        }
+
+        @Test
         @DisplayName("둘 다 어긋나면 시각·거리 순으로 두 문장을 공백으로 이어 한 번에 거절한다")
         void validateRejectsBothAtOnce() {
             // when & then -> 하나 고치고 다시 보내야 나머지를 알게 하지 않는다
