@@ -12,7 +12,7 @@
 
 **앱 진입(스플래시)**
 
-- 앱을 열면 먼저 `GET /app-versions`로 업데이트가 필요한지 확인한다(아래 공통 — 앱 업데이트). 업데이트 화면으로 가지 않으면 다음으로 넘어간다.
+- 앱을 열면 먼저 `GET /app/version`으로 업데이트가 필요한지 확인한다(아래 공통 — 앱 업데이트). 업데이트 화면으로 가지 않으면 다음으로 넘어간다.
 - 저장된 refreshToken으로 `POST /auth/refresh`를 시도하고, 성공하면 `GET /users/me`의 `isOnboarded`로 진입 화면을 가른다.
 
 | refreshToken | `isOnboarded` | 진입 화면 |
