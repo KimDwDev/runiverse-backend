@@ -1,7 +1,6 @@
 package com.runiverse.running_service.application.match.command.apply;
 
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
-import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
@@ -35,7 +34,6 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
     private final LoadUserAvgPacePort loadUserAvgPacePort;
     private final CreateMatchApplicationPort createMatchApplicationPort;
     private final MatchRoomAssigner matchRoomAssigner;
-    private final MatchProperties matchProperties;
     private final MatchSlotPolicy matchSlotPolicy;
     private final RoomInfoAssembler roomInfoAssembler;
     private final ApplicationEventPublisher eventPublisher;
@@ -46,9 +44,8 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
         //    마감보다 먼저 봐야 03:00처럼 애초에 없는 슬롯이 409 마감이 아니라 400으로 나간다
         matchSlotPolicy.validate(command.scheduledStartAt(), command.targetDistanceMeters());
         // 1. 모집이 끝난 슬롯인가 — DB를 안 타는 검사라 앞쪽에 둔다.
-        //    마감은 운영값·현재 시각에 걸린 정책이다
-        LocalDateTime closeAt = command.scheduledStartAt().minus(matchProperties.closeOffset());
-        if (!LocalDateTime.now().isBefore(closeAt)) {
+        //    경계는 슬롯 조회의 selectable과 같아야 해 정책이 함께 판정한다
+        if (!matchSlotPolicy.isOpen(command.scheduledStartAt(), LocalDateTime.now())) {
             throw new MatchSlotClosedException();
         }
         UserId userId = new UserId(command.userId());

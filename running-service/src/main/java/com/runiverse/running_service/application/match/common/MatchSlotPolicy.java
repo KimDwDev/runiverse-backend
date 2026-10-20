@@ -36,6 +36,12 @@ public class MatchSlotPolicy {
         return matchProperties.allowedDistancesMeters().contains(distanceMeters);
     }
 
+    // 모집 마감 전인가 — 신청의 MATCH_SLOT_CLOSED와 슬롯 조회의 selectable이 이 경계를 함께 쓴다.
+    // 마감 정각은 이미 마감이다(그 시점에 확정 판정이 돈다). now를 받는 건 조회가 슬롯 전체를 한 시각으로 판정하기 위해서다
+    public boolean isOpen(LocalDateTime startAt, LocalDateTime now) {
+        return now.isBefore(startAt.minus(matchProperties.closeOffset()));
+    }
+
     // 신청 검증. 둘 다 어긋나면 두 문장을 한 번에 보낸다 — 하나 고치고 다시 보내야 나머지를 알게 하지 않는다
     public void validate(LocalDateTime startAt, int distanceMeters) {
         List<String> violations = new ArrayList<>();

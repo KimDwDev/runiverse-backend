@@ -53,6 +53,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -92,9 +94,9 @@ class ApplyMatchHandlerTest {
     @Mock
     private MatchRoomAssigner matchRoomAssigner;
 
-    // 선택지 판정 자체는 MatchSlotPolicyTest가 본다 — 여기선 순서와 호출만 본다.
-    // 실제 정책을 쓰면 now 기준으로 만든 마감 테스트의 시각이 슬롯 간격에 걸린다
-    @Mock
+    // 실제 정책을 감싼 spy — 마감(isOpen)은 실제 경계를 타고, 선택지(validate)만 막는다.
+    // now 기준으로 만든 마감 테스트의 시각이 슬롯 간격에 걸려 선택지 판정을 그대로 타면 400으로 빠진다.
+    // 선택지 판정 자체는 MatchSlotPolicyTest가 본다
     private MatchSlotPolicy matchSlotPolicy;
 
     @Mock
@@ -107,12 +109,14 @@ class ApplyMatchHandlerTest {
 
     @BeforeEach
     void setUp() {
+        matchSlotPolicy = spy(new MatchSlotPolicy(new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
+                PACE_TIE_TOLERANCE, COOLDOWN,
+                LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000))));
+        // 선택지 위반을 일부러 던지는 테스트는 이 스텁을 덮어써 쓰지 않으므로 lenient다
+        lenient().doNothing().when(matchSlotPolicy).validate(any(), anyInt());
         applyMatchHandler = new ApplyMatchHandler(
                 matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
-                createMatchApplicationPort,
-                matchRoomAssigner, new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
-                        PACE_TIE_TOLERANCE, COOLDOWN,
-                        LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000)),
+                createMatchApplicationPort, matchRoomAssigner,
                 matchSlotPolicy, roomInfoAssembler, eventPublisher);
     }
 

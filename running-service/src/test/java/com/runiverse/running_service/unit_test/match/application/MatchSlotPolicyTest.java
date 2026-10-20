@@ -157,6 +157,28 @@ class MatchSlotPolicyTest {
         }
 
         @Test
+        @DisplayName("마감(시작 10분 전) 1초 전까지는 열려 있다")
+        void openUntilJustBeforeClose() {
+            // when & then
+            assertThat(policy.isOpen(DATE.atTime(19, 0), DATE.atTime(18, 49, 59))).isTrue();
+        }
+
+        @Test
+        @DisplayName("마감 정각은 이미 마감이다")
+        void closedExactlyAtCloseTime() {
+            // when & then -> 그 시점에 확정 판정이 돈다. 신청 409와 조회 selectable이 이 경계를 함께 쓴다
+            assertThat(policy.isOpen(DATE.atTime(19, 0), DATE.atTime(18, 50))).isFalse();
+        }
+
+        @Test
+        @DisplayName("마감이 지나면 닫혀 있다")
+        void closedAfterCloseTime() {
+            // when & then
+            assertThat(policy.isOpen(DATE.atTime(19, 0), DATE.atTime(18, 50, 1))).isFalse();
+            assertThat(policy.isOpen(DATE.atTime(19, 0), DATE.atTime(19, 30))).isFalse();
+        }
+
+        @Test
         @DisplayName("슬롯 조회는 허용 거리면 통과한다")
         void validateDistancePassesListedDistance() {
             // when & then

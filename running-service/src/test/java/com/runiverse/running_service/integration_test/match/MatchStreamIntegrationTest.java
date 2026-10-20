@@ -123,7 +123,6 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,                   // LoadUserAvgPacePort
                 runningStore,                      // CreateMatchApplicationPort
                 matchRoomAssigner,
-                MATCH_PROPERTIES,
                 new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
                 eventPublisher
