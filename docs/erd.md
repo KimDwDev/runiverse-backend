@@ -102,7 +102,7 @@
 | created_at / updated_at | timestamp | NOT NULL | |
 
 > CHECK `ck_app_version_platform`: `platform in ('IOS', 'ANDROID')`
-> CHECK `ck_app_version_format`: `minimum_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$' and latest_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$'`
+> CHECK `ck_app_version_format`: `minimum_version ~ '^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$' and latest_version ~ '^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$'`
 > CHECK `ck_app_version_order`: `string_to_array(minimum_version, '.')::int[] <= string_to_array(latest_version, '.')::int[]` — 부분마다 정수로 비교한다(문자열 비교면 `1.10.0` < `1.9.0`)
 > **값은 운영이 SQL로 직접 바꾼다** — 관리 API가 없어 애플리케이션 검증을 거치지 않으므로 형식·대소 관계를 DB가 막는다. 서버가 캐시 없이 요청마다 읽으므로 바꾸면 바로 반영된다 — 버전 확인 API와 구버전 요청 거절이 같은 값을 본다.
 > **행은 배포 SQL이 미리 넣는다** — 두 플랫폼 행이 항상 있다. 행을 지우거나 더하지 않고 UPDATE만 한다.
