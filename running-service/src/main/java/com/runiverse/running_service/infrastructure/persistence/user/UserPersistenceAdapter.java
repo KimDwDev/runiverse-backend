@@ -39,6 +39,7 @@ import com.runiverse.running_service.domain.user.DeletedUser;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.UserOnboarding;
 import com.runiverse.running_service.domain.user.vo.AvgPace;
+import com.runiverse.running_service.domain.user.vo.BackgroundImageKey;
 import com.runiverse.running_service.domain.user.vo.Birthday;
 import com.runiverse.running_service.domain.user.vo.Bmi;
 import com.runiverse.running_service.domain.user.vo.Gender;
@@ -98,6 +99,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 emptyToNull(user.getPasswordHash().value()),
                 user.isAlertConsent(),
                 user.getProfileImageKey().map(ProfileImageKey::value).orElse(null),
+                user.getBackgroundImageKey().map(BackgroundImageKey::value).orElse(null),
                 user.getProfileVisibility(),
                 emptyToNull(user.getIntroduction().value())
         );
@@ -266,6 +268,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 Objects.requireNonNullElse(entity.getPasswordHash(), ""),
                 entity.isAlertConsent(),
                 entity.getProfileImageKey(),
+                entity.getBackgroundImageKey(),
                 entity.getProfileVisibility(),
                 Objects.requireNonNullElse(entity.getIntroduction(), "")
         );
