@@ -50,7 +50,6 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
     void setUp() {
         handler = new GetMatchSlotsHandler(
                 new MatchSlotPolicy(MATCH_PROPERTIES),
-                MATCH_PROPERTIES,
                 new InMemoryMatchStore(runningStore)   // CountWaitingPlayersPort
         );
     }

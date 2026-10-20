@@ -116,6 +116,6 @@ class GetMatchSlotsHandlerTest {
         MatchProperties properties = new MatchProperties(
                 closeOffset, Duration.ofSeconds(10), Duration.ofHours(6), 10, Duration.ofMinutes(20),
                 LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
-        return new GetMatchSlotsHandler(new MatchSlotPolicy(properties), properties, countWaitingPlayersPort);
+        return new GetMatchSlotsHandler(new MatchSlotPolicy(properties), countWaitingPlayersPort);
     }
 }
