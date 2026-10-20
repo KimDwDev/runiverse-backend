@@ -103,8 +103,9 @@ class MatchApplyRequestValidationTest {
                 validator.validate(new ApplyMatchRequest(null, DISTANCE));
 
         // then -> 슬롯 검사가 null에 또 걸리면 같은 필드로 메시지가 두 번 나간다
-        assertThat(violations).hasSize(1);
-        assertThat(violations.iterator().next().getMessage()).contains("필수");
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .containsExactly("희망 시작 시각은 필수입니다.");
     }
 
     @Test
@@ -115,8 +116,9 @@ class MatchApplyRequestValidationTest {
                 validator.validate(new ApplyMatchRequest(DATE.atTime(VALID), null));
 
         // then
-        assertThat(violations).hasSize(1);
-        assertThat(violations.iterator().next().getMessage()).contains("필수");
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .containsExactly("목표 거리는 필수입니다.");
     }
 
     private Set<ConstraintViolation<ApplyMatchRequest>> validate(LocalTime time, Integer distance) {
