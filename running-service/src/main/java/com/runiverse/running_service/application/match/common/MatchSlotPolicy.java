@@ -2,6 +2,7 @@ package com.runiverse.running_service.application.match.common;
 
 import com.runiverse.running_service.application.match.exception.InvalidMatchOptionException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 // 매칭 신청 선택지 판정. 신청 검증과 슬롯 조회가 이 판정을 함께 써야 두 API의 선택지가 갈라지지 않는다
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class MatchSlotPolicy {
@@ -44,6 +46,8 @@ public class MatchSlotPolicy {
             violations.add(distanceRule());
         }
         if (!violations.isEmpty()) {
+            // 사용자가 고른 값의 문제라 INFO다. userId는 MDC가 붙인다
+            log.info("[매칭] 신청 실패: 선택지 밖 - startAt={}, distanceM={}", startAt, distanceMeters);
             throw new InvalidMatchOptionException(String.join(" ", violations));
         }
     }
