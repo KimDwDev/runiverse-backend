@@ -13,6 +13,8 @@ import com.runiverse.running_service.application.running.command.solo.OpenSoloRo
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
 import com.runiverse.running_service.application.running.command.start.StartRunningCommand;
 import com.runiverse.running_service.application.running.command.start.StartRunningHandler;
+import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusCommand;
+import com.runiverse.running_service.application.running.command.status.ChangeLiveRunningStatusHandler;
 import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
@@ -20,6 +22,7 @@ import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.port.out.LiveRunningStatus;
 import com.runiverse.running_service.application.running.port.out.RunningComboUpdate;
+import com.runiverse.running_service.application.running.port.out.RunningProgress;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
@@ -76,6 +79,7 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
     private OpenSoloRoomHandler openSoloRoomHandler;
     private StartRunningHandler startRunningHandler;
     private UpdateRunningLocationHandler updateRunningLocationHandler;
+    private ChangeLiveRunningStatusHandler changeLiveRunningStatusHandler;
     private FinishRunningHandler handler;
     private SimpleMeterRegistry meterRegistry;
 
@@ -139,6 +143,11 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 newUpdateRunningComboJudge(),
                 new UpdateRunningFinishJudge(runningFinisher),
                 DEFAULT_PROPERTIES
+        );
+        changeLiveRunningStatusHandler = new ChangeLiveRunningStatusHandler(
+                new LiveRunningStatusChanger( // LiveRunningStatusChanger
+                        liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
+                runningComboStore         // MarkRunningComboPausedPort
         );
         handler = new FinishRunningHandler(runningFinisher);
     }
@@ -915,5 +924,108 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
                 .isEqualTo(RunningPlayerStatus.COMPLETED);
         // 늦은 배치가 다시 쌓은 버퍼도 멱등 경로가 비운다
         assertThat(runningTrackStore.isEmpty(runningRoomId, new UserId(userId))).isTrue();
+    }
+
+    // 일시정지 시나리오 — 초당 2.5m로 200초를 달리다 일시정지하고, 60초 동안 150m를 옮겨 재개한 뒤 다시 200초를 달린다.
+    // 앱은 일시정지 동안 좌표를 모으지 않고, 재개 뒤 좌표에는 하나 올린 구간 번호를 붙인다
+    private static final int LEG_POINTS = 200;
+    private static final int PAUSED_SECONDS = 60;
+    private static final double MOVED_WHILE_PAUSED_METERS = 150.0;
+    // 두 구간에서 실제로 달린 거리 — 199칸 × 2.5m씩 두 번
+    private static final int RUN_METERS = 995;
+
+    private static List<TrackPoint> legBeforePause() {
+        List<TrackPoint> points = new ArrayList<>(LEG_POINTS);
+        for (int i = 0; i < LEG_POINTS; i++) {
+            points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(i), 0));
+        }
+        return points;
+    }
+
+    // 일시정지 직전 좌표에서 옮긴 거리와 멈춘 시간만큼 떨어진 곳에서 이어 달린다
+    private static List<TrackPoint> legAfterResume() {
+        double resumeNorth = (LEG_POINTS - 1) * 2.5 + MOVED_WHILE_PAUSED_METERS;
+        int resumeSecond = LEG_POINTS - 1 + PAUSED_SECONDS;
+        List<TrackPoint> points = new ArrayList<>(LEG_POINTS);
+        for (int i = 0; i < LEG_POINTS; i++) {
+            points.add(new TrackPoint(LEG_POINTS + i, 37.5 + (resumeNorth + i * 2.5) / METERS_PER_DEGREE, 127.0,
+                    null, 5.0, null, null, 168, null, TRACK_START.plusSeconds(resumeSecond + i), 1));
+        }
+        return points;
+    }
+
+    private void changeStatus(UUID userId, Long runningRoomId, LiveRunningStatus status) {
+        changeLiveRunningStatusHandler.handle(
+                new ChangeLiveRunningStatusCommand(userId, runningRoomId, null, status));
+    }
+
+    @Test
+    @DisplayName("일시정지 중 이동한 거리는 진행 거리에 들어가지 않고, 재개하면 상태가 RUNNING으로 돌아온다")
+    void excludesDistanceMovedWhilePaused() {
+        // given -> 첫 구간을 달리고 일시정지했다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        runWith(userId, runningRoomId, legBeforePause());
+        changeStatus(userId, runningRoomId, LiveRunningStatus.PAUSED);
+        assertThat(runningProgressPublisher.publishedIn(runningRoomId).getLast().status())
+                .isEqualTo(LiveRunningStatus.PAUSED);
+
+        // when -> 150m 떨어진 곳에서 재개하고 다시 달린다
+        changeStatus(userId, runningRoomId, LiveRunningStatus.RUNNING);
+        runWith(userId, runningRoomId, legAfterResume());
+
+        // then -> 상대 화면의 거리에 옮긴 150m가 섞이지 않는다
+        RunningProgress last = runningProgressPublisher.publishedIn(runningRoomId).getLast();
+        assertThat(last.distanceMeters()).isEqualTo(RUN_METERS);
+        assertThat(last.status()).isEqualTo(LiveRunningStatus.RUNNING);
+    }
+
+    @Test
+    @DisplayName("일시정지 중 재연결해 트랙 전체를 다시 보내도 거리가 늘지 않고 일시정지가 풀리지 않는다")
+    void keepsPausedWhenTrackIsResentWhilePaused() {
+        // given -> 첫 구간을 달리고 일시정지했다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        List<TrackPoint> beforePause = legBeforePause();
+        runWith(userId, runningRoomId, beforePause);
+        changeStatus(userId, runningRoomId, LiveRunningStatus.PAUSED);
+        int pausedDistance = runningProgressPublisher.publishedIn(runningRoomId).getLast().distanceMeters();
+
+        // when -> 재연결한 앱이 로컬 트랙 전체를 150점씩 나눠 다시 보낸다
+        runWith(userId, runningRoomId, beforePause.subList(0, 150));
+        runWith(userId, runningRoomId, beforePause.subList(150, LEG_POINTS));
+
+        // then -> 이미 받은 좌표뿐이다. 풀리면 멈춘 사람이 상대 화면에 다시 달리는 것으로 보인다
+        RunningProgress last = runningProgressPublisher.publishedIn(runningRoomId).getLast();
+        assertThat(last.distanceMeters()).isEqualTo(pausedDistance);
+        assertThat(last.status()).isEqualTo(LiveRunningStatus.PAUSED);
+        assertThat(liveRunningStatusStore.load(runningRoomId, new UserId(userId)))
+                .contains(LiveRunningStatus.PAUSED);
+    }
+
+    @Test
+    @DisplayName("종료 기록은 일시정지 중 이동을 거리·시간에서 빼고 경로를 두 조각으로 남긴다")
+    void recordExcludesMovementWhilePaused() {
+        // given -> 일시정지를 사이에 두고 두 구간을 달렸다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        runWith(userId, runningRoomId, legBeforePause());
+        changeStatus(userId, runningRoomId, LiveRunningStatus.PAUSED);
+        changeStatus(userId, runningRoomId, LiveRunningStatus.RUNNING);
+        runWith(userId, runningRoomId, legAfterResume());
+
+        // when
+        finish(userId, runningRoomId);
+
+        // then -> 러닝 중 거리(995m)와 같은 기준이다. 구간 경계가 10m라 990m에서 끊긴다
+        RunningRecord record = runningRecordStore.find(runningRoomId, new UserId(userId))
+                .orElseThrow();
+        assertThat(record.getTotalDistance().meters()).isEqualTo(990);
+        // 멈춘 60초는 빠지고 990m를 초당 2.5m로 뛴 시간만 남는다
+        assertThat(record.getTotalDuration().seconds()).isEqualTo(396);
+        assertThat(record.getSegments())
+                .extracting(segment -> segment.getSegmentNumber().value())
+                .containsExactly(1, 2);
     }
 }

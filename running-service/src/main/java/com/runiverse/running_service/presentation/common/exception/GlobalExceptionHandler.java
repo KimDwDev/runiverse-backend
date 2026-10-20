@@ -263,7 +263,9 @@ public class GlobalExceptionHandler {
     private HttpStatus toStatus(UserErrorCode code) {
         return switch (code) {
             case PROFILE_IMAGE_NOT_UPLOADED,
-                 INVALID_PROFILE_IMAGE -> HttpStatus.BAD_REQUEST;
+                 INVALID_PROFILE_IMAGE,
+                 BACKGROUND_IMAGE_NOT_UPLOADED,
+                 INVALID_BACKGROUND_IMAGE -> HttpStatus.BAD_REQUEST;
             case INVALID_CURRENT_PASSWORD -> HttpStatus.UNAUTHORIZED;
             case ALREADY_ONBOARDED,
                  ONBOARDING_NOT_COMPLETED,
