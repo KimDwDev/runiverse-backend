@@ -1109,7 +1109,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
-- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘), `targetDistanceMeters`(선택 — 주면 해당 거리 조건만 집계)
+- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`), `targetDistanceMeters`(필수 — `3000`·`5000`·`10000` 중 하나, 해당 거리 조건만 집계한다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다)
 - **Response `200 OK`**
 
 ```json
@@ -1122,7 +1122,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외
+- `slots`는 `date` 하루의 신청 가능 시각(18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다
+- `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
 - `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다
 - **인증**: 필요
 
