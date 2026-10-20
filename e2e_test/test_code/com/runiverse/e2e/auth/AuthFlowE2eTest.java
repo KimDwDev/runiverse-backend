@@ -88,6 +88,27 @@ class AuthFlowE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("인증 경로 중 로그아웃은 공개되지 않아 토큰이 필요하다")
+    void logoutIsNotPublic() {
+        // when -> 공개 경로(/auth/oauth/**·/auth/email/** 등)가 /auth/**로 넓어지면 토큰 없이 통과한다
+        Response response = post("/auth/logout", Map.of());
+        // then
+        assertThat(response.status()).isEqualTo(401);
+        assertThat(response.text("code")).isEqualTo("AUTHENTICATION_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("actuator는 헬스 체크만 공개되고, 다른 엔드포인트는 토큰이 필요하다")
+    void onlyHealthCheckIsPublicAmongActuator() {
+        // when -> 공개 경로가 /actuator/**로 넓어지면 토큰 없이 통과해 401이 아니게 된다
+        Response health = get("/actuator/health", null);
+        Response env = get("/actuator/env", null);
+        // then
+        assertThat(health.status()).isEqualTo(200);
+        assertThat(env.status()).isEqualTo(401);
+    }
+
+    @Test
     @DisplayName("인증을 마쳐도 비밀번호 규칙을 어기면 400으로 걸러지고 가입되지 않는다")
     void signUpRejectsInvalidPassword() {
         // given

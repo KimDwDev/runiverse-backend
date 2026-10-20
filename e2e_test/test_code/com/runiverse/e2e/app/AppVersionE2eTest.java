@@ -57,6 +57,18 @@ class AppVersionE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("버전 확인만 공개되고, /app 아래 다른 경로는 토큰이 필요하다")
+    void onlyVersionCheckIsPublic() {
+        // when - 공개 경로가 /app/**로 넓어지면 토큰 없이도 통과해 401이 아니게 된다
+        Response notices = get("/app/notices", null);
+        Response nested = get("/app/version/latest", null);
+
+        // then
+        assertThat(notices.status()).isEqualTo(401);
+        assertThat(nested.status()).isEqualTo(401);
+    }
+
+    @Test
     @DisplayName("최소 버전보다 낮으면 토큰을 보기 전에 403으로 거절한다")
     void rejectsOldAppBeforeTokenCheck() {
         // when - 토큰 검사가 먼저면 401이 나간다
@@ -94,7 +106,7 @@ class AppVersionE2eTest extends E2eTestSupport {
                 .hasMessageContaining("403");
     }
 
-    private static Map<String, String> appVersion(String platform, String version) {
-        return Map.of("X-App-Platform", platform, "X-App-Version", version);
+    private static Map<String, String> appVersion(String platform, String versionName) {
+        return Map.of("X-App-Platform", platform, "X-App-Version", versionName);
     }
 }
