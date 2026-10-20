@@ -90,7 +90,7 @@ public abstract class E2eTestSupport {
     }
 
     private Response exchange(String method, String path, Map<String, ?> request,
-                              String accessToken) {
+                              String accessToken, Map<String, String> headers) {
         // 본문 없는 메서드에 빈 문자열을 실으면 Content-Type만 남아 서버가 파싱을 시도한다
         HttpRequest.BodyPublisher body = request == null
                 ? HttpRequest.BodyPublishers.noBody()
@@ -105,29 +105,40 @@ public abstract class E2eTestSupport {
         if (accessToken != null) {
             builder.header("Authorization", "Bearer " + accessToken);
         }
+        headers.forEach(builder::header);
         HttpResponse<String> response = send(builder.build());
         return new Response(response.statusCode(), parse(response.body()));
     }
 
     protected Response get(String path, String accessToken) {
-        return exchange("GET", path, null, accessToken);
+        return exchange("GET", path, null, accessToken, Map.of());
+    }
+
+    /** 앱 버전 헤더처럼 요청에 헤더를 더 싣는다. */
+    protected Response get(String path, String accessToken, Map<String, String> headers) {
+        return exchange("GET", path, null, accessToken, headers);
     }
 
     protected Response post(String path, Map<String, ?> request, String accessToken) {
-        return exchange("POST", path, request, accessToken);
+        return exchange("POST", path, request, accessToken, Map.of());
     }
 
     protected Response patch(String path, Map<String, ?> request, String accessToken) {
-        return exchange("PATCH", path, request, accessToken);
+        return exchange("PATCH", path, request, accessToken, Map.of());
     }
 
     protected Response delete(String path, String accessToken) {
-        return exchange("DELETE", path, null, accessToken);
+        return exchange("DELETE", path, null, accessToken, Map.of());
     }
 
     /** 러닝 WebSocket에 붙는다. 토큰이 null이면 핸드셰이크가 401로 막히는지 확인하는 용도다. */
     protected RunningWebSocket connectRunningWebSocket(String accessToken) {
-        return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken);
+        return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, Map.of());
+    }
+
+    /** 앱 버전 헤더처럼 핸드셰이크에 헤더를 더 싣는다. */
+    protected RunningWebSocket connectRunningWebSocket(String accessToken, Map<String, String> headers) {
+        return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, headers);
     }
 
     protected MatchStream openMatchStream(String accessToken) {
