@@ -1,7 +1,7 @@
 package com.runiverse.running_service.application.user.command.profileimage;
 
 import com.runiverse.running_service.application.user.port.in.CreateProfileImageUploadUrlUsecase;
-import com.runiverse.running_service.application.user.port.out.GenerateProfileImageIdPort;
+import com.runiverse.running_service.application.user.port.out.GenerateImageIdPort;
 import com.runiverse.running_service.application.user.port.out.GenerateUploadUrlPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUploadUrlUsecase {
 
-    private final GenerateProfileImageIdPort generateProfileImageIdPort;
+    private final GenerateImageIdPort generateImageIdPort;
     private final GenerateUploadUrlPort generateUploadUrlPort;
 
     @Override
@@ -22,7 +22,7 @@ public class CreateProfileImageUploadUrlHandler implements CreateProfileImageUpl
         // prefix에 userId를 넣어 프로필 소유자 검증
         String profileImageKey = ProfileImageKeyPolicy.create(
                 command.userId(),
-                generateProfileImageIdPort.generate(),
+                generateImageIdPort.generate(),
                 contentType
         ).value();
 
