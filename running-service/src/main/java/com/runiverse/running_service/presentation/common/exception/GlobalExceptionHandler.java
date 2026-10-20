@@ -14,13 +14,18 @@ import com.runiverse.running_service.presentation.common.response.CooldownErrorR
 import com.runiverse.running_service.presentation.common.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -41,7 +46,7 @@ public class GlobalExceptionHandler {
     }
 
     // 도메인 검증 예외
-    // 여기까지 왔다면 Request DTO 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
+    // 여기까지 왔다면 Request DTO·경로 변수 검증이나 유스케이스가 걸러야 할 입력을 놓친 것이라 ERROR로 남긴다
     @ExceptionHandler(com.runiverse.running_service.domain.common.exception.BusinessException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(
             com.runiverse.running_service.domain.common.exception.BusinessException e,
@@ -71,6 +76,30 @@ public class GlobalExceptionHandler {
                 .distinct()
                 .toList();
         log.info("{} 요청 검증 실패 - fields={}", LogTag.of(request), fields);
+        markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                CommonErrorCode.INVALID_REQUEST.getCode(),
+                message.isBlank() ? CommonErrorCode.INVALID_REQUEST.getMessage() : message
+        );
+    }
+
+    // 메서드 인자에 직접 붙인 제약 위반 (예: 경로 변수의 @Min)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidationException(
+            HandlerMethodValidationException e,
+            HttpServletRequest request
+    ) {
+        String message = e.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(MessageSourceResolvable::getDefaultMessage)
+                .collect(Collectors.joining(" "));
+        // 입력값에는 개인정보가 섞일 수 있어 인자 이름만 남긴다
+        List<String> params = e.getParameterValidationResults().stream()
+                .map(result -> result.getMethodParameter().getParameterName())
+                .distinct()
+                .toList();
+        log.info("{} 요청 검증 실패 - params={}", LogTag.of(request), params);
         markReason(request, CommonErrorCode.INVALID_REQUEST.getCode());
         return respond(
                 HttpStatus.BAD_REQUEST,
@@ -109,6 +138,39 @@ public class GlobalExceptionHandler {
                 HttpStatus.NOT_FOUND,
                 ResourceErrorCode.NOT_FOUND.getCode(),
                 ResourceErrorCode.NOT_FOUND.getMessage()
+        );
+    }
+
+    // 경로는 있지만 그 메서드를 받지 않는 경우 — 받는 메서드를 Allow 헤더로 알린다
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 지원하지 않는 메서드 - method={}, path={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI());
+        markReason(request, CommonErrorCode.METHOD_NOT_ALLOWED.getCode());
+        return respond(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                CommonErrorCode.METHOD_NOT_ALLOWED.getCode(),
+                CommonErrorCode.METHOD_NOT_ALLOWED.getMessage(),
+                e.getHeaders()
+        );
+    }
+
+    // 본문의 Content-Type을 받지 않는 경우 (Content-Type 없이 JSON 본문을 보낸 경우 포함)
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException e,
+            HttpServletRequest request
+    ) {
+        log.info("{} 지원하지 않는 본문 형식 - method={}, path={}, contentType={}",
+                LogTag.of(request), request.getMethod(), request.getRequestURI(), request.getContentType());
+        markReason(request, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode());
+        return respond(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
+                CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage()
         );
     }
 
@@ -156,12 +218,22 @@ public class GlobalExceptionHandler {
 
     // 노출 대상이 아닌 경우 전부 500으로 대체
     private ResponseEntity<ErrorResponse> respond(HttpStatus status, String code, String message) {
+        return respond(status, code, message, HttpHeaders.EMPTY);
+    }
+
+    // 500으로 가릴 때는 원래 상태에 딸린 헤더도 버린다
+    private ResponseEntity<ErrorResponse> respond(
+            HttpStatus status,
+            String code,
+            String message,
+            HttpHeaders headers
+    ) {
         if (!ErrorExposurePolicy.isExposed(status, code)) {
             log.warn("비노출 대상이라 500으로 대체: {} {}", status.value(), code);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ErrorExposurePolicy.masked());
         }
-        return ResponseEntity.status(status).body(new ErrorResponse(code, message));
+        return ResponseEntity.status(status).headers(headers).body(new ErrorResponse(code, message));
     }
 
     // ErrorCode가 sealed라 default 없이도 컴파일러가 누락을 잡는다
@@ -226,6 +298,8 @@ public class GlobalExceptionHandler {
             case INVALID_ROOM_STATE -> HttpStatus.CONFLICT;
             case RUNNING_SESSION_UNAVAILABLE,
                  RUNNING_TRACK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            // WS 전용이라 이 경로로 나갈 일이 없다 — 검증 실패 계열이라 400에 둔다
+            case PAUSE_SEGMENT_DECREASED -> HttpStatus.BAD_REQUEST;
         };
     }
 

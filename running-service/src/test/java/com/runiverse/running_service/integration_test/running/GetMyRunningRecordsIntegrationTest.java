@@ -163,7 +163,6 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
         assertThat(listed.totalDistanceMeters()).isEqualTo(record.getTotalDistance().meters());
         assertThat(listed.totalDurationSeconds()).isEqualTo(record.getTotalDuration().seconds());
         assertThat(listed.averagePaceSecondsPerKm()).isEqualTo(record.getAvgPace().secondsPerKm());
-        assertThat(listed.routePolyline()).isEqualTo(record.getRoutePolyline().value());
     }
 
     @Test
@@ -247,7 +246,7 @@ public class GetMyRunningRecordsIntegrationTest extends IntegrationTestSupport {
         List<TrackPoint> points = new ArrayList<>(TRACK_POINTS);
         for (int i = 0; i < TRACK_POINTS; i++) {
             points.add(new TrackPoint(i, 37.5 + i * 2.5 / METERS_PER_DEGREE, 127.0,
-                    null, 5.0, null, null, 168, null, trackStart.plusSeconds(i)));
+                    null, 5.0, null, null, 168, null, trackStart.plusSeconds(i), 0));
         }
         updateRunningLocationHandler.handle(
                 new UpdateRunningLocationCommand(userId, runningRoomId, null, points));

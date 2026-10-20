@@ -6,6 +6,8 @@ package com.runiverse.running_service.application.running.port.out;
 public record RunningDistance(
         double meters,
         long lastSequence,
+        // 마지막으로 반영한 좌표의 일시정지 구간 번호 — 다음 배치의 번호가 이보다 작으면 거부한다
+        int lastPauseSegment,
         Double lastLatitude,
         Double lastLongitude,
         // 마지막으로 반영한 좌표의 페이스. 발행만 하고 흘려보내면
@@ -18,9 +20,10 @@ public record RunningDistance(
         Double anchorLongitude
 ) {
 
-    // 좌표를 한 번도 못 받은 상태 — lastSequence가 -1이라 순번 0도 새 좌표로 잡힌다
+    // 좌표를 한 번도 못 받은 상태 — lastSequence가 -1이라 순번 0도 새 좌표로 잡힌다.
+    // 러닝은 일시정지 구간 0에서 시작한다
     public static RunningDistance empty() {
-        return new RunningDistance(0, -1, null, null, null, null, null);
+        return new RunningDistance(0, -1, 0, null, null, null, null, null);
     }
 
     public boolean hasLastPoint() {

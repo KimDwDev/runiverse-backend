@@ -59,7 +59,7 @@ class UpdateRunningComboJudgeTest {
     private static final RunningComboProperties PROPERTIES = new RunningComboProperties(
             30, 30, Duration.ofSeconds(19), Duration.ofSeconds(10), 1);
     // 관측했고 의심점도 옮겨진 배치 — 달리는 중
-    private static final RunningComboSignal RUNNING_AT_1000 = new RunningComboSignal(1_000, true, true);
+    private static final RunningComboSignal RUNNING_AT_1000 = new RunningComboSignal(1_000, true, true, false);
 
     @Mock
     private LoadRunningComboSnapshotsPort loadRunningComboSnapshotsPort;
@@ -178,7 +178,7 @@ class UpdateRunningComboJudgeTest {
                 new RunningComboSnapshot(SENDER, 900, observedAt, 0, movedAt, observedAt, false, false)));
 
         // when -> 재전송분만 온 배치
-        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(900, false, false));
+        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(900, false, false, false));
 
         // then
         RunningComboSnapshot saved = captureSavedSnapshot();
@@ -219,7 +219,7 @@ class UpdateRunningComboJudgeTest {
         givenSenderSnapshot(900, Instant.now().minusSeconds(30), 0, true);
 
         // when -> 재전송분만 왔다
-        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(900, false, false));
+        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(900, false, false, false));
 
         // then
         assertThat(captureSavedSnapshot().paused()).isTrue();
@@ -354,6 +354,69 @@ class UpdateRunningComboJudgeTest {
         } finally {
             log.stop();
         }
+    }
+
+    // 10초 전에도 달리던 보낸 사람과, 지금 막 관측한 20m 앞의 상대 — 둘 다 달리는 중이라 창 안이면 붙는다
+    private void givenRunningSenderAndPeer() {
+        Instant now = Instant.now();
+        Instant before = now.minusSeconds(10);
+        given(loadRunningComboSnapshotsPort.loadSnapshots(ROOM_ID)).willReturn(List.of(
+                new RunningComboSnapshot(SENDER, 900, before, 10, before, before, false, false),
+                new RunningComboSnapshot(PEER, 1_020, now, 0, now, now, false, false)));
+    }
+
+    @Test
+    @DisplayName("일시정지 경계를 넘은 배치는 표시가 없어도 이 판정에서 일시정지로 보고 붙이지 않는다")
+    void judge_treatsPauseCrossingAsPaused() {
+        // given -> 일시정지 신호(RUNNING_PAUSE)가 유실돼 표시가 없다
+        givenRunningSenderAndPeer();
+
+        // when -> 재개 뒤 첫 배치가 경계를 넘었다
+        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(1_000, true, true, true));
+
+        // then -> 놓치면 일시정지 시간까지 함께 달린 것으로 세어진다
+        assertThat(captureSavedSnapshot().paused()).isTrue();
+        assertThat(captureUpdate().relations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("경계를 넘지 않은 같은 배치는 그대로 붙는다")
+    void judge_attachesWithoutPauseCrossing() {
+        // given -> 위와 같은 상황에서 경계만 없다
+        givenRunningSenderAndPeer();
+
+        // when
+        judge.judge(ROOM_ID, SENDER, RUNNING_AT_1000);
+
+        // then -> 위 테스트의 대조군이다 — 끊긴 이유가 경계뿐임을 보인다
+        assertThat(captureSavedSnapshot().paused()).isFalse();
+        assertThat(captureUpdate().relations()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("첫 배치가 경계를 넘었어도 이 판정에서 일시정지다")
+    void judge_treatsPauseCrossingAsPausedOnFirstBatch() {
+        // given -> 저장된 스냅샷이 없다
+
+        // when
+        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(1_000, true, true, true));
+
+        // then
+        assertThat(captureSavedSnapshot().paused()).isTrue();
+    }
+
+    @Test
+    @DisplayName("일시정지 표시가 있던 참가자가 경계를 넘은 배치로 돌아오면 표시는 다음 배치가 지운다")
+    void judge_keepsPauseMarkOnCrossingBatch() {
+        // given -> 일시정지 신호를 받아 표시가 있다
+        givenSenderSnapshot(900, Instant.now().minusSeconds(30), 0, true);
+
+        // when -> 재개 뒤 첫 배치 — 관측은 있지만 경계를 넘었다
+        judge.judge(ROOM_ID, SENDER, new RunningComboSignal(1_000, true, true, true));
+
+        // then -> 이 판정은 일시정지다. 지우면 다음 배치 전까지 일시정지 근거가 사라진다
+        assertThat(captureSavedSnapshot().paused()).isTrue();
+        verify(markRunningComboPausedPort, never()).clearPaused(anyLong(), any());
     }
 
     private void givenSenderSnapshot(double meters, Instant recordedAt, double speed, boolean paused) {

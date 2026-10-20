@@ -10,6 +10,9 @@ public record FilteredTrack(
         List<TrackPoint> points,              // 정확도·튐으로 뺀 점을 제외한 계산 대상
         double[] cumulativeMeters,
         double[] cumulativeMovingSeconds,
+        // 칸(points[i-1] → points[i])마다 경로를 끊어야 하는지 — 정지가 아닌 이유로 0으로 한 칸이다.
+        // 정지는 제자리라 이어 그려도 모양이 틀어지지 않아 끊지 않는다
+        boolean[] breakEdges,
         TrackFilterSummary summary
 ) {
 

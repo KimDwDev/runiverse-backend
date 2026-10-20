@@ -119,7 +119,7 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
     private static String compact(TrackPoint point) {
         return String.format(
                 Locale.ROOT,
-                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d]",
+                "[%d,%.5f,%.5f,%s,%.1f,%s,%s,%s,%s,%d,%d]",
                 point.sequence(),
                 point.latitude(),
                 point.longitude(),
@@ -129,7 +129,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                 nullable(point.headingDegrees(), "%.1f"),
                 nullable(point.cadenceSpm(), "%d"),
                 nullable(point.currentPaceSecondsPerKm(), "%d"),
-                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond());
+                point.recordedAt().atZone(ZoneId.systemDefault()).toEpochSecond(),
+                point.pauseSegment());
     }
 
     private static String nullable(Number value, String format) {
@@ -154,7 +155,8 @@ public class RunningTrackDbAdapter implements AppendRunningTrackPort, LoadRunnin
                     toInteger(fields[8]),
                     LocalDateTime.ofInstant(
                             Instant.ofEpochSecond(Long.parseLong(fields[9])),
-                            ZoneId.systemDefault())));
+                            ZoneId.systemDefault()),
+                    Integer.parseInt(fields[10])));
         }
         return points;
     }

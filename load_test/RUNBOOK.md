@@ -53,7 +53,7 @@ APP_HOST=<테스트 서버 IP> PROM_HOST=<모니터링 서버 IP> ~/load_test/sc
 
 **앱을 (재)기동한 직후에는 워밍업 회차를 먼저 돌리고 결과를 버린다** — `load-400`을 run_id 90번대(예: redis 91, db 95)로 한 번. 1회차 run 11(100명)이 run 12(400명)보다 느렸던 원인이 JVM 워밍업이었다. 프로필을 바꿔 앱을 다시 띄우면 매번 해당한다.
 
-## 2-1. DB 프로필로 바꾸기 (실험 브랜치 `experiment/state-db`)
+## 2-1. DB 프로필로 바꾸기 (`state-db`)
 
 러닝 중 상태 4종을 Redis 대신 테스트 RDS에 둔다(`infrastructure/persistence/running/state/*DbAdapter`).
 pub/sub·토큰·쿨다운은 그대로 Redis다. 같은 이미지에서 프로필만 바꿔 두 저장소를 비교한다.

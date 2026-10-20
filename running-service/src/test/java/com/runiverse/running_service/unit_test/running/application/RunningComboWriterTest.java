@@ -92,11 +92,11 @@ class RunningComboWriterTest {
             points.add(new BoundaryPoint(i * 10, latitudeOf(i), 127.0,
                     local((long) i * SECONDS_PER_POINT), i * SECONDS_PER_POINT, i));
             if (i > 0) {
-                splits.add(new RecordedSplitTime(i - 1, i,
+                splits.add(new RecordedSplitTime(1, i - 1, i,
                         local((long) (i - 1) * SECONDS_PER_POINT), local((long) i * SECONDS_PER_POINT)));
             }
         }
-        return new RecordedRoute(A.value(), PolylineEncoder.encode(points), splits);
+        return new RecordedRoute(A.value(), List.of(PolylineEncoder.encode(points)), splits);
     }
 
     private List<RunningCombo> captureCreated() {

@@ -73,9 +73,12 @@ public class InMemoryRunningRecordStore implements CreateRunningRecordPort, Exis
                 .filter(record -> record.getRunningRoomId().value().equals(runningRoomId))
                 .map(record -> new RecordedRoute(
                         record.getUserId().value(),
-                        record.getRoutePolyline().value(),
+                        record.getSegments().stream()
+                                .map(segment -> segment.getRoutePolyline().value())
+                                .toList(),
                         record.getSplits().stream()
                                 .map(split -> new RecordedSplitTime(
+                                        split.getSegmentNumber().value(),
                                         split.getRouteRange().startIndex(),
                                         split.getRouteRange().endIndex(),
                                         split.getPeriod().startAt(),

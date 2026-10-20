@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.running.command.location.Update
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationHandler;
 import com.runiverse.running_service.application.running.command.location.UpdateRunningLocationResult;
 import com.runiverse.running_service.application.running.common.TrackDistance;
+import com.runiverse.running_service.application.running.exception.PauseSegmentDecreasedException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.out.AppendRunningTrackPort;
 import com.runiverse.running_service.application.running.port.out.ChangeLiveRunningStatusPort;
@@ -125,6 +126,14 @@ public class UpdateRunningLocationHandlerTest {
 
     // 순번이 커질수록 북쪽으로 일정하게 나아간다 — 누적 거리를 예측할 수 있게 한다
     private static TrackPoint trackPoint(long sequence, Integer paceSecondsPerKm) {
+        return trackPoint(sequence, paceSecondsPerKm, 0);
+    }
+
+    private static TrackPoint pausedPoint(long sequence, int pauseSegment) {
+        return trackPoint(sequence, 357, pauseSegment);
+    }
+
+    private static TrackPoint trackPoint(long sequence, Integer paceSecondsPerKm, int pauseSegment) {
         return new TrackPoint(
                 sequence,
                 BASE_LATITUDE + sequence * LATITUDE_STEP,
@@ -135,7 +144,7 @@ public class UpdateRunningLocationHandlerTest {
                 181.0,
                 174,
                 paceSecondsPerKm,
-                LocalDateTime.of(2026, 8, 25, 7, 30, (int) sequence));
+                LocalDateTime.of(2026, 8, 25, 7, 30, (int) sequence), pauseSegment);
     }
 
     private UpdateRunningLocationCommand command(List<TrackPoint> points) {
@@ -206,7 +215,7 @@ public class UpdateRunningLocationHandlerTest {
         // given -> 직전 배치의 마지막 좌표가 순번 2였다
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
-                new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
+                new RunningDistance(100.0, 2L, 0, previous.latitude(), previous.longitude(),
                         previous.currentPaceSecondsPerKm(), null, null));
         List<TrackPoint> points = List.of(trackPoint(3L), trackPoint(4L));
 
@@ -228,7 +237,7 @@ public class UpdateRunningLocationHandlerTest {
         // 그대로 더하면 거리가 두 배가 된다
         TrackPoint previous = trackPoint(2L);
         RunningDistance stored = new RunningDistance(
-                100.0, 2L, previous.latitude(), previous.longitude(), STORED_PACE, null, null);
+                100.0, 2L, 0, previous.latitude(), previous.longitude(), STORED_PACE, null, null);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(stored);
 
         // when -> 0,1,2는 이미 반영된 순번이다
@@ -453,39 +462,85 @@ public class UpdateRunningLocationHandlerTest {
         assertThatThrownBy(() -> updateRunningLocationHandler.handle(
                 command(List.of(trackPoint(0L)))))
                 .isInstanceOf(RunningTrackUnavailableException.class);
-        verify(loadRunningDistancePort, never()).loadDistance(anyLong(), any());
         verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
         verify(publishRunningProgressPort, never()).publish(anyLong(), any());
         verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
     }
 
     @Test
-    @DisplayName("누적 거리 읽기에 실패하면 좌표만 저장하고 거리 갱신·발행을 건너뛴다")
-    void skipsProgressWhenDistanceLoadFails() {
-        // given -> 못 읽은 것을 빈 값으로 이어가면 저장이 성공하는 순간 살아 있는 누적이 덮인다
+    @DisplayName("누적 거리 읽기에 실패하면 좌표를 저장하지 않고 저장 실패로 알린다")
+    void rejectsBatchWhenDistanceLoadFails() {
+        // given -> 마지막 일시정지 구간 번호를 모르면 줄어든 번호를 거를 수 없다
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
                 .willThrow(new RuntimeException("redis down"));
 
-        // when -> 진행 표시는 요청을 죽일 일이 아니다 — 예외가 밖으로 나가면 안 된다
-        updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+        // when & then -> 원본은 클라 로컬 트랙에 남아 재연결로 다시 온다
+        assertThatThrownBy(() -> updateRunningLocationHandler.handle(command(List.of(trackPoint(0L)))))
+                .isInstanceOf(RunningTrackUnavailableException.class);
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
+        verify(publishRunningProgressPort, never()).publish(anyLong(), any());
+        verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
+    }
 
-        // then
-        verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
+    @Test
+    @DisplayName("배치 안에서 일시정지 구간 번호가 줄면 저장·누적·통지 없이 거부한다")
+    void rejectsBatchWhosePauseSegmentDecreases() {
+        // when & then -> 순번 순으로 1 → 0으로 줄었다
+        assertThatThrownBy(() -> updateRunningLocationHandler.handle(command(List.of(
+                pausedPoint(0L, 1), pausedPoint(1L, 0)))))
+                .isInstanceOf(PauseSegmentDecreasedException.class);
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
         verify(saveRunningDistancePort, never()).saveDistance(anyLong(), any(), any());
         verify(publishRunningProgressPort, never()).publish(anyLong(), any());
     }
 
     @Test
-    @DisplayName("누적 거리 읽기 실패를 삼키는 곳이라 여기서 원인 예외를 담아 ERROR로 남긴다")
-    void logsDistanceLoadFailureWhereSwallowed() {
+    @DisplayName("마지막으로 반영한 좌표보다 일시정지 구간 번호가 줄면 거부한다")
+    void rejectsBatchBelowStoredPauseSegment() {
+        // given -> 순번 2까지 반영했고 그때 번호는 1이었다
+        TrackPoint previous = pausedPoint(2L, 1);
+        given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
+                new RunningDistance(100.0, 2L, 1, previous.latitude(), previous.longitude(),
+                        STORED_PACE, null, null));
+
+        // when & then -> 배치 안은 0 → 0으로 멀쩡하지만 이전 배치보다 줄었다
+        assertThatThrownBy(() -> updateRunningLocationHandler.handle(command(List.of(
+                pausedPoint(3L, 0), pausedPoint(4L, 0)))))
+                .isInstanceOf(PauseSegmentDecreasedException.class);
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+    }
+
+    @Test
+    @DisplayName("재연결 재전송분은 마지막 번호보다 작아도 받는다 -> 이미 반영한 순번이다")
+    void acceptsResentPointsWithEarlierPauseSegment() {
+        // given -> 순번 2까지 반영했고 그때 번호는 1이었다
+        TrackPoint previous = pausedPoint(2L, 1);
+        given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
+                new RunningDistance(100.0, 2L, 1, previous.latitude(), previous.longitude(),
+                        STORED_PACE, null, null));
+
+        // when -> 재연결한 클라가 처음부터 다시 보낸다
+        updateRunningLocationHandler.handle(command(List.of(
+                pausedPoint(0L, 0), pausedPoint(1L, 0), pausedPoint(2L, 1), pausedPoint(3L, 1))));
+
+        // then
+        verify(appendRunningTrackPort).append(anyLong(), any(), anyList());
+        assertThat(captureSaved().lastPauseSegment()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("누적 거리 읽기 실패를 바꿔 던지는 곳이라 여기서 원인 예외를 담아 ERROR로 남긴다")
+    void logsDistanceLoadFailureWhereTranslated() {
         // given -> 어댑터는 던지기만 하고 찍지 않는다. 받는 쪽이 한 번만 찍는다
         LogCapture log = LogCapture.of(UpdateRunningLocationHandler.class);
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
                 .willThrow(new RuntimeException("redis down"));
 
         try {
-            // when
-            updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
+            // when -> 업무 예외로 갈아끼우면 원래 원인은 여기서만 보인다
+            assertThatThrownBy(() -> updateRunningLocationHandler.handle(command(List.of(trackPoint(0L)))))
+                    .isInstanceOf(RunningTrackUnavailableException.class);
 
             // then
             assertThat(log.messages(Level.ERROR)).containsExactly(
@@ -530,7 +585,7 @@ public class UpdateRunningLocationHandlerTest {
         // given -> 재연결하면 클라는 로컬 트랙 전체를 순번 0부터 다시 보낸다
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
-                new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
+                new RunningDistance(100.0, 2L, 0, previous.latitude(), previous.longitude(),
                         STORED_PACE, null, null));
 
         // when -> 0,1,2는 이미 거리에 반영된 순번이다
@@ -607,18 +662,15 @@ public class UpdateRunningLocationHandlerTest {
     }
 
     @Test
-    @DisplayName("누적 거리를 못 읽으면 종료를 판정하지 않고 끝나지 않았다고 돌려준다")
+    @DisplayName("누적 거리를 못 읽으면 종료를 판정하지 않고 저장 실패로 알린다")
     void skipsFinishWhenDistanceLoadFails() {
         // given -> 누적을 모르면 목표를 넘었는지도 모른다
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
                 .willThrow(new RuntimeException("redis down"));
 
-        // when
-        UpdateRunningLocationResult result =
-                updateRunningLocationHandler.handle(command(List.of(trackPoint(0L))));
-
-        // then -> 다음 배치가 다시 판정한다
-        assertThat(result.finished()).isFalse();
+        // when & then -> 끝났다고 답하지 않는다. 재연결로 다시 온 배치가 다시 판정한다
+        assertThatThrownBy(() -> updateRunningLocationHandler.handle(command(List.of(trackPoint(0L)))))
+                .isInstanceOf(RunningTrackUnavailableException.class);
         verify(updateRunningFinishJudge, never()).judge(anyLong(), any(), any(), anyDouble());
     }
 
@@ -636,6 +688,19 @@ public class UpdateRunningLocationHandlerTest {
         assertThat(captor.getValue().observed()).isTrue();
         assertThat(captor.getValue().moved()).isTrue();
         assertThat(captor.getValue().meters()).isEqualTo(captureSaved().meters());
+        assertThat(captor.getValue().pauseCrossed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("일시정지 경계를 넘은 배치는 콤보 판정에 경계를 넘었다고 넘긴다")
+    void passesPauseCrossingToCombo() {
+        // when -> 두 좌표 사이에서 일시정지 버튼을 눌렀다
+        updateRunningLocationHandler.handle(command(List.of(pausedPoint(0L, 0), pausedPoint(1L, 1))));
+
+        // then -> 일시정지 신호가 유실돼도 이 판정에서 콤보를 끊는 근거다
+        ArgumentCaptor<RunningComboSignal> captor = ArgumentCaptor.forClass(RunningComboSignal.class);
+        verify(updateRunningComboJudge).judge(anyLong(), any(), captor.capture());
+        assertThat(captor.getValue().pauseCrossed()).isTrue();
     }
 
     @Test
@@ -644,7 +709,7 @@ public class UpdateRunningLocationHandlerTest {
         // given -> 순번 2까지 이미 반영했다
         TrackPoint previous = trackPoint(2L);
         given(loadRunningDistancePort.loadDistance(anyLong(), any())).willReturn(
-                new RunningDistance(100.0, 2L, previous.latitude(), previous.longitude(),
+                new RunningDistance(100.0, 2L, 0, previous.latitude(), previous.longitude(),
                         STORED_PACE, previous.latitude(), previous.longitude()));
 
         // when

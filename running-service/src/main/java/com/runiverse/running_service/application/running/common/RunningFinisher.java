@@ -218,7 +218,7 @@ public class RunningFinisher {
                 .totalCalories(CalorieCalculator.kcal(
                         analysis.avgPaceSecondsPerKm(), analysis.totalDurationSeconds(), weightKg))
                 .gpsTrackKey(gpsTrackKey)
-                .routePolyline(analysis.routePolyline())
+                .segments(analysis.segments())
                 .startAt(analysis.startAt())
                 .endAt(analysis.endAt())
                 .weatherCode(weather.code())
@@ -381,10 +381,14 @@ public class RunningFinisher {
         if (remaining <= 0) {
             return 0;
         }
+        // 화면은 목표 도달인데 서버가 미루는 원인이 일시정지인지 가른다 — 클라 로컬 거리가 경계 칸을 더했을 수 있다
         log.info("[러닝] 종료 건너뜀: 확정 거리 목표 미달 - roomId={}, userId={}, trigger={}, "
-                        + "confirmedDistanceM={}, targetDistanceM={}, lastPointLagSec={}",
+                        + "confirmedDistanceM={}, targetDistanceM={}, lastPointLagSec={}, "
+                        + "pauseBoundaryCount={}, pauseRemovedDistanceM={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH",
-                Math.round(filtered.totalMeters()), target, lastPointLagSec);
+                Math.round(filtered.totalMeters()), target, lastPointLagSec,
+                filtered.summary().pauseBoundaryCount(),
+                Math.round(filtered.summary().pauseRemovedMeters()));
         // 0.3m만 모자라도 1m로 알린다 — 0으로 알리면 클라가 끝난 줄 안다
         return (int) Math.ceil(remaining);
     }
@@ -394,7 +398,8 @@ public class RunningFinisher {
     private void logFilter(Long runningRoomId, UUID userId, boolean onGoal, Long lastPointLagSec,
                            TrackFilterSummary summary) {
         log.info("[러닝] 트랙 필터 성공 - roomId={}, userId={}, trigger={}, lastPointLagSec={}, "
-                        + "rawDistanceM={}, filteredDistanceM={}, accuracyDroppedCount={}, "
+                        + "rawDistanceM={}, filteredDistanceM={}, pauseBoundaryCount={}, "
+                        + "pauseRemovedDistanceM={}, accuracyDroppedCount={}, "
                         + "accuracyRemovedDistanceM={}, spikePointCount={}, "
                         + "jumpEdgeCount={}, spikeRemovedDistanceM={}, "
                         + "gapEdgeCount={}, gapAcceptedCount={}, gapRejectedCount={}, "
@@ -403,6 +408,7 @@ public class RunningFinisher {
                         + "maxStopDisplacementM={}, radiusClampedCount={}",
                 runningRoomId, userId, onGoal ? "GOAL" : "FINISH", lastPointLagSec,
                 Math.round(summary.rawMeters()), Math.round(summary.filteredMeters()),
+                summary.pauseBoundaryCount(), Math.round(summary.pauseRemovedMeters()),
                 summary.accuracyDroppedCount(), Math.round(summary.accuracyRemovedMeters()),
                 summary.spikePointCount(),
                 summary.jumpEdgeCount(), Math.round(summary.spikeRemovedMeters()),

@@ -1,4 +1,4 @@
--- state-db 프로필(실험 브랜치)이 쓰는 러닝 중 상태 테이블 — Redis 어댑터 4개와 같은 일을 RDS에서 한다.
+-- state-db 프로필이 쓰는 러닝 중 상태 테이블 — Redis 어댑터 4개와 같은 일을 RDS에서 한다.
 -- JPA 엔티티가 아니라 JdbcTemplate으로 다루므로 JPA_DDL=update가 만들지 않는다. 측정 전에 한 번 실행한다.
 -- 시각은 Redis 저장 형식과 같게 epoch millis(bigint)로 둔다.
 -- 지우기: 맨 아래 DROP 블록의 주석을 풀어 실행한다.
@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS running_state_distance (
     user_id          uuid             NOT NULL,
     meters           double precision NOT NULL,
     last_sequence    bigint           NOT NULL,
+    last_pause_segment integer        NOT NULL,
     last_latitude    double precision,
     last_longitude   double precision,
     last_pace        integer,

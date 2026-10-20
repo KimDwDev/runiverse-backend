@@ -41,6 +41,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 // RUNNING_STARTED가 나르는 진입·재연결 화면 복구용 스냅샷을 조립한다(api-spec 5-C).
@@ -377,6 +379,64 @@ class GetRunningSnapshotHandlerTest {
     }
 
     // 탈퇴자는 users 행이 지워져 결과에서 빠진다 — 없는 프로필을 넣지 않는 것이 곧 탈퇴다
+    @Test
+    @DisplayName("본인이 이어 쓸 순번과 일시정지 구간 번호를 담는다 -> 재설치한 앱이 서버가 받은 다음부터 이어 쓴다")
+    void carriesRequesterResumeNumbers() {
+        // given -> 순번 119까지 받았고 그 좌표의 번호가 2였다. 상대 값은 담지 않는다
+        givenRoom(connected(ME), connected(PEER));
+        givenProfiles(profile(ME, "완두콩", null), profile(PEER, "강낭콩", null));
+        given(loadRunningDistancePort.loadDistance(eq(ROOM_ID), eq(new UserId(ME))))
+                .willReturn(new RunningDistance(1_520, 119L, 2, 35.17955, 129.07564, 345, null, null));
+        given(loadRunningDistancePort.loadDistance(eq(ROOM_ID), eq(new UserId(PEER))))
+                .willReturn(new RunningDistance(1_480, 300L, 5, 35.17955, 129.07564, 352, null, null));
+        given(runningComboReader.read(anyLong(), any())).willReturn(List.of());
+
+        // when
+        GetRunningSnapshotResult result = handler.handle(new GetRunningSnapshotQuery(ME, ROOM_ID));
+
+        // then -> 일시정지 구간 번호 검사가 비교하는 값과 같아야 이어 써도 거부되지 않는다
+        assertThat(result.nextSequence()).isEqualTo(120L);
+        assertThat(result.pauseSegment()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("본인 누적 상태는 한 번만 읽는다 -> 이어 쓸 번호와 본인 진행이 같은 값을 쓴다")
+    void readsRequesterDistanceOnce() {
+        // given
+        givenRoom(connected(ME), connected(PEER));
+        givenProfiles(profile(ME, "완두콩", null), profile(PEER, "강낭콩", null));
+        givenDistance(ME, 1_520, 345);
+        givenDistance(PEER, 1_480, 352);
+        given(runningComboReader.read(anyLong(), any())).willReturn(List.of());
+
+        // when
+        GetRunningSnapshotResult result = handler.handle(new GetRunningSnapshotQuery(ME, ROOM_ID));
+
+        // then -> 본인은 번호를 내려고 읽은 값을 진행에도 다시 쓴다. 상대는 따로 읽는다
+        verify(loadRunningDistancePort, times(1)).loadDistance(ROOM_ID, new UserId(ME));
+        verify(loadRunningDistancePort, times(1)).loadDistance(ROOM_ID, new UserId(PEER));
+        assertThat(playerOf(result, ME).distanceMeters()).isEqualTo(1_520);
+        assertThat(playerOf(result, PEER).distanceMeters()).isEqualTo(1_480);
+    }
+
+    @Test
+    @DisplayName("받은 좌표가 없으면 순번 0, 일시정지 구간 0부터 이어 쓴다")
+    void startsResumeNumbersFromZeroWithoutPoints() {
+        // given -> 출발 직후 첫 배치를 보내기 전이다
+        givenRoom(connected(ME));
+        givenProfiles(profile(ME, "완두콩", null));
+        given(loadRunningDistancePort.loadDistance(eq(ROOM_ID), eq(new UserId(ME))))
+                .willReturn(RunningDistance.empty());
+        given(runningComboReader.read(anyLong(), any())).willReturn(List.of());
+
+        // when
+        GetRunningSnapshotResult result = handler.handle(new GetRunningSnapshotQuery(ME, ROOM_ID));
+
+        // then -> lastSequence가 -1이라 다음 순번은 0이다
+        assertThat(result.nextSequence()).isZero();
+        assertThat(result.pauseSegment()).isZero();
+    }
+
     private void givenProfiles(PlayerProfile... profiles) {
         given(loadPlayerProfilesPort.loadProfiles(any())).willReturn(
                 Arrays.stream(profiles)
@@ -394,7 +454,7 @@ class GetRunningSnapshotHandlerTest {
 
     private void givenDistance(UUID userId, int meters, Integer pace) {
         given(loadRunningDistancePort.loadDistance(eq(ROOM_ID), eq(new UserId(userId))))
-                .willReturn(new RunningDistance(meters, 180L, 35.17955, 129.07564, pace, null, null));
+                .willReturn(new RunningDistance(meters, 180L, 0, 35.17955, 129.07564, pace, null, null));
     }
 
     private static GetRunningSnapshotResult.Player playerOf(

@@ -72,7 +72,7 @@
 | 러닝 중 | `RUNNING_PROGRESS_UPDATED` | S→C | `status` 포함 — 멈춘 것·끊긴 것·끝난 것을 느려진 것과 구분. 상태가 바뀔 때도 나간다 |
 | 러닝 중 | `RUNNING_GOAL_PENDING` | S→C | `RUNNING_FINISH`(`forced=false`)의 확정 거리가 목표에 못 미침 — 종료를 확정하지 않고 본인에게 남은 거리를 알린다 |
 | 러닝 중 | `RUNNING_COMBO_UPDATED` | S→C | 나란히 달리는 상대와의 콤보 — 참가자 쌍마다 따로 센다 |
-| 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 상대 화면의 `status` 표시용. 기록 계산은 바꾸지 않는다 |
+| 러닝 중 | `RUNNING_PAUSE` / `RUNNING_RESUME` | C→S | 일시정지·재개 — 상대 화면의 `status` 표시용. 기록 계산은 이 신호가 아니라 좌표의 `pauseSegment`로 한다 |
 | 러닝 중 | `RUNNING_FINISH` | C→S | `forced` 플래그로 조기 종료 의사 포함 — 서버가 상태·기록 확정. `forced=false`인데 확정 거리가 목표에 못 미치면 확정하지 않고 `RUNNING_GOAL_PENDING`으로 답한다 |
 | 공통 | `ERROR` | S→C | WS 요청 실패 통지 |
 
@@ -163,19 +163,23 @@
 ## 0. 공통 규칙
 
 - **refreshToken**: 바디로 전달하고 클라이언트 Keychain/Keystore에 보관한다.
-- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-2만 전체가 아니라 구간별로 잘라 `splits[].routes`에 싣는다), 목록·카드처럼 한 응답에 여러 건이 실리는 곳(7-1·8-1)은 `routePolyline` 문자열 그대로 내린다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
-  - **이웃한 두 점이 30m 넘게 떨어져 있으면 그 사이를 선으로 잇지 않는다.** 경로의 점은 인정한 거리 10m마다 찍힌 경계점이라 정상이면 이웃 간격이 10m 이하이고, 정지 구간을 건너뛰어도 그보다 조금 넓을 뿐이다. 30m를 넘으면 서버가 관측하지 못해 기록에서 뺀 구간(수집이 멈춘 동안의 이동·GPS 튐)이다 — `routes`·`splits[].routes`·`routePolyline` 모두 같다([feature-spec.md](feature-spec.md) 트랙 필터)
+- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-1은 조각별 배열, 6-2는 구간별로 잘라 `splits[].routes`에 싣는다), 피드 카드(8-1)는 `routePolyline` 문자열로 내린다. 기록 목록(7-1)은 경로를 싣지 않는다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 좌표 배열은 `routes`, 문자열은 `routePolyline` 두 이름뿐이다.
+  - **경로는 끊긴 곳에서 조각으로 나뉘어 저장된다**(`running_segments`). 서버가 기록에서 뺀 구간(일시정지·관측하지 못한 이동·GPS 튐)이 경계다. 버튼 없이 멈춘 정지 구간은 끊지 않는다 — 제자리라 이어 그려도 모양이 틀어지지 않는다([feature-spec.md](feature-spec.md) 트랙 필터)
+  - 6-1 `routes`는 조각마다 배열 하나로 내린다. 클라는 조각 안의 점만 선으로 잇고 조각 사이는 잇지 않는다
+  - 6-2 `splits[].routes`는 구간이 속한 조각 하나에서 자른 배열이라 조각 사이를 걸치지 않는다. 끊긴 곳에 걸친 구간은 점 하나만 실린다
+  - `routePolyline`(8-1)은 서버가 조각을 이어 한 줄로 다시 인코딩한 값이다 — 이웃한 두 점이 30m 넘게 떨어져 있으면 끊긴 곳으로 보고 잇지 않는다. 카드 미리보기용이라 일시정지 중 짧게(약 40m 이하) 옮긴 자리가 이어 그려지는 것은 감수한다
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
+  - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
-- **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "550e8400-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
+- **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "01a0f2d4-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-7)은 보낸 필드만 담는다 — 11-6에서 보내지 않은 필드는 키째 빠진다(11-2·11-7은 필드가 하나뿐이다).
 - **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 세 API(11-2·11-6·11-7)는 예외로 보낸 필드만 담는다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 
 ### 공통 에러 응답
 
-인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다 — 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
+인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다. 경로는 있지만 받지 않는 메서드는 **405** `METHOD_NOT_ALLOWED`이고 `Allow` 헤더에 받는 메서드를 담는다. 받지 않는 본문 형식(`Content-Type`)은 **415** `UNSUPPORTED_MEDIA_TYPE`이다. 셋 다 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다. 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
 `인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·11-3·11-8)에 헤더를 싣지 않는다.
 
 검증에 실패한 필드가 둘 이상이거나 한 필드에서 제약이 둘 이상 깨지면 `message`는 각 사유를 공백으로 이어 붙인 한 문자열이며, **문장 순서는 보장하지 않는다**. 각 엔드포인트의 400 예시는 사유를 하나씩 보여주는 것이지 나올 수 있는 조합을 모두 나열한 것이 아니다. 클라이언트는 `message`를 문서 문구와 정확히 비교하거나 파싱해 어느 필드가 틀렸는지 역추적하지 않는다 — 필드 단위 안내는 클라이언트 자체 검증으로 처리하고, 서버 `message`는 그대로 노출한다.
@@ -215,6 +219,24 @@
 {
   "code": "MALFORMED_REQUEST_BODY",
   "message": "요청 본문을 읽을 수 없습니다."
+}
+```
+
+- **에러 (405 Method Not Allowed — 받지 않는 메서드, `Allow` 헤더 포함)**
+
+```json
+{
+  "code": "METHOD_NOT_ALLOWED",
+  "message": "지원하지 않는 요청 메서드입니다."
+}
+```
+
+- **에러 (415 Unsupported Media Type — 받지 않는 본문 형식)**
+
+```json
+{
+  "code": "UNSUPPORTED_MEDIA_TYPE",
+  "message": "지원하지 않는 요청 본문 형식입니다."
 }
 ```
 
@@ -376,7 +398,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "accessToken": "ey...",
   "refreshToken": "ey..."
 }
@@ -445,7 +467,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "accessToken": "ey...",
   "refreshToken": "ey..."
 }
@@ -761,7 +783,7 @@
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "01a0f2d4-6180-7000-8000-446655440001",
   "nickname": "완두콩"
 }
 ```
@@ -1200,7 +1222,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",
       "introduction": "즐겁게 같이 달려요!",   // users.introduction
@@ -1208,7 +1230,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "isDeleted": false                     // 탈퇴 유저 표시 — §0 공통 규칙
     },
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440013",
+      "userId": "01a0f2d4-6180-7000-8000-446655440013",
       "nickname": "철수",
       "profileImageUrl": "https://...",
       "introduction": "천천히 오래 달려요.",
@@ -1343,8 +1365,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `UNSUPPORTED_MESSAGE_TYPE` | 모르는 `event`이거나 S→C 전용 타입을 클라가 보냄 |
   | `INVALID_REQUEST` | `data` 검증 실패 |
   | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
+  | `PAUSE_SEGMENT_DECREASED` | `RUNNING_LOCATION_UPDATE`의 `pauseSegment`가 `sequence` 순서를 거슬러 줄었다 — 검증 실패 계열(REST의 400에 해당)이다. 클라 로컬 트랙이 깨졌다는 뜻이라 같은 배치를 다시 보내도 계속 거부된다. 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다 |
   | `RUNNING_SESSION_UNAVAILABLE` | 외부 저장소 장애로 세션을 등록하지 못함 — 이 연결로는 러닝 메시지를 처리할 수 없다(참가자 상태는 이미 `RUNNING`일 수 있다). 잠시 뒤 `RUNNING_START`를 다시 보낸다 — 멱등이다 |
-  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다 |
+  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다. `sourceType`으로 갈린다 — `RUNNING_LOCATION_UPDATE`면 다음 배치 차례에 로컬 트랙 전체를 다시 보내고, `RUNNING_FINISH`면 좌표가 아니라 `RUNNING_FINISH`를 다시 보낸다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
@@ -1388,9 +1411,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "startedAt": "2026-07-25T19:00:00",       // 방의 start_at — 경과 시간의 기준
   "targetDistanceMeters": 5000,             // 목표 없는 솔로 방은 null
+  "nextSequence": 120,                      // 본인 기준 — 서버가 받은 마지막 sequence + 1. 받은 좌표가 없으면 0
+  "pauseSegment": 2,                        // 본인 기준 — 서버가 받은 마지막 좌표의 pauseSegment. 받은 좌표가 없으면 0
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "완두콩",
       "profileImageUrl": "https://...",     // 사진이 없으면 null
       "distanceMeters": 1520,               // 서버가 좌표로 누적한 값
@@ -1400,7 +1425,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   ],
   "comboPeers": [                           // RUNNING_COMBO_UPDATED의 peers와 같은 모양, 겹친 상대가 없으면 []
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440016",
+      "userId": "01a0f2d4-6180-7000-8000-446655440016",
       "gapMeters": -18,
       "comboCount": 3,
       "maxComboCount": 12
@@ -1411,6 +1436,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **`RoomInfo`를 재사용하지 않는다.** 그쪽은 매칭 대기방을 그리려고 만든 구조라 진행 상황이라는 개념이 없고, 러닝 중에는 `closeAt`·`teamAveragePace`가 의미를 잃는다. 대신 `players[]`가 **`RoomInfo`의 프로필 + `RUNNING_PROGRESS_UPDATED`의 진행**을 합친 모양이라, 클라는 **이 스냅샷으로 채우고 갱신분으로 덮는** 한 쌍으로 다룬다
 - **본인도 `players`에 담는다.** 본인 진행은 클라가 직접 계산하지만, 앱 재설치로 로컬 트랙이 사라지면 본인 누적 거리를 복구할 경로가 이것뿐이다. 다만 **클라는 화면 표시에 로컬 계산값을 우선**하고 이 값은 복구용으로만 쓴다
+- **`nextSequence`·`pauseSegment`는 로컬 트랙을 잃은 클라가 번호를 이어 쓰는 값이다.** 클라는 다음에 붙일 `sequence`와 현재 `pauseSegment`를 각각 로컬 값과 이 값 중 **큰 쪽**으로 맞춘다
+  - 평소(재연결·앱 재시작)에는 로컬 값이 항상 같거나 커서 바뀌는 것이 없다. 앱 재설치처럼 로컬 트랙을 잃었을 때만 서버 값으로 올라간다 — 맞추지 않으면 `sequence`는 이미 받은 순번으로 조용히 버려지고, `pauseSegment`는 `PAUSE_SEGMENT_DECREASED`로 계속 거부된다
+  - `pauseSegment`는 서버가 `PAUSE_SEGMENT_DECREASED`를 판정할 때 비교하는 값과 같다. 그래서 이 값 이상으로 이어 쓰면 거부되지 않는다
+  - 한계: 일시정지 중에 재설치하면 클라는 일시정지 상태를 잃는다. 그 사이 이동은 일시정지가 아니라 관측하지 못한 이동으로 처리된다
 - **이미 이탈·완주한 참가자는 담지 않는다.** 러닝 화면에는 그들을 그릴 자리가 없다. 연결만 끊긴 참가자는 그대로 담고 `status`가 `DISCONNECTED`로 실린다
 - **`players[].status`는 각 참가자의 현재 화면 상태다.** 상태가 기록된 적 없는 참가자(매칭 방에 배정됐지만 `RUNNING_START`를 보낸 적 없는 사람)는 `DISCONNECTED`로 싣는다. 요청한 본인은 서버 처리 6번에서 이미 `RUNNING`으로 바뀌었으므로 항상 `RUNNING`이다
   - 이탈·완주자를 담지 않으므로 `FINISHED`는 종료 확정과 세션 정리 사이의 짧은 틈에만 나올 수 있다
@@ -1438,7 +1467,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "headingDegrees": 85.3,            // 0~360, nullable
       "cadenceSpm": 165,                 // nullable
       "currentPaceSecondsPerKm": 345,    // nullable
-      "recordedAt": "2026-07-25T19:10:30"   // 측정 시각
+      "recordedAt": "2026-07-25T19:10:30",  // 측정 시각
+      "pauseSegment": 0                     // 일시정지 구간 번호. 일시정지 버튼을 누를 때마다 1씩 오른다
     }
   ]
 }
@@ -1446,16 +1476,30 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **`runningRoomId`를 싣지 않는다.** 방은 `RUNNING_START`가 참가자 검증을 마치고 정한 뒤 서버가 WS 세션에 들고 있다. 10초마다 반복되는 메시지에 매번 실으면 클라가 참가하지 않은 방을 지정할 수 있게 된다
   - `RUNNING_START` 없이 이 메시지를 보내면 서버에 정해진 방이 없어 `RUNNING_NOT_STARTED`로 거부한다. 클라는 `RUNNING_START`부터 다시 보낸다
-- **필수는 `sequence`·`latitude`·`longitude`·`accuracyMeters`·`recordedAt` 다섯뿐이다.** 나머지는 단말이 못 잴 수 있어 `null`로 보내도 되고, 서버는 그 좌표를 버리지 않고 값이 비었다는 사실만 남긴다 — 배치 하나가 통째로 거절되면 그 10초가 통으로 빈다. 케이던스는 보수 센서가, 속도·방위는 GPS 픽스가 있어야 온다
+- **필수는 `sequence`·`latitude`·`longitude`·`accuracyMeters`·`recordedAt`·`pauseSegment` 여섯뿐이다.** 나머지는 단말이 못 잴 수 있어 `null`로 보내도 되고, 서버는 그 좌표를 버리지 않고 값이 비었다는 사실만 남긴다 — 배치 하나가 통째로 거절되면 그 10초가 통으로 빈다. 케이던스는 보수 센서가, 속도·방위는 GPS 픽스가 있어야 온다
   - 비어 있으면 해당 지표를 표본에서 제외한다. 유효 표본이 없으면 지표 자체가 null이다(`running_records.avg_cadence`, erd.md)
-  - 배치를 거부하는 건 필수 값 쪽뿐이다 — `locations`가 없거나 비었거나, 좌표 중 하나라도 필수 다섯 값이 빠졌거나 범위(위도 -90~90, 경도 -180~180, `sequence` 0~100,000)를 벗어나면 배치 전체를 `INVALID_REQUEST`로 거부한다. `sequence` 상한은 정상 클라가 닿지 않는 안전 한도다(6시간 × 1Hz = 21,600)
+  - 배치를 거부하는 건 필수 값 쪽뿐이다 — `locations`가 없거나 비었거나, 좌표 중 하나라도 필수 여섯 값이 빠졌거나 범위(위도 -90~90, 경도 -180~180, `sequence`·`pauseSegment` 0~100,000)를 벗어나면 배치 전체를 `INVALID_REQUEST`로 거부한다. `sequence` 상한은 정상 클라가 닿지 않는 안전 한도다(6시간 × 1Hz = 21,600)
 - **클라는 1~2초 간격으로 수집해 로컬에 쌓으면서, 10초마다 모아서 보낸다.** 좌표 하나씩 10초마다 보내면 트랙이 성겨져 경로와 거리 정확도가 떨어진다
+- **`pauseSegment`는 일시정지 구간 번호다.** 러닝을 시작할 때 0이고, 일시정지 버튼을 누를 때마다 1 올린다. 서버는 이웃한 두 좌표의 값이 다르면 그 사이를 일시정지로 보고 거리·시간에서 뺀다. 이동 거리·속도와 무관하며, 러닝 중 누적과 확정 거리에 모두 적용한다(feature-spec 트랙 필터)
+  - **버튼 일시정지에만 올린다.** 자동 정지(버튼 없이 멈춤)·재연결·앱 재시작·위치 권한 재획득에는 올리지 않는다 — 잘못 올리면 그 자리의 실제 이동이 기록에서 빠진다
+  - **버튼을 누른 즉시 올리고 로컬에 저장한다.** 남은 좌표의 전송 결과를 기다리지 않는다 — 위치 배치에는 ack가 없고, 남은 좌표는 각자 저장된 옛 번호로 나간다. 증가가 빠지거나(끊긴 채 일시정지, 저장 전 앱 종료) 늦으면 재개 후 좌표가 같은 번호로 나가 일시정지 중 이동이 거리에 들어간다. 서버는 올린 번호를 좌표로만 알 수 있어 `RUNNING_STARTED`로도 되살릴 수 없다
+  - `sequence`는 일시정지와 무관하게 이어서 센다
+  - 값은 좌표와 함께 로컬 트랙에 저장한다 — 재전송할 때 처음과 같은 값이어야 한다. 서버는 같은 `sequence`의 좌표를 먼저 받은 것으로 남긴다
+  - **`sequence` 순으로 줄어들 수 없다.** 서버는 배치 안을 `sequence` 순으로 놓았을 때 값이 줄거나, 마지막으로 반영한 좌표보다 큰 `sequence`의 값이 그 좌표의 값보다 작으면 배치 전체를 `PAUSE_SEGMENT_DECREASED`로 거부한다. 번호가 되돌아가면 일시정지가 아닌 구간이 일시정지로 빠지거나, 일시정지 구간이 거리로 들어갈 수 있다
+  - **이 오류를 받으면 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다.** 같은 값을 다시 보내도 풀리지 않는다. 재설치로 번호를 잃는 경우는 `RUNNING_STARTED`의 `nextSequence`·`pauseSegment`로 막으므로, 남는 원인은 클라의 번호 관리 오류다. 서버는 거부할 때마다 원인과 순번을 INFO 로그로 남긴다
+  - 일시정지 신호(`RUNNING_PAUSE`)가 아니라 이 값으로 계산하는 이유: 좌표와 함께 저장·재전송되므로 유실되지 않고, 좌표와 같은 시계·같은 순서를 따른다
 - 페이스·거리·케이던스·진행 시간은 러닝 중 표시용으로 클라이언트가 계산한다. 칼로리는 러닝 중 표시·전송하지 않고 종료 시 서버가 계산한다
+  - **클라 로컬 거리도 일시정지 경계 칸을 더하지 않는다.** `pauseSegment`가 바뀐 칸(일시정지 직전 → 재개 직후)은 서버가 거리에서 빼므로, 클라가 더하면 화면으로는 목표에 닿았는데 서버 확정 거리는 모자라 종료가 미뤄진다(`RUNNING_GOAL_PENDING`)
 - 서버는 Redis(`runningRoomId+userId` 키)에 버퍼링하고 기록을 생성할 때 S3에 업로드한다(`gpsTrackKey`) — `runningRoomId`는 세션이 들고 있는 값이다
 - **ack 없음** — 고빈도 메시지라 건별 ack는 트래픽 낭비. 실패는 `ERROR`로 통지
-  - 저장소 장애로 배치를 담지 못하면 `RUNNING_TRACK_UNAVAILABLE`을 보내되 **연결은 끊지 않고 러닝도 계속한다.** 원본이 로컬 트랙에 남아 있어 재연결로 복구되기 때문이다
+  - 저장소 장애로 배치를 담지 못하면 `RUNNING_TRACK_UNAVAILABLE`을 보내되 **연결은 끊지 않고 러닝도 계속한다.** 원본은 로컬 트랙에 남아 있다
+  - **이 오류(`sourceType: RUNNING_LOCATION_UPDATE`)를 받으면 클라는 재연결을 기다리지 않고 다음 배치 차례에 로컬 트랙 전체를 처음 `sequence`부터 저장된 `pauseSegment` 그대로 한 번 다시 보낸다.** 연결이 끊기지 않으니 재연결만 기다리면 그 배치는 러닝이 끝날 때까지 들어오지 않고, 빈칸은 관측 공백 규칙으로 판정돼 거리가 빠지거나 경로가 끊긴다. 오류에는 어느 배치인지 실리지 않아 전체를 보낸다 — 서버는 이미 받은 `sequence`를 무시한다
+    - 장애가 이어지면 다시 보낸 메시지마다 또 오류가 온다. 오류마다 즉시 다시 보내지 말고 배치 주기(약 10초)보다 자주 보내지 않는다. 한 메시지 64KB 한도에 맞춰 나눠 보낸다
+    - `RUNNING_FINISH` 전에 재전송이 남아 있으면 먼저 전체를 다시 보낸다
+    - 일시정지 중에 다시 보냈다면 처음 보는 좌표가 멈춤을 풀므로, 재전송 뒤 `RUNNING_PAUSE`를 다시 보낸다
+  - **누적 상태(마지막 `sequence`·`pauseSegment`)를 읽지 못해도 배치를 저장하지 않고 `RUNNING_TRACK_UNAVAILABLE`을 보낸다.** 줄어든 `pauseSegment`를 걸러낼 기준이 없어 검증하지 않은 좌표를 받지 않는다 — 위 재전송으로 다시 온 배치가 그때 검증된다
   - 장애가 이어지면 배치마다 `ERROR`가 나간다. 클라는 건별 알림 대신 "저장 실패 중" 상태 표시 하나로 다룬다
-- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
+- 재연결하면 클라이언트는 로컬 트랙 전체를 처음 `sequence`부터 처음과 같은 `pauseSegment`로 다시 보내고, 서버는 `(runningRoomId, userId, sequence)`가 같은 좌표를 무시한다(`runningRoomId`는 재연결 뒤 `RUNNING_START`가 다시 정한다). 앱 재설치로 로컬 트랙을 잃었으면 `RUNNING_STARTED`의 `nextSequence`·`pauseSegment`로 번호를 이어 쓴다. ack가 없으므로 성공 경계를 추정하지 않으며 로컬 트랙은 `RUNNING_FINISHED`를 받은 뒤 삭제한다 — `RUNNING_FINISH`의 ack든 아래 자동 종료든 같다
 - **목표 거리를 채우면 서버가 러닝을 끝낸다.** 서버가 누적한 거리(`RUNNING_PROGRESS_UPDATED`의 `distanceMeters`와 같은 값)가 목표 이상이 되면, 그 배치를 저장하고 진행을 알린 뒤 저장된 트랙을 트랙 필터로 분석해 **확정 거리**를 낸다. 확정 거리도 목표 이상이면 `RUNNING_FINISH`(`forced=false`)와 같은 규칙으로 종료를 확정하고 `RUNNING_FINISHED`를 보낸다. 클라는 받으면 좌표 전송을 멈추고 로컬 트랙을 지운 뒤 결과 화면으로 간다
   - **목표가 없는 솔로 방은 해당 없다.** 사용자가 `RUNNING_FINISH`를 보내야 끝난다
   - **확정 거리가 목표 미만이면 끝내지 않고 아무것도 보내지 않는다.** 러닝 중 누적과 확정 거리는 어긋날 수 있다 — 누적만 보고 끝내면 확정 거리가 목표 직전으로 나와 서버가 끊은 러닝이 조기 종료로 남는다. 러닝은 그대로 계속되고 다음 배치가 다시 확인한다
@@ -1465,7 +1509,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "distanceMeters": 1520,               // 현재까지 이동 거리(서버가 좌표로 누적)
   "targetDistanceMeters": 5000,         // 목표 거리(m). 목표 없는 솔로 방은 null
   "currentPaceSecondsPerKm": 345,       // 현재 페이스(초/km), nullable
@@ -1476,14 +1520,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **두 경우에 나간다.**
   - `RUNNING_LOCATION_UPDATE` 배치를 처리할 때마다 — 참가자당 약 10초 간격이다. 재전송분만 온 배치라 거리가 그대로여도 나간다
   - 참가자 상태(`status`)가 바뀔 때 — 좌표 배치와 무관하게 즉시 나간다(아래 상태 표). 상태가 그대로면 나가지 않는다
-- **누적 거리 조회에 실패한 배치는 알림을 거른다.** 좌표는 저장되고 다음 배치가 최신 누적을 나른다. 이 배치로 바뀌었어야 할 상태(예: `PAUSED` → `RUNNING`)도 다음 배치에서 반영된다
+- **누적 거리 조회에 실패한 배치는 저장하지 않고 알림도 거른다.** 보낸 본인에게만 `ERROR`(`RUNNING_TRACK_UNAVAILABLE`)를 보내고, 연결은 끊지 않으며 러닝도 계속된다 — `pauseSegment`를 마지막으로 반영한 좌표와 비교할 기준이 없어서다. 원본은 로컬 트랙에 남아, 클라가 다음 배치 차례에 전체를 다시 보내 복구한다(`RUNNING_LOCATION_UPDATE` 절). 이 배치로 바뀌었어야 할 상태(예: `PAUSED` → `RUNNING`)는 다음 배치에서 반영된다
+- **`pauseSegment`가 줄어든 배치는 통째로 거부한다.** 저장·누적·알림이 모두 없고 상태도 바뀌지 않는다. 보낸 본인에게만 `ERROR`(`PAUSE_SEGMENT_DECREASED`)를 보낸다
 - **갱신된 참가자 한 명만 싣는다.** 좌표 배치를 받아 진행이 바뀐 사람만 알리면 되고, 전원 스냅샷을 매번 보내면 인원수만큼 payload가 커진다
   - 클라는 참가자별 최신값을 로컬에 들고 이 메시지로 덮는다
   - **최초 진입·재연결 시 전원의 현재 진행은 `RUNNING_STARTED` 스냅샷이 나른다**(5-C) — 이 메시지는 갱신분만 실으므로 그것만으로는 화면을 복구할 수 없다
   - `runningRoomId`를 싣지 않는다 — 클라는 `RUNNING_START`로 정한 방 하나에만 있다
   - 닉네임·`profileImageUrl`을 싣지 않는다 — 10초마다 인원수만큼 나가는 메시지라 presigned URL(수백 자)이 붙으면 payload가 커진다. 표시 정보는 `RUNNING_STARTED` 스냅샷에서 받아 `userId`로 찾는다
 - **본인도 받는다.** 방 전체가 같은 서버 기준값을 받게 하려는 것이다. 다만 본인 표시 거리는 클라의 로컬 계산값이 정본이라 이 값으로 덮지 않는다
-- `distanceMeters`는 **서버가 수신한 좌표로 누적한 값**이다. 클라 표시용 거리(5-D)와 미세하게 다를 수 있으나 다른 참가자 화면에 쓰는 값이라 서버 기준으로 통일한다
+- `distanceMeters`는 **서버가 수신한 좌표로 누적한 값**이다. 일시정지 경계(`pauseSegment`가 바뀐 칸)는 누적에서도 뺀다. 클라 표시용 거리(5-D)와 미세하게 다를 수 있으나 다른 참가자 화면에 쓰는 값이라 서버 기준으로 통일한다
 - `currentPaceSecondsPerKm`는 거리에 반영한 마지막 좌표의 값을 옮긴다. 재전송분만 온 배치면 직전 값을 유지한다 — 단말이 못 재면 `null`이다
 - **`status`는 멈춘 것·끊긴 것·끝난 것을 단순히 느려진 것과 구분한다.** 없으면 상대가 화면에서 갑자기 뒤처진 것처럼 보인다. **화면 표시용이며 기록(거리·시간)에는 영향을 주지 않는다** — 저장하지 않고 Redis에만 둔다
 
@@ -1507,7 +1552,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "peers": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "gapMeters": -18,                 // 양수면 상대가 앞, 음수면 뒤
       "comboCount": 12,                 // 이 상대와 지금 이어지고 있는 콤보
       "maxComboCount": 30               // 이번 러닝에서 이 상대와 기록한 최고 콤보
@@ -1558,7 +1603,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **상대 화면에 멈춤을 알리는 신호다.** 서버는 참가자 상태를 `PAUSED`/`RUNNING`으로 바꾸고, 바뀌었으면 방에 `RUNNING_PROGRESS_UPDATED`(`status`)를 보낸다. 멈춘 동안에는 좌표 배치가 오지 않아 알림을 따로 내야 한다
 - **서버는 이 신호로 기록 계산을 바꾸지 않는다.** 기록은 수신한 좌표로만 계산한다 — 신호가 유실되거나 조작돼도 기록이 흔들리지 않아야 한다. 클라는 일시정지 동안 좌표 수집·전송을 멈추고 본인 화면의 경과 시간도 멈춘다
-  - 멈춘 구간(제자리 흔들림·긴 공백)은 서버가 좌표만으로 판정해 거리·시간에서 뺀다 — [feature-spec.md](feature-spec.md)의 트랙 필터 절
+  - 일시정지 구간은 좌표의 `pauseSegment`로 뺀다(`RUNNING_LOCATION_UPDATE`). 버튼 없이 멈춘 구간(제자리 흔들림·긴 공백)은 서버가 좌표만으로 판정해 뺀다 — [feature-spec.md](feature-spec.md)의 트랙 필터 절
+- **일시정지하면 콤보는 항상 끊긴다.** 일시정지 길이와 무관하다. 이 신호를 받으면 일시정지 표시를 남겨 그 참가자가 낀 다음 판정에서 끊고, 신호가 유실되거나 판정 전에 재개해도 재개 후 첫 배치의 `pauseSegment`가 바뀌어 있으면 그 판정에서 끊는다. 다시 함께 달리면 0부터 새로 쌓이고 최고 콤보는 남는다(feature-spec 러닝 콤보)
+  - **클라는 콤보 중에 일시정지 버튼을 누르면 콤보가 끊긴다는 안내를 띄운다.** 콤보 중인지는 마지막으로 받은 `RUNNING_COMBO_UPDATED`의 `peers`가 비어 있지 않은지로 판단한다
 - **다른 참가자는 계속 진행한다.** 일시정지는 본인에게만 적용된다
 - **멈춤은 셋 중 무엇으로든 풀린다** — `RUNNING_RESUME`, `RUNNING_START`, 처음 보는 좌표가 담긴 `RUNNING_LOCATION_UPDATE`. `RUNNING_RESUME`은 다음 배치(최대 10초)를 기다리지 않고 상대 화면을 즉시 바꾸려는 것이고, 좌표는 `RUNNING_RESUME`이 유실됐을 때의 안전망이다
 - **멱등이다.** 같은 상태로 바꾸는 요청은 아무것도 보내지 않는다. 이미 끝난 참가자(`FINISHED`)에게는 아무 효과가 없다
@@ -1578,15 +1625,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `forced`는 필수다 — 비우면 `INVALID_REQUEST`로 거부한다
-- **클라는 보내기 전에 남은 좌표를 먼저 보낸다.** 한 연결 안에서는 메시지가 순서대로 처리된다. 종료는 마지막 수신 좌표까지로 계산하므로, 다음 배치를 기다리던 좌표(최대 10초 분량)를 보내지 않으면 그만큼 기록에서 빠진다 — 4,980m에서 배치를 보내고 5,010m에서 종료를 누르면 4,980m로 확정돼 조기 종료가 된다
+- **클라는 보내기 전에 남은 좌표를 먼저 보낸다.** 한 연결 안에서는 메시지가 순서대로 처리된다. 종료는 마지막 수신 좌표까지로 계산하므로, 다음 배치를 기다리던 좌표(최대 10초 분량)를 보내지 않으면 그만큼 기록에서 빠진다 — 4,980m에서 배치를 보내고 5,010m에서 종료를 누르면 4,980m로 확정돼 조기 종료가 된다. `RUNNING_TRACK_UNAVAILABLE`로 다시 보내야 할 트랙이 남아 있으면 그것도 먼저 보낸다
   - 남은 좌표로 확정 거리가 목표를 채우면 그 배치에서 자동 종료가 먼저 확정되고, 뒤이은 `RUNNING_FINISH`는 아래 멱등 규칙대로 `RUNNING_FINISHED`만 다시 받는다
 - **이 메시지는 사용자가 종료를 길게 눌렀을 때만 보낸다.** 화면 거리가 목표 이상이면 `forced=false`(다 뛰었다), 미만이면 `forced=true`(조기 종료를 선택했다)다
 - **`forced=false`인데 확정 거리가 목표에 못 미치면 확정하지 않는다.** `RUNNING_FINISHED` 대신 `RUNNING_GOAL_PENDING`(남은 거리)을 보내고 러닝은 계속된다 — 화면으로는 다 뛰었는데 서버가 오염 좌표를 빼 인정하지 않은 경우라, 그대로 확정하면 억울한 조기 종료가 된다. 사용자가 그래도 끝내려면 `forced=true`로 다시 보낸다
   - 확정하지 않으므로 상태·기록·트랙 버퍼 모두 그대로이고, 이 요청의 ack(`RUNNING_FINISHED`)도 나가지 않는다
 - `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다. 다만 미만이어도 방 인원(확정 인원에서 취소·탈퇴한 미출석자를 뺀 수)이 1이면 `_NO_PENALTY`다. 목표가 없는 솔로 방은 끝낸 것이 곧 완주라 `COMPLETED`다
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
-- 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 계산 전에 트랙 필터가 정지·GPS 튐·관측 안 된 칸을 거리·시간에서 뺀다([feature-spec.md](feature-spec.md) 트랙 필터) — 그래서 `totalDurationSeconds`는 움직인 시간이다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
-- 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간, 운영값)을 통과한 트랙이면 `running_records`와 splits를 저장하고 GPS 트랙을 S3에 올려 `route_polyline`을 만든다. 통과하지 못하면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
+- 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 계산 전에 트랙 필터가 일시정지 경계(`pauseSegment`가 바뀐 칸)·정지·GPS 튐·관측 안 된 칸을 거리·시간에서 뺀다([feature-spec.md](feature-spec.md) 트랙 필터) — 그래서 `totalDurationSeconds`는 움직인 시간이다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
+- 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간, 운영값)을 통과한 트랙이면 `running_records`·경로 조각(`running_segments`)·splits를 저장하고 GPS 트랙을 S3에 올린다. 통과하지 못하면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
 - **목표 거리를 넘겨 뛰면 목표 지점에서 끊어 기록한다.** 목표를 사이에 둔 두 좌표에서 비율로 위치·시각을 보간해 그 지점을 기록의 끝으로 삼고, `totalDistanceMeters`·`endAt`·`totalDurationSeconds`를 모두 그 기준으로 확정한다 — 거리만 자르면 페이스가 실제보다 빨라진다. 목표 이후 좌표는 기록 계산에서만 빠지고 **S3 원본 트랙에는 그대로 남는다**. 목표 미달로 끝났으면 마지막 10m 경계까지로 확정한다(10m 미만 꼬리는 버린다)
 - **구간은 목표 거리를 10m로 나눈 고정 경계다**(0-10, 10-20…). 참가자별 실제 거리로 나누지 않으므로 같은 방 참가자의 `splitNumber` N은 언제나 같은 거리 구간을 가리킨다. 경계가 정확히 10m가 되도록 그 지점도 보간해 만든다
 - **ack**: `RUNNING_FINISHED` — 수신 후 클라는 REST `GET /running-rooms/{id}/results`로 대시보드 진입. 확정하지 못한 `forced=false`는 ack 대신 `RUNNING_GOAL_PENDING`을 받는다
@@ -1617,13 +1664,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "runningRoomId": 125,
   "startedAt": "2026-07-25T19:00:30",   // 현재 사용자 기록 기준, 기록 없으면 null
   "finishedAt": "2026-07-25T19:30:30",  // 현재 사용자 기록 기준, 기록 없으면 null
-  "routes": [                             // 현재 사용자 경로 [위도, 경도] — 본인 기록이 없으면 null
-    [35.1795543, 129.0756416],
-    [35.1796012, 129.0757104]
+  "routes": [                             // 현재 사용자 경로 — 끊긴 곳마다 조각 하나. 본인 기록이 없으면 null
+    [                                     // 조각 1 [위도, 경도]
+      [35.1795543, 129.0756416],
+      [35.1796012, 129.0757104]
+    ],
+    [                                     // 조각 2 — 일시정지 뒤 재개
+      [35.1801230, 129.0762011],
+      [35.1801874, 129.0762650]
+    ]
   ],
   "players": [
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",   // nullable
       "status": "COMPLETED",              // COMPLETED | RUNNING 두 값뿐이다
@@ -1637,7 +1690,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalElevationGainMeters": 42
     },
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440031",
+      "userId": "01a0f2d4-6180-7000-8000-446655440031",
       "nickname": "러닝초보",
       "profileImageUrl": null,
       "status": "COMPLETED",
@@ -1659,7 +1712,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `runningRoomId` | Long | O | 러닝 방 ID |
 | `startedAt` | String | X | 현재 사용자 기록의 시작 시각. 기록이 없으면 null |
 | `finishedAt` | String | X | 현재 사용자 기록의 종료 시각. 기록이 없으면 null |
-| `routes` | Number[][] | X | 현재 사용자 경로. `[[위도, 경도], …]`를 달린 순서대로 담는다. 안쪽 배열은 길이 2, 위도가 먼저다(GeoJSON과 반대). 좌표는 소수점 5자리(약 1m)까지. 첫 원소가 시작 지점, 끝 원소가 종료 지점이라 마커용 좌표를 따로 싣지 않는다. 본인 기록이 없으면 null(빈 배열이 아니다) |
+| `routes` | Number[][][] | X | 현재 사용자 경로. 조각 배열이고, 조각마다 `[[위도, 경도], …]`를 달린 순서대로 담는다. 조각도 달린 순서다. 가장 안쪽 배열은 길이 2, 위도가 먼저다(GeoJSON과 반대). 좌표는 소수점 5자리(약 1m)까지. 첫 조각의 첫 원소가 시작 지점, 끝 조각의 끝 원소가 종료 지점이라 마커용 좌표를 따로 싣지 않는다. 본인 기록이 없으면 null(빈 배열이 아니다) |
 | `players` | Array | O | 러닝 단계에 들어간 참가자 전원의 결과 |
 
 **`players[]`**
@@ -1673,20 +1726,21 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `isDeleted` | Boolean | O | 탈퇴한 사용자 여부 |
 | `isMe` | Boolean | O | 현재 사용자 여부 |
 | `totalDistanceMeters` | Integer | X | 총 이동 거리(m). 기록이 없으면 null |
-| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
+| `totalDurationSeconds` | Integer | X | 총 러닝 시간(초) — **움직인 시간**이다. 트랙 필터가 일시정지·정지·관측하지 못한 구간을 빼므로 그 기록의 시작~종료 시각 차보다 짧을 수 있다. 기록이 없으면 null |
 | `totalCaloriesKcal` | Integer | X | 총 소모 칼로리(kcal). 기록이 없으면 null |
 | `averagePaceSecondsPerKm` | Integer | X | 평균 페이스(초/km). 기록이 없으면 null |
 | `averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록이 없거나 유효 표본이 부족하면 null |
-| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null. 일시정지 중에 오른 높이는 들어가지 않는다 |
 
 - **`status`는 `COMPLETED`·`RUNNING` 두 값뿐이다** — 러닝을 끝낸 사람은 완주든 중도이탈이든 `COMPLETED`, 아직 뛰는 중이면 `RUNNING`이다. DB의 `running_players.status`(`RUNNING_LEFT_PENALTY` 등, `erd.md` §6)를 그대로 노출하지 않는다: **페널티 여부는 본인 매칭 쿨다운 판정에 쓰는 내부 값이라 남의 화면에 실을 이유가 없다.** 얼마나 뛰었는지는 `totalDistanceMeters`로 드러난다
 - `players`에는 방에서 러닝 단계에 들어간 참가자 전원을 유지하고 **시작 전 이탈자는 제외한다**. 기록이 없는 참가자는 사용자 정보와 `status`만 채워 내려가므로 화면에 "기록 없음"으로 표시한다
 - 탈퇴한 참가자는 공통 탈퇴 유저 형식으로 표시하고 `isDeleted=true`로 반환한다
 
-- **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`/`route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
-- **`routes`는 서버가 폴리라인을 풀어서 내린다** — 저장은 `running_records.route_polyline`(encoded polyline)이지만 응답은 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. **러닝 결과(6-1·6-2) 중 전체 경로를 한 덩어리로 주는 곳은 여기뿐이다** — 6-2의 `routes`는 같은 경로를 구간별로 자른 조각이다
-- **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — `routes`의 첫 원소와 끝 원소가 그대로 시작·끝 지점이다
-- **목록·카드 응답은 `routePolyline`을 그대로 유지한다**(7-1·8-1) — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2)에만 쓴다
+- **`startedAt`·`finishedAt`·`routes`는 본인 기록 기준이다**(`running_records.start_at`/`end_at`, `running_segments.route_polyline`). 본인 기록이 없으면 null이며 6-2의 최상위 필드도 같은 기준이다
+- **`routes`는 서버가 조각별 폴리라인을 풀어서 내린다** — 저장은 `running_segments.route_polyline`(조각마다 encoded polyline)이지만 응답은 조각 번호 순의 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. **러닝 결과(6-1·6-2) 중 전체 경로를 한 번에 주는 곳은 여기뿐이다** — 6-2의 `routes`는 같은 경로를 구간별로 자른 것이다
+- **조각은 서버가 기록에서 뺀 곳에서만 나뉜다** — 일시정지 경계, 관측하지 못한 이동, GPS 튐. 클라는 조각 사이를 선으로 잇지 않고, 30m 같은 간격 규칙으로 따로 판단하지 않는다(feature-spec 트랙 필터)
+- **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — 첫 조각의 첫 원소와 끝 조각의 끝 원소가 그대로 시작·끝 지점이다
+- **피드 카드(8-1)는 `routePolyline`을 유지한다** — 한 응답에 기록이 여러 건이라 좌표 배열로 바꾸면 응답 크기가 건수만큼 곱해진다. 서버가 조각을 이어 한 줄로 다시 인코딩해 내린다. 좌표 배열은 기록 하나를 크게 그리는 화면(6-1·6-2)에만 쓴다. 기록 목록(7-1)은 경로를 싣지 않는다
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -1731,7 +1785,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "finishedAt": "2026-07-25T19:30:30",
   "players": [                           // 참가자 메타데이터는 여기 한 번만 — 구간마다 반복하지 않는다
     {
-      "userId": "550e8400-e29b-41d4-a716-446655440015",
+      "userId": "01a0f2d4-6180-7000-8000-446655440015",
       "nickname": "동완러너",
       "profileImageUrl": "https://...",
       "status": "COMPLETED",             // 6-1과 같은 규칙 — COMPLETED | RUNNING
@@ -1751,7 +1805,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       ],
       "players": [
         {
-          "userId": "550e8400-e29b-41d4-a716-446655440015",  // 최상위 players와 조인
+          "userId": "01a0f2d4-6180-7000-8000-446655440015",  // 최상위 players와 조인
           "durationSeconds": 3,
           "averagePaceSecondsPerKm": 345,
           "averageCadenceSpm": 162,
@@ -1769,7 +1823,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `runningRoomId` | Long | O | 러닝 방 ID |
 | `splitDistanceMeters` | Integer | O | 고정 구간 거리(m). 항상 10 |
 | `totalDistanceMeters` | Integer | X | 현재 사용자 총 거리(m). 목표를 넘겨 뛰었으면 목표 지점에서, 목표 미달이면 마지막 10m 경계에서 끊은 값이다. 기록이 없으면 null |
-| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null |
+| `totalElevationGainMeters` | Integer | X | 현재 사용자 누적 상승 고도(m). 기록이 없거나 유효 표본이 부족하면 null. 일시정지 중에 오른 높이는 들어가지 않는다 |
 | `startedAt` | String | X | 현재 사용자 기록 시작 시각. 기록이 없으면 null |
 | `finishedAt` | String | X | 현재 사용자 기록 종료 시각. 기록이 없으면 null |
 | `players` | Array | O | **기록이 있는** 참가자 목록. 참가자 메타데이터는 여기에만 담는다 |
@@ -1794,7 +1848,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `startDistanceMeters` | Integer | O | 구간 시작 누적 거리(m) |
 | `endDistanceMeters` | Integer | O | 구간 종료 누적 거리(m) |
 | `distanceMeters` | Integer | O | 구간 거리(m). 고정 10m — 마지막 자투리 구간은 생기지 않는다 |
-| `routes` | Number[][] | X | 이 구간의 **본인** 경로. `[[위도, 경도], …]` 형식이며 구간 N의 끝 원소는 구간 N+1의 첫 원소와 같다. 본인 기록이 없거나 본인이 이 구간에 도달하지 못했으면 null |
+| `routes` | Number[][] | X | 이 구간의 **본인** 경로. `[[위도, 경도], …]` 형식이며 구간이 속한 조각 하나에서 자른 것이다. 같은 조각 안에서는 구간 N의 끝 원소가 구간 N+1의 첫 원소와 같다. 끊긴 곳에 걸친 구간은 원소가 하나다. 본인 기록이 없거나 본인이 이 구간에 도달하지 못했으면 null |
 | `players` | Array | O | 이 구간 기록이 있는 참가자 목록 |
 
 **`splits[].players[]`**
@@ -1802,11 +1856,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `userId` | UUID | O | 참가자 ID. 최상위 `players`와 조인한다 |
-| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 정지·관측하지 못한 시간은 들어가지 않는다 |
+| `durationSeconds` | Integer | O | 구간 소요 시간(초) — 움직인 시간이다. 트랙 필터가 뺀 일시정지·정지·관측하지 못한 시간은 들어가지 않는다 |
 | `averagePaceSecondsPerKm` | Integer | O | 구간 평균 페이스(초/km) |
 | `averageCadenceSpm` | Integer | X | 구간 평균 케이던스(spm). 유효 표본이 부족하면 null |
 | `caloriesKcal` | Integer | O | 구간 소모 칼로리(kcal) |
-| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
+| `elevationChangeMeters` | Integer | X | 구간 순고도차(m). 끝 − 시작이며, 일시정지로 끊긴 구간은 조각마다의 순고도차를 더한다(일시정지 중 오르내린 높이는 빠진다). 내리막은 음수이며 유효 표본이 부족하면 null — 10m 구간에서는 대체로 null이다 |
 
 - **참가자 메타데이터는 최상위 `players`에 한 번만 싣고, `splits[].players`에는 `userId`와 수치만 둔다.** 구간이 목표 5,000m 기준 500개라 `nickname`·`profileImageUrl`을 구간마다 반복하면 응답이 MB 단위가 된다(presigned URL만 500×인원×수백 바이트). 클라는 `userId`로 조인한다
 - **구간 경계는 방 전체가 공유한다** — 0m부터 10m씩 자르는 고정 경계라, `splitNumber` N은 모든 참가자에게 같은 거리 구간이다. 목표에 못 미치고 끝난 참가자는 도달하지 못한 구간의 `players`에서 빠진다
@@ -1814,11 +1868,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **10m 구간의 `elevationChangeMeters`는 대체로 null이다** — GPS 수직 오차가 구간 길이에 맞먹어 노이즈 임계값을 넘는 표본이 거의 없다
 - 조회하는 본인의 기록이 없어도 **다른 참가자의 구간 기록은 그대로 내려간다** — 본인 기록이 없어도 다른 참가자의 결과는 보이는 6-1과 같은 규칙이다
 - **경로는 최상위가 아니라 구간마다 실린다.** 이 화면은 구간별로 색을 달리해 그리므로 자른 조각이 곧 그리는 단위다. 전체 경로 하나가 필요하면 6-1의 `routes`를 쓴다 — 같은 값을 두 응답에 중복해 싣지 않는다
-- **`splits[].routes`는 조회하는 본인의 경로다.** 같은 객체의 `players`가 참가자 전원인 것과 다르다 — `running_splits.route_start_index`·`route_end_index`가 각자 자기 `route_polyline`의 위치를 가리키므로 남의 구간 좌표는 이 배열에 섞이지 않는다
-- **이어붙일 때 경계점이 겹친다.** N번 구간의 끝 원소와 N+1번의 첫 원소는 같은 점이다 — 전체 경로를 만들려면 두 번째 구간부터 첫 원소를 건너뛴다
-- 경로는 `running_records.route_polyline`에서 나온다 — 서버가 풀어 구간 범위로 잘라 내리므로 S3를 조회하지 않는다. 저장된 좌표 컬럼은 없다
+- **`splits[].routes`는 조회하는 본인의 경로다.** 같은 객체의 `players`가 참가자 전원인 것과 다르다 — `running_splits.route_start_index`·`route_end_index`가 각자 자기 조각(`running_segments.route_polyline`)의 위치를 가리키므로 남의 구간 좌표는 이 배열에 섞이지 않는다
+- **이어붙일 때 경계점이 겹친다.** 같은 조각 안에서 N번 구간의 끝 원소와 N+1번의 첫 원소는 같은 점이다 — 전체 경로를 만들려면 두 번째 구간부터 첫 원소를 건너뛴다. 전체 경로가 필요하면 6-1을 쓰는 편이 낫다
+- **끊긴 곳에 걸친 구간은 점 하나만 실린다.** 일시정지 직전 경계점은 앞 조각에, 재개 뒤 첫 경계점은 뒤 조각에 있다. 구간은 끝점이 있는 뒤 조각에 속하고 그 조각의 첫 점 하나만 가리킨다 — 선을 긋지 않는다. 거리·시간·페이스는 다른 구간과 같다
+- 경로는 구간이 속한 조각의 `running_segments.route_polyline`에서 구간 범위로 잘라 내린다 — 서버가 풀어 내리므로 S3를 조회하지 않는다. 저장된 좌표 컬럼은 없다
 - 점별 고도·정확도·순간 페이스·케이던스·시각은 반환하지 않고 구간 단위 값만 제공한다.
-- **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
+- **고도는 두 층위가 서로 다른 값이다** — 최상위 `totalElevationGainMeters`는 **누적 상승**(올라간 것만 합산, `running_records.total_elevation_gain`), 구간의 `elevationChangeMeters`는 **순고도차**(끝 − 시작, 일시정지로 끊긴 구간은 조각별 순고도차의 합, `running_splits.elevation_change`)다. **구간값을 더해도 최상위 값이 되지 않는다** — 계산 기준이 다르다(`erd.md` 러닝 기록 절)
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -1863,8 +1918,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
-      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
-      "routePolyline": "u{~vFvyys@fS]pT_@..."   // 카드 경로 미리보기용
+      "totalElevationGainMeters": 42  // 유효 표본이 부족하면 null
     }
   ]
 }
@@ -1877,7 +1931,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
 - **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
 - **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
-- **`routePolyline`은 카드의 경로 미리보기용이다** — 기록 카드에 달린 모양을 작게 띄운다(`feature-spec.md` 기록 절)
+- **경로는 싣지 않는다** — 카드에 경로 미리보기를 띄우지 않는다. 경로는 기록 상세(6-1·6-2)에서만 본다
 - **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
 
 - **에러 (400 Bad Request)**
@@ -1920,7 +1974,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "feedId": 77,
   "author": {
-    "userId": "550e8400-e29b-41d4-a716-446655440015",
+    "userId": "01a0f2d4-6180-7000-8000-446655440015",
     "nickname": "동완러너",
     "profileImageUrl": "...",
     "isDeleted": false
@@ -1942,7 +1996,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     "totalDistanceMeters": 5020,
     "totalDurationSeconds": 1800,
     "averagePaceSecondsPerKm": 359,
-    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 10m 경계점 경로(encoded polyline) — 카드 지도 미리보기. running_records.route_polyline
+    "routePolyline": "u{~vFvyys@fS]pT_@..."   // 10m 경계점 경로(encoded polyline) — 카드 지도 미리보기. running_segments.route_polyline을 조각 순으로 이어 다시 인코딩
   },
   "createdAt": "2026-07-25T11:00:00",
   "updatedAt": "2026-07-25T11:00:00"
@@ -2033,7 +2087,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "commentId": 201,
       "author": {
-        "userId": "550e8400-e29b-41d4-a716-446655440013",
+        "userId": "01a0f2d4-6180-7000-8000-446655440013",
         "nickname": "철수",
         "profileImageUrl": "...",
         "isDeleted": false
@@ -2313,7 +2367,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "email": "run@example.com",
   "loginType": "GOOGLE",               // LOCAL | GOOGLE | KAKAO | APPLE
   "nickname": "동완러너",                // 온보딩 전이면 null
@@ -2337,7 +2391,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "userId": "550e8400-e29b-41d4-a716-446655440015",
+  "userId": "01a0f2d4-6180-7000-8000-446655440015",
   "isMe": false,
   "nickname": "동완러너",              // 온보딩 전이면 null
   "profileImageUrl": "https://...",
@@ -2525,7 +2579,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg",
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg",
   "uploadUrl": "https://..."
 }
 ```
@@ -2571,7 +2625,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg"
 }
 ```
 
@@ -2583,7 +2637,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "profileImageKey": "profiles/550e8400-.../9f1c2b7e-....jpg"
+  "profileImageKey": "profiles/01a0f2d4-.../9f1c2b7e-....jpg"
 }
 ```
 
@@ -3015,7 +3069,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **동작 (테이블별 정책)**:
   - 탈퇴는 활성 상태 때문에 막지 않는다. `MATCHING`이면 5-A의 대기 취소, `MATCHED`이면 방 나가기를 적용하고 인원을 갱신해 남은 참가자에게 이벤트를 보낸다. `STARTED`이면 본인이 `RUNNING`일 때 마지막 수신 데이터로 5-D의 종료 처리를, `JOINED`(미접속)일 때 강제 종료와 같은 기준의 이탈 처리를 먼저 적용한다. 미접속이면 시작 후 취소처럼 인원을 줄여 남은 참가자에게 이벤트를 보내고, 0이 되면 방을 `CANCELLED`로 닫는다.
   - `delete_users` 스냅샷 후 `users`를 하드 삭제한다. `delete_users.created_at`은 스냅샷 시각이다.
-  - **유지**: `feeds`/`comments`/`running_records`(+splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
+  - **유지**: `feeds`/`comments`/`running_records`(+segments·splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
   - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`friendships`/`user_colors`.
   - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).

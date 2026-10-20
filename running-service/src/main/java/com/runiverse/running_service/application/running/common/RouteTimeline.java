@@ -7,6 +7,7 @@ import com.runiverse.running_service.domain.running.combo.vo.ComboPoint;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -30,17 +31,36 @@ public final class RouteTimeline {
 
     // 구간이 경로를 빈틈없이 덮지 못하면 점을 고를 수 없다 — 그 참가자는 기록이 없는 것처럼 다룬다
     public static Optional<RouteTimeline> of(RecordedRoute route) {
-        List<RoutePoint> points = PolylineDecoder.decode(route.routePolyline());
+        // 조각을 이어 기록의 경계점 전체로 편다 — 콤보 점은 조각을 모르고 시각으로만 찾는다
+        List<RoutePoint> points = new ArrayList<>();
+        int[] offsets = new int[route.segmentPolylines().size()];
+        int[] sizes = new int[offsets.length];
+        for (int i = 0; i < offsets.length; i++) {
+            List<RoutePoint> segment = PolylineDecoder.decode(route.segmentPolylines().get(i));
+            offsets[i] = points.size();
+            sizes[i] = segment.size();
+            points.addAll(segment);
+        }
         if (points.isEmpty()) {
             return Optional.empty();
         }
         LocalDateTime[] times = new LocalDateTime[points.size()];
         for (RecordedSplitTime split : route.splits()) {
-            if (split.routeEndIndex() >= points.size()) {
+            int segment = split.segmentNumber() - 1;
+            if (segment < 0 || segment >= offsets.length || split.routeEndIndex() >= sizes[segment]) {
                 return Optional.empty();
             }
-            times[split.routeStartIndex()] = split.startAt();
-            times[split.routeEndIndex()] = split.endAt();
+            int end = offsets[segment] + split.routeEndIndex();
+            // 끊긴 곳에 걸친 구간([0, 0])의 시작 경계점은 앞 조각의 마지막 점이다 —
+            // 여기를 비우면 1번 조각이 점 하나뿐일 때 그 점의 시각이 없어 참가자 전체가 빠진다
+            int start = split.routeStartIndex() == split.routeEndIndex()
+                    ? end - 1
+                    : offsets[segment] + split.routeStartIndex();
+            if (start < 0) {
+                return Optional.empty();
+            }
+            times[start] = split.startAt();
+            times[end] = split.endAt();
         }
         if (Arrays.stream(times).anyMatch(Objects::isNull)) {
             return Optional.empty();

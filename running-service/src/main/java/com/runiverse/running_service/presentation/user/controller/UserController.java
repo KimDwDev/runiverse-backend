@@ -66,6 +66,7 @@ import com.runiverse.running_service.presentation.user.response.ProfileUpdateRes
 import com.runiverse.running_service.presentation.user.response.UserProfileResponse;
 import com.runiverse.running_service.presentation.user.response.UserStatusResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -86,6 +87,10 @@ import java.util.UUID;
 @RequestMapping("users")
 @RequiredArgsConstructor
 public class UserController {
+
+    // UserId VO가 받는 UUIDv7만 — UUID 타입으로 받으면 1-1-1-1-1 같은 값도 변환된다
+    private static final String USER_ID_FORMAT =
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
     private final CompleteOnboardingUsecase completeOnboardingUsecase;
     private final GetMyBasicInfoUsecase getMyBasicInfoUsecase;
@@ -138,11 +143,11 @@ public class UserController {
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> getUserProfile(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID userId
+            @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
     ) {
         UUID viewerId = UUID.fromString(jwt.getSubject());
         GetUserProfileResult result = getUserProfileUsecase.handle(
-                new GetUserProfileQuery(viewerId, userId));
+                new GetUserProfileQuery(viewerId, UUID.fromString(userId)));
         return ResponseEntity.ok(new UserProfileResponse(
                 result.userId(),
                 result.isMe(),
@@ -215,9 +220,11 @@ public class UserController {
     }
 
     @GetMapping("/{userId}/profile-image")
-    public ResponseEntity<ProfileImageUrlResponse> getProfileImageUrl(@PathVariable UUID userId) {
+    public ResponseEntity<ProfileImageUrlResponse> getProfileImageUrl(
+            @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
+    ) {
         GetProfileImageUrlResult result = getProfileImageUsecase.handle(
-                new GetProfileImageUrlQuery(userId));
+                new GetProfileImageUrlQuery(UUID.fromString(userId)));
         return ResponseEntity.ok(new ProfileImageUrlResponse(result.profileImageUrl()));
     }
 

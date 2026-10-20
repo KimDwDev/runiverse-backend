@@ -251,17 +251,31 @@ class RunningWebSocketHandlerTest {
     private static String pointWithoutOptionalFields(int sequence) {
         return """
                 {"sequence":%d,"latitude":35.1795543,"longitude":129.0756416,\
-                "accuracyMeters":6.2,"recordedAt":"2026-07-25T19:10:30"}""".formatted(sequence);
+                "accuracyMeters":6.2,"recordedAt":"2026-07-25T19:10:30","pauseSegment":0}"""
+                .formatted(sequence);
     }
 
     // 위치 배치의 좌표 한 개 — 단말이 모두 측정한 정상 배치.
     // Long.MAX_VALUE까지 실어 보낼 수 있어야 커서를 끝으로 미는 좌표를 재현한다
     private static String point(long sequence) {
+        return pointWithPauseSegment(sequence, "0");
+    }
+
+    // 일시정지 구간 번호만 바꾼 좌표 — JSON 조각을 그대로 받아 null도 재현한다
+    private static String pointWithPauseSegment(long sequence, String pauseSegment) {
         return """
                 {"sequence":%d,"latitude":35.1795543,"longitude":129.0756416,\
                 "altitudeMeters":18.4,"accuracyMeters":6.2,"speedMetersPerSecond":2.8,\
                 "headingDegrees":85.3,"cadenceSpm":165,"currentPaceSecondsPerKm":345,\
-                "recordedAt":"2026-07-25T19:10:30"}""".formatted(sequence);
+                "recordedAt":"2026-07-25T19:10:30","pauseSegment":%s}"""
+                .formatted(sequence, pauseSegment);
+    }
+
+    // pauseSegment 칸이 아예 없는 좌표 — 일시정지 번호를 모르는 클라가 보내는 모양이다
+    private static String pointWithoutPauseSegment(long sequence) {
+        return """
+                {"sequence":%d,"latitude":35.1795543,"longitude":129.0756416,\
+                "accuracyMeters":6.2,"recordedAt":"2026-07-25T19:10:30"}""".formatted(sequence);
     }
 
     @Test
@@ -365,6 +379,9 @@ class RunningWebSocketHandlerTest {
         Map<?, ?> data = (Map<?, ?>) captureSent().data();
         assertThat(data.get("runningRoomId")).isEqualTo((int) ROOM_ID);
         assertThat(data.get("targetDistanceMeters")).isEqualTo(TARGET_DISTANCE_METERS);
+        // 로컬 트랙을 잃은 앱(재설치)이 이어 쓸 본인 번호다
+        assertThat(data.get("nextSequence")).isEqualTo(120);
+        assertThat(data.get("pauseSegment")).isEqualTo(2);
         List<?> players = (List<?>) data.get("players");
         assertThat(players).hasSize(1);
         Map<?, ?> player = (Map<?, ?>) players.get(0);
@@ -690,6 +707,116 @@ class RunningWebSocketHandlerTest {
     }
 
     @Test
+    @DisplayName("일시정지 구간 번호를 좌표마다 그대로 옮긴다")
+    void mapsPauseSegmentToTrackPoints() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when -> 두 좌표 사이에서 일시정지 버튼을 한 번 눌렀다
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s,%s]}""".formatted(
+                pointWithPauseSegment(0, "0"), pointWithPauseSegment(1, "1"))));
+
+        // then -> 번호가 0으로 메워지면 일시정지 중 이동이 거리로 들어간다
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), captor.capture());
+        assertThat(captor.getValue()).extracting(TrackPoint::pauseSegment).containsExactly(0, 1);
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호가 빠진 좌표는 적재하지 않고 INVALID_REQUEST로 응답한다")
+    void rejectsMissingPauseSegment() throws Exception {
+        // given -> 번호가 없으면 일시정지 구간을 뺄 근거가 없다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(pointWithoutPauseSegment(0))));
+
+        // then
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_LOCATION_UPDATE");
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호가 null이면 적재하지 않고 INVALID_REQUEST로 응답한다")
+    void rejectsNullPauseSegment() throws Exception {
+        // given -> primitive로 받으면 null이 0으로 메워져 검증을 그냥 통과한다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(pointWithPauseSegment(0, "null"))));
+
+        // then
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_LOCATION_UPDATE");
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호가 음수면 적재하지 않고 INVALID_REQUEST로 응답한다")
+    void rejectsNegativePauseSegment() throws Exception {
+        // given -> 러닝은 0에서 시작해 오르기만 한다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(pointWithPauseSegment(0, "-1"))));
+
+        // then
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_LOCATION_UPDATE");
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호가 상한을 넘으면 적재하지 않고 INVALID_REQUEST로 응답한다")
+    void rejectsPauseSegmentBeyondUpperBound() throws Exception {
+        // given
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(
+                pointWithPauseSegment(0, String.valueOf(TrackPoint.MAX_PAUSE_SEGMENT + 1)))));
+
+        // then
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "INVALID_REQUEST", "RUNNING_LOCATION_UPDATE");
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호 상한 값 자체는 정상 좌표로 받는다")
+    void acceptsPauseSegmentAtUpperBound() throws Exception {
+        // given -> 경계를 한 칸 잘못 잡으면 멀쩡한 배치를 버린다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s]}""".formatted(
+                pointWithPauseSegment(0, String.valueOf(TrackPoint.MAX_PAUSE_SEGMENT)))));
+
+        // then
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
+        verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), captor.capture());
+        assertThat(captor.getValue()).extracting(TrackPoint::pauseSegment)
+                .containsExactly(TrackPoint.MAX_PAUSE_SEGMENT);
+    }
+
+    @Test
     @DisplayName("순번이 튄 배치를 튕겨도 이어지는 정상 배치는 그대로 적재한다")
     void keepsAppendingAfterRejectedBatch() throws Exception {
         // given -> 이번 버그의 핵심. 튄 좌표가 그 배치 10초만 잃게 하고
@@ -709,6 +836,24 @@ class RunningWebSocketHandlerTest {
         ArgumentCaptor<List<TrackPoint>> captor = ArgumentCaptor.forClass(List.class);
         verify(appendRunningTrackPort).append(eq(ROOM_ID), any(), captor.capture());
         assertThat(captor.getValue()).extracting(TrackPoint::sequence).containsExactly(12L, 13L);
+    }
+
+    @Test
+    @DisplayName("일시정지 구간 번호가 줄면 적재하지 않고 PAUSE_SEGMENT_DECREASED로 응답한다")
+    void respondsPauseSegmentDecreased() throws Exception {
+        // given -> 형식은 맞지만 순번 순으로 1 → 0으로 줄었다. 클라 로컬 트랙이 깨졌다
+        given(startRunningUsecase.handle(any())).willReturn(new StartRunningResult(ROOM_ID, TARGET_DISTANCE_METERS));
+        handler.handleMessage(session, runningStart("""
+                {"runningRoomId":125}"""));
+
+        // when
+        handler.handleMessage(session, locationUpdate("""
+                {"locations":[%s,%s]}""".formatted(
+                pointWithPauseSegment(0, "1"), pointWithPauseSegment(1, "0"))));
+
+        // then -> 형식 오류(INVALID_REQUEST)와 가른다 — 같은 배치를 다시 보내도 계속 거부된다
+        verify(appendRunningTrackPort, never()).append(anyLong(), any(), anyList());
+        assertThatError(captureLastSent(session), "PAUSE_SEGMENT_DECREASED", "RUNNING_LOCATION_UPDATE");
     }
 
     @Test
@@ -1014,7 +1159,7 @@ class RunningWebSocketHandlerTest {
     // 누적이 주어진 값 그대로 판정에 쓰인다
     private void givenStoredDistance(double meters) {
         given(loadRunningDistancePort.loadDistance(anyLong(), any()))
-                .willReturn(new RunningDistance(meters, 0L, 35.1795543, 129.0756416, 345, null, null));
+                .willReturn(new RunningDistance(meters, 0L, 0, 35.1795543, 129.0756416, 345, null, null));
     }
 
     // 새 메시지 타입이 생겨도 연결이 끊기지 않는지 전수로 확인한다
@@ -1180,6 +1325,8 @@ class RunningWebSocketHandlerTest {
                 ROOM_ID,
                 LocalDateTime.of(2026, 7, 25, 19, 0),
                 TARGET_DISTANCE_METERS,
+                120L,
+                2,
                 List.of(new GetRunningSnapshotResult.Player(
                         USER_ID, "완두콩", "https://example.test/p.png", 1_520, 345,
                         LiveRunningStatus.RUNNING)),
