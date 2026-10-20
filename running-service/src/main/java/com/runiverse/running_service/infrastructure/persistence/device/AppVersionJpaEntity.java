@@ -28,9 +28,10 @@ import org.hibernate.annotations.Check;
         )
 )
 @Check(name = "ck_app_version_platform", constraints = "platform in ('IOS', 'ANDROID')")
+// AppVersion과 같은 규칙(부분마다 9자리까지) — DB가 받은 값은 서버도 읽을 수 있어야 한다
 @Check(name = "ck_app_version_format",
-        constraints = "minimum_version ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$' "
-                + "and latest_version ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'")
+        constraints = "minimum_version ~ '^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$' "
+                + "and latest_version ~ '^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$'")
 // 부분마다 정수로 비교한다 — 글자로 비교하면 1.10.0이 1.9.0보다 낮다
 @Check(name = "ck_app_version_order",
         constraints = "string_to_array(minimum_version, '.')::int[] "
