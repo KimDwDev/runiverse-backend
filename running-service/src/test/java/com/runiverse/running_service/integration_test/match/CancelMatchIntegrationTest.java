@@ -10,6 +10,7 @@ import com.runiverse.running_service.application.match.command.broadcast.Broadca
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
@@ -131,6 +132,7 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
                 runningStore,        // CreateMatchApplicationPort
                 matchRoomAssigner,
                 MATCH_PROPERTIES,
+                new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
                 eventPublisher
         );

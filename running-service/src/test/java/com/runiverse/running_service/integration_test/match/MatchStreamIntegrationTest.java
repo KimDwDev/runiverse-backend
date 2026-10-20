@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.match.command.stream.CloseMatch
 import com.runiverse.running_service.application.match.command.stream.OpenMatchStreamCommand;
 import com.runiverse.running_service.application.match.command.stream.OpenMatchStreamHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
@@ -123,6 +124,7 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
                 runningStore,                      // CreateMatchApplicationPort
                 matchRoomAssigner,
                 MATCH_PROPERTIES,
+                new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
                 eventPublisher
         );
