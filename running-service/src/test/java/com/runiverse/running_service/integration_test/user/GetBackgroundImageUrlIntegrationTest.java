@@ -5,6 +5,8 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpComma
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.user.command.backgroundimage.ChangeBackgroundImageCommand;
 import com.runiverse.running_service.application.user.command.backgroundimage.ChangeBackgroundImageHandler;
+import com.runiverse.running_service.application.user.command.backgroundimage.DeleteBackgroundImageCommand;
+import com.runiverse.running_service.application.user.command.backgroundimage.DeleteBackgroundImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageHandler;
 import com.runiverse.running_service.application.user.common.ImageContentType;
@@ -15,7 +17,6 @@ import com.runiverse.running_service.application.user.exception.ProfileNotFoundE
 import com.runiverse.running_service.application.user.query.backgroundimage.GetBackgroundImageUrlHandler;
 import com.runiverse.running_service.application.user.query.backgroundimage.GetBackgroundImageUrlQuery;
 import com.runiverse.running_service.application.user.query.backgroundimage.GetBackgroundImageUrlResult;
-import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
 import com.runiverse.running_service.integration_test.fake.FakeUploadedImageStore;
 import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
@@ -42,6 +43,7 @@ public class GetBackgroundImageUrlIntegrationTest extends IntegrationTestSupport
     private FakeViewUrlGenerator viewUrlGenerator;
     private ChangeBackgroundImageHandler changeBackgroundImageHandler;
     private ChangeProfileImageHandler changeProfileImageHandler;
+    private DeleteBackgroundImageHandler deleteBackgroundImageHandler;
     private GetBackgroundImageUrlHandler handler;
 
     @BeforeEach
@@ -57,6 +59,9 @@ public class GetBackgroundImageUrlIntegrationTest extends IntegrationTestSupport
         changeProfileImageHandler = new ChangeProfileImageHandler(
                 verifier,
                 userStore            // UpdateProfileImagePort
+        );
+        deleteBackgroundImageHandler = new DeleteBackgroundImageHandler(
+                userStore            // ClearBackgroundImagePort
         );
         handler = new GetBackgroundImageUrlHandler(
                 userStore,           // LoadUserByIdPort
@@ -138,14 +143,14 @@ public class GetBackgroundImageUrlIntegrationTest extends IntegrationTestSupport
     }
 
     @Test
-    @DisplayName("배경 연결을 끊으면 다시 URL 없이 답한다")
+    @DisplayName("배경을 삭제하면 다시 URL 없이 답한다")
     void returnsNullAfterBackgroundCleared() {
         // given
         UUID userId = signUp(EMAIL);
         registerImage(UserImageType.BACKGROUND, userId);
 
-        // when -> 삭제 핸들러가 부르는 포트를 직접 호출한다
-        userStore.clearBackgroundImage(new UserId(userId));
+        // when
+        deleteBackgroundImageHandler.handle(new DeleteBackgroundImageCommand(userId));
 
         // then
         assertThat(imageOf(userId).backgroundImageUrl()).isNull();
