@@ -23,6 +23,7 @@ presentation ──▶ [port/in] application [port/out] ◀── infrastructure
 domain/
   <domain>/             aggregate · vo · exception
   common/exception/     BusinessException · ErrorCode (도메인용)
+  common/vo/            UserId (여러 도메인 공용)
 
 application/
   <domain>/command/     상태를 바꾸는 유스케이스 — 기능별 Command · Handler · Result(선택)
@@ -30,16 +31,21 @@ application/
   <domain>/port/in/     *Usecase — Handler가 구현
   <domain>/port/out/    아웃바운드 인터페이스 · 전용 입출력 모델
   <domain>/exception/   외부 확인이 필요한 실패
+  <domain>/common/      도메인 안 여러 유스케이스가 함께 쓰는 부품
   common/exception/     BusinessException · ErrorCode (유스케이스용)
   common/port/out/      도메인에 매이지 않는 공통 아웃바운드 포트
 
-infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config
+infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config 등
+
 presentation/
   <domain>/             controller · request · response
+  <domain>/sse/         SSE 연결 · 설정
+  <domain>/websocket/   WebSocket 핸들러 · 연결 · 메시지
   common/exception/     GlobalExceptionHandler · *ErrorCode · ErrorExposurePolicy
   common/filter/        서블릿 필터와 그 등록 설정
   common/response/      ErrorResponse
   common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler
+  common/websocket/     WebSocketEnvelope
 
 observability/
   logging/              RequestIdFilter · MDC 키 상수 · 로그 태그
