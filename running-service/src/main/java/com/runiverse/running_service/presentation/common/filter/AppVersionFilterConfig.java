@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.appversion.filter;
+package com.runiverse.running_service.presentation.common.filter;
 
 import jakarta.servlet.DispatcherType;
 import org.springframework.boot.web.servlet.DelegatingFilterProxyRegistrationBean;

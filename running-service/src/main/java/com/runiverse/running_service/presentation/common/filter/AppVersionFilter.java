@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.appversion.filter;
+package com.runiverse.running_service.presentation.common.filter;
 
 import com.runiverse.running_service.application.appversion.port.in.CheckAppVersionUsecase;
 import com.runiverse.running_service.application.appversion.query.version.CheckAppVersionQuery;

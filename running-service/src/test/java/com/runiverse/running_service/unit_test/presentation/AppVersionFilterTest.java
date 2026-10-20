@@ -1,10 +1,10 @@
-package com.runiverse.running_service.unit_test.appversion.presentation;
+package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.appversion.port.in.CheckAppVersionUsecase;
 import com.runiverse.running_service.application.appversion.query.version.CheckAppVersionQuery;
 import com.runiverse.running_service.application.appversion.query.version.CheckAppVersionResult;
 import com.runiverse.running_service.observability.metrics.HttpRequestMetricsFilter;
-import com.runiverse.running_service.presentation.appversion.filter.AppVersionFilter;
+import com.runiverse.running_service.presentation.common.filter.AppVersionFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
