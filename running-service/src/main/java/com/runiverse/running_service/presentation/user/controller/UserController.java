@@ -63,7 +63,6 @@ import com.runiverse.running_service.presentation.user.request.NicknameUpdateReq
 import com.runiverse.running_service.presentation.user.request.OnboardingRequest;
 import com.runiverse.running_service.presentation.user.request.PasswordUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileImageUpdateRequest;
-import com.runiverse.running_service.presentation.user.request.ProfileImageUploadUrlRequest;
 import com.runiverse.running_service.presentation.user.request.ProfileUpdateRequest;
 import com.runiverse.running_service.presentation.user.request.SettingsUpdateRequest;
 import com.runiverse.running_service.presentation.user.response.BackgroundImageUpdateResponse;
@@ -218,7 +217,7 @@ public class UserController {
     @PostMapping("/me/profile-image/presigned-url")
     public ResponseEntity<ProfileImageUploadUrlResponse> createProfileImageUploadUrl(
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody ProfileImageUploadUrlRequest request
+            @Valid @RequestBody ImageUploadUrlRequest request
     ) {
         UUID userId = UUID.fromString(jwt.getSubject());
         CreateProfileImageUploadUrlResult result = createProfileImageUploadUrlUsecase.handle(
