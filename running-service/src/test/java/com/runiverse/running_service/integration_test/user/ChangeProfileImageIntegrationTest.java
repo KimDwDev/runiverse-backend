@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.user.command.profileimage.Chang
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageResult;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import com.runiverse.running_service.application.user.common.ImageContentType;
+import com.runiverse.running_service.application.user.common.UploadedImageVerifier;
 import com.runiverse.running_service.application.user.exception.InvalidProfileImageException;
 import com.runiverse.running_service.application.user.exception.ProfileImageNotUploadedException;
 import com.runiverse.running_service.integration_test.fake.FakeUploadedImageStore;
@@ -39,7 +40,7 @@ public class ChangeProfileImageIntegrationTest {
         uploadedImageStore = new FakeUploadedImageStore();
         profileImageStore = new InMemoryProfileImageStore();
         handler = new ChangeProfileImageHandler(
-                uploadedImageStore,  // LoadUploadedImagePort
+                new UploadedImageVerifier(uploadedImageStore),  // LoadUploadedImagePort
                 profileImageStore    // UpdateProfileImagePort
         );
     }

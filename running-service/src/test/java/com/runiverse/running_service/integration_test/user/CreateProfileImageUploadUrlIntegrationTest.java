@@ -4,6 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlCommand;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlHandler;
 import com.runiverse.running_service.application.user.command.profileimage.CreateProfileImageUploadUrlResult;
+import com.runiverse.running_service.application.user.common.ImageUploadUrlIssuer;
 import com.runiverse.running_service.integration_test.fake.FakeImageIdGenerator;
 import com.runiverse.running_service.integration_test.fake.FakeUploadUrlGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,8 +36,10 @@ public class CreateProfileImageUploadUrlIntegrationTest {
         imageIdGenerator = new FakeImageIdGenerator();
         uploadUrlGenerator = new FakeUploadUrlGenerator();
         handler = new CreateProfileImageUploadUrlHandler(
-                imageIdGenerator,  // GenerateImageIdPort
-                uploadUrlGenerator        // GenerateUploadUrlPort
+                new ImageUploadUrlIssuer(
+                        imageIdGenerator,   // GenerateImageIdPort
+                        uploadUrlGenerator  // GenerateUploadUrlPort
+                )
         );
     }
 
