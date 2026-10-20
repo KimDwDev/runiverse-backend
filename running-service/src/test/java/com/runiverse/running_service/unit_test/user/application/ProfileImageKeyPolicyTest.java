@@ -1,6 +1,5 @@
 package com.runiverse.running_service.unit_test.user.application;
 
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageContentType;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

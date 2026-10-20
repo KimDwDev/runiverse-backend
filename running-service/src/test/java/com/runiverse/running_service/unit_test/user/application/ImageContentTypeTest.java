@@ -1,12 +1,10 @@
 package com.runiverse.running_service.unit_test.user.application;
 
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageContentType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("프로필 이미지 형식 단위 테스트")

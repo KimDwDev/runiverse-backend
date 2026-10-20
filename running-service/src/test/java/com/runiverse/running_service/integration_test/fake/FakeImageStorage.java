@@ -1,7 +1,5 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.user.port.out.DeleteProfileImagesPort;
-
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

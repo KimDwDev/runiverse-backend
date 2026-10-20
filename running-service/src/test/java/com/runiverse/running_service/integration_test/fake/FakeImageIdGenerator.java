@@ -1,7 +1,5 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.user.port.out.GenerateProfileImageIdPort;
-
 import java.util.UUID;
 
 public class FakeProfileImageIdGenerator implements GenerateProfileImageIdPort {

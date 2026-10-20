@@ -2,7 +2,6 @@ package com.runiverse.running_service.unit_test.user.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.command.accountdeletion.DeletedUserRedactor;
-import com.runiverse.running_service.application.user.port.out.DeleteProfileImagesPort;
 import com.runiverse.running_service.application.user.port.out.RedactDeletedUserPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import org.junit.jupiter.api.DisplayName;

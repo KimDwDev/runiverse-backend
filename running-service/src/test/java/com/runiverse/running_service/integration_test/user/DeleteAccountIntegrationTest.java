@@ -7,7 +7,6 @@ import com.runiverse.running_service.application.user.command.accountdeletion.De
 import com.runiverse.running_service.application.user.command.accountdeletion.DeletedUserRedactor;
 import com.runiverse.running_service.application.user.command.accountdeletion.KakaoUnlinkRequestedEvent;
 import com.runiverse.running_service.application.user.command.accountdeletion.RedactDeletedUsersHandler;
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageContentType;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import com.runiverse.running_service.application.user.port.out.AccountSnapshot;
 import com.runiverse.running_service.domain.common.vo.UserId;

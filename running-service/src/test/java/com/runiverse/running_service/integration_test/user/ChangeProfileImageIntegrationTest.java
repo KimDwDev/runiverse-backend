@@ -4,7 +4,6 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageResult;
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageContentType;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import com.runiverse.running_service.application.user.exception.InvalidProfileImageException;
 import com.runiverse.running_service.application.user.exception.ProfileImageNotUploadedException;

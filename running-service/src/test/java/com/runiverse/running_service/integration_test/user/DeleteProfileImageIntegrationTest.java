@@ -5,7 +5,6 @@ import com.runiverse.running_service.application.user.command.profileimage.Chang
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.DeleteProfileImageHandler;
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageContentType;
 import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import com.runiverse.running_service.integration_test.fake.FakeUploadedImageStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryProfileImageStore;
