@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.device;
 
 import com.runiverse.running_service.domain.device.AppVersionPolicy;
-import com.runiverse.running_service.domain.device.vo.AppVersion;
 import com.runiverse.running_service.domain.device.vo.Platform;
+import com.runiverse.running_service.domain.device.vo.VersionName;
 import com.runiverse.running_service.infrastructure.persistence.device.AppVersionJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.device.AppVersionPersistenceAdapter;
 import jakarta.persistence.EntityManager;
@@ -54,8 +54,8 @@ class AppVersionPersistenceAdapterTest {
         verify(query).setParameter("platform", Platform.IOS);
         assertThat(policy).hasValueSatisfying(loaded -> {
             assertThat(loaded.getPlatform()).isEqualTo(Platform.IOS);
-            assertThat(loaded.getMinimumVersion()).isEqualTo(new AppVersion("1.1.0"));
-            assertThat(loaded.getLatestVersion()).isEqualTo(new AppVersion("1.2.0"));
+            assertThat(loaded.getMinimumVersion()).isEqualTo(new VersionName("1.1.0"));
+            assertThat(loaded.getLatestVersion()).isEqualTo(new VersionName("1.2.0"));
         });
     }
 

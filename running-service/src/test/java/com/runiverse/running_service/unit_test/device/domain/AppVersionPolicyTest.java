@@ -1,10 +1,10 @@
 package com.runiverse.running_service.unit_test.device.domain;
 
 import com.runiverse.running_service.domain.device.AppVersionPolicy;
-import com.runiverse.running_service.domain.device.exception.InvalidAppVersionFormatException;
+import com.runiverse.running_service.domain.device.exception.InvalidVersionNameFormatException;
 import com.runiverse.running_service.domain.device.exception.PlatformRequiredException;
-import com.runiverse.running_service.domain.device.vo.AppVersion;
 import com.runiverse.running_service.domain.device.vo.Platform;
+import com.runiverse.running_service.domain.device.vo.VersionName;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,23 +31,23 @@ public class AppVersionPolicyTest {
 
         // then
         assertThat(policy.getPlatform()).isEqualTo(Platform.ANDROID);
-        assertThat(policy.getMinimumVersion()).isEqualTo(new AppVersion("1.1.0"));
-        assertThat(policy.getLatestVersion()).isEqualTo(new AppVersion("1.2.0"));
+        assertThat(policy.getMinimumVersion()).isEqualTo(new VersionName("1.1.0"));
+        assertThat(policy.getLatestVersion()).isEqualTo(new VersionName("1.2.0"));
     }
 
     @Test
     @DisplayName("최소 버전보다 낮은 앱은 업데이트가 필요하다")
     void lowerThanMinimumRequiresUpdate() {
         // when & then
-        assertThat(policy("1.1.0", "1.2.0").requiresUpdate(new AppVersion("1.0.9"))).isTrue();
+        assertThat(policy("1.1.0", "1.2.0").requiresUpdate(new VersionName("1.0.9"))).isTrue();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"1.1.0", "1.1.5", "1.2.0", "2.0.0"})
     @DisplayName("최소 버전 이상이면 최신보다 낮아도 업데이트가 필요 없다")
-    void atOrAboveMinimumDoesNotRequireUpdate(String appVersion) {
+    void atOrAboveMinimumDoesNotRequireUpdate(String versionName) {
         // when & then -> 최신 미만은 닫을 수 있는 안내라 앱이 판정한다
-        assertThat(policy("1.1.0", "1.2.0").requiresUpdate(new AppVersion(appVersion))).isFalse();
+        assertThat(policy("1.1.0", "1.2.0").requiresUpdate(new VersionName(versionName))).isFalse();
     }
 
     @Test
@@ -66,6 +66,6 @@ public class AppVersionPolicyTest {
     void invalidVersionFails() {
         // when & then -> DB CHECK가 막지만 읽어 온 값도 VO를 거친다
         assertThatThrownBy(() -> policy("1.1", "1.2.0"))
-                .isInstanceOf(InvalidAppVersionFormatException.class);
+                .isInstanceOf(InvalidVersionNameFormatException.class);
     }
 }

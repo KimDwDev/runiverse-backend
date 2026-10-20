@@ -34,7 +34,7 @@ public class AppVersionFilter extends OncePerRequestFilter {
     public static final String APP_VERSION_HEADER = "X-App-Version";
 
     private static final Pattern PLATFORM_FORMAT = Pattern.compile("^(?i)(IOS|ANDROID)$");
-    // AppVersion과 같은 규칙 — 부분마다 9자리까지
+    // VersionName과 같은 규칙 — 부분마다 9자리까지
     private static final Pattern APP_VERSION_FORMAT =
             Pattern.compile("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$");
     // 구버전도 업데이트가 필요하다는 답을 받아야 한다

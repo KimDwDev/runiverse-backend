@@ -1,8 +1,8 @@
 package com.runiverse.running_service.domain.device;
 
 import com.runiverse.running_service.domain.device.exception.PlatformRequiredException;
-import com.runiverse.running_service.domain.device.vo.AppVersion;
 import com.runiverse.running_service.domain.device.vo.Platform;
+import com.runiverse.running_service.domain.device.vo.VersionName;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -12,8 +12,8 @@ import lombok.Getter;
 public class AppVersionPolicy {
 
     private final Platform platform;
-    private final AppVersion minimumVersion;
-    private final AppVersion latestVersion;
+    private final VersionName minimumVersion;
+    private final VersionName latestVersion;
 
     @Builder
     private AppVersionPolicy(Platform platform, String minimumVersion, String latestVersion) {
@@ -21,11 +21,11 @@ public class AppVersionPolicy {
             throw new PlatformRequiredException();
         }
         this.platform = platform;
-        this.minimumVersion = new AppVersion(minimumVersion);
-        this.latestVersion = new AppVersion(latestVersion);
+        this.minimumVersion = new VersionName(minimumVersion);
+        this.latestVersion = new VersionName(latestVersion);
     }
 
-    public boolean requiresUpdate(AppVersion appVersion) {
-        return appVersion.isLowerThan(minimumVersion);
+    public boolean requiresUpdate(VersionName versionName) {
+        return versionName.isLowerThan(minimumVersion);
     }
 }
