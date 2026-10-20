@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.user.command.accountdeletion;
 
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
+import com.runiverse.running_service.application.user.common.UserImageType;
 import com.runiverse.running_service.application.user.port.out.DeleteImagesPort;
 import com.runiverse.running_service.application.user.port.out.RedactDeletedUserPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -19,7 +19,9 @@ public class DeletedUserRedactor {
     @Transactional
     public void redact(UserId userId) {
         // 사진을 먼저 지운다 — 행을 먼저 비우면 다음 실행에서 걸리지 않아 사진만 영영 남는다
-        deleteImagesPort.deleteAllByPrefix(ProfileImageKeyPolicy.prefixOf(userId.value()));
+        for (UserImageType type : UserImageType.values()) {
+            deleteImagesPort.deleteAllByPrefix(type.prefixOf(userId.value()));
+        }
         redactDeletedUserPort.redact(userId);
     }
 }

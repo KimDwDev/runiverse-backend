@@ -4,9 +4,9 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageCommand;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageHandler;
 import com.runiverse.running_service.application.user.command.profileimage.ChangeProfileImageResult;
-import com.runiverse.running_service.application.user.command.profileimage.ProfileImageKeyPolicy;
 import com.runiverse.running_service.application.user.common.ImageContentType;
 import com.runiverse.running_service.application.user.common.UploadedImageVerifier;
+import com.runiverse.running_service.application.user.common.UserImageType;
 import com.runiverse.running_service.application.user.exception.InvalidProfileImageException;
 import com.runiverse.running_service.application.user.exception.ProfileImageNotUploadedException;
 import com.runiverse.running_service.integration_test.fake.FakeUploadedImageStore;
@@ -46,8 +46,8 @@ public class ChangeProfileImageIntegrationTest {
     }
 
     private static String keyOf(UUID owner) {
-        return ProfileImageKeyPolicy.create(
-                owner, UuidCreator.getTimeOrderedEpoch(), ImageContentType.JPEG).value();
+        return UserImageType.PROFILE.createKey(
+                owner, UuidCreator.getTimeOrderedEpoch(), ImageContentType.JPEG);
     }
 
     @Test
