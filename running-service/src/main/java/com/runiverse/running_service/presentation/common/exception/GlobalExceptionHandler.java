@@ -38,12 +38,13 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     // 유스케이스 예외
+    // 문구는 예외에서 꺼낸다 — 운영값으로 문구를 만드는 예외가 있다. 그 외에는 ErrorCode의 문구와 같다
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e, HttpServletRequest request) {
         ErrorCode errorCode = e.getErrorCode();
-        log.warn("업무 예외: {} - {}", errorCode.getCode(), errorCode.getMessage());
+        log.warn("업무 예외: {} - {}", errorCode.getCode(), e.getMessage());
         markReason(request, errorCode.getCode());
-        return respond(toStatus(errorCode), errorCode.getCode(), errorCode.getMessage());
+        return respond(toStatus(errorCode), errorCode.getCode(), e.getMessage());
     }
 
     // 도메인 검증 예외
