@@ -40,6 +40,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -107,7 +108,8 @@ class CancelMatchHandlerTest {
                 lockMatchApplicationPort, loadMatchRoomPort, lockMatchRoomPort,
                 loadMatchPlayersPort, updateMatchApplicationPort, updateMatchRoomPort, matchCooldownPort,
                 new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
-                        PACE_TIE_TOLERANCE, COOLDOWN),
+                        PACE_TIE_TOLERANCE, COOLDOWN,
+                        LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000)),
                 roomInfoAssembler, eventPublisher);
     }
 

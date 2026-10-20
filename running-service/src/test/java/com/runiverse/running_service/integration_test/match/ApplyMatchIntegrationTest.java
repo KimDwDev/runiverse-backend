@@ -49,6 +49,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -71,7 +72,8 @@ public class ApplyMatchIntegrationTest extends IntegrationTestSupport {
     private static final Duration FORCE_FINISH_OFFSET = Duration.ofHours(6);
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final MatchProperties MATCH_PROPERTIES = new MatchProperties(
-            CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET, 10, COOLDOWN);
+            CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET, 10, COOLDOWN,
+            LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;

@@ -34,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -57,7 +58,8 @@ class ForceFinishRunningRoomHandlerTest {
     // 강제 종료는 예약이 시각을 이미 판단했다 — 핸들러는 오프셋을 보지 않는다
     private static final MatchProperties PROPERTIES = new MatchProperties(
             Duration.ofMinutes(10), Duration.ofSeconds(10), Duration.ofHours(6),
-            10, MATCH_COOLDOWN);
+            10, MATCH_COOLDOWN,
+            LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
 
     private static final UserId RUNNER = new UserId(UuidCreator.getTimeOrderedEpoch());
     private static final UserId NO_SHOW = new UserId(UuidCreator.getTimeOrderedEpoch());
