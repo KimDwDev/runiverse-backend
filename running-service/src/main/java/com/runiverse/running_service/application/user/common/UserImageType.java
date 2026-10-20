@@ -8,6 +8,7 @@ import com.runiverse.running_service.application.user.exception.ProfileImageNotU
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.BackgroundImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
+import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 // 프로필·배경 사진이 다른 점은 여기에만 둔다 — 공유 컴포넌트는 종류로 분기하지 않는다
+@RequiredArgsConstructor
 public enum UserImageType {
 
     PROFILE(
@@ -34,16 +36,6 @@ public enum UserImageType {
     private final Supplier<BusinessException> invalid;
     private final Supplier<BusinessException> notUploaded;
     private final Function<User, Optional<String>> keyReader;
-
-    UserImageType(String keyPrefix,
-                  Supplier<BusinessException> invalid,
-                  Supplier<BusinessException> notUploaded,
-                  Function<User, Optional<String>> keyReader) {
-        this.keyPrefix = keyPrefix;
-        this.invalid = invalid;
-        this.notUploaded = notUploaded;
-        this.keyReader = keyReader;
-    }
 
     // 끝의 /까지 포함해야 userId 뒤에 다른 문자가 붙은 key를 막고, 탈퇴 시 지우는 범위도 유저 폴더로 한정된다
     public String prefixOf(UUID userId) {
