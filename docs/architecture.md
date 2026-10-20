@@ -36,6 +36,7 @@ application/
 infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config
 presentation/
   <domain>/             controller · request · response
+  <domain>/filter/      서블릿 필터와 그 등록 설정
   common/exception/     GlobalExceptionHandler · *ErrorCode · ErrorExposurePolicy
   common/response/      ErrorResponse
   common/security/      JwtAuthenticationEntryPoint · JwtAccessDeniedHandler
