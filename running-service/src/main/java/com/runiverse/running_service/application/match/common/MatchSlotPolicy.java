@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.match.common;
 
+import com.runiverse.running_service.application.match.exception.InvalidMatchOptionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -7,13 +8,17 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 // 매칭 신청 선택지 판정. 신청 검증과 슬롯 조회가 이 판정을 함께 써야 두 API의 선택지가 갈라지지 않는다
 @Component
 @RequiredArgsConstructor
 public class MatchSlotPolicy {
+
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final MatchProperties matchProperties;
 
@@ -27,6 +32,20 @@ public class MatchSlotPolicy {
 
     public boolean allowsDistance(int distanceMeters) {
         return matchProperties.allowedDistancesMeters().contains(distanceMeters);
+    }
+
+    // 신청 검증. 둘 다 어긋나면 두 문장을 한 번에 보낸다 — 하나 고치고 다시 보내야 나머지를 알게 하지 않는다
+    public void validate(LocalDateTime startAt, int distanceMeters) {
+        List<String> violations = new ArrayList<>();
+        if (!allowsStartAt(startAt)) {
+            violations.add(startTimeRule());
+        }
+        if (!allowsDistance(distanceMeters)) {
+            violations.add(distanceRule());
+        }
+        if (!violations.isEmpty()) {
+            throw new InvalidMatchOptionException(String.join(" ", violations));
+        }
     }
 
     // 그날의 신청 가능 시각, 오름차순
@@ -44,5 +63,20 @@ public class MatchSlotPolicy {
     private boolean isOnInterval(LocalTime time) {
         return Duration.between(matchProperties.allowedFirstStartTime(), time).toNanos()
                 % matchProperties.allowedStartTimeInterval().toNanos() == 0;
+    }
+
+    // 문구는 운영값으로 만든다 — 설정만 바꾸고 안내가 옛 값을 말하는 일이 없게 한다
+    private String startTimeRule() {
+        return "시작 시각은 %s부터 %s까지 %d분 간격으로만 선택할 수 있습니다.".formatted(
+                matchProperties.allowedFirstStartTime().format(TIME_FORMAT),
+                matchProperties.allowedLastStartTime().format(TIME_FORMAT),
+                matchProperties.allowedStartTimeInterval().toMinutes());
+    }
+
+    private String distanceRule() {
+        return "목표 거리는 %s 중 하나여야 합니다.".formatted(
+                matchProperties.allowedDistancesMeters().stream()
+                        .map(String::valueOf)
+                        .collect(Collectors.joining(", ")));
     }
 }
