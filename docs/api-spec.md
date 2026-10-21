@@ -140,34 +140,37 @@
 | 53 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
 | 54 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
 | 55 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
+| 56 | POST | `/api/v1/users/{userId}/block` | 유저 차단 — 사용 화면: 타인 프로필 |
+| 57 | DELETE | `/api/v1/users/{userId}/block` | 차단 해제 — 사용 화면: 차단 목록 |
+| 58 | GET | `/api/v1/users/me/blocks` | 내 차단 목록 |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 56 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 57 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 58 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 59 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 60 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
-| 61 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
-| 62 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
-| 63 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 64 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 65 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 66 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 67 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 59 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 60 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 61 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 62 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 63 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
+| 64 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
+| 65 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
+| 66 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 67 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 68 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 69 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 70 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 68 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 69 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 70 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 71 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 71 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 72 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 70개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 73개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -2980,6 +2983,34 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 상대의 페이스 값은 싣지 않는다
 - **페이지를 나누지 않는다** — 총 인원이 운영값으로 묶여 있다. 후보가 없으면 빈 배열이다
 - 온보딩 전이면 페이스 갈래는 비고 함께 뛴 사람만 나온다
+- **인증**: 필요
+
+### 10-12. `POST /api/v1/users/{userId}/block` — 차단 / `DELETE` — 차단 해제
+
+- **화면**: 차단은 타인 프로필, 해제는 차단 목록(10-13)
+- **차단은 유저가 아니라 나와 그 사람 사이의 관계다** — 유저 리소스(`/users/{userId}`)를 지우는 것이 아니라 하위 리소스 `block`을 만들고 지운다. `DELETE /users/me`(회원탈퇴)와 모양이 겹치지 않게 하려는 것이기도 하다
+- **토글형 액션이다**(`api-convention.md` 응답 형태) — 이미 차단한 사람을 다시 차단해도, 차단하지 않은 사람을 해제해도 성공한다
+- **Request 본문이 없다**
+- **Response `204 No Content`** — 차단·해제 모두
+- **차단했을 때 일어나는 일(친구 관계·요청·초대 정리, 상대에게 보이는 방식, 양방향 여부)은 차단 구현 때 정한다** — 정해진 방향은 `feature-spec.md` 차단 절(프로필 안 보임·초대 불가·친구 목록 보기 불가)
+- **에러 (400 Bad Request)**: `CANNOT_BLOCK_SELF` — 자기 자신은 차단할 수 없다(차단만 해당)
+- **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
+
+```json
+{
+  "code": "CANNOT_BLOCK_SELF",
+  "message": "자기 자신은 차단할 수 없습니다."
+}
+```
+
+- **인증**: 필요
+
+### 10-13. `GET /api/v1/users/me/blocks` — 차단 목록
+
+- **화면**: 설정 또는 프로필의 차단 목록 — 해제(10-12 `DELETE`)의 진입점이다
+- **내가 차단한 사람만 담는다** — 나만 보는 목록이라 `/me`다. 나를 차단한 사람은 담지 않는다
+- **Query**: `cursor`/`limit` — 최근에 차단한 순
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
 - **인증**: 필요
 
 ## 11. 프로필 편집 페이지
