@@ -23,24 +23,33 @@
 | 9 | POST | `/api/v1/auth/logout` | 로그아웃 — access 토큰 서버 차단(블랙리스트) + 리프레시 토큰 삭제 — 사용 화면: 설정 페이지 |
 | 10 | POST | `/api/v1/users/onboarding` | 온보딩 입력 (닉네임 포함, 1회성) |
 
-### 2. 공통 — 디바이스/푸시 · 유저 상태 · 앱 버전
+### 2. 공통 — 디바이스/푸시 · 유저 상태 · 앱 버전 · 알림
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 11 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
 | 12 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 | 13 | GET | `/api/v1/app/version` | 플랫폼별 최소·최신 앱 버전 — 업데이트 강제·안내 판정, 인증 불필요 — 사용 화면: 앱 진입(스플래시)·포그라운드 복귀 |
+| 14 | GET | `/api/v1/users/me/notifications` | 인앱 알림 목록 (최신순, 항목별 현재 상태 포함) — 사용 화면: 알림함 |
+| 15 | GET | `/api/v1/users/me/notifications/unread-count` | 안 읽은 알림 수 — 하단 탭 배지 — 사용 화면: 전역 |
+| 16 | POST | `/api/v1/users/me/notifications/read` | 알림 모두 읽음 — 알림함을 열 때 |
 
 ### 3. 홈 화면
 
 - 날씨: 서버 API 없음 — 클라이언트가 직접 호출 (상세 3번)
 - 매칭 시작·취소: REST (아래 5번). 대기 현황은 SSE 스트림으로 수신
 
-### 4. 매칭완료 대기방
+### 4. 매칭완료 대기방 · 초대 러닝 (초대 페이지 / 초대 방)
 
-- 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번)
-- 나가기: `DELETE /api/v1/running-matches`
-- 친구 초대 **[MVP 제외]**: 엔드포인트 미정 (상세 4번)
+- 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번) — 초대 방도 같은 스트림을 쓰며 초대 현황이 `RoomInfo`에 실린다
+- 나가기: `DELETE /api/v1/running-matches` — 초대 방도 같다
+
+| # | Method | Path | 설명 |
+|---|--------|------|------|
+| 17 | POST | `/api/v1/running-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
+| 18 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
+| 19 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
+| 20 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/decline` | 초대 거절 — 사용 화면: 알림함 |
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -50,11 +59,11 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 14 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 15 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 16 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 17 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
-| 18 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 21 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 22 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 23 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 24 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
 
@@ -81,83 +90,85 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 19 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
-| 20 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
+| 26 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
+| 27 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
+| 28 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 22 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 23 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 24 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 25 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 26 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 27 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 28 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 29 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 30 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 31 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 32 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 29 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 30 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 31 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 32 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 33 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 34 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 35 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 36 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 37 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 38 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 39 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 33 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 34 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 35 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 36 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 40 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 41 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 42 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 43 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 37 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 38 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
-| 39 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 40 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 41 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 42 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
-| 43 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 44 | GET | `/api/v1/users/me/friends` | 내 친구 목록 (+이름 검색) |
-| 45 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 46 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 47 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 44 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 45 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 46 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 47 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 48 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 49 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 50 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 51 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인·타인 공통 |
+| 52 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
+| 53 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 54 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 55 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
+| 56 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 48 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 49 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 50 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 51 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 52 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
-| 53 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
-| 54 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
-| 55 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 56 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 57 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 58 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 59 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 57 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 58 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 59 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 60 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 61 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
+| 62 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
+| 63 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
+| 64 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 65 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 66 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 67 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 68 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 60 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 61 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 62 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 63 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 69 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 70 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 71 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 72 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 62개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 71개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -176,6 +187,7 @@
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
   - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
+- **친구 상태 `friendStatus`**: `NONE` | `PENDING_SENT` | `PENDING_RECEIVED` | `ACCEPTED` — 언제나 **조회하는 사람 기준**이다. 대상이 본인이면 `null`이다(10-2·10-7·10-9·2-4가 같은 값을 쓴다).
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "01a0f2d4-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-10·11-11)은 보낸 필드만 담는다 — 11-10에서 보내지 않은 필드는 키째 빠진다(11-2·11-11·11-6은 필드가 하나뿐이다).
@@ -950,7 +962,7 @@
 ```json
 {
   "status": "RUNNING",                          // IDLE | WAITING | READY | RUNNING
-  "type": "MATCH",                              // MATCH | SOLO — status가 IDLE이면 null
+  "type": "MATCH",                              // MATCH | SOLO | INVITE — status가 IDLE이면 null
   "runningRoomId": 125,                         // status가 IDLE이면 null
   "scheduledStartAt": "2026-07-25T19:00:00",    // status가 IDLE이면 null
   "targetDistanceMeters": 5000,                 // status가 IDLE이거나 목표 없는 솔로 방이면 null
@@ -964,7 +976,7 @@
 |---|---|---|
 | `IDLE` | 활성 신청이 없음 | 홈. `cooldownUntil`이 있으면 매칭 버튼에 남은 시간을 표시 |
 | `WAITING` | 방이 `MATCHING`이고 모집 마감 전 | 매칭 스트림 연결 — 방 정보는 연결 직후 `RoomInfo` 스냅샷이 나른다 |
-| `READY` | 방이 `MATCHED` | `MATCH`면 스트림 연결 + 카운트다운, `SOLO`면 곧바로 WS `RUNNING_START` |
+| `READY` | 방이 `MATCHED` | `MATCH`·`INVITE`면 스트림 연결 + 카운트다운, `SOLO`면 곧바로 WS `RUNNING_START` |
 | `RUNNING` | 방이 `STARTED` | WS 연결 → `RUNNING_START` → 로컬 트랙 재전송 |
 
 - **마감이 지난 `MATCHING` 방은 `READY`로 답한다.** 확정 예약이 아직 깨지 않은 틈에 조회하면 방은 `MATCHING`이지만 곧 확정될 자리다 — 대기 화면을 그리게 두면 잠시 뒤 화면이 다시 바뀐다. 매칭 취소가 방 상태가 아니라 마감 시각으로 분기하는 것과 같은 이유다
@@ -972,8 +984,8 @@
 - **방 정보를 담지 않는다.** 참가자 목록·팀 평균 페이스·모집 마감 시각은 방의 속성이고, 매칭 중에는 스트림이 `RoomInfo`로, 러닝 중에는 `RUNNING_STARTED` ack가 나른다. 여기 실으면 같은 값이 두 경로로 내려가 어긋날 여지가 생긴다
   - 다만 `scheduledStartAt`·`targetDistanceMeters`는 담는다 — 러닝 중 복구에서 경과 시간·목표를 그리는 데 필요하고, 방 정보를 조립하지 않고도 한 행에서 나온다
   - 두 값 모두 **`running_rooms` 쪽이 정본이다.** `running_players.target_distance`는 NOT NULL이라 목표 없는 솔로에도 값이 들어가므로, `null`을 그대로 보내려면 방의 값을 써야 한다
-- **`type`에 `INVITE`는 나가지 않는다** — 미래 예약값이라 계약에 포함하지 않는다
-- **`WAITING`은 `MATCH`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
+- **`type`이 `INVITE`면 초대 방이다** — 상태 판정과 클라가 할 일은 `MATCH`와 같다(초대 방 화면을 그릴지만 가른다). 초대를 받기만 한 사람은 활성 신청이 없어 `IDLE`이다
+- **`WAITING`은 `MATCH`·`INVITE`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
 - **인증**: 필요
 
 ### 2-3. `GET /api/v1/app/version` — 앱 버전 확인
@@ -1025,18 +1037,230 @@
 
 - **인증**: 불필요
 
+### 2-4. `GET /api/v1/users/me/notifications` — 인앱 알림 목록
+
+- **화면**: 알림함
+- **Query**: `cursor`/`limit` — 최신순
+- **Response `200 OK`**
+
+```json
+{
+  "items": [
+    {
+      "notificationId": 912,
+      "type": "RUNNING_INVITED",            // FRIEND_REQUESTED | FRIEND_ACCEPTED | RUNNING_INVITED
+      "isRead": false,
+      "createdAt": "2026-07-25T12:03:00",
+      "actor": {
+        "userId": "01a0f2d4-6180-7000-8000-446655440013",
+        "nickname": "철수",
+        "profileImageUrl": "https://...",
+        "isDeleted": false
+      },
+      "friendStatus": null,                 // FRIEND_* 알림만 — 지금 actor와의 친구 상태
+      "invitation": {                       // RUNNING_INVITED만
+        "runningRoomInvitationId": 31,
+        "runningRoomId": 130,
+        "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | EXPIRED — 지금 상태
+        "scheduledStartAt": "2026-07-25T19:30:00",
+        "targetDistanceMeters": 7000
+      }
+    }
+  ],
+  "nextCursor": "..."
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `type` | String | O | 알림 종류 — erd §6 `notifications.type` |
+| `isRead` | Boolean | O | 읽음 여부 |
+| `actor` | Object | O | 알림을 일으킨 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
+| `friendStatus` | String | X | `FRIEND_REQUESTED`·`FRIEND_ACCEPTED`일 때 **지금** actor와의 친구 상태(§0). `RUNNING_INVITED`면 `null` |
+| `invitation` | Object | X | `RUNNING_INVITED`일 때만 있고 그 밖에는 `null` |
+| `invitation.status` | String | O | 초대의 **지금** 상태 — `PENDING`이면 수락·거절 버튼을 그린다 |
+
+- **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `friendStatus`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
+  - 친구 요청 알림: `PENDING_RECEIVED`면 수락(10-6)·거절(10-5) 버튼, 그 밖이면 결과만 보여준다
+  - 초대 알림: `PENDING`이면 수락(4-3)·거절(4-4) 버튼, `ACCEPTED`면 탭하면 초대 방으로 간다
+- **보관 기간(운영값)이 지난 알림은 나오지 않는다**
+- **이 조회는 읽음 처리를 하지 않는다** — 읽음은 2-6이 한다
+- **인증**: 필요
+
+### 2-5. `GET /api/v1/users/me/notifications/unread-count` — 안 읽은 알림 수
+
+- **화면**: 전역 — 하단 탭 배지
+- **Response `200 OK`**: `{ "unreadCount": 3 }`
+- **실시간으로 밀어 주지 않는다** — 앱 진입·포그라운드 복귀·탭 전환 때 클라가 다시 묻는다. 전원에게 스트림을 열지 않는다는 원칙(5-A 매칭 상태 복원)과 같은 이유다
+- 보관 기간이 지난 알림은 세지 않는다
+- **인증**: 필요
+
+### 2-6. `POST /api/v1/users/me/notifications/read` — 알림 모두 읽음
+
+- **화면**: 알림함 — 열 때 한 번 호출한다
+- 본인의 안 읽은 알림을 모두 읽음으로 바꾼다. 항목별 읽음 처리는 두지 않는다
+- 안 읽은 알림이 없어도 성공한다
+- **Response `204 No Content`**
+- **인증**: 필요
+
 ## 3. 홈 화면 — 날씨
 
 홈 화면 날씨는 클라이언트가 키 없는 무료 날씨 API를 직접 호출한다. 서버 API는 없다.
 
-## 4. 친구 초대 [MVP 제외]
+## 4. 초대 러닝
 
-엔드포인트와 방 생명주기는 정의하지 않는다. `INVITE`·`INVITED`는 미래 예약값이다.
+친구끼리 시각·거리를 정해 뛰는 방이다. **방이 생기는 방식(4-1)과 사람이 들어오는 방식(4-2~4-4)만 매칭과 다르고, 그 밖은 매칭 방과 같은 경로를 탄다** — 방 정보는 매칭 스트림의 `RoomInfo`(5-B)로 받고, 나가기는 `DELETE /running-matches`(5-A), 카운트다운·러닝은 5-C·5-D 그대로다. 생명주기 근거는 `feature-spec.md` 초대 러닝 생명주기 절.
 
-- 초대방은 `running_rooms.type='INVITE'`로 새로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)에 잡히면 모르는 사람이 배정된다.
-- 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다.
-- 초대 발송 수는 제한하지 않는다.
-- 방은 최대 4명이며 먼저 수락한 순서대로 입장시키고 이후 수락은 막는다.
+- 초대 방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)과 슬롯별 대기 인원 집계에 잡히지 않는다.
+- 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다. 초대 수는 제한하지 않는다.
+- 방은 최대 4명이며 먼저 수락한 순서대로 입장시키고, 자리가 차면 이후 수락은 막는다.
+- **매칭 방에서는 초대할 수 없다** — 4-2는 초대 방이 아니면 404다.
+
+### 4-1. `POST /api/v1/running-rooms/invite` — 초대 방 개설
+
+- **화면**: 초대 페이지
+- **Request**
+
+```json
+{
+  "scheduledStartAt": "2026-07-25T07:30:00",
+  "targetDistanceMeters": 7000
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `scheduledStartAt` | String | O | KST 시작 시각. **분 단위**(초는 `00`). 선택지가 아니라 자유 입력이다 |
+| `targetDistanceMeters` | Integer | O | 목표 거리(m). 운영 설정의 최소·최대 거리 사이 |
+
+- **시각·거리를 선택지로 좁히지 않는다** — 매칭(5-A)과 다른 점이다. 범위만 운영 설정으로 막는다
+  - 거리가 범위를 벗어나거나 시각이 분 단위가 아니면 `400 INVALID_REQUEST`
+  - 시작 시각은 "지금 + 모집 마감 오프셋 + 최소 모집 시간" 이후, "지금 + 최대 예약 기간" 이전이어야 한다 — 벗어나면 `409 INVITE_START_AT_OUT_OF_RANGE`. 지금 시각에 따라 갈리는 판정이라 요청 검증이 아니다(매칭의 `MATCH_SLOT_CLOSED`와 같다)
+- **동작**: 방을 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다. 예약도 매칭 방과 같게 건다
+- 페이스는 온보딩 값을 쓴다(매칭과 같다)
+- **매칭 쿨다운 중에도 만들 수 있다** — 쿨다운은 매칭 신청만 막는다
+- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다 — 연결 직후 `RoomInfo` 스냅샷이 온다
+- **Response `201 Created`**
+
+```json
+{
+  "runningRoomId": 130
+}
+```
+
+- **에러 (409 Conflict)**
+  - `INVITE_START_AT_OUT_OF_RANGE` — 시작 시각이 만들 수 있는 범위 밖이다
+  - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 신청(매칭·초대 방)이 있다
+  - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
+
+```json
+{
+  "code": "INVITE_START_AT_OUT_OF_RANGE",
+  "message": "선택할 수 없는 시작 시각입니다."
+}
+```
+
+- **인증**: 필요
+
+### 4-2. `POST /api/v1/running-rooms/{runningRoomId}/invitations` — 친구 초대
+
+- **화면**: 초대 방 — 친구 초대 버튼에서 여러 명을 골라 한 번에 보낸다
+- **Request**
+
+```json
+{
+  "inviteeIds": [
+    "01a0f2d4-6180-7000-8000-446655440013",
+    "01a0f2d4-6180-7000-8000-446655440021"
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `inviteeIds` | String[] | O | 초대할 친구의 `userId`. 1~50명, 중복은 하나로 본다 |
+
+- **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 모두 친구(`ACCEPTED`)여야 한다
+  - **이미 대기중이거나 이미 방에 들어와 있는 사람은 건너뛴다** — 오류가 아니다. 응답 `invitations`에서 빠진다
+  - **친구가 아닌 사람이 하나라도 섞이면 아무에게도 보내지 않는다**(`409 NOT_FRIEND`) — 화면에서 고른 목록이 친구 목록이라 섞였다면 그사이 관계가 바뀐 것이다. 다시 고르게 한다
+  - 거절했거나 수락 뒤 나간 친구는 같은 초대를 `PENDING`으로 되살린다
+- **부수 효과**: 초대받은 사람마다 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
+- **Response `201 Created`** — 이번 요청으로 `PENDING`이 된 초대만 담는다
+
+```json
+{
+  "invitations": [
+    { "runningRoomInvitationId": 31, "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING" }
+  ]
+}
+```
+
+- **에러 (404 Not Found)**: 방이 없거나, 초대 방이 아니거나, 호출자가 이 방의 현재 참가자가 아니다
+- **에러 (409 Conflict)**
+  - `RUNNING_INVITATION_CLOSED` — 모집 중인 방이 아니거나 모집 마감이 지났다
+  - `NOT_FRIEND` — 친구가 아닌 사람이 섞여 있다
+
+```json
+{
+  "code": "RUNNING_INVITATION_CLOSED",
+  "message": "초대를 받을 수 없는 방입니다."
+}
+
+{
+  "code": "NOT_FRIEND",
+  "message": "친구에게만 초대를 보낼 수 있습니다."
+}
+```
+
+- **인증**: 필요
+
+### 4-3. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/accept` — 초대 수락
+
+- **화면**: 알림함 (초대 알림의 수락 버튼)
+- **Request 본문이 없다**
+- **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 초대를 `ACCEPTED`로 바꾼다. 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다
+  - **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 순서를 정한다
+  - 매칭 쿨다운 중에도 수락할 수 있다
+- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다
+- **Response `201 Created`**
+
+```json
+{
+  "runningRoomId": 130
+}
+```
+
+- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (409 Conflict)** — 판정 순서대로
+  - `RUNNING_INVITATION_CLOSED` — 만료됐거나(모집 마감·방 취소) 방이 모집 중이 아니다
+  - `RUNNING_INVITATION_NOT_PENDING` — 이미 수락했거나 거절한 초대다. 거절 뒤 다시 들어가려면 다시 초대받아야 한다
+  - `RUNNING_ROOM_FULL` — 자리가 다 찼다. **초대는 `PENDING`으로 남는다** — 누가 나가면 다시 수락할 수 있다
+  - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 신청이 있다
+  - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
+
+```json
+{
+  "code": "RUNNING_INVITATION_NOT_PENDING",
+  "message": "이미 응답한 초대입니다."
+}
+
+{
+  "code": "RUNNING_ROOM_FULL",
+  "message": "방이 가득 찼습니다."
+}
+```
+
+- **인증**: 필요
+
+### 4-4. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/decline` — 초대 거절
+
+- **화면**: 알림함 (초대 알림의 거절 버튼)
+- **Request 본문이 없다**
+- 초대를 `DECLINED`로 바꾸고 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다 — 방 화면에 "거절"이 보인다. **행을 지우지 않는다**(친구 요청 거절과 다르다)
+- **Response `204 No Content`**
+- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (409 Conflict)**: `RUNNING_INVITATION_NOT_PENDING` — 대기중인 초대가 아니다(이미 응답했거나 만료됐다)
+- **인증**: 필요
 
 ## 5. 매칭·러닝 실시간 통신
 
@@ -1082,7 +1306,7 @@
 #### `GET /api/v1/running-matches/stream` — 매칭 이벤트 스트림 (SSE)
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
-- **연결 시점**: 매칭 신청 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
+- **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.
   - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.**
@@ -1099,7 +1323,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 이벤트 | 시점 |
 |---|---|
 | `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
-| `MATCH_ROOM_UPDATED` | 인원 변동·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다 |
+| `MATCH_ROOM_UPDATED` | 인원 변동·초대 현황 변동(초대 방)·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 각 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다.
@@ -1308,11 +1532,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### 공통 객체 `RoomInfo` — 매칭방 전체 정보
 
-두 SSE 이벤트가 아래 **같은 구조를 싣는다** — `data`가 완전히 동일하고 이벤트 이름만 다르다.
+두 SSE 이벤트가 아래 **같은 구조를 싣는다** — `data`가 완전히 동일하고 이벤트 이름만 다르다. **초대 방(4번)도 같은 객체다** — 이벤트 이름의 `MATCH`는 매칭 단계를 뜻하며 방 종류는 `type`이 가른다.
 
 ```json
 {
   "runningRoomId": 125,
+  "type": "MATCH",                   // MATCH | INVITE
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED는 현재 내려오지 않는다(받으면 홈으로)
   "scheduledStartAt": "2026-07-25T19:00:00",
   "closeAt": "2026-07-25T18:50:00",  // 모집 마감 시각 — start_at - 오프셋(운영값, 현재 10분) 계산값
@@ -1335,9 +1560,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "averagePaceSecondsPerKm": 390,
       "isDeleted": false
     }
-  ]
+  ],
+  "invitations": []                  // 초대 방의 초대 현황 — 매칭 방은 항상 빈 배열
 }
 ```
+
+- **`invitations`** — 초대 방에서 아직 참가자가 아닌 초대만 담는다
+
+```json
+"invitations": [
+  {
+    "runningRoomInvitationId": 31,
+    "userId": "01a0f2d4-6180-7000-8000-446655440021",
+    "nickname": "영희",
+    "profileImageUrl": "https://...",
+    "status": "PENDING",             // PENDING | DECLINED
+    "isDeleted": false
+  }
+]
+```
+
+  - `PENDING`(대기중)·`DECLINED`(거절)만 나간다. 수락하면 `players`로 옮겨 가고, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다
+  - 상태가 바뀔 때마다(초대·수락·거절) `MATCH_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
 
 - **참가자별 `status`는 내려보내지 않는다** — 이탈자는 배정 행이 `is_connected=false`가 되어 목록에서 빠지므로 남아 있는 참가자는 아직 끝나지 않은 참가자(`JOINED`·`RUNNING`)다. 방의 진행 단계는 위 `status`가 나른다
 - **탈퇴한 참가자는 목록에서 빠진다** — 시작 전 탈퇴는 일반 취소처럼 방에서 빠지며 인원도 줄고, 시작 후 탈퇴는 배정이 끊겨 목록에서 빠진다(접속 전이었으면 인원도 준다). `isDeleted`는 §0 공통 형식이라 계약에 남지만 이 목록에서는 현재 항상 `false`다
@@ -1351,7 +1595,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - `data` = `RoomInfo` 전체 재전송. **인원 변동과 연결 직후 스냅샷이 이 이벤트로 나간다** — 모집 중 참가·이탈뿐 아니라 확정 후 이탈, 시작 후 미접속자(`JOINED`)의 취소·탈퇴로 인원이 줄 때도 나간다
 - **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 `start_at` 정각의 시작 스케줄러가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
-- 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`와 `players`가 말해주므로 이벤트를 더 쪼개지 않는다
+- 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`·`players`·`invitations`가 말해주므로 이벤트를 더 쪼개지 않는다
 
 | `status` | 클라가 할 일 |
 |---|---|
@@ -2010,7 +2254,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "runningRecordId": 501,
       "runningRoomId": 125,           // 항상 값이 있다
-      "type": "MATCH",                // MATCH | SOLO
+      "type": "MATCH",                // MATCH | SOLO | INVITE
       "playerCount": 3,               // 이 러닝을 시작한 인원(본인 포함)
       "startedAt": "2026-07-25T19:00:30",
       "totalDistanceMeters": 5020,
@@ -2025,7 +2269,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
 - **숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 빠진다** — 6-1·6-2가 그 방을 404로 보는 것과 맞춘다. 숨김은 [MVP 제외]라 지금은 해당하는 방이 없다
 - **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
-- **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝이다. `INVITE`는 [MVP 제외] 예약값이라 나오지 않는다
+- **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝, `INVITE`는 초대 러닝이다
 - **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
 - **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
 - **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
@@ -2501,6 +2745,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `friendStatus`로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
+- **배경 사진은 싣지 않는다** — 11-7이 따로 내린다(프로필 사진과 같은 이유로 presigned URL을 표시 시점에 받는다)
+- 친구 목록(10-7)·업적(10-10)은 각자의 API로 받는다
 
 - **에러 (404 Not Found — 탈퇴 포함)**
 
@@ -2543,8 +2789,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `friendships`에 `(요청자, 대상, PENDING)` 행을 만들고 대상에게 "친구 요청 도착" 푸시를 보낸다
-- **역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`다
+- `friendships`에 `(요청자, 대상, PENDING)` 행을 만들고 대상에게 "친구 요청 도착" 인앱 알림(`FRIEND_REQUESTED`, 2-4)을 쌓고 푸시를 보낸다
+- **역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`이고, 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
 - **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
 - **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
 - **에러 (404 Not Found)**: 대상이 없다
@@ -2572,7 +2818,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 10-6. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
 
-- **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 푸시를 보낸다
+- **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 인앱 알림(`FRIEND_ACCEPTED`)을 쌓고 푸시를 보낸다
   - **Response `201 Created`**: `{ "friendStatus": "ACCEPTED" }`
   - **에러 (404 Not Found)**: 받은 요청이 없다
 - **DELETE(친구 삭제)**: **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 이력을 남기지 않는다
@@ -2587,14 +2833,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
 > | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
 
-### 10-7. `GET /api/v1/users/me/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
+### 10-7. `GET /api/v1/users/{userId}/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
 
-- **화면**: 친구 목록 페이지 (친구 탭 + 받은 요청 탭)
-- **둘 다 본인 것만 조회한다.** 타인의 친구 목록은 열지 않는다(근거는 `feature-spec.md` 친구 목록 페이지 절). 타인 프로필에는 **친구 수만** 표시된다
+- **화면**: 친구 목록 페이지(본인 — 친구 목록 + 추천 친구 + 받은 요청) / 타인 프로필의 친구 목록
+- **친구 목록은 타인 것도 조회한다** — 프로필의 친구 수를 누르면 그 사람의 목록이 열린다(`feature-spec.md` 프로필 페이지 절). 본인 목록은 본인 `userId`로 부른다. `profile_visibility`로 가리지 않는다
+- **받은 요청 목록은 본인 것만 조회한다**
 - **Query**: `q`(이름 필터, 친구 목록만), `cursor`/`limit`
-- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
-- 친구 목록은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 본인인 행이다
+- **Response `200 OK`**
+  - 친구 목록: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
+  - 받은 요청: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
+- **친구 목록의 `friendStatus`는 조회하는 사람 기준이다**(§0) — 타인의 목록에서 바로 친구 요청 버튼을 그리게 한다. 본인 목록이면 전부 `ACCEPTED`이고, 목록에 조회자 본인이 있으면 그 항목은 `null`이다
+- 친구 목록은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 대상인 행이다
 - 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
+- **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
 - **인증**: 필요
 
 ### 10-8. `GET /api/v1/users/{userId}/colors` — 컬러 컬렉션 [MVP 제외]
@@ -2653,6 +2904,69 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **Query**: `q`(필수, 닉네임), `cursor`/`limit`
 - **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
 - `friendStatus`는 10-2와 같은 값이며, 버튼을 무엇으로 그릴지가 이 값에 달렸다
+- **인증**: 필요
+
+### 10-10. `GET /api/v1/users/{userId}/achievements` — 업적
+
+- **화면**: 프로필 (본인/타인 공통) — 10칸 중 활성 업적 4개를 그리고, 나머지 6칸은 클라가 비활성(준비중)으로 채운다
+- **Response `200 OK`**
+
+```json
+{
+  "achievements": [
+    { "type": "TOTAL_DISTANCE",      "level": 2, "maxLevel": 5, "thresholds": [10000, 50000, 100000, 300000, 1000000] },
+    { "type": "BEST_PACE",           "level": 1, "maxLevel": 4, "thresholds": [420, 360, 300, 240] },
+    { "type": "BEST_COMBO",          "level": 0, "maxLevel": 4, "thresholds": [10, 30, 60, 120] },
+    { "type": "MATCH_RUNNING_COUNT", "level": 3, "maxLevel": 5, "thresholds": [1, 5, 10, 30, 100] }
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `type` | String | O | 업적 종류 — 아래 표 |
+| `level` | Integer | O | 달성한 단계. 하나도 못 넘었으면 `0` |
+| `maxLevel` | Integer | O | 최대 단계 = `thresholds` 길이 |
+| `thresholds` | Integer[] | O | 단계 기준값(1단계부터). 단위는 업적마다 다르다 — 아래 표 |
+
+| `type` | 판정 값 | `thresholds` 단위 | 넘은 것으로 보는 조건 |
+|---|---|---|---|
+| `TOTAL_DISTANCE` | 누적 거리 | 미터 | 값 ≥ 기준값 |
+| `BEST_PACE` | 최고 페이스 | 초/km | 값 ≤ 기준값 (빠를수록 작다) |
+| `BEST_COMBO` | 최고 콤보 | 회 | 값 ≥ 기준값 |
+| `MATCH_RUNNING_COUNT` | 매칭 러닝 횟수 | 회 | 값 ≥ 기준값 |
+
+- **판정 값 자체는 싣지 않는다** — 프로필은 수치 통계를 보여주지 않기로 해서(`feature-spec.md` 프로필 페이지 절) 단계만 내린다. 기준값은 배지 이름("10km")과 다음 목표를 그리는 데 쓴다
+- 판정 규칙(어떤 기록을 세는지)은 `feature-spec.md` 업적 절이 정본이다. 저장하지 않고 조회할 때 계산한다
+- **기준값·단계 수는 운영 설정이다** — 위 숫자는 형식 예시다. 클라는 단계 수를 하드코딩하지 않고 `maxLevel`·`thresholds`를 그대로 쓴다
+- **항목 순서는 위 표 순서로 고정한다.** 업적이 늘면 뒤에 붙고 클라는 빈칸을 줄인다 — 모르는 `type`은 건너뛴다
+- 기록이 없거나 온보딩 전인 사용자는 전부 `level: 0`이다
+- **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
+- **인증**: 필요
+
+### 10-11. `GET /api/v1/users/me/friend-recommendations` — 추천 친구
+
+- **화면**: 친구 목록 페이지 (본인)
+- **Response `200 OK`**
+
+```json
+{
+  "recommendations": [
+    {
+      "userId": "01a0f2d4-6180-7000-8000-446655440013",
+      "nickname": "철수",
+      "profileImageUrl": "https://...",
+      "reason": "RAN_TOGETHER"        // RAN_TOGETHER | SIMILAR_PACE
+    }
+  ]
+}
+```
+
+- **함께 뛴 사람(`RAN_TOGETHER`)을 먼저 채우고 남은 자리를 페이스가 비슷한 사람(`SIMILAR_PACE`)으로 채운다.** 판정·제외 규칙은 `feature-spec.md` 추천 친구 절
+- **결과는 모두 친구 요청을 보낼 수 있는 사람이다**(`friendStatus`가 늘 `NONE`이라 싣지 않는다) — 버튼은 친구 요청(10-4) 하나다
+- 상대의 페이스 값은 싣지 않는다
+- **페이지를 나누지 않는다** — 총 인원이 운영값으로 묶여 있다. 후보가 없으면 빈 배열이다
+- 온보딩 전이면 페이스 갈래는 비고 함께 뛴 사람만 나온다
 - **인증**: 필요
 
 ## 11. 프로필 편집 페이지
