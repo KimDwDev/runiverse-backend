@@ -10,6 +10,7 @@ import com.runiverse.running_service.application.match.command.broadcast.Broadca
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
@@ -49,6 +50,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -68,7 +70,8 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(10);
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     private static final MatchProperties MATCH_PROPERTIES = new MatchProperties(
-            CLOSE_OFFSET, Duration.ofSeconds(10), Duration.ofHours(6), 10, COOLDOWN);
+            CLOSE_OFFSET, Duration.ofSeconds(10), Duration.ofHours(6), 10, COOLDOWN,
+            LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
@@ -128,7 +131,7 @@ public class CancelMatchIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,     // LoadUserAvgPacePort
                 runningStore,        // CreateMatchApplicationPort
                 matchRoomAssigner,
-                MATCH_PROPERTIES,
+                new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
                 eventPublisher
         );

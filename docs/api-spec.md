@@ -1109,7 +1109,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
-- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘), `targetDistanceMeters`(선택 — 주면 해당 거리 조건만 집계)
+- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`), `targetDistanceMeters`(필수 — `3000`·`5000`·`10000` 중 하나, 해당 거리 조건만 집계한다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다)
 - **Response `200 OK`**
 
 ```json
@@ -1122,9 +1122,36 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외
-- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다
+- `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
+- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감)
 - **인증**: 필요
+- **에러 (400 Bad Request)**: 날짜·거리가 형식에 맞지 않거나, 거리가 없거나, 오늘 이전 날짜면 요청 검증 단계에서 걸린다. 거리가 선택지 밖이면 유스케이스가 걸러 낸다 — 어느 쪽이든 `code`는 `INVALID_REQUEST`다
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "목표 거리는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "조회 날짜는 오늘 이전일 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "목표 거리는 3000, 5000, 10000 중 하나여야 합니다."
+}
+```
+
+- 형식 오류(`date=2026/07/25`, `targetDistanceMeters=abc`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
+- 선택지 밖 거리 문구는 매칭 신청과 같은 문장이다 — 거리 목록이 설정에서 오므로 설정이 바뀌면 문구도 바뀐다
 
 #### `POST /api/v1/running-matches` — 매칭 신청
 
@@ -1143,7 +1170,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
-- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다
+- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 클라는 하드코딩하지 말고 `GET /running-matches/slots`가 내려 주는 선택지를 따른다
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용. 그 값이 없으면(온보딩 미완료) `409 ONBOARDING_NOT_COMPLETED`
 - **모집 인원도 입력받지 않음** — 서버가 최대 4명까지 모으고, 마감 때 1명이면 1인으로 확정한다 (`desiredPlayerCount` 필드 없음)
@@ -1161,7 +1188,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **방 ID만 돌려준다.** 방 정보·참가자 목록·모집 마감 시각(`closeAt`)은 **연결 직후 스트림이 `RoomInfo` 스냅샷으로 나른다** — 응답과 스트림이 같은 값을 두 벌로 내리지 않는다. 솔로 개시(`POST /running-rooms/solo`)와 응답 모양이 같다
 - **응답을 받은 뒤 SSE 스트림에 연결한다**
-- **에러 (400 Bad Request)**: 값이 없거나 허용 범위 밖이다 — 요청 검증 단계에서 걸린다
+- **에러 (400 Bad Request)**: 값이 없거나 허용 범위 밖이다. 값이 없으면 요청 검증 단계에서, 선택지 밖이면 유스케이스가 다른 검사보다 먼저 걸러 낸다 — 어느 쪽이든 `code`는 `INVALID_REQUEST`이고, 이미 지난 시각이라도 선택지 밖이면 `409 MATCH_SLOT_CLOSED`가 아니라 400이다
 
 ```json
 {
@@ -1185,7 +1212,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 두 조건이 동시에 어긋나면 `message`에 두 문장이 공백으로 이어붙어 한 번에 나간다
+- 두 조건이 동시에 어긋나면 `message`에 시각 → 거리 순으로 두 문장이 공백으로 이어붙어 한 번에 나간다. 단, 한쪽 값이 비어 있으면 필수 문구만 먼저 나가고 다른 쪽의 선택지 위반은 값을 채워 다시 보냈을 때 나간다
 
 - **에러 (409 Conflict)** — 아래 순서로 검사하며, 먼저 걸린 것 하나만 응답한다
 - **`MATCH_SLOT_CLOSED`** — 모집 마감(`start_at - 오프셋`)이 지난 슬롯이다
