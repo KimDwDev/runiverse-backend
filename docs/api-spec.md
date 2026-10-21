@@ -132,8 +132,8 @@
 | 45 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
 | 46 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
 | 47 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 48 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 49 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
+| 48 | PUT | `/api/v1/users/{userId}/friend-request` | 친구 요청 수락 — 요청을 친구로 확정 |
+| 49 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
 | 50 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
 | 51 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인이면 확정·보낸 요청·받은 요청, 타인이면 확정만 |
 | 52 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
@@ -185,7 +185,7 @@
   - `routePolyline`(8-1)은 서버가 조각을 이어 한 줄로 다시 인코딩한 값이다 — 이웃한 두 점이 30m 넘게 떨어져 있으면 끊긴 곳으로 보고 잇지 않는다. 카드 미리보기용이라 일시정지 중 짧게(약 40m 이하) 옮긴 자리가 이어 그려지는 것은 감수한다
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
   - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
-- **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
+- **친구 관계**: 토글이 아니다. **성립 전 요청은 `/users/{userId}/friend-request` 한 리소스를 메서드로 다룬다** — 요청 `POST`(10-4), 수락 `PUT`(10-5), 취소·거절 `DELETE`(10-6). 성립한 친구의 삭제만 `/users/{userId}/friend`(10-6)다.
 - **친구 상태 `friendStatus`**: `NONE` | `PENDING_SENT` | `PENDING_RECEIVED` | `ACCEPTED` — 언제나 **조회하는 사람 기준**이다. 대상이 본인이면 `null`이다(10-2·10-7·10-9·2-4가 같은 값을 쓴다).
   - **값이 추가될 수 있다** — 차단(`feature-spec.md` 차단 절)이 붙으면 차단 관계를 나타내는 값이 생긴다. 클라는 모르는 값을 받으면 친구 버튼을 그리지 않는다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
@@ -1081,7 +1081,7 @@
 | `invitation.status` | String | O | 초대의 **지금** 상태 — `PENDING`이면 수락·거절 버튼을 그린다 |
 
 - **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `friendStatus`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
-  - 친구 요청 알림: `PENDING_RECEIVED`면 수락(10-6)·거절(10-5) 버튼, 그 밖이면 결과만 보여준다
+  - 친구 요청 알림: `PENDING_RECEIVED`면 수락(10-5)·거절(10-6) 버튼, 그 밖이면 결과만 보여준다
   - 초대 알림: `PENDING`이면 수락(4-3)·거절(4-4) 버튼, `ACCEPTED`면 탭하면 초대 방으로 간다
 - **보관 기간(운영값)이 지난 알림은 나오지 않는다**
 - **이 조회는 읽음 처리를 하지 않는다** — 읽음은 2-6이 한다
@@ -2808,20 +2808,25 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 - **인증**: 필요
 
-### 10-5. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절
+### 10-5. `PUT /api/v1/users/{userId}/friend-request` — 요청 수락
 
-- **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
-- **이력을 남기지 않는다**
-- **Response `204 No Content`**
-- **에러 (404 Not Found)**: `PENDING` 요청이 없다
+- **경로의 `{userId}`는 요청을 보낸 사람이다.** 그 사람이 나에게 보낸 `PENDING` 행의 `status`를 `ACCEPTED`로 바꾼다 — 요청 리소스를 친구로 확정된 상태로 갈아끼우는 것이라 `PUT`이다
+- **Request 본문이 없다** — 수락 말고 바꿀 수 있는 값이 없다. `PATCH`로 상태 값을 받으면 `PENDING` 같은 의미 없는 값까지 검증해야 한다
+- 요청자에게 "친구 요청 수락됨" 인앱 알림(`FRIEND_ACCEPTED`)을 쌓고 푸시를 보낸다
+- **멱등이다** — 이미 그 사람과 친구(`ACCEPTED`)면 아무것도 바꾸지 않고 같은 응답을 준다. 알림도 다시 쌓지 않는다. 응답을 못 받은 앱이 다시 보내도 에러가 나지 않는다
+- **Response `200 OK`**: `{ "friendStatus": "ACCEPTED" }`
+- **에러 (404 Not Found)**: 그 사람이 나에게 보낸 요청이 없다 — 내가 보낸 요청을 내가 수락하려는 경우도 여기다
 - **인증**: 필요
 
-### 10-6. `POST /api/v1/users/{userId}/friend` — 요청 수락 / `DELETE` — 친구 삭제
+### 10-6. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절 / `DELETE /api/v1/users/{userId}/friend` — 친구 삭제
 
-- **POST(수락)**: 경로의 `{userId}`는 **요청을 보낸 사람**이다. `status`를 `ACCEPTED`로 바꾸고 요청자에게 "친구 요청 수락됨" 인앱 알림(`FRIEND_ACCEPTED`)을 쌓고 푸시를 보낸다
-  - **Response `201 Created`**: `{ "friendStatus": "ACCEPTED" }`
-  - **에러 (404 Not Found)**: 받은 요청이 없다
-- **DELETE(친구 삭제)**: **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 이력을 남기지 않는다
+- **요청 취소·거절** (`DELETE .../friend-request`)
+  - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
+  - **이력을 남기지 않는다**
+  - **Response `204 No Content`**
+  - **에러 (404 Not Found)**: 둘 사이에 `PENDING` 요청이 없다
+- **친구 삭제** (`DELETE .../friend`): **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 이력을 남기지 않는다
+  - 성립 전 요청과 리소스를 나눈다 — 요청은 `friend-request`, 성립한 관계는 `friend`다
   - **Response `204 No Content`**
   - **에러 (404 Not Found)**: 친구가 아니다
 - **인증**: 필요
@@ -2830,7 +2835,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > |---|---|---|
 > | `NONE` | 친구 요청 | `POST .../friend-request` |
 > | `PENDING_SENT` | 요청 취소 | `DELETE .../friend-request` |
-> | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
+> | `PENDING_RECEIVED` | 수락 / 거절 | `PUT .../friend-request` / `DELETE .../friend-request` |
 > | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
 
 ### 10-7. `GET /api/v1/users/{userId}/friends` — 친구 목록
@@ -2848,7 +2853,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **Query**: `q`(이름 필터), `cursor`/`limit`
 - **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
 - **`friendStatus`는 조회하는 사람 기준이다**(§0)
-  - 본인 목록: 항목의 상태 그대로 — `PENDING_RECEIVED`면 수락(10-6)·거절(10-5), `PENDING_SENT`면 취소(10-5), `ACCEPTED`면 삭제(10-6)
+  - 본인 목록: 항목의 상태 그대로 — `PENDING_RECEIVED`면 수락(10-5)·거절(10-6), `PENDING_SENT`면 취소(10-6), `ACCEPTED`면 삭제(10-6)
   - 타인 목록: 나와 그 사람의 관계 — 타인의 목록에서 바로 친구 요청 버튼을 그린다. 목록에 조회자 본인이 있으면 그 항목은 `null`이다
 - **정렬**: 받은 요청 → 보낸 요청 → 확정 순으로 묶고, 묶음 안에서는 닉네임순이다. 커서는 묶음과 그 안의 위치를 함께 담는다 — 묶음 경계에서 페이지가 끊겨도 이어진다
 - 확정은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 대상인 행, 받은 요청은 본인이 `receiver_id`, 보낸 요청은 본인이 `requester_id`이고 `status='PENDING'`인 행이다
