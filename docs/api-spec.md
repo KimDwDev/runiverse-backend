@@ -135,40 +135,39 @@
 | 48 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
 | 49 | POST | `/api/v1/users/{userId}/friend` | 친구 요청 수락 |
 | 50 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 51 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인·타인 공통 |
-| 52 | GET | `/api/v1/users/me/friend-requests` | 받은 친구 요청 목록 |
-| 53 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 54 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
-| 55 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
-| 56 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
+| 51 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인이면 확정·보낸 요청·받은 요청, 타인이면 확정만 |
+| 52 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 53 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 54 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
+| 55 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 57 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 58 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 59 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 60 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 61 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
-| 62 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
-| 63 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
-| 64 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 65 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 66 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 67 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 68 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 56 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 57 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 58 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 59 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 60 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
+| 61 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
+| 62 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
+| 63 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 64 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 65 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 66 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 67 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 69 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 70 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 71 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 72 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 68 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 69 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 70 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 71 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 71개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 70개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -188,6 +187,7 @@
   - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
 - **친구 관계**: 토글이 아니며 요청·수락·삭제를 10-4~10-6으로 나눈다.
 - **친구 상태 `friendStatus`**: `NONE` | `PENDING_SENT` | `PENDING_RECEIVED` | `ACCEPTED` — 언제나 **조회하는 사람 기준**이다. 대상이 본인이면 `null`이다(10-2·10-7·10-9·2-4가 같은 값을 쓴다).
+  - **값이 추가될 수 있다** — 차단(`feature-spec.md` 차단 절)이 붙으면 차단 관계를 나타내는 값이 생긴다. 클라는 모르는 값을 받으면 친구 버튼을 그리지 않는다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "01a0f2d4-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
 - **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-10·11-11)은 보낸 필드만 담는다 — 11-10에서 보내지 않은 필드는 키째 빠진다(11-2·11-11·11-6은 필드가 하나뿐이다).
@@ -2833,18 +2833,26 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > | `PENDING_RECEIVED` | 수락 / 거절 | `POST .../friend` / `DELETE .../friend-request` |
 > | `ACCEPTED` | 친구 삭제 | `DELETE .../friend` |
 
-### 10-7. `GET /api/v1/users/{userId}/friends` — 친구 목록 / `GET /api/v1/users/me/friend-requests` — 받은 요청 목록
+### 10-7. `GET /api/v1/users/{userId}/friends` — 친구 목록
 
-- **화면**: 친구 목록 페이지(본인 — 친구 목록 + 추천 친구 + 받은 요청) / 타인 프로필의 친구 목록
-- **친구 목록은 타인 것도 조회한다** — 프로필의 친구 수를 누르면 그 사람의 목록이 열린다(`feature-spec.md` 프로필 페이지 절). 본인 목록은 본인 `userId`로 부른다. `profile_visibility`로 가리지 않는다
-- **받은 요청 목록은 본인 것만 조회한다**
-- **Query**: `q`(이름 필터, 친구 목록만), `cursor`/`limit`
-- **Response `200 OK`**
-  - 친구 목록: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
-  - 받은 요청: `{ "items": [ { "userId", "nickname", "profileImageUrl" } ], "nextCursor": "..." }`
-- **친구 목록의 `friendStatus`는 조회하는 사람 기준이다**(§0) — 타인의 목록에서 바로 친구 요청 버튼을 그리게 한다. 본인 목록이면 전부 `ACCEPTED`이고, 목록에 조회자 본인이 있으면 그 항목은 `null`이다
-- 친구 목록은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 대상인 행이다
-- 받은 요청 목록은 본인이 `receiver_id`이고 `status='PENDING'`인 행이다. 보낸 요청 목록은 화면이 없어 API도 두지 않는다
+- **화면**: 친구 목록 페이지(본인 — 이 목록 + 추천 친구 10-11) / 타인 프로필의 친구 목록
+- **본인과 타인이 보는 범위가 다른 하나의 리소스라 `{userId}` 경로에 인가 규칙을 둔다**(`api-convention.md` 사용자 리소스 경로). 10-3 피드 그리드와 같은 구조다
+
+| 조회자 | 담기는 항목 |
+|---|---|
+| 본인(`userId`가 토큰 주체) | 확정(`ACCEPTED`) · 보낸 요청(`PENDING_SENT`) · 받은 요청(`PENDING_RECEIVED`) |
+| 타인 | 확정(`ACCEPTED`)만 — 누구에게 요청했고 누가 요청했는지는 본인만 안다 |
+| 차단 관계 | 차단 구현 때 정한다 — 목록을 열지 않는 방향이다(10-8의 `403 PROFILE_NOT_VISIBLE` 자리) |
+
+- `profile_visibility`로 가리지 않는다
+- **Query**: `q`(이름 필터), `cursor`/`limit`
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
+- **`friendStatus`는 조회하는 사람 기준이다**(§0)
+  - 본인 목록: 항목의 상태 그대로 — `PENDING_RECEIVED`면 수락(10-6)·거절(10-5), `PENDING_SENT`면 취소(10-5), `ACCEPTED`면 삭제(10-6)
+  - 타인 목록: 나와 그 사람의 관계 — 타인의 목록에서 바로 친구 요청 버튼을 그린다. 목록에 조회자 본인이 있으면 그 항목은 `null`이다
+- **정렬**: 받은 요청 → 보낸 요청 → 확정 순으로 묶고, 묶음 안에서는 닉네임순이다. 커서는 묶음과 그 안의 위치를 함께 담는다 — 묶음 경계에서 페이지가 끊겨도 이어진다
+- 확정은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 대상인 행, 받은 요청은 본인이 `receiver_id`, 보낸 요청은 본인이 `requester_id`이고 `status='PENDING'`인 행이다
+- **10-2 `friendCount`는 확정만 센다** — 본인 목록의 항목 수와 다를 수 있다
 - **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
 - **인증**: 필요
 

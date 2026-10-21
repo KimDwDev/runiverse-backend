@@ -360,7 +360,7 @@
 | status | enum | NOT NULL, default PENDING | `PENDING`(수락 대기) / `ACCEPTED`(친구 성립) |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 수락 시각. 회원탈퇴 시 CASCADE 삭제 |
 
-> **관계는 대칭이지만 저장은 방향을 갖는다.** 누가 요청했는지 알아야 "받은 요청 목록"을 만들 수 있어 두 컬럼을 구분한다. 성립한 뒤로는 방향에 의미가 없어 친구 목록 조회는 두 컬럼 모두를 본다.
+> **관계는 대칭이지만 저장은 방향을 갖는다.** 누가 요청했는지 알아야 친구 목록에서 받은 요청과 보낸 요청을 가를 수 있어 두 컬럼을 구분한다. 성립한 뒤로는 방향에 의미가 없어 친구 목록 조회는 두 컬럼 모두를 본다.
 > **역방향 중복은 앱에서 막는다.** 요청 전에 `(A,B)`와 `(B,A)`를 함께 조회해, 역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 **수락으로 처리**한다.
 > **거절·삭제는 행을 DELETE한다** — 이력을 보관하지 않는다.
 > **친구 수는 집계 테이블 없이 `COUNT`로 구한다** — `status='ACCEPTED'`이면서 두 컬럼 중 하나가 본인인 행을 센다.
@@ -562,7 +562,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 인덱스 대상 | 용도 |
 |---|---|
 | user_devices.user_id | 푸시 발송 — 유저의 활성 기기 조회 |
-| friendships.receiver_id | 받은 요청·친구 목록 (PK는 requester_id만 커버) |
+| friendships.receiver_id | 친구 목록의 받은 요청·확정 쪽 (PK는 requester_id만 커버 — 보낸 요청·확정의 requester 쪽은 PK가 맡는다) |
 | notifications.(user_id, created_at) | 알림함 최신순 조회·안 읽은 수 — 보관 기간 조건도 `created_at` 범위로 탄다 |
 | running_room_invitations.invitee_id | 받은 초대 조회 — UNIQUE가 `running_room_id` 방향만 커버한다. 방의 초대 현황은 UNIQUE가 맡는다 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
