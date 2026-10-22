@@ -2741,7 +2741,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "nickname": "동완러너",              // 온보딩 전이면 null
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
-  "friendCount": 42,                   // friendships에서 COUNT (status=ACCEPTED)
+  "friendCount": 42,                   // user_relationships에서 COUNT (type=ACCEPTED)
   "friendStatus": "ACCEPTED"           // NONE | PENDING_SENT | PENDING_RECEIVED | ACCEPTED
 }
 ```
@@ -2792,8 +2792,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- `friendships`에 `(요청자, 대상, PENDING)` 행을 만들고 대상에게 "친구 요청 도착" 인앱 알림(`FRIEND_REQUESTED`, 2-4)을 쌓고 푸시를 보낸다
-- **역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`이고, 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
+- `user_relationships`에 `(요청자→대상, PENDING_SENT)`·`(대상→요청자, PENDING_RECEIVED)` 두 행을 만들고 대상에게 "친구 요청 도착" 인앱 알림(`FRIEND_REQUESTED`, 2-4)을 쌓고 푸시를 보낸다
+- **이미 상대가 나에게 요청해 둔 상태면(내 행이 `PENDING_RECEIVED`) 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`이고, 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
 - **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
 - **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
 - **에러 (404 Not Found)**: 대상이 없다
@@ -2824,11 +2824,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 10-6. `DELETE /api/v1/users/{userId}/friend-request` — 요청 취소 · 거절 / `DELETE /api/v1/users/{userId}/friend` — 친구 삭제
 
 - **요청 취소·거절** (`DELETE .../friend-request`)
-  - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(`PENDING` 행 DELETE) 하나로 둔다
-  - **이력을 남기지 않는다**
+  - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(양쪽 `PENDING_*` 행에 `deleted_at`) 하나로 둔다
+  - 두 행에 `deleted_at`을 찍는다 — 끝난 관계는 내부 이력으로만 남고 API에 나오지 않는다
   - **Response `204 No Content`**
   - **에러 (404 Not Found)**: 둘 사이에 `PENDING` 요청이 없다
-- **친구 삭제** (`DELETE .../friend`): **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 이력을 남기지 않는다
+- **친구 삭제** (`DELETE .../friend`): **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 두 행에 `deleted_at`을 찍는다
   - 성립 전 요청과 리소스를 나눈다 — 요청은 `friend-request`, 성립한 관계는 `friend`다
   - **Response `204 No Content`**
   - **에러 (404 Not Found)**: 친구가 아니다
@@ -2859,7 +2859,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 본인 목록: 항목의 상태 그대로 — `PENDING_RECEIVED`면 수락(10-5)·거절(10-6), `PENDING_SENT`면 취소(10-6), `ACCEPTED`면 삭제(10-6)
   - 타인 목록: 나와 그 사람의 관계 — 타인의 목록에서 바로 친구 요청 버튼을 그린다. 목록에 조회자 본인이 있으면 그 항목은 `null`이다
 - **정렬**: 받은 요청 → 보낸 요청 → 확정 순으로 묶고, 묶음 안에서는 닉네임순이다. 커서는 묶음과 그 안의 위치를 함께 담는다 — 묶음 경계에서 페이지가 끊겨도 이어진다
-- 확정은 `status='ACCEPTED'`이면서 `requester_id`·`receiver_id` 중 하나가 대상인 행, 받은 요청은 본인이 `receiver_id`, 보낸 요청은 본인이 `requester_id`이고 `status='PENDING'`인 행이다
+- `user_relationships`에서 `user_id`가 대상이고 `deleted_at IS NULL`인 행이다 — 본인이면 `type`이 `ACCEPTED`·`PENDING_SENT`·`PENDING_RECEIVED`, 타인이면 `ACCEPTED`만. 행의 `type`이 곧 본인 목록의 `friendStatus`다
 - **10-2 `friendCount`는 확정만 센다** — 본인 목록의 항목 수와 다를 수 있다
 - **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
 - **인증**: 필요
@@ -3678,7 +3678,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 탈퇴는 활성 상태 때문에 막지 않는다. `MATCHING`이면 5-A의 대기 취소, `MATCHED`이면 방 나가기를 적용하고 인원을 갱신해 남은 참가자에게 이벤트를 보낸다. `STARTED`이면 본인이 `RUNNING`일 때 마지막 수신 데이터로 5-D의 종료 처리를, `JOINED`(미접속)일 때 강제 종료와 같은 기준의 이탈 처리를 먼저 적용한다. 미접속이면 시작 후 취소처럼 인원을 줄여 남은 참가자에게 이벤트를 보내고, 0이 되면 방을 `CANCELLED`로 닫는다.
   - `delete_users` 스냅샷 후 `users`를 하드 삭제한다. `delete_users.created_at`은 스냅샷 시각이다.
   - **유지**: `feeds`/`comments`/`running_records`(+segments·splits)/좋아요. `running_players`와 `running_room_sessions`는 상태와 무관하게 전부 유지한다 — 시작 전 신청도 지우지 않고 일반 취소처럼 닫는다(쿨다운은 걸지 않는다). 시작한 방은 기록 없는 참가자도 결과에 남고, 신청 이력은 통계에 쓴다. 사용자는 공통 탈퇴 유저 형식으로 표시한다.
-  - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`friendships`/`user_colors`.
+  - **삭제**: `user_onboardings`(값은 `delete_users`로 스냅샷 후)/`user_devices`/`oauth_users`(`login_type` 판정 후 — 먼저 지우면 `LOCAL`로 보인다)/`user_relationships`(양쪽, 끝난 관계 포함)/`user_colors`.
   - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필·배경 사진 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).
 - **Response**: `204 No Content` (토큰 즉시 무효화)
