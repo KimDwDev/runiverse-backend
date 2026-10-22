@@ -9,6 +9,7 @@ import com.runiverse.running_service.infrastructure.persistence.relationship.Use
 import com.runiverse.running_service.infrastructure.persistence.relationship.UserRelationshipPersistenceAdapter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,12 +21,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +43,9 @@ public class UserRelationshipPersistenceAdapterTest {
 
     @Mock
     private TypedQuery<UserRelationshipJpaEntity> relationshipQuery;
+
+    @Mock
+    private Query insertQuery;
 
     @InjectMocks
     private UserRelationshipPersistenceAdapter adapter;
@@ -143,6 +151,49 @@ public class UserRelationshipPersistenceAdapterTest {
 
         // then
         assertThat(entity.getType()).isEqualTo(RelationshipType.FRIEND);
+    }
+
+    @Test
+    @DisplayName("행 확보는 누가 호출하든 user_id 순서로 두 행을 NONE으로 넣는다")
+    void ensurePairInsertsInFixedOrder() {
+        // given -> A→B와 B→A가 같은 순서로 넣어야 서로를 기다리다 교착에 빠지지 않는다
+        UUID smaller = userId.compareTo(targetId) < 0 ? userId : targetId;
+        UUID larger = smaller.equals(userId) ? targetId : userId;
+        givenInsertQuery();
+
+        // when -> 같은 쌍을 양쪽 방향에서 호출한다
+        adapter.ensurePair(new UserId(userId), new UserId(targetId));
+        adapter.ensurePair(new UserId(targetId), new UserId(userId));
+
+        // then
+        verify(insertQuery, times(2)).setParameter("firstUserId", smaller);
+        verify(insertQuery, times(2)).setParameter("firstTargetId", larger);
+        verify(insertQuery, times(2)).setParameter("secondUserId", larger);
+        verify(insertQuery, times(2)).setParameter("secondTargetId", smaller);
+        verify(insertQuery, times(2)).setParameter("type", "NONE");
+        // 저장 시각은 JVM 타임존 기준이라 SQL의 now()가 아니라 값으로 넘긴다
+        verify(insertQuery, times(2)).setParameter(eq("now"), any(LocalDateTime.class));
+        verify(insertQuery, times(2)).executeUpdate();
+    }
+
+    @Test
+    @DisplayName("행 확보는 이미 있는 행을 건드리지 않는 ON CONFLICT DO NOTHING이다")
+    void ensurePairIgnoresExistingRows() {
+        // given
+        givenInsertQuery();
+
+        // when
+        adapter.ensurePair(new UserId(userId), new UserId(targetId));
+
+        // then -> 기존 행을 덮으면 진행 중인 요청·친구 관계가 NONE으로 지워진다
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(entityManager).createNativeQuery(sql.capture());
+        assertThat(sql.getValue()).contains("ON CONFLICT (user_id, target_id) DO NOTHING");
+    }
+
+    private void givenInsertQuery() {
+        when(entityManager.createNativeQuery(anyString())).thenReturn(insertQuery);
+        when(insertQuery.setParameter(anyString(), any())).thenReturn(insertQuery);
     }
 
     private void givenLockedRows(List<UserRelationshipJpaEntity> rows) {
