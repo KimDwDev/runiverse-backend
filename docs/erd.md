@@ -6,19 +6,19 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`friendships`·`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
-- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`friendships.requester_id`/`receiver_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`scheduled_jobs`·`colors`).
+- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`, `running_room_invitations.inviter_id`/`invitee_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`·`user_relationships`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다. `notifications`도 `created_at`만 둔다 — 갱신은 `is_read` 하나뿐이고 읽은 시각은 쓰는 곳이 없다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`·`like_count`·`comment_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **`deleted_at`**: `feeds`는 소프트 삭제, `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`friendships`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`notifications`·`running_room_invitations`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
   - **CASCADE에 기대지 않고 앱이 먼저 지운다** — 온보딩 값과 로그인 수단은 `delete_users`로 옮겨야 하는데 DB 연쇄 삭제는 애플리케이션을 거치지 않는다. 기존 개발 DB처럼 FK가 붙지 않은 환경도 있어 CASCADE 유무와 무관하게 동작해야 한다.
 - **`running_players`는 상태와 무관하게 유지한다.** 탈퇴 전 일반 취소·이탈·러닝 종료 처리를 적용한다(시작 전 신청도 지우지 않고 취소처럼 닫는다). 시작한 방의 참가 row와 세션은 기록 없는 참가자도 과거 결과에 남기기 위해, 그 밖의 신청 이력은 통계에 쓰기 위해 남긴다.
   - 논리 참조 `user_id` 컬럼은 전부 **NOT NULL**이다(nullable은 스냅샷 테이블 `delete_feeds`·`delete_comments`뿐).
@@ -120,14 +120,14 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_id | bigint | PK | API `runningRoomId`(Long)가 이 값을 가리킴. **신규 방은 신청·개시 시 1인으로 생성** — 매칭은 `MATCHING`, 모집 단계가 없는 솔로는 `MATCHED`로 시작한다 |
-| type | enum | NOT NULL | `SOLO` / `MATCH` / `INVITE` — [§6](#6-enum-사전). 생성 시 확정·불변. `INVITE`는 **[MVP 제외]** 예약값 |
+| running_room_id | bigint | PK | API `runningRoomId`(Long)가 이 값을 가리킴. **신규 방은 신청·개시 시 1인으로 생성** — 매칭·초대는 `MATCHING`, 모집 단계가 없는 솔로는 `MATCHED`로 시작한다 |
+| type | enum | NOT NULL | `SOLO` / `MATCH` / `INVITE` — [§6](#6-enum-사전). 생성 시 확정·불변 |
 | status | enum | NOT NULL | 진행 단계 — [§6 enum 사전](#6-enum-사전) |
 | start_at | timestamp | NOT NULL | 예약 시작 시각 |
 | close_at | timestamp | nullable | **방이 닫힌 시각.** `FINISHED`·`CANCELLED`로 갈 때 찍고, 그 전까지는 null이다 — 종류와 무관하게 열려 있는 방은 전부 null. 모집 마감 시각이 아니다(그건 `start_at - 오프셋`으로 계산한다) |
 | target_distance | int | nullable | 방의 목표 거리(미터). **솔로 방은 null** — 목표가 없어야 조기 종료 페널티 판정을 건너뛴다. 매칭 조건이라 **정해진 뒤에는 바뀌지 않는다**. 참가자에게서 유추하지 않고 방이 직접 가져 후보 방 조회가 단일 테이블에서 끝난다 |
 | avg_pace | int | nullable | 참가자 평균 페이스(초/km). 시작 전까지 참가·이탈마다 갱신하고, 시작 후에는 뛴 방의 평균으로 고정한다. 배정 후보의 순위 재료로 쓰고(자격 조건이 아니다 — 멀어도 매칭한다), `RoomInfo.teamAveragePaceSecondsPerKm`로도 나간다. **nullable인 이유는 시작 전에 참가자가 0이면 평균 낼 대상이 없기 때문이다** — 마지막 값을 남기지 않고 지운다(그 방은 같은 순간 `CANCELLED`로 닫힌다 — 아래 `current_player_count`) |
-| max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`, **[MVP 제외]** 초대 `4`. 생성 시 확정·불변 |
+| max_player_count | int | NOT NULL | 자리 수 — 매칭 `4`, 솔로 `1`, 초대 `4`. 생성 시 확정·불변 |
 | current_player_count | int | NOT NULL | 현재 인원. 생성 시 `1`, 참가·이탈마다 갱신한다. `current_player_count < max_player_count`면 들어갈 수 있다. **`1`은 정상 상태다** — 마감 전이면 계속 모집하고 마감 후면 혼자 뛴다. **인원은 이탈로만 줄어든다** — 시작 전 이탈, 시작 후에는 접속 전(`JOINED`) 참가자의 매칭 취소·탈퇴. `0`이 되면 방을 `CANCELLED`로 닫는다(빈 방이 후보로 남지 않게). 완주·조기 종료·강제 종료로는 줄지 않고, 뛰던 참가자가 모두 종료됐을 때 유효 기록 유무로 `FINISHED`/`CANCELLED`가 갈린다(아래 생명주기). 확정 후 이탈·미출석·조기 종료 제재의 면제 판정에도 쓴다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | **[MVP 제외]** 관리자 부정 방 숨김용 |
@@ -140,6 +140,7 @@
 > CHECK `ck_running_room_close_at`: `(status in ('FINISHED', 'CANCELLED') and close_at is not null) or (status not in ('FINISHED', 'CANCELLED') and close_at is null)`
 
 > **후보 방 배정**: 매칭 신청 시 `type='MATCH' AND status='MATCHING' AND current_player_count < max_player_count`인 방 중 `target_distance`·`start_at`이 맞는 방을 후보로 삼고, `avg_pace`가 가까운 순으로 고른다 — 페이스는 순위 재료라 멀어도 후보에서 빠지지 않는다(`feature-spec.md` 방 배정 기준). 후보가 하나도 없을 때만 새 방을 만든다(1인 방).
+> **초대 방**: 사용자가 시작 시각·목표 거리를 직접 정해 연다(`type='INVITE'`). 사람은 `running_room_invitations` 수락으로만 들어오고 후보 방 배정에는 잡히지 않는다. 모집 마감부터는 아래 마감 판정을 포함해 매칭 방과 같다(feature-spec 초대 러닝 생명주기).
 > **마감 판정**: 모집 마감(`start_at - 운영 설정 오프셋`)에 도달하면 스케줄러가 **인원과 무관하게** `MATCHED`로 확정한다(1인이면 1인으로 확정돼 혼자 뛴다). `max_player_count` 도달 여부와도 무관하다. 마감 시각은 방 컬럼이 아니다 — 방을 만들 때 `scheduled_jobs`에 `MATCH_CLOSE`(`execute_at = start_at - 오프셋`)를 걸어 그 시각에 확정한다.
 
 ### running_players
@@ -162,9 +163,9 @@
 > CHECK `ck_running_player_desired_player_count`: `desired_player_count is null or desired_player_count between 2 and 4`
 
 > **방과의 연결은 `running_room_sessions`가 갖는다** — 참가자가 여러 방을 거칠 수 있는 설계라(방 이동은 향후 매칭 알고리즘 몫) 단일 `running_room_id` 컬럼으로는 이력을 담을 수 없고, 현재 속한 방은 `is_connected`로 가린다.
-> **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈리며, `INVITED`는 **[MVP 제외]** 예약값이다.
+> **`status`는 참가 의사와 진행 상태를 함께 표현한다** — 신청(`JOINED`)에서 러닝(`RUNNING`)·완주(`COMPLETED`)까지 한 축으로 간다. 이탈은 시점과 제재 여부로 네 값이 갈린다. **`INVITED`는 쓰지 않는다** — 초대 대기는 신청이 아니라 `running_room_invitations`가 갖는다(초대만으로 신청 행이 생기면 활성 신청 판정에 걸린다). CHECK에는 남아 있다.
 > **`status`와 `deleted_at`은 축이 다르다** — `status`가 "어떻게 끝났나"(사유·제재 여부), `deleted_at`이 "언제 끝났나"다. `updated_at`을 이탈 시각으로 쓰지 않는다 — 그 row가 한 번만 더 갱신돼도 값이 밀려 이탈 시각을 잃는다.
-> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록(마감 전이라 언제나 미제재다) / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. **시작 전** 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 `CANCELLED`로 닫는다. **러닝이 시작된 뒤에는 인원이 줄지 않는다** — 완주·조기 종료든, 강제 종료로 `JOINED`인 채 닫히든 배정 행만 `is_connected=false`로 내리고 `leave_count`도 올리지 않는다. **예외는 시작 후 `JOINED`인 참가자의 매칭 취소·탈퇴**다 — 시작 전 이탈과 같게 인원을 하나 줄이고 `leave_count`를 올린다. 그래서 상대가 취소·탈퇴해 혼자 남은 사람이 이어서 나가거나 강제 종료되면 미출석 제재가 면제된다. `current_player_count`는 시작 이후 "확정 인원에서 취소·탈퇴한 미출석자를 뺀 수"이며, 미출석 제재(취소·탈퇴·강제 종료)와 조기 종료 제재는 그 값이 1이면 면제된다. 완주·조기 종료로 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버리기도 한다 — 시작 후 방을 닫는 건 전원 종료를 확인하는 별도 경로이고, 유효 기록이 있으면 `FINISHED`, 하나도 없으면 `CANCELLED`다. 친구 초대 생명주기는 MVP에서 정의하지 않는다.
+> **row 생명주기**: 생성 = 매칭 신청·솔로 개시 / 대기 취소 = `status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록(마감 전이라 언제나 미제재다) / 러닝 시작 = 각자의 WS `RUNNING_START`가 본인을 `RUNNING`으로 전환(일괄 전환 없음) / 이탈 = `status=*_LEFT_*` + `deleted_at` 기록 / 완주 = `status=COMPLETED` + `deleted_at` 기록. **시작 전** 대기 취소·이탈 시 배정 행은 `is_connected=false`로 바꾸고 방 인원을 하나 줄이며, 그 결과 인원이 `0`이면 방을 `CANCELLED`로 닫는다. **러닝이 시작된 뒤에는 인원이 줄지 않는다** — 완주·조기 종료든, 강제 종료로 `JOINED`인 채 닫히든 배정 행만 `is_connected=false`로 내리고 `leave_count`도 올리지 않는다. **예외는 시작 후 `JOINED`인 참가자의 매칭 취소·탈퇴**다 — 시작 전 이탈과 같게 인원을 하나 줄이고 `leave_count`를 올린다. 그래서 상대가 취소·탈퇴해 혼자 남은 사람이 이어서 나가거나 강제 종료되면 미출석 제재가 면제된다. `current_player_count`는 시작 이후 "확정 인원에서 취소·탈퇴한 미출석자를 뺀 수"이며, 미출석 제재(취소·탈퇴·강제 종료)와 조기 종료 제재는 그 값이 1이면 면제된다. 완주·조기 종료로 줄이면 마지막 완주자가 방을 `CANCELLED`로 만들어 버리기도 한다 — 시작 후 방을 닫는 건 전원 종료를 확인하는 별도 경로이고, 유효 기록이 있으면 `FINISHED`, 하나도 없으면 `CANCELLED`다. **초대 방에서는 생성 = 방 개설·초대 수락**이고, 그 뒤 생명주기는 위와 같다.
 > **활성 신청 판정**: `deleted_at IS NULL`. `status`는 보지 않는다 — 러닝 중(`RUNNING`)인 참가자도 활성이어야 다음 매칭이 막힌다.
 > **러닝 종료 판정**: 목표 거리 도달은 `COMPLETED`, 미달은 실제 거리 비율에 따라 `RUNNING_LEFT_*`다(목표가 없는 솔로는 끝내면 `COMPLETED`). 종료 신호·목표 도달 자동 종료·강제 종료·러닝 중 탈퇴에 같은 규칙을 적용하고, 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간 통과)을 지난 트랙만 기록으로 만든다. 산출할 수 없으면 실제 거리를 0으로 판정한다. **미달이어도 `status`는 그대로 남는다** — 기록 유무와 개인 종료 상태는 별개다.
 
@@ -184,6 +185,27 @@
 > **지금은 배정이 신청당 한 번이다** — 신청하면 방 하나에 배정되고, 현재 구현·명세에는 배정을 바꾸는 흐름이 없다. 나가면 그 행이 `is_connected=false`로 남는다.
 > **스키마는 방 이동을 담을 수 있게 미리 설계돼 있다** — 매칭 알고리즘이 고도화되면 서버가 활성 신청을 더 맞는 방으로 옮겨 다니게 한다. 그때 신청이 방을 옮기면 row가 쌓여 참여 이력이 되고, 거쳐 간 방으로 돌아오면 복합 PK가 같으므로 기존 행의 `is_connected`를 되살리고 `leave_count`만 누적한다(그래서 2 이상이 될 수 있다). 이동 시 두 방의 `current_player_count`는 한 트랜잭션에서 같이 갱신한다.
 > **취소 후 재신청은 같은 행을 쓴다** — 키가 유저라 이전에 나갔던 방에 다시 배정되면 행을 새로 만들지 않고 `is_connected`를 되살리며 `running_player_id`를 새 신청으로 갱신한다. 후보에서 막지는 않으며 `leave_count`가 그 방의 순위를 낮춰 되도록 피할 뿐이다 — **그 방이 유일한 후보면 몇 번을 나왔든 다시 들어간다.** 러닝 구간의 "의도적 이탈은 복귀 불가"는 러닝 중인 같은 신청 얘기라 둘 다와 별개다.
+
+### running_room_invitations (러닝 초대)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| running_room_invitation_id | bigint | PK | API `runningRoomInvitationId`(Long) |
+| running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 초대 방(`type='INVITE'`) |
+| inviter_id | UUID | → users, NOT NULL | 초대한 사람 — 방의 현재 참가자 누구나. 다시 초대하면 마지막으로 초대한 사람으로 바뀐다. **논리 참조** — 보낸 사람이 탈퇴해도 초대는 유효하다(방장이 없어 방이 그대로 남는다) |
+| invitee_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 초대받은 사람 |
+| status | enum | NOT NULL | `PENDING` / `ACCEPTED` / `DECLINED` / `EXPIRED` — [§6](#6-enum-사전) |
+| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 상태 변경 시각(응답·만료·다시 초대) |
+
+> UNIQUE (running_room_id, invitee_id) — 방·사람 쌍당 한 행. 다시 초대하면 새 행이 아니라 이 행을 `PENDING`으로 되살린다.
+> CHECK `ck_running_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED')`
+> CHECK `ck_running_room_invitation_users`: `inviter_id <> invitee_id`
+
+> **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다.
+> **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `DECLINED`와 "수락 뒤 방을 나간 `ACCEPTED`"는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
+> **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
+> **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
+> **받은 사람이 탈퇴하면 그 사람의 초대를 지우고, 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 그래서 받은 사람 쪽 알림이 가리키는 초대 행은 항상 있다.
 
 ### running_records
 
@@ -304,7 +326,7 @@
 
 ### scheduled_jobs (예약 작업)
 
-> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감·시작 통지·정각 시작·강제 종료 넷이 이 표를 쓴다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
+> **도메인 테이블이 아니라 기전 테이블이다** — "정해진 시각에 무엇을 실행할지"만 담고 결과는 각 도메인 테이블이 갖는다. 지금은 모집 마감·시작 통지·정각 시작·강제 종료 넷이 이 표를 쓴다. 매칭 방과 초대 방에 같게 걸고, 솔로 방에는 걸지 않는다. 도메인 B 아래 두는 것은 현재 값이 전부 매칭·러닝이기 때문이다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -325,23 +347,59 @@
 
 ---
 
-## 3. 도메인 C — 소셜 (친구 · 피드 · 댓글)
+## 3. 도메인 C — 소셜 (친구 · 알림 · 피드 · 댓글)
 
 > **`[MVP 제외]` 표기**: 지금 만들지 않는 테이블. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이다.
 
-### friendships
+### user_relationships (친구 · 요청 · 차단)
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| requester_id | UUID | PK1, FK → users | 요청을 보낸 쪽 |
-| receiver_id | UUID | PK2, FK → users | 요청을 받은 쪽 |
-| status | enum | NOT NULL, default PENDING | `PENDING`(수락 대기) / `ACCEPTED`(친구 성립) |
-| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 수락 시각. 회원탈퇴 시 CASCADE 삭제 |
+| user_relationship_id | bigint | PK | API에 내보내지 않는다 — 경로는 상대 `userId`로 찾는다 |
+| user_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | **행의 주인** — "내 관점"의 나 |
+| target_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 상대 |
+| type | enum | NOT NULL | 주인 관점의 관계 — `NONE` / `FRIEND` / `FRIEND_REQUEST_SENT` / `FRIEND_REQUEST_RECEIVED` / `BLOCKED` — [§6](#6-enum-사전) |
+| created_at / updated_at | timestamp | NOT NULL | `created_at` = 이 쌍의 관계가 처음 생긴 시각, `updated_at` = 마지막 `type` 변경 시각 |
 
-> **관계는 대칭이지만 저장은 방향을 갖는다.** 누가 요청했는지 알아야 "받은 요청 목록"을 만들 수 있어 두 컬럼을 구분한다. 성립한 뒤로는 방향에 의미가 없어 친구 목록 조회는 두 컬럼 모두를 본다.
-> **역방향 중복은 앱에서 막는다.** 요청 전에 `(A,B)`와 `(B,A)`를 함께 조회해, 역방향에 `PENDING`이 있으면 새 요청을 만들지 않고 **수락으로 처리**한다.
-> **거절·삭제는 행을 DELETE한다** — 이력을 보관하지 않는다.
-> **친구 수는 집계 테이블 없이 `COUNT`로 구한다** — `status='ACCEPTED'`이면서 두 컬럼 중 하나가 본인인 행을 센다.
+> UNIQUE (user_id, target_id) — 쌍마다 행은 하나다. 관계가 끝나도 지우지 않고 같은 행을 계속 쓴다.
+> CHECK `ck_user_relationship_type`: `type in ('NONE', 'FRIEND', 'FRIEND_REQUEST_SENT', 'FRIEND_REQUEST_RECEIVED', 'BLOCKED')`
+> CHECK `ck_user_relationship_users`: `user_id <> target_id`
+
+> **사람마다 자기 관점의 행을 갖는다.** `type`이 곧 조회자 기준 API `friendStatus`라 값 이름을 그대로 맞췄다(변환 없음). 친구 수·친구 목록·관계 확인이 전부 `user_id` 하나로 끝난다 — 요청자/수신자 두 컬럼을 OR로 볼 일이 없다.
+> **관계가 끝나면 행을 지우지 않고 `NONE`으로 바꾼다.** 행이 지워지는 것은 탈퇴(두 FK CASCADE)뿐이다. 그래서 API `NONE`은 "행이 없다"와 "`NONE` 행이 있다" 두 경우다 — 둘을 같게 다룬다.
+> **친구·요청은 양쪽에 짝으로 쓴다** — A가 요청하면 `(A,B,FRIEND_REQUEST_SENT)`·`(B,A,FRIEND_REQUEST_RECEIVED)`, 수락하면 둘 다 `FRIEND`. **짝은 DB로 막을 수 없어 앱이 한 트랜잭션에서 함께 바꾼다.** 차단은 건 쪽 한 행만 `BLOCKED`다.
+
+| 사건 | A의 행 (A → B) | B의 행 (B → A) |
+|---|---|---|
+| A가 요청 | `FRIEND_REQUEST_SENT` (없으면 생성, `NONE`이면 갱신) | `FRIEND_REQUEST_RECEIVED` (없으면 생성, `NONE`이면 갱신) |
+| B가 수락 (서로 요청해 바로 성립한 경우 포함) | `FRIEND` | `FRIEND` |
+| 요청 취소·거절·친구 삭제 | `NONE` | `NONE` |
+| A가 B를 차단 | `BLOCKED` (없으면 생성) | 있으면 `NONE` |
+| A가 차단 해제 | `NONE` | — |
+
+> **차단은 친구 관계를 끝낸다** — 쌍마다 행이 하나라 `BLOCKED`와 `FRIEND`가 함께 있을 수 없다. 해제하면 `NONE`이라 친구로 돌아가지 않는다.
+> **조회는 `NONE`을 관계 없음으로 본다** — 친구 수는 `type='FRIEND'`, 친구 목록은 `type in (FRIEND, FRIEND_REQUEST_SENT, FRIEND_REQUEST_RECEIVED)`처럼 필요한 값을 골라 읽는다. `NONE`을 빼먹지 않도록 "아닌 것"(`<> 'BLOCKED'`)이 아니라 "맞는 것"을 나열한다.
+> **이력은 테이블에 남지 않는다** — 행은 지금 상태만 갖는다(마지막 변경 시각은 `updated_at`). 무슨 일이 있었는지(요청·수락·취소·거절·삭제·차단·해제)는 **애플리케이션 로그**로 남긴다(feature-spec 관계 이력).
+> **친구 수는 `COUNT`로 구한다** — `user_id`가 본인이고 `type='FRIEND'`인 행.
+
+### notifications (인앱 알림)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| notification_id | bigint | PK | API `notificationId`(Long) |
+| user_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 받는 사람 |
+| actor_id | UUID | → users, NOT NULL | 알림을 일으킨 사람(요청·수락·초대한 사람). 논리 참조 — 탈퇴해도 알림은 남고 탈퇴 유저 형식으로 보인다 |
+| running_room_invitation_id | bigint | → running_room_invitations, nullable | `RUNNING_INVITED`만 값이 있다. 논리 참조 — 초대 행은 받은 사람이 탈퇴할 때만 지워지고, 그때 이 알림도 함께 지워진다 |
+| type | enum | NOT NULL | `FRIEND_REQUESTED` / `FRIEND_ACCEPTED` / `RUNNING_INVITED` — [§6](#6-enum-사전) |
+| is_read | boolean | NOT NULL, default false | 알림함을 열면 받는 사람의 안 읽은 알림을 모두 true로 바꾼다 |
+| created_at | timestamp | NOT NULL | 정렬·보관 기간 기준 |
+
+> CHECK `ck_notification_type`: `type in ('FRIEND_REQUESTED', 'FRIEND_ACCEPTED', 'RUNNING_INVITED')`
+> CHECK `ck_notification_invitation`: `(type = 'RUNNING_INVITED') = (running_room_invitation_id is not null)`
+
+> **알림은 사건의 기록이다** — 원 상태(친구 요청·초대)가 바뀌어도 고치거나 지우지 않는다. 화면의 현재 상태는 조회할 때 `user_relationships`·`running_room_invitations`에서 읽어 붙인다. 그래서 상태 컬럼이 없다.
+> **`is_read` 하나만 바뀐다** — `updated_at`을 두지 않는다. 읽은 시각은 쓰는 곳이 없다.
+> **만드는 동작과 같은 트랜잭션에서 넣는다**(feature-spec 인앱 알림 저장). 보관 기간(운영값)이 지난 행은 조회에서 빠지고, 지우는 주기는 운영에서 정한다.
 
 ### feeds [MVP 제외]
 
@@ -496,17 +554,19 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 컬럼 | 값 | 비고 |
 |---|---|---|
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
-| users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `friendships`로 직접 판정 |
-| friendships.status | PENDING / ACCEPTED | 수락 대기 / 친구 성립 — 거절은 값이 아니라 row DELETE |
+| users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
+| user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `friendStatus`와 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
+| running_room_invitations.status | PENDING / ACCEPTED / DECLINED / EXPIRED | 응답 대기 / 수락(방 입장) / 거절 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
+| notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | app_versions.platform | IOS / ANDROID | `user_devices.platform`과 같은 값 |
-| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **[MVP 제외]** 예약값. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
-| running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대. `INVITE`는 **[MVP 제외]** 예약값 |
+| running_players.status | INVITED / JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | `INVITED`는 **쓰지 않는다** — 초대 대기는 `running_room_invitations.status`가 갖는다. 나머지는 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
+| running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 닫힘 — 시작 전이면 항상(인원이 0이 됐거나, 한 번도 시작되지 않은 방을 강제 종료가 닫을 때 — 이때는 인원을 줄이지 않는다), 시작 후면 유효 기록이 하나도 없을 때 |
 | oauth_users.provider | GOOGLE / KAKAO / APPLE | |
-| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY / RUNNING_START / RUNNING_FORCE_FINISH | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다) / 정각 시작(`start_at`에 `MATCHED`→`STARTED`. 매칭 방에만 걸고, 참가자 상태는 바꾸지 않는다) / 강제 종료(`start_at + 유예`에 남은 참가자와 방을 닫는다. 매칭 방에만 건다) |
+| scheduled_jobs.job_type | MATCH_CLOSE / RUNNING_READY / RUNNING_START / RUNNING_FORCE_FINISH | 모집 마감 확정(`MATCHING`→`MATCHED`) / 곧 시작 통지(`start_at - 리드타임`에 SSE `RUNNING_READY` 발행 — 방 상태는 바꾸지 않는다) / 정각 시작(`start_at`에 `MATCHED`→`STARTED`. 매칭·초대 방에만 걸고, 참가자 상태는 바꾸지 않는다) / 강제 종료(`start_at + 유예`에 남은 참가자와 방을 닫는다. 매칭·초대 방에만 건다) |
 | delete_users.gender | MALE / FEMALE | 온보딩 스냅샷 — 온보딩 전에 탈퇴하면 null |
 | delete_users.login_type | LOCAL / GOOGLE / KAKAO / APPLE | `oauth_users.provider`에 `LOCAL`을 더한 값 — 소셜 연동이 없는 계정도 표현해야 한다 |
 
@@ -519,7 +579,11 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 인덱스 대상 | 용도 |
 |---|---|
 | user_devices.user_id | 푸시 발송 — 유저의 활성 기기 조회 |
-| friendships.receiver_id | 받은 요청·친구 목록 (PK는 requester_id만 커버) |
+| user_relationships.(user_id, target_id) | UNIQUE 겸 조회 — 친구 수·친구 목록·관계 확인(`friendStatus`)이 `user_id` 선두로 탄다 |
+| user_relationships.target_id | 탈퇴 시 `target_id` 쪽 CASCADE 삭제 — 차단 여부 확인은 상대 행을 `(user_id, target_id)`로 찾아 이 인덱스가 필요 없다 |
+| notifications.(user_id, created_at) | 알림함 최신순 조회·안 읽은 수 — 보관 기간 조건도 `created_at` 범위로 탄다 |
+| running_room_invitations.invitee_id | 받은 초대 조회 — UNIQUE가 `running_room_id` 방향만 커버한다. 방의 초대 현황은 UNIQUE가 맡는다 |
+| user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
 | feeds.created_at | **[MVP 제외]** 피드 타임라인 최신순 정렬 |
 | feed_images.feed_id | **[MVP 제외]** 피드 이미지 조회 |
@@ -529,6 +593,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_room_sessions.(user_id, is_connected) | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 타며, 현재 방 조회는 `is_connected=true`를 항상 함께 본다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다. 슬롯별 대기 인원 집계(`GET /running-matches/slots`)도 같은 인덱스를 탄다 — 앞 세 컬럼은 등치, `start_at`은 그날 하루 범위, `target_distance`는 인덱스 안에서 거르고 `current_player_count`만 테이블에서 읽는다 |
 | running_combos.(running_room_id, second_user_id, segment_number) | 방 안에서 내 콤보 구간 조회의 `second_user_id` 쪽 — UNIQUE가 `first_user_id` 방향만 커버한다. 쌍을 정렬해 저장하므로 참가자가 어느 쪽에 있을지 미리 알 수 없다. `segment_number`까지 두어 구간 순서대로 읽힌다 |
+| running_combos.(first_user_id, combo_count) · (second_user_id, combo_count) | 업적 최고 콤보 — 여러 방에 걸친 내 콤보의 최댓값. 쌍의 어느 쪽에든 있을 수 있어 둘 다 두고 Postgres가 각각 읽어 합친다 |
 | scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작 |
 | delete_users.(email, created_at) `WHERE email IS NOT NULL` | 보관 기간 만료 정리 — 아직 신원 정보가 남은 행 조회. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다. `email`이 선두라 정리가 끝난 대다수를 인덱스 단계에서 배제한다. 행을 지우지 않는 테이블이라 시간이 갈수록 `created_at` 단독으로는 거의 전부를 읽게 된다 |
