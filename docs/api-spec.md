@@ -2794,7 +2794,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `user_relationships`에 `(요청자→대상, FRIEND_REQUEST_SENT)`·`(대상→요청자, FRIEND_REQUEST_RECEIVED)` 두 행을 쓰고(이전 관계로 `NONE` 행이 남아 있으면 그 행을 갱신한다) 대상에게 "친구 요청 도착" 인앱 알림(`FRIEND_REQUESTED`, 2-4)을 쌓고 푸시를 보낸다
-- **이미 상대가 나에게 요청해 둔 상태면(내 행이 `FRIEND_REQUEST_RECEIVED`) 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답의 `relationType`은 `FRIEND`이고, 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
+- **이미 상대가 나에게 요청해 둔 상태면(내 행이 `FRIEND_REQUEST_RECEIVED`) 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 10-5 수락과 같은 `200 OK` `{ "relationType": "FRIEND" }`이고(요청을 새로 만들지 않으므로 `201`이 아니다), 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
+  - **동시에 서로 요청해도 같다** — 두 요청 중 뒤에 처리되는 쪽이 앞쪽이 만든 요청을 받은 상태로 보고 수락한다. 둘 다 `FRIEND_REQUEST_SENT`로 끝나는 일은 없다
 - **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
 - **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
 - **에러 (404 Not Found)**: 대상이 없다
