@@ -5,12 +5,24 @@ import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsR
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record MatchSlotsResponse(List<MatchSlotResponse> slots) {
+public record MatchSlotsResponse(List<DistanceSlotsResponse> distances) {
 
     public static MatchSlotsResponse from(GetMatchSlotsResult result) {
-        return new MatchSlotsResponse(result.slots().stream()
-                .map(MatchSlotResponse::from)
+        return new MatchSlotsResponse(result.distances().stream()
+                .map(DistanceSlotsResponse::from)
                 .toList());
+    }
+
+    public record DistanceSlotsResponse(
+            int targetDistanceMeters,
+            List<MatchSlotResponse> slots
+    ) {
+
+        static DistanceSlotsResponse from(GetMatchSlotsResult.DistanceSlots distanceSlots) {
+            return new DistanceSlotsResponse(distanceSlots.targetDistanceMeters(), distanceSlots.slots().stream()
+                    .map(MatchSlotResponse::from)
+                    .toList());
+        }
     }
 
     public record MatchSlotResponse(
