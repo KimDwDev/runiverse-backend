@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
-// 그 플랫폼의 최소 버전보다 낮은 앱의 요청을 처리하기 전에 거절한다 —
+// 버전을 알 수 없거나 그 플랫폼의 최소 버전보다 낮은 앱의 요청을 처리하기 전에 거절한다 —
 // 호환을 깨는 배포 뒤 이미 떠 있던 구버전 앱의 요청이 기록·상태를 틀어지게 하지 않기 위해서다.
 // 서버 등록과 실행 순서는 AppVersionFilterConfig가 정한다
 @Slf4j
@@ -59,9 +59,10 @@ public class AppVersionFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String platform = request.getHeader(PLATFORM_HEADER);
         String versionName = request.getHeader(APP_VERSION_HEADER);
-        // 헤더가 없거나 틀리면 거절하지 않는다 — 헤더를 싣기 전 버전과 구분할 수 없고, 앱 실수 하나로 전원이 막히지 않게 한다
+        // 헤더가 없거나 틀리면 최소 버전 미만과 같이 거절한다 — 헤더를 싣지 않는 구버전 앱을 막는다.
+        // 통과시키면 아무 값이나 실어 검사를 건너뛸 수 있다
         if (!isWellFormed(platform, versionName)) {
-            filterChain.doFilter(request, response);
+            reject(request, response, HttpStatus.FORBIDDEN, CommonErrorCode.APP_UPDATE_REQUIRED);
             return;
         }
 

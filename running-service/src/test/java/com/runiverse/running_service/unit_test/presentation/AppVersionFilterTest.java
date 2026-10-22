@@ -50,13 +50,16 @@ class AppVersionFilterTest {
     }
 
     @Test
-    @DisplayName("헤더가 없으면 판정하지 않고 그대로 처리한다")
-    void passesWithoutHeaders() throws Exception {
-        // when -> 헤더를 싣기 전 버전(안드로이드 1.0.0)과 구분할 수 없다
-        filter.doFilter(request("/users/me", null, null), response, chain);
+    @DisplayName("헤더가 없으면 판정하지 않고 403으로 거절한다")
+    void rejectsWithoutHeaders() throws Exception {
+        // given -> 헤더를 싣지 않는 구버전 앱(안드로이드 1.0.0)이다
+        MockHttpServletRequest request = request("/users/me", null, null);
+
+        // when
+        filter.doFilter(request, response, chain);
 
         // then
-        assertThat(chain.getRequest()).isNotNull();
+        assertUpdateRequired(request);
         verifyNoInteractions(checkAppVersionUsecase);
     }
 
@@ -72,13 +75,16 @@ class AppVersionFilterTest {
             "IOS, 1.0.1000000000",
             "IOS, ' 1.0.0'"
     })
-    @DisplayName("헤더가 하나뿐이거나 형식이 틀리면 거절하지 않고 그대로 처리한다")
-    void passesMalformedHeaders(String platform, String versionName) throws Exception {
-        // when -> 앱 실수 하나로 전원이 막히지 않게 한다
-        filter.doFilter(request("/users/me", platform, versionName), response, chain);
+    @DisplayName("헤더가 하나뿐이거나 형식이 틀리면 판정하지 않고 403으로 거절한다")
+    void rejectsMalformedHeaders(String platform, String versionName) throws Exception {
+        // given -> 통과시키면 아무 값이나 실어 검사를 건너뛸 수 있다
+        MockHttpServletRequest request = request("/users/me", platform, versionName);
+
+        // when
+        filter.doFilter(request, response, chain);
 
         // then
-        assertThat(chain.getRequest()).isNotNull();
+        assertUpdateRequired(request);
         verifyNoInteractions(checkAppVersionUsecase);
     }
 
@@ -94,14 +100,7 @@ class AppVersionFilterTest {
         filter.doFilter(request, response, chain);
 
         // then
-        assertThat(chain.getRequest()).isNull();
-        assertThat(response.getStatus()).isEqualTo(403);
-        assertThat(response.getContentType()).startsWith("application/json");
-        assertThat(body()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "code", "APP_UPDATE_REQUIRED",
-                "message", "앱 업데이트가 필요합니다."));
-        // 보안 필터처럼 중앙 예외 핸들러를 거치지 않아 원인을 직접 남겨야 UNKNOWN이 되지 않는다
-        assertThat(request.getAttribute(HttpRequestMetricsFilter.REASON)).isEqualTo("APP_UPDATE_REQUIRED");
+        assertUpdateRequired(request);
     }
 
     @Test
@@ -178,6 +177,17 @@ class AppVersionFilterTest {
             request.addHeader(AppVersionFilter.APP_VERSION_HEADER, versionName);
         }
         return request;
+    }
+
+    private void assertUpdateRequired(MockHttpServletRequest request) throws Exception {
+        assertThat(chain.getRequest()).isNull();
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentType()).startsWith("application/json");
+        assertThat(body()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "code", "APP_UPDATE_REQUIRED",
+                "message", "앱 업데이트가 필요합니다."));
+        // 보안 필터처럼 중앙 예외 핸들러를 거치지 않아 원인을 직접 남겨야 UNKNOWN이 되지 않는다
+        assertThat(request.getAttribute(HttpRequestMetricsFilter.REASON)).isEqualTo("APP_UPDATE_REQUIRED");
     }
 
     private Map<String, Object> body() throws Exception {
