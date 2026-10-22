@@ -358,32 +358,32 @@
 | user_relationship_id | bigint | PK | API에 내보내지 않는다 — 경로는 상대 `userId`로 찾는다 |
 | user_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | **행의 주인** — "내 관점"의 나 |
 | target_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 상대 |
-| type | enum | NOT NULL | 주인 관점의 관계 — `PENDING_SENT` / `PENDING_RECEIVED` / `ACCEPTED` / `BLOCKED` — [§6](#6-enum-사전) |
+| type | enum | NOT NULL | 주인 관점의 관계 — `FRIEND_REQUEST_SENT` / `FRIEND_REQUEST_RECEIVED` / `FRIEND` / `BLOCKED` — [§6](#6-enum-사전) |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 `type` 변경 시각 — 수락한 행이면 친구가 된 시각이다 |
 | deleted_at | timestamp | nullable | **관계가 끝난 시각**(소프트 삭제). 값이 없으면 지금 유효한 관계다 |
 
-> CHECK `ck_user_relationship_type`: `type in ('PENDING_SENT', 'PENDING_RECEIVED', 'ACCEPTED', 'BLOCKED')`
+> CHECK `ck_user_relationship_type`: `type in ('FRIEND_REQUEST_SENT', 'FRIEND_REQUEST_RECEIVED', 'FRIEND', 'BLOCKED')`
 > CHECK `ck_user_relationship_users`: `user_id <> target_id`
 > UNIQUE (user_id, target_id) `WHERE deleted_at IS NULL` — **유효한 관계는 쌍마다 하나다.** 끝난 행은 쌓이므로 조건 없는 UNIQUE를 걸 수 없다. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다(`delete_users`와 같다).
 
 > **사람마다 자기 관점의 행을 갖는다.** `type`이 곧 조회자 기준 API `friendStatus`라 값 이름을 그대로 맞췄다(변환 없음). 행이 없으면 `NONE`이다. 친구 수·친구 목록·관계 확인이 전부 `user_id` 하나로 끝난다 — 요청자/수신자 두 컬럼을 OR로 볼 일이 없다.
-> **친구·요청은 양쪽에 짝으로 쓴다** — A가 요청하면 `(A,B,PENDING_SENT)`·`(B,A,PENDING_RECEIVED)`, 수락하면 둘 다 `ACCEPTED`. **짝은 DB로 막을 수 없어 앱이 한 트랜잭션에서 함께 바꾼다.** 차단은 건 쪽 한 행뿐이다.
+> **친구·요청은 양쪽에 짝으로 쓴다** — A가 요청하면 `(A,B,FRIEND_REQUEST_SENT)`·`(B,A,FRIEND_REQUEST_RECEIVED)`, 수락하면 둘 다 `FRIEND`. **짝은 DB로 막을 수 없어 앱이 한 트랜잭션에서 함께 바꾼다.** 차단은 건 쪽 한 행뿐이다.
 > **진행은 같은 행을 갱신하고, 끝나면 `deleted_at`을 찍는다.**
 
 | 사건 | A의 행 (A → B) | B의 행 (B → A) |
 |---|---|---|
-| A가 요청 | 새 행 `PENDING_SENT` | 새 행 `PENDING_RECEIVED` |
-| B가 수락 (서로 요청해 바로 성립한 경우 포함) | `ACCEPTED`로 갱신 | `ACCEPTED`로 갱신 |
+| A가 요청 | 새 행 `FRIEND_REQUEST_SENT` | 새 행 `FRIEND_REQUEST_RECEIVED` |
+| B가 수락 (서로 요청해 바로 성립한 경우 포함) | `FRIEND`로 갱신 | `FRIEND`로 갱신 |
 | 요청 취소·거절·친구 삭제 | `deleted_at` | `deleted_at` |
 | A가 B를 차단 | 기존 행이 있으면 `deleted_at`, **새 행** `BLOCKED` | 있으면 `deleted_at` |
 | A가 차단 해제 | `BLOCKED` 행에 `deleted_at` | — |
 
-> **차단은 친구 관계를 끝낸다** — 주인의 유효한 행이 하나뿐이라 `BLOCKED`와 `ACCEPTED`가 함께 있을 수 없다. 해제해도 친구로 돌아가지 않는다. 친구였던 기록은 끝난 행으로 남는다.
+> **차단은 친구 관계를 끝낸다** — 주인의 유효한 행이 하나뿐이라 `BLOCKED`와 `FRIEND`가 함께 있을 수 없다. 해제해도 친구로 돌아가지 않는다. 친구였던 기록은 끝난 행으로 남는다.
 > **다시 맺으면 새 행이다** — 끝난 행을 되살리지 않는다. 그래서 한 쌍의 끝난 행이 쌓여 관계 이력이 된다.
-> **이력은 내부용이다** — API에 내보내지 않는다. 남는 것은 "어떤 `type`이었고 언제 끝났나"까지라 **취소와 거절은 구분되지 않는다**(둘 다 `PENDING_*` 행의 `deleted_at`). 수락 전 대기 시각은 `created_at`, 수락 시각은 `updated_at`이 말한다.
+> **이력은 내부용이다** — API에 내보내지 않는다. 남는 것은 "어떤 `type`이었고 언제 끝났나"까지라 **취소와 거절은 구분되지 않는다**(둘 다 `FRIEND_REQUEST_*` 행의 `deleted_at`). 수락 전 대기 시각은 `created_at`, 수락 시각은 `updated_at`이 말한다.
 > **모든 조회는 `deleted_at IS NULL`을 함께 본다** — 하나라도 빠지면 끝난 관계가 되살아나 보인다.
 > **탈퇴하면 그 사람이 들어간 행은 끝난 행까지 전부 지운다**(양쪽 FK CASCADE). 탈퇴하지 않은 사람의 끝난 행 보관 기간은 운영에서 정한다.
-> **친구 수는 `COUNT`로 구한다** — `user_id`가 본인이고 `type='ACCEPTED'`이며 `deleted_at IS NULL`인 행.
+> **친구 수는 `COUNT`로 구한다** — `user_id`가 본인이고 `type='FRIEND'`이며 `deleted_at IS NULL`인 행.
 
 ### notifications (인앱 알림)
 
@@ -558,7 +558,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
-| user_relationships.type | PENDING_SENT / PENDING_RECEIVED / ACCEPTED / BLOCKED | 행 주인 관점의 관계 — 보낸 요청 / 받은 요청 / 친구 / 내가 차단함. API `friendStatus`와 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 관계가 없으면 행이 없다(`NONE`) |
+| user_relationships.type | FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / FRIEND / BLOCKED | 행 주인 관점의 관계 — 보낸 요청 / 받은 요청 / 친구 / 내가 차단함. API `friendStatus`와 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 관계가 없으면 행이 없다(`NONE`) |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / EXPIRED | 응답 대기 / 수락(방 입장) / 거절 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
 | notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |

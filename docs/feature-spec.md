@@ -617,7 +617,7 @@
 - **방 생성**: `running_rooms`를 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고, 입력받은 시작 시각·목표 거리를 `start_at`·`target_distance`에 넣는다. 만든 사람의 `running_players(status='JOINED')`와 배정 세션도 함께 만든다. 예약(`MATCH_CLOSE`·`RUNNING_READY`·`RUNNING_START`·`RUNNING_FORCE_FINISH`)도 매칭 방과 같은 시점에 같은 종류로 건다.
   - 매칭 후보 스캔(`type='MATCH'`)과 슬롯별 대기 인원 집계에 잡히지 않는다 — 잡히면 모르는 사람이 배정된다.
 - **초대는 신청이 아니다** — 초대받은 사람의 `running_players` 행을 만들지 않고 `running_room_invitations`에 따로 둔다. 활성 신청은 `running_players.deleted_at IS NULL` 하나로 판정하므로, 초대만 받아도 신청 행이 생기면 초대 여러 개가 쌓인 사람이 매칭도 다른 초대도 못 하게 된다. 그래서 `running_players.status`의 `INVITED`는 쓰지 않는다.
-- **초대 조건**: 보내는 사람이 그 방의 현재 참가자이고(`is_connected=true`), 방이 `MATCHING`이며 모집 마감 전이고, 받는 사람이 친구(`ACCEPTED`)여야 한다. 이미 대기중이거나 이미 방에 들어와 있는 친구는 건너뛴다 — 여러 명을 한 번에 고르다 겹친 것은 오류가 아니다.
+- **초대 조건**: 보내는 사람이 그 방의 현재 참가자이고(`is_connected=true`), 방이 `MATCHING`이며 모집 마감 전이고, 받는 사람이 친구(`FRIEND`)여야 한다. 이미 대기중이거나 이미 방에 들어와 있는 친구는 건너뛴다 — 여러 명을 한 번에 고르다 겹친 것은 오류가 아니다.
   - **친구 여부는 초대 시점에만 본다.** 초대 뒤에 친구를 끊어도 대기 중인 초대는 유효하다.
 - **수락**: 방을 잠그고 다시 본다 — `MATCHING`이고 마감 전이며 자리가 남았고(`current_player_count < max_player_count`), 받는 사람에게 활성 신청이 없어야 한다. 통과하면 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고 인원·방 평균 페이스를 갱신한 뒤 초대를 `ACCEPTED`로 바꾼다. **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 그 순서를 정한다.
   - 자리가 차서 거절된 초대는 `PENDING`으로 남는다 — 누가 나가면 다시 수락할 수 있다.
