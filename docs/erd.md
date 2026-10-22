@@ -8,7 +8,7 @@
 
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`, `running_room_invitations.inviter_id`/`invitee_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`·`scheduled_jobs`·`colors`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`·`user_relationships`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다. `notifications`도 `created_at`만 둔다 — 갱신은 `is_read` 하나뿐이고 읽은 시각은 쓰는 곳이 없다.
@@ -16,7 +16,7 @@
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
-- **`deleted_at`**: `feeds`·`user_relationships`는 소프트 삭제(`user_relationships`는 끝난 관계를 내부 이력으로 남긴다 — API에 내보내지 않는다), `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
+- **`deleted_at`**: `feeds`는 소프트 삭제, `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
 - **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`notifications`·`running_room_invitations`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
   - **CASCADE에 기대지 않고 앱이 먼저 지운다** — 온보딩 값과 로그인 수단은 `delete_users`로 옮겨야 하는데 DB 연쇄 삭제는 애플리케이션을 거치지 않는다. 기존 개발 DB처럼 FK가 붙지 않은 환경도 있어 CASCADE 유무와 무관하게 동작해야 한다.
@@ -204,7 +204,7 @@
 > **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다.
 > **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `DECLINED`와 "수락 뒤 방을 나간 `ACCEPTED`"는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
 > **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
-> **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 관계 종료(`deleted_at`)로 처리하는 것과 다르다.
+> **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
 > **받은 사람이 탈퇴하면 그 사람의 초대를 지우고, 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 그래서 받은 사람 쪽 알림이 가리키는 초대 행은 항상 있다.
 
 ### running_records
@@ -358,32 +358,29 @@
 | user_relationship_id | bigint | PK | API에 내보내지 않는다 — 경로는 상대 `userId`로 찾는다 |
 | user_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | **행의 주인** — "내 관점"의 나 |
 | target_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 상대 |
-| type | enum | NOT NULL | 주인 관점의 관계 — `FRIEND_REQUEST_SENT` / `FRIEND_REQUEST_RECEIVED` / `FRIEND` / `BLOCKED` — [§6](#6-enum-사전) |
-| created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 `type` 변경 시각 — 수락한 행이면 친구가 된 시각이다 |
-| deleted_at | timestamp | nullable | **관계가 끝난 시각**(소프트 삭제). 값이 없으면 지금 유효한 관계다 |
+| type | enum | NOT NULL | 주인 관점의 관계 — `NONE` / `FRIEND` / `FRIEND_REQUEST_SENT` / `FRIEND_REQUEST_RECEIVED` / `BLOCKED` — [§6](#6-enum-사전) |
+| created_at / updated_at | timestamp | NOT NULL | `created_at` = 이 쌍의 관계가 처음 생긴 시각, `updated_at` = 마지막 `type` 변경 시각 |
 
-> CHECK `ck_user_relationship_type`: `type in ('FRIEND_REQUEST_SENT', 'FRIEND_REQUEST_RECEIVED', 'FRIEND', 'BLOCKED')`
+> UNIQUE (user_id, target_id) — 쌍마다 행은 하나다. 관계가 끝나도 지우지 않고 같은 행을 계속 쓴다.
+> CHECK `ck_user_relationship_type`: `type in ('NONE', 'FRIEND', 'FRIEND_REQUEST_SENT', 'FRIEND_REQUEST_RECEIVED', 'BLOCKED')`
 > CHECK `ck_user_relationship_users`: `user_id <> target_id`
-> UNIQUE (user_id, target_id) `WHERE deleted_at IS NULL` — **유효한 관계는 쌍마다 하나다.** 끝난 행은 쌓이므로 조건 없는 UNIQUE를 걸 수 없다. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다(`delete_users`와 같다).
 
-> **사람마다 자기 관점의 행을 갖는다.** `type`이 곧 조회자 기준 API `friendStatus`라 값 이름을 그대로 맞췄다(변환 없음). 행이 없으면 `NONE`이다. 친구 수·친구 목록·관계 확인이 전부 `user_id` 하나로 끝난다 — 요청자/수신자 두 컬럼을 OR로 볼 일이 없다.
-> **친구·요청은 양쪽에 짝으로 쓴다** — A가 요청하면 `(A,B,FRIEND_REQUEST_SENT)`·`(B,A,FRIEND_REQUEST_RECEIVED)`, 수락하면 둘 다 `FRIEND`. **짝은 DB로 막을 수 없어 앱이 한 트랜잭션에서 함께 바꾼다.** 차단은 건 쪽 한 행뿐이다.
-> **진행은 같은 행을 갱신하고, 끝나면 `deleted_at`을 찍는다.**
+> **사람마다 자기 관점의 행을 갖는다.** `type`이 곧 조회자 기준 API `friendStatus`라 값 이름을 그대로 맞췄다(변환 없음). 친구 수·친구 목록·관계 확인이 전부 `user_id` 하나로 끝난다 — 요청자/수신자 두 컬럼을 OR로 볼 일이 없다.
+> **관계가 끝나면 행을 지우지 않고 `NONE`으로 바꾼다.** 행이 지워지는 것은 탈퇴(두 FK CASCADE)뿐이다. 그래서 API `NONE`은 "행이 없다"와 "`NONE` 행이 있다" 두 경우다 — 둘을 같게 다룬다.
+> **친구·요청은 양쪽에 짝으로 쓴다** — A가 요청하면 `(A,B,FRIEND_REQUEST_SENT)`·`(B,A,FRIEND_REQUEST_RECEIVED)`, 수락하면 둘 다 `FRIEND`. **짝은 DB로 막을 수 없어 앱이 한 트랜잭션에서 함께 바꾼다.** 차단은 건 쪽 한 행만 `BLOCKED`다.
 
 | 사건 | A의 행 (A → B) | B의 행 (B → A) |
 |---|---|---|
-| A가 요청 | 새 행 `FRIEND_REQUEST_SENT` | 새 행 `FRIEND_REQUEST_RECEIVED` |
-| B가 수락 (서로 요청해 바로 성립한 경우 포함) | `FRIEND`로 갱신 | `FRIEND`로 갱신 |
-| 요청 취소·거절·친구 삭제 | `deleted_at` | `deleted_at` |
-| A가 B를 차단 | 기존 행이 있으면 `deleted_at`, **새 행** `BLOCKED` | 있으면 `deleted_at` |
-| A가 차단 해제 | `BLOCKED` 행에 `deleted_at` | — |
+| A가 요청 | `FRIEND_REQUEST_SENT` (없으면 생성, `NONE`이면 갱신) | `FRIEND_REQUEST_RECEIVED` (없으면 생성, `NONE`이면 갱신) |
+| B가 수락 (서로 요청해 바로 성립한 경우 포함) | `FRIEND` | `FRIEND` |
+| 요청 취소·거절·친구 삭제 | `NONE` | `NONE` |
+| A가 B를 차단 | `BLOCKED` (없으면 생성) | 있으면 `NONE` |
+| A가 차단 해제 | `NONE` | — |
 
-> **차단은 친구 관계를 끝낸다** — 주인의 유효한 행이 하나뿐이라 `BLOCKED`와 `FRIEND`가 함께 있을 수 없다. 해제해도 친구로 돌아가지 않는다. 친구였던 기록은 끝난 행으로 남는다.
-> **다시 맺으면 새 행이다** — 끝난 행을 되살리지 않는다. 그래서 한 쌍의 끝난 행이 쌓여 관계 이력이 된다.
-> **이력은 내부용이다** — API에 내보내지 않는다. 남는 것은 "어떤 `type`이었고 언제 끝났나"까지라 **취소와 거절은 구분되지 않는다**(둘 다 `FRIEND_REQUEST_*` 행의 `deleted_at`). 수락 전 대기 시각은 `created_at`, 수락 시각은 `updated_at`이 말한다.
-> **모든 조회는 `deleted_at IS NULL`을 함께 본다** — 하나라도 빠지면 끝난 관계가 되살아나 보인다.
-> **탈퇴하면 그 사람이 들어간 행은 끝난 행까지 전부 지운다**(양쪽 FK CASCADE). 탈퇴하지 않은 사람의 끝난 행 보관 기간은 운영에서 정한다.
-> **친구 수는 `COUNT`로 구한다** — `user_id`가 본인이고 `type='FRIEND'`이며 `deleted_at IS NULL`인 행.
+> **차단은 친구 관계를 끝낸다** — 쌍마다 행이 하나라 `BLOCKED`와 `FRIEND`가 함께 있을 수 없다. 해제하면 `NONE`이라 친구로 돌아가지 않는다.
+> **조회는 `NONE`을 관계 없음으로 본다** — 친구 수는 `type='FRIEND'`, 친구 목록은 `type in (FRIEND, FRIEND_REQUEST_SENT, FRIEND_REQUEST_RECEIVED)`처럼 필요한 값을 골라 읽는다. `NONE`을 빼먹지 않도록 "아닌 것"(`<> 'BLOCKED'`)이 아니라 "맞는 것"을 나열한다.
+> **이력은 테이블에 남지 않는다** — 행은 지금 상태만 갖는다(마지막 변경 시각은 `updated_at`). 무슨 일이 있었는지(요청·수락·취소·거절·삭제·차단·해제)는 **애플리케이션 로그**로 남긴다(feature-spec 관계 이력).
+> **친구 수는 `COUNT`로 구한다** — `user_id`가 본인이고 `type='FRIEND'`인 행.
 
 ### notifications (인앱 알림)
 
@@ -558,7 +555,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
-| user_relationships.type | FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / FRIEND / BLOCKED | 행 주인 관점의 관계 — 보낸 요청 / 받은 요청 / 친구 / 내가 차단함. API `friendStatus`와 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 관계가 없으면 행이 없다(`NONE`) |
+| user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `friendStatus`와 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / EXPIRED | 응답 대기 / 수락(방 입장) / 거절 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
 | notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
@@ -582,7 +579,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 인덱스 대상 | 용도 |
 |---|---|
 | user_devices.user_id | 푸시 발송 — 유저의 활성 기기 조회 |
-| user_relationships.(user_id, target_id) `WHERE deleted_at IS NULL` | 유효 관계 UNIQUE 겸 조회 — 친구 수·친구 목록·관계 확인(`friendStatus`)이 `user_id` 선두로 탄다. 끝난 행은 인덱스 단계에서 빠진다 |
+| user_relationships.(user_id, target_id) | UNIQUE 겸 조회 — 친구 수·친구 목록·관계 확인(`friendStatus`)이 `user_id` 선두로 탄다 |
 | user_relationships.target_id | 탈퇴 시 `target_id` 쪽 CASCADE 삭제 — 차단 여부 확인은 상대 행을 `(user_id, target_id)`로 찾아 이 인덱스가 필요 없다 |
 | notifications.(user_id, created_at) | 알림함 최신순 조회·안 읽은 수 — 보관 기간 조건도 `created_at` 범위로 탄다 |
 | running_room_invitations.invitee_id | 받은 초대 조회 — UNIQUE가 `running_room_id` 방향만 커버한다. 방의 초대 현황은 UNIQUE가 맡는다 |
