@@ -130,6 +130,37 @@ class AppVersionFilterTest {
         verifyNoInteractions(checkAppVersionUsecase);
     }
 
+    @Test
+    @DisplayName("CORS 사전 요청은 앱 버전 헤더가 없어도 검사하지 않는다")
+    void skipsCorsPreflight() throws Exception {
+        // given -> 브라우저는 사전 요청에 헤더 이름만 싣는다. 막으면 본 요청을 못 보낸다
+        MockHttpServletRequest request = request("/auth/login", null, null);
+        request.setMethod("OPTIONS");
+        request.addHeader("Origin", "http://localhost:3000");
+        request.addHeader("Access-Control-Request-Method", "POST");
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(chain.getRequest()).isNotNull();
+        verifyNoInteractions(checkAppVersionUsecase);
+    }
+
+    @Test
+    @DisplayName("사전 요청이 아닌 OPTIONS는 앱 버전 헤더가 없으면 거절한다")
+    void rejectsPlainOptionsWithoutHeaders() throws Exception {
+        // given -> 빼는 건 CORS 사전 요청뿐이다. 메서드만 OPTIONS라고 검사를 건너뛰면 안 된다
+        MockHttpServletRequest request = request("/auth/login", null, null);
+        request.setMethod("OPTIONS");
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertUpdateRequired(request);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"/app/notices", "/app/version/latest", "/app-versions"})
     @DisplayName("버전 확인 주소와 앞부분만 같은 경로는 검사한다")

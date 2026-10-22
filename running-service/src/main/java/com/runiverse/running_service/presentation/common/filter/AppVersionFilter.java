@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -44,11 +45,14 @@ public class AppVersionFilter extends OncePerRequestFilter {
     private final CheckAppVersionUsecase checkAppVersionUsecase;
     private final ObjectMapper objectMapper;
 
+    // CORS 사전 요청은 브라우저가 헤더 이름만 싣고 처리도 하지 않는다 — 막으면 본 요청을 못 보낸다.
+    // 판정은 뒤의 CORS 설정에 맡기고, 본 요청은 여기서 검사한다
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
-        return uri.equals(contextPath + APP_VERSION_PATH) || uri.startsWith(contextPath + ACTUATOR_PATH);
+        return uri.equals(contextPath + APP_VERSION_PATH) || uri.startsWith(contextPath + ACTUATOR_PATH)
+                || CorsUtils.isPreFlightRequest(request);
     }
 
     @Override
