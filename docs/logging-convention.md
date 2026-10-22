@@ -68,6 +68,7 @@
 |---|---|
 | `auth` | `[인증]` |
 | `user` | `[회원]` |
+| `relationship` | `[관계]` |
 | `match` | `[매칭]` |
 | `running` | `[러닝]` |
 | `scheduling` | `[예약]` |
