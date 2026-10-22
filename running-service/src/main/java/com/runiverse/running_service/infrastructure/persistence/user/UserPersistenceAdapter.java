@@ -8,6 +8,7 @@ import com.runiverse.running_service.application.common.port.out.LoadPlayerProfi
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
+import com.runiverse.running_service.application.relationship.port.out.ExistsUserPort;
 import com.runiverse.running_service.application.running.port.out.LoadUserWeightPort;
 import com.runiverse.running_service.application.user.exception.NicknameAlreadyExistsException;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
@@ -77,7 +78,7 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
         UpdatePasswordPort, LoadUserAvgPacePort, UpdateIntroductionPort, UpdateOnboardingPort, LoadUserWeightPort,
         LoadOnboardingProfilePort, LoadPlayerProfilesPort, UpdateSettingsPort, LoadOauthProviderPort,
         LoadAccountSnapshotPort, SaveDeletedUserPort, DeleteUserPort,
-        LoadDeletedUserIdsPort, RedactDeletedUserPort, UpdateUserAvgPacePort {
+        LoadDeletedUserIdsPort, RedactDeletedUserPort, UpdateUserAvgPacePort, ExistsUserPort {
 
     private final EntityManager entityManager;
 
@@ -91,6 +92,18 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
                 .setParameter("email", email)
                 .getSingleResult();
 
+        return count > 0;
+    }
+
+    @Override
+    public boolean existsUser(UserId userId) {
+        Long count = entityManager.createQuery("""
+                        SELECT COUNT(u)
+                        FROM UserJpaEntity u
+                        WHERE u.userId = :userId
+                        """, Long.class)
+                .setParameter("userId", userId.value())
+                .getSingleResult();
         return count > 0;
     }
 
