@@ -4,6 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestCommand;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestHandler;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestResult;
+import com.runiverse.running_service.application.relationship.common.FriendRequestAcceptor;
 import com.runiverse.running_service.application.relationship.exception.FriendRequestNotFoundException;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
@@ -30,8 +31,8 @@ public class AcceptFriendRequestIntegrationTest extends IntegrationTestSupport {
     void setUp() {
         relationshipStore = new InMemoryUserRelationshipStore();
         acceptFriendRequestHandler = new AcceptFriendRequestHandler(
-                relationshipStore,  // LoadUserRelationshipPort
-                relationshipStore   // SaveUserRelationshipPort
+                relationshipStore,                              // LoadUserRelationshipPort
+                new FriendRequestAcceptor(relationshipStore)    // SaveUserRelationshipPort
         );
         requesterId = UuidCreator.getTimeOrderedEpoch();
         receiverId = UuidCreator.getTimeOrderedEpoch();

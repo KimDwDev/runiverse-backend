@@ -4,6 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestCommand;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestHandler;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestResult;
+import com.runiverse.running_service.application.relationship.common.FriendRequestAcceptor;
 import com.runiverse.running_service.application.relationship.exception.FriendRequestNotFoundException;
 import com.runiverse.running_service.application.relationship.port.out.LoadUserRelationshipPort;
 import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,7 +39,6 @@ public class AcceptFriendRequestHandlerTest {
     @Mock
     private SaveUserRelationshipPort saveUserRelationshipPort;
 
-    @InjectMocks
     private AcceptFriendRequestHandler handler;
 
     private UUID userId;
@@ -47,6 +46,9 @@ public class AcceptFriendRequestHandlerTest {
 
     @BeforeEach
     void setUp() {
+        // 짝 검증과 저장은 공용 컴포넌트가 맡는다 — 진짜를 끼워 저장 포트까지 이어지는지 본다
+        handler = new AcceptFriendRequestHandler(
+                loadUserRelationshipPort, new FriendRequestAcceptor(saveUserRelationshipPort));
         userId = UuidCreator.getTimeOrderedEpoch();
         requesterId = UuidCreator.getTimeOrderedEpoch();
     }

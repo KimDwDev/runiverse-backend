@@ -1,9 +1,9 @@
 package com.runiverse.running_service.application.relationship.command.accept;
 
+import com.runiverse.running_service.application.relationship.common.FriendRequestAcceptor;
 import com.runiverse.running_service.application.relationship.exception.FriendRequestNotFoundException;
 import com.runiverse.running_service.application.relationship.port.in.AcceptFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.out.LoadUserRelationshipPort;
-import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;
 import com.runiverse.running_service.application.relationship.port.out.UserRelationshipPair;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.relationship.UserRelationship;
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AcceptFriendRequestHandler implements AcceptFriendRequestUsecase {
 
     private final LoadUserRelationshipPort loadUserRelationshipPort;
-    private final SaveUserRelationshipPort saveUserRelationshipPort;
+    private final FriendRequestAcceptor friendRequestAcceptor;
 
     @Override
     public AcceptFriendRequestResult handle(AcceptFriendRequestCommand command) {
@@ -42,16 +42,8 @@ public class AcceptFriendRequestHandler implements AcceptFriendRequestUsecase {
             throw notFound(requesterId);
         }
 
-        // 4. 상대 행은 반드시 보낸 요청이다 — 아니면 짝이 깨진 데이터라 사용자 잘못이 아니다
-        UserRelationship theirs = pair.findTheirs()
-                .filter(relationship -> relationship.getType() == RelationshipType.FRIEND_REQUEST_SENT)
-                .orElseThrow(() -> new IllegalStateException("친구 요청의 짝이 맞지 않습니다."));
-
-        // 5. 두 행을 함께 친구로 바꾼다
-        mine.accept();
-        theirs.accept();
-        saveUserRelationshipPort.save(mine);
-        saveUserRelationshipPort.save(theirs);
+        // 4. 두 행을 함께 친구로 바꾼다 — 상대 행이 보낸 요청이 아니면 짝이 깨진 데이터라 500이다
+        friendRequestAcceptor.accept(mine, pair.findTheirs().orElse(null));
 
         log.info("[관계] 친구 요청 수락 성공 - targetUserId={}", requesterId.value());
         return new AcceptFriendRequestResult(RelationshipType.FRIEND);
