@@ -64,6 +64,12 @@ for attempt in $(seq 1 60); do
   sleep 2
 done
 
+# 앱 버전 헤더를 실은 연결은 최소 버전을 읽는다 — 행이 없으면 핸드셰이크가 500이다.
+# E2E와 같은 SQL을 쓰며, 실패를 삼키면 k6가 엉뚱한 연결 실패로 깨지므로 바로 멈춘다
+echo "===== 앱 버전 시드 ====="
+compose exec -T postgres psql --quiet --username=runiverse --dbname=runiverse_e2e \
+  --set ON_ERROR_STOP=1 --file=- < "${ROOT_DIR}/e2e_test/sql/app-versions.sql"
+
 echo "===== 시드 (run_id=${RUN_ID}, rooms=${ROOMS}) ====="
 compose exec -T postgres psql --quiet --username=runiverse --dbname=runiverse_e2e \
   -v run_id="${RUN_ID}" -v rooms="${ROOMS}" --file=- < "${LOAD_DIR}/sql/seed.sql"

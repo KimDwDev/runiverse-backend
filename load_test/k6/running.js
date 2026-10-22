@@ -33,6 +33,8 @@ const START_SPREAD_SECONDS = Number(__ENV.START_SPREAD_SECONDS || 0);
 const FINISH_TOGETHER = __ENV.FINISH_SPREAD_SECONDS !== undefined;
 const FINISH_SPREAD_SECONDS = Number(__ENV.FINISH_SPREAD_SECONDS || 0);
 const STRICT = __ENV.STRICT !== 'false';
+// 서버가 앱 버전 헤더가 없는 연결을 403으로 막는다 — 대상 서버의 안드로이드 최소 버전 이상이어야 한다
+const APP_VERSION_HEADERS = { 'X-App-Platform': 'ANDROID', 'X-App-Version': '1.1.0' };
 
 const BATCH_SECONDS = 10;
 const PAUSE_SECONDS = 20;
@@ -227,7 +229,7 @@ function connect(runner, resendLastBatch) {
   runner.batchSentAt = null;
   // 끊긴 사이 보내지 못한 종료는 다시 보낸다
   runner.finishSentAt = null;
-  const params = { headers: { Authorization: `Bearer ${runner.token}` } };
+  const params = { headers: { Authorization: `Bearer ${runner.token}`, ...APP_VERSION_HEADERS } };
 
   const response = ws.connect(WS_URL, params, (socket) => {
     socket.on('open', () => {
