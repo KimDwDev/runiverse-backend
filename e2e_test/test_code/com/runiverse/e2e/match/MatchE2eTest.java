@@ -188,43 +188,59 @@ class MatchE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("슬롯 조회는 그날 모집 중인 대기 인원을 슬롯별로 세고, 선택지 밖 값은 400으로 걸린다")
+    @DisplayName("슬롯 조회는 그날 모집 중인 대기 인원을 거리·슬롯별로 세고, 잘못된 날짜는 400으로 걸린다")
     void slotsCountWaitingPlayers() {
-        // given - 다른 테스트의 내일 3000m 슬롯과 섞이지 않게 모레 10000m를 쓴다
+        // given - 다른 테스트의 내일 슬롯과 섞이지 않게 모레를 쓴다. 모레는 이 테스트만 신청한다
         LocalDate slotDate = TOMORROW.plusDays(1);
-        int slotDistance = 10000;
         TestUser first = signUpAndOnboard();
         TestUser second = signUpAndOnboard();
-        assertThat(apply(first, slotDate.atTime(20, 0), slotDistance).status()).isEqualTo(201);
-        assertThat(apply(second, slotDate.atTime(20, 0), slotDistance).status()).isEqualTo(201);
+        TestUser third = signUpAndOnboard();
+        assertThat(apply(first, slotDate.atTime(20, 0), 10000).status()).isEqualTo(201);
+        assertThat(apply(second, slotDate.atTime(20, 0), 10000).status()).isEqualTo(201);
+        assertThat(apply(third, slotDate.atTime(20, 0), 5000).status()).isEqualTo(201);
 
         // when
-        Response slots = get("/running-matches/slots?date=" + slotDate + "&targetDistanceMeters=" + slotDistance,
+        Response slots = get("/running-matches/slots?date=" + slotDate, first.accessToken());
+        Response malformed = get("/running-matches/slots?date=2026/07/25", first.accessToken());
+        Response pastDate = get("/running-matches/slots?date=" + LocalDate.now(APP_ZONE).minusDays(1),
                 first.accessToken());
-        Response offDistance = get("/running-matches/slots?targetDistanceMeters=7000", first.accessToken());
-        Response malformed = get("/running-matches/slots?targetDistanceMeters=abc", first.accessToken());
-        Response pastDate = get("/running-matches/slots?date=" + LocalDate.now(APP_ZONE).minusDays(1)
-                + "&targetDistanceMeters=" + slotDistance, first.accessToken());
 
-        // then - 9개 슬롯이 오름차순이고 같은 방에 모인 두 명이 20:00에 잡힌다(JPQL 집계가 실제 DB에서 돈다)
+        // then - 거리 오름차순, 거리마다 9개 슬롯이 오름차순이고 같은 시각이어도 거리끼리 합산하지 않는다
+        //        (JPQL 집계가 실제 DB에서 돈다)
         assertThat(slots.status()).isEqualTo(200);
-        List<Map<String, Object>> slotList = slots.objects("slots");
-        assertThat(slotList).extracting(slot -> LocalDateTime.parse((String) slot.get("scheduledStartAt")))
+        assertThat(slots.body().keySet()).containsExactly("distances");
+        List<Map<String, Object>> distances = slots.objects("distances");
+        assertThat(distances).extracting(distance -> distance.get("targetDistanceMeters"))
+                .containsExactly(3000, 5000, 10000);
+        assertThat(slotsOf(distances, 3000)).extracting(slot -> LocalDateTime.parse((String) slot.get("scheduledStartAt")))
                 .containsExactly(
                         slotDate.atTime(18, 0), slotDate.atTime(18, 30), slotDate.atTime(19, 0),
                         slotDate.atTime(19, 30), slotDate.atTime(20, 0), slotDate.atTime(20, 30),
                         slotDate.atTime(21, 0), slotDate.atTime(21, 30), slotDate.atTime(22, 0));
-        assertThat(slotList).extracting(slot -> slot.get("waitingCount"))
+        assertThat(slotsOf(distances, 3000)).extracting(slot -> slot.get("waitingCount"))
+                .containsExactly(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(slotsOf(distances, 5000)).extracting(slot -> slot.get("waitingCount"))
+                .containsExactly(0, 0, 0, 0, 1, 0, 0, 0, 0);
+        assertThat(slotsOf(distances, 10000)).extracting(slot -> slot.get("waitingCount"))
                 .containsExactly(0, 0, 0, 0, 2, 0, 0, 0, 0);
-        assertThat(slotList).extracting(slot -> slot.get("selectable")).containsOnly(true);
+        for (int distanceMeters : List.of(3000, 5000, 10000)) {
+            assertThat(slotsOf(distances, distanceMeters)).extracting(slot -> slot.get("selectable")).containsOnly(true);
+        }
 
-        assertThat(offDistance.status()).isEqualTo(400);
-        assertThat(offDistance.text("code")).isEqualTo("INVALID_REQUEST");
-        assertThat(offDistance.text("message")).isEqualTo("목표 거리는 3000, 5000, 10000 중 하나여야 합니다.");
         assertThat(malformed.status()).isEqualTo(400);
+        assertThat(malformed.text("code")).isEqualTo("INVALID_REQUEST");
         assertThat(malformed.text("message")).isEqualTo("입력값이 올바르지 않습니다.");
         assertThat(pastDate.status()).isEqualTo(400);
         assertThat(pastDate.text("message")).isEqualTo("조회 날짜는 오늘 이전일 수 없습니다.");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> slotsOf(List<Map<String, Object>> distances, int distanceMeters) {
+        return distances.stream()
+                .filter(distance -> distance.get("targetDistanceMeters").equals(distanceMeters))
+                .findFirst()
+                .map(distance -> (List<Map<String, Object>>) distance.get("slots"))
+                .orElseThrow();
     }
 
     @Test

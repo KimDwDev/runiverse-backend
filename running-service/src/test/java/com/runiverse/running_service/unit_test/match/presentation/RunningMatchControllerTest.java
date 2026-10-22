@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.match.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.match.exception.InvalidMatchOptionException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
@@ -49,7 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 // 쿨다운만 공통 에러 형식이 아니라 전용 응답을 탄다 — 그 모양을 요청 단위로 확인한다.
-// 슬롯 조회는 쿼리 파라미터 바인딩·응답 모양·400 문구를 본다
+// 슬롯 조회는 날짜 바인딩·거리별 응답 모양·400 문구를 본다
 @ExtendWith(MockitoExtension.class)
 @DisplayName("매칭 컨트롤러 단위 테스트")
 class RunningMatchControllerTest {
@@ -121,32 +119,35 @@ class RunningMatchControllerTest {
     }
 
     @Test
-    @DisplayName("슬롯 조회는 날짜·거리를 넘기고 슬롯을 초 단위 시각으로 내려 준다")
+    @DisplayName("슬롯 조회는 날짜를 넘기고 거리별 슬롯을 초 단위 시각으로 내려 준다")
     void slotsResponseShape() throws Exception {
         // given
         LocalDate date = LocalDate.now().plusDays(1);
         given(getMatchSlotsUsecase.handle(any())).willReturn(new GetMatchSlotsResult(List.of(
-                new GetMatchSlotsResult.MatchSlot(date.atTime(18, 0), 0, false),
-                new GetMatchSlotsResult.MatchSlot(date.atTime(18, 30), 3, true))));
+                new GetMatchSlotsResult.DistanceSlots(3_000, List.of(
+                        new GetMatchSlotsResult.MatchSlot(date.atTime(18, 0), 0, false))),
+                new GetMatchSlotsResult.DistanceSlots(5_000, List.of(
+                        new GetMatchSlotsResult.MatchSlot(date.atTime(18, 0), 0, false),
+                        new GetMatchSlotsResult.MatchSlot(date.atTime(18, 30), 3, true))))));
 
         // when
-        MvcResult result = mockMvc.perform(get("/running-matches/slots")
-                        .param("date", date.toString())
-                        .param("targetDistanceMeters", "5000"))
+        MvcResult result = mockMvc.perform(get("/running-matches/slots").param("date", date.toString()))
                 .andReturn();
 
-        // then
+        // then -> 응답에 조회 날짜를 따로 싣지 않는다
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        ArgumentCaptor<GetMatchSlotsQuery> captor = ArgumentCaptor.forClass(GetMatchSlotsQuery.class);
-        verify(getMatchSlotsUsecase).handle(captor.capture());
-        assertThat(captor.getValue()).isEqualTo(new GetMatchSlotsQuery(date, 5_000));
-        Map<String, List<Map<String, Object>>> body = JSON_MAPPER.readValue(
+        verify(getMatchSlotsUsecase).handle(new GetMatchSlotsQuery(date));
+        Map<String, Object> body = JSON_MAPPER.readValue(
                 new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8),
                 new TypeReference<>() {
                 });
-        assertThat(body.get("slots")).containsExactly(
-                Map.of("scheduledStartAt", date + "T18:00:00", "waitingCount", 0, "selectable", false),
-                Map.of("scheduledStartAt", date + "T18:30:00", "waitingCount", 3, "selectable", true));
+        assertThat(body.keySet()).containsExactly("distances");
+        assertThat(body.get("distances")).isEqualTo(List.of(
+                Map.of("targetDistanceMeters", 3_000, "slots", List.of(
+                        Map.of("scheduledStartAt", date + "T18:00:00", "waitingCount", 0, "selectable", false))),
+                Map.of("targetDistanceMeters", 5_000, "slots", List.of(
+                        Map.of("scheduledStartAt", date + "T18:00:00", "waitingCount", 0, "selectable", false),
+                        Map.of("scheduledStartAt", date + "T18:30:00", "waitingCount", 3, "selectable", true)))));
     }
 
     @Test
@@ -156,17 +157,32 @@ class RunningMatchControllerTest {
         given(getMatchSlotsUsecase.handle(any())).willReturn(new GetMatchSlotsResult(List.of()));
 
         // when
-        mockMvc.perform(get("/running-matches/slots").param("targetDistanceMeters", "5000"));
+        mockMvc.perform(get("/running-matches/slots"));
 
         // then
-        verify(getMatchSlotsUsecase).handle(new GetMatchSlotsQuery(LocalDate.now(), 5_000));
+        verify(getMatchSlotsUsecase).handle(new GetMatchSlotsQuery(LocalDate.now()));
     }
 
     @Test
-    @DisplayName("거리가 숫자가 아니면 변환 오류 문구 대신 공통 문구로 400을 낸다")
-    void nonNumericDistanceIsInvalidRequest() throws Exception {
+    @DisplayName("예전 클라가 거리를 붙여 보내도 거절하지 않고 날짜로만 조회한다")
+    void ignoresLegacyDistanceParam() throws Exception {
+        // given
+        given(getMatchSlotsUsecase.handle(any())).willReturn(new GetMatchSlotsResult(List.of()));
+
         // when
         MvcResult result = mockMvc.perform(get("/running-matches/slots").param("targetDistanceMeters", "abc"))
+                .andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        verify(getMatchSlotsUsecase).handle(new GetMatchSlotsQuery(LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("날짜 형식이 틀리면 변환 오류 문구 대신 공통 문구로 400을 낸다")
+    void malformedDateIsInvalidRequest() throws Exception {
+        // when
+        MvcResult result = mockMvc.perform(get("/running-matches/slots").param("date", "2026/07/25"))
                 .andReturn();
 
         // then -> 내부 타입명·입력값이 본문에 실리면 안 된다
@@ -178,24 +194,11 @@ class RunningMatchControllerTest {
     }
 
     @Test
-    @DisplayName("거리가 없으면 필수 문구로 400을 낸다")
-    void missingDistanceIsRequired() throws Exception {
-        // when
-        MvcResult result = mockMvc.perform(get("/running-matches/slots")).andReturn();
-
-        // then
-        assertThat(result.getResponse().getStatus()).isEqualTo(400);
-        assertThat(errorOf(result)).containsEntry("message", "목표 거리는 필수입니다.");
-        verifyNoInteractions(getMatchSlotsUsecase);
-    }
-
-    @Test
     @DisplayName("오늘 이전 날짜는 400이다")
     void pastDateIsRejected() throws Exception {
         // when
         MvcResult result = mockMvc.perform(get("/running-matches/slots")
-                        .param("date", LocalDate.now().minusDays(1).toString())
-                        .param("targetDistanceMeters", "5000"))
+                        .param("date", LocalDate.now().minusDays(1).toString()))
                 .andReturn();
 
         // then
@@ -204,24 +207,6 @@ class RunningMatchControllerTest {
                 .containsEntry("code", "INVALID_REQUEST")
                 .containsEntry("message", "조회 날짜는 오늘 이전일 수 없습니다.");
         verifyNoInteractions(getMatchSlotsUsecase);
-    }
-
-    @Test
-    @DisplayName("목록 밖 거리는 유스케이스가 거절해 같은 400 INVALID_REQUEST로 나간다")
-    void unlistedDistanceIsInvalidRequest() throws Exception {
-        // given
-        given(getMatchSlotsUsecase.handle(any()))
-                .willThrow(new InvalidMatchOptionException("목표 거리는 3000, 5000, 10000 중 하나여야 합니다."));
-
-        // when
-        MvcResult result = mockMvc.perform(get("/running-matches/slots").param("targetDistanceMeters", "7000"))
-                .andReturn();
-
-        // then
-        assertThat(result.getResponse().getStatus()).isEqualTo(400);
-        assertThat(errorOf(result))
-                .containsEntry("code", "INVALID_REQUEST")
-                .containsEntry("message", "목표 거리는 3000, 5000, 10000 중 하나여야 합니다.");
     }
 
     private Map<String, Object> errorOf(MvcResult result) throws Exception {
