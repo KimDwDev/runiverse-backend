@@ -40,6 +40,10 @@ public abstract class E2eTestSupport {
     private static final Pattern VERIFICATION_CODE = Pattern.compile("\\d{6}");
     private static final int CODE_LOOKUP_RETRIES = 10;
     private static final int MAIL_BODY_LINES = 5;
+    // 서버가 앱 버전 헤더가 없는 요청을 거절한다 — 따로 넘기지 않으면 지원하는 앱처럼 싣는다.
+    // 값은 sql/app-versions.sql의 안드로이드 최신 버전이다
+    private static final Map<String, String> SUPPORTED_APP_VERSION =
+            Map.of("X-App-Platform", "ANDROID", "X-App-Version", "1.2.0");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
@@ -114,38 +118,39 @@ public abstract class E2eTestSupport {
     }
 
     protected Response get(String path, String accessToken) {
-        return exchange("GET", path, null, accessToken, Map.of());
+        return exchange("GET", path, null, accessToken, SUPPORTED_APP_VERSION);
     }
 
-    /** 앱 버전 헤더처럼 요청에 헤더를 더 싣는다. */
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 빈 맵이면 앱 버전 헤더 없이 보낸다. */
     protected Response get(String path, String accessToken, Map<String, String> headers) {
         return exchange("GET", path, null, accessToken, headers);
     }
 
     protected Response post(String path, Map<String, ?> request, String accessToken) {
-        return exchange("POST", path, request, accessToken, Map.of());
+        return exchange("POST", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
 
     protected Response patch(String path, Map<String, ?> request, String accessToken) {
-        return exchange("PATCH", path, request, accessToken, Map.of());
+        return exchange("PATCH", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
 
     protected Response delete(String path, String accessToken) {
-        return exchange("DELETE", path, null, accessToken, Map.of());
+        return exchange("DELETE", path, null, accessToken, SUPPORTED_APP_VERSION);
     }
 
     /** 러닝 WebSocket에 붙는다. 토큰이 null이면 핸드셰이크가 401로 막히는지 확인하는 용도다. */
     protected RunningWebSocket connectRunningWebSocket(String accessToken) {
-        return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, Map.of());
+        return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, SUPPORTED_APP_VERSION);
     }
 
-    /** 앱 버전 헤더처럼 핸드셰이크에 헤더를 더 싣는다. */
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 빈 맵이면 앱 버전 헤더 없이 연결한다. */
     protected RunningWebSocket connectRunningWebSocket(String accessToken, Map<String, String> headers) {
         return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, headers);
     }
 
     protected MatchStream openMatchStream(String accessToken) {
-        return MatchStream.open(HTTP_CLIENT, BASE_URL + "/running-matches/stream", accessToken);
+        return MatchStream.open(HTTP_CLIENT, BASE_URL + "/running-matches/stream", accessToken,
+                SUPPORTED_APP_VERSION);
     }
 
     /** 메일 인증 → 가입까지만 한다. 액세스 토큰을 돌려준다. */

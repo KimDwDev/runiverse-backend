@@ -45,6 +45,7 @@ KEEP_STACK=1 ./load_test/smoke-local.sh    # 끝나도 스택을 남긴다(로�
    ```bash
    psql "host=<RDS> dbname=<DB> user=<USER>" -v run_id=2 -v rooms=1 -f load_test/sql/seed.sql
    ```
+   - k6는 연결에 앱 버전 헤더(`ANDROID` `1.1.0`)를 싣는다. 그 DB의 `app_versions`에 `ANDROID` 행이 있고 최소 버전이 `1.1.0` 이하여야 한다 — 행이 없으면 핸드셰이크가 500, 최소 버전이 더 높으면 403이다.
 3. k6 — 별도 EC2에서 돌린다. `JWT_SECRET`은 앱의 `JWT_ACCESS_SECRET`과 같은 값이다(출력하지 않는다).
    ```bash
    k6 run -e WS_URL=ws://<앱 주소>:8080/api/v1/ws/running -e JWT_SECRET="$JWT_SECRET" \

@@ -81,6 +81,38 @@ class AppVersionE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("앱 버전 헤더가 없으면 토큰을 보기 전에 403으로 거절한다")
+    void rejectsAppWithoutHeaders() {
+        // when - 헤더를 싣지 않는 구버전 앱(안드로이드 1.0.0)이다
+        Response response = get("/users/me", "not-a-token", Map.of());
+
+        // then
+        assertThat(response.status()).isEqualTo(403);
+        assertThat(response.text("code")).isEqualTo("APP_UPDATE_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("앱 버전 헤더 형식이 틀리면 403으로 거절한다")
+    void rejectsMalformedHeaders() {
+        // when - 통과시키면 아무 값이나 실어 검사를 건너뛸 수 있다
+        Response response = get("/users/me", "not-a-token", appVersion("ANDROID", "1.1"));
+
+        // then
+        assertThat(response.status()).isEqualTo(403);
+        assertThat(response.text("code")).isEqualTo("APP_UPDATE_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("앱 버전 헤더가 없어도 버전 확인 API는 답을 받는다")
+    void versionCheckWithoutHeaders() {
+        // when - 헤더를 싣지 않는 앱도 업데이트가 필요하다는 것을 알아야 한다
+        Response response = get("/app/version?platform=ANDROID", null, Map.of());
+
+        // then
+        assertThat(response.status()).isEqualTo(200);
+    }
+
+    @Test
     @DisplayName("최소 버전 이상이면 그대로 처리하고 플랫폼마다 따로 판정한다")
     void passesSupportedApp() {
         // given
