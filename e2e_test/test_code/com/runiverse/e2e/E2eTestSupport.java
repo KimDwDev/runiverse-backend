@@ -130,6 +130,11 @@ public abstract class E2eTestSupport {
         return exchange("PATCH", path, request, accessToken, Map.of());
     }
 
+    /** 친구 요청 수락처럼 본문 없이 리소스를 갈아끼우는 PUT이다. */
+    protected Response put(String path, String accessToken) {
+        return exchange("PUT", path, null, accessToken, Map.of());
+    }
+
     protected Response delete(String path, String accessToken) {
         return exchange("DELETE", path, null, accessToken, Map.of());
     }
