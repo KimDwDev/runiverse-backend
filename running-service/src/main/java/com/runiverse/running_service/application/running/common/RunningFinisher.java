@@ -199,6 +199,7 @@ public class RunningFinisher {
 
     private void createRecord(Long runningRoomId, UUID userId, RunningTrack track,
                               TrackAnalysis analysis, BigDecimal weightKg) {
+        // TODO: 방 잠금을 쥔 채 S3 업로드·날씨 조회를 기다린다 — 날씨는 러닝 시작 때 미리 받아 두고, 업로드는 잠금 밖으로 옮긴다
         // 원본 트랙은 목표 이후 좌표까지 그대로 올린다 — 끊는 것은 기록뿐이다.
         // 키가 러닝 시작 시각으로 정해져 재시도해도 같은 객체를 덮어쓴다
         String gpsTrackKey = saveGpsTrackPort.save(new GpsTrackUpload(
