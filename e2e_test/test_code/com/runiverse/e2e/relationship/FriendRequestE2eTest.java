@@ -134,7 +134,80 @@ class FriendRequestE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("친구 요청과 수락은 토큰이 필요하다")
+    @DisplayName("보낸 쪽이 취소하면 204이고, 다시 지우면 404이며, 다시 요청하면 새 요청이 된다")
+    void cancelThenRequestAgain() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+
+        // when
+        Response cancelled = delete(friendRequestPath(receiver), requester.accessToken());
+
+        // then
+        assertThat(cancelled.status()).isEqualTo(204);
+        // 받은 쪽은 수락할 요청이 없다
+        assertThat(put(friendRequestPath(requester), receiver.accessToken()).status()).isEqualTo(404);
+        // 멱등이 아니다 — 이미 취소된 요청은 지울 것이 없다
+        Response cancelledAgain = delete(friendRequestPath(receiver), requester.accessToken());
+        assertThat(cancelledAgain.status()).isEqualTo(404);
+        assertThat(cancelledAgain.text("code")).isEqualTo("NOT_FOUND");
+        // NONE으로 남은 행을 갱신해 새 요청을 만든다
+        Response requestedAgain = post(friendRequestPath(receiver), null, requester.accessToken());
+        assertThat(requestedAgain.status()).isEqualTo(201);
+        assertThat(requestedAgain.text("relationshipType")).isEqualTo("FRIEND_REQUEST_SENT");
+    }
+
+    @Test
+    @DisplayName("받은 쪽이 거절하면 204이고, 보낸 쪽은 더 이상 취소할 요청이 없다")
+    void receiverRejects() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+
+        // when
+        Response rejected = delete(friendRequestPath(requester), receiver.accessToken());
+
+        // then
+        assertThat(rejected.status()).isEqualTo(204);
+        assertThat(delete(friendRequestPath(receiver), requester.accessToken()).status()).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("상대가 수락한 뒤에 취소해도 204이고 둘은 친구가 아니다")
+    void cancelAfterAcceptedEndsFriendship() {
+        // given - 보낸 쪽 화면은 아직 "요청 취소"인데 받은 쪽이 막 수락했다
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+        put(friendRequestPath(requester), receiver.accessToken());
+
+        // when
+        Response cancelled = delete(friendRequestPath(receiver), requester.accessToken());
+
+        // then
+        assertThat(cancelled.status()).isEqualTo(204);
+        // 친구가 아니니 수락은 404, 새 요청은 201이다
+        assertThat(put(friendRequestPath(requester), receiver.accessToken()).status()).isEqualTo(404);
+        assertThat(post(friendRequestPath(requester), null, receiver.accessToken()).status()).isEqualTo(201);
+    }
+
+    @Test
+    @DisplayName("요청한 적 없는 사이나 없는 사용자에게 취소하면 404다")
+    void cancelWithoutRequestIsNotFound() {
+        // given
+        TestUser user = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        String unknownUserId = "01900000-0000-7000-8000-" + UUID.randomUUID().toString().substring(24);
+
+        // when & then
+        assertThat(delete(friendRequestPath(stranger), user.accessToken()).status()).isEqualTo(404);
+        assertThat(delete("/users/" + unknownUserId + "/friend-request", user.accessToken()).status()).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("친구 요청·수락·취소는 토큰이 필요하다")
     void friendRequestRequiresToken() {
         // given
         TestUser user = signUpAndOnboard();
@@ -142,6 +215,7 @@ class FriendRequestE2eTest extends E2eTestSupport {
         // when & then - /users/** 공개 경로가 넓어지면 토큰 없이 통과한다
         assertThat(post(friendRequestPath(user), null, null).status()).isEqualTo(401);
         assertThat(put(friendRequestPath(user), null).status()).isEqualTo(401);
+        assertThat(delete(friendRequestPath(user), null).status()).isEqualTo(401);
     }
 
     private static String friendRequestPath(TestUser target) {
