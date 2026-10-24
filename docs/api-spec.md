@@ -61,7 +61,7 @@
 |---|--------|------|------|
 | 21 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
 | 22 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 23 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 23 | GET | `/api/v1/running-matches/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
 | 24 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
 | 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
@@ -1337,24 +1337,39 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
-- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`), `targetDistanceMeters`(필수 — `3000`·`5000`·`10000` 중 하나, 해당 거리 조건만 집계한다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다)
+- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`). 거리는 받지 않는다 — 고를 수 있는 모든 거리를 한 번에 내려 주므로, 모달에서 거리를 바꿔도 다시 요청하지 않는다
 - **Response `200 OK`**
 
 ```json
 {
-  "slots": [
-    { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-    { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
-    { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+  "distances": [
+    {
+      "targetDistanceMeters": 3000,
+      "slots": [
+        { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
+        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 2, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 0, "selectable": true }
+      ]
+    },
+    {
+      "targetDistanceMeters": 5000,
+      "slots": [
+        { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
+        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+      ]
+    }
   ]
 }
 ```
 
-- `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- `distances`는 신청 가능한 거리(현재 운영값 3000·5000·10000) 전부를 **`targetDistanceMeters` 오름차순**으로 담는다. 대기자가 하나도 없는 거리도 빠지지 않는다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 인원을 합산하지 않는다
+- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- 응답에 조회 날짜를 따로 싣지 않는다 — `scheduledStartAt`이 날짜를 담는다
 - `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
-- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감)
+- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감). 마감은 시각으로만 갈리므로 같은 시각이면 거리가 달라도 값이 같다
 - **인증**: 필요
-- **에러 (400 Bad Request)**: 날짜·거리가 형식에 맞지 않거나, 거리가 없거나, 오늘 이전 날짜면 요청 검증 단계에서 걸린다. 거리가 선택지 밖이면 유스케이스가 걸러 낸다 — 어느 쪽이든 `code`는 `INVALID_REQUEST`다
+- **에러 (400 Bad Request)**: 날짜가 형식에 맞지 않거나 오늘 이전이면 요청 검증 단계에서 걸린다 — `code`는 `INVALID_REQUEST`다
 
 ```json
 {
@@ -1364,22 +1379,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "목표 거리는 필수입니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
   "message": "조회 날짜는 오늘 이전일 수 없습니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "목표 거리는 3000, 5000, 10000 중 하나여야 합니다."
 }
 ```
 
-- 형식 오류(`date=2026/07/25`, `targetDistanceMeters=abc`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
-- 선택지 밖 거리 문구는 매칭 신청과 같은 문장이다 — 거리 목록이 설정에서 오므로 설정이 바뀌면 문구도 바뀐다
+- 형식 오류(`date=2026/07/25`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
 
 #### `POST /api/v1/running-matches` — 매칭 신청
 

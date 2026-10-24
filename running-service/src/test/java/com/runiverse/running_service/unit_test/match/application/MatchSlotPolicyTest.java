@@ -179,19 +179,17 @@ class MatchSlotPolicyTest {
         }
 
         @Test
-        @DisplayName("슬롯 조회는 허용 거리면 통과한다")
-        void validateDistancePassesListedDistance() {
+        @DisplayName("고를 수 있는 거리를 오름차순으로 내려 준다")
+        void listsDistancesInAscendingOrder() {
             // when & then
-            assertThatCode(() -> policy.validateDistance(10_000)).doesNotThrowAnyException();
+            assertThat(policy.distances()).containsExactly(3_000, 5_000, 10_000);
         }
 
         @Test
-        @DisplayName("슬롯 조회는 목록 밖 거리를 신청과 같은 문구로 거절한다")
-        void validateDistanceRejectsWithSameMessage() {
-            // when & then -> 두 API의 거리 안내가 갈라지지 않는다
-            assertThatThrownBy(() -> policy.validateDistance(7_000))
-                    .isInstanceOf(InvalidMatchOptionException.class)
-                    .hasMessage(DISTANCE_MESSAGE);
+        @DisplayName("내려 준 거리는 모두 신청 검증을 통과한다")
+        void everyListedDistanceIsAllowed() {
+            // when & then -> 조회가 보여 준 거리를 신청이 거절하면 안 된다
+            assertThat(policy.distances()).allMatch(policy::allowsDistance);
         }
 
         @Test
@@ -237,6 +235,18 @@ class MatchSlotPolicyTest {
                     .isInstanceOf(InvalidMatchOptionException.class)
                     .hasMessage("시작 시각은 06:00부터 09:00까지 90분 간격으로만 선택할 수 있습니다."
                             + " 목표 거리는 10000, 3000 중 하나여야 합니다.");
+        }
+
+        @Test
+        @DisplayName("거리 목록은 설정 순서·중복과 상관없이 오름차순 한 번씩이다")
+        void distancesIgnoreSettingOrderAndDuplicates() {
+            // given -> 응답의 거리 순서가 설정을 적은 순서에 끌려가면 안 된다
+            MatchSlotPolicy policy = policyOf(
+                    LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30),
+                    List.of(10_000, 3_000, 5_000, 3_000));
+
+            // when & then
+            assertThat(policy.distances()).containsExactly(3_000, 5_000, 10_000);
         }
 
         @Test

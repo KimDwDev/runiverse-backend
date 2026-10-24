@@ -42,8 +42,7 @@ public class RunningMatchController {
     // 누가 보든 같은 목록이라 사용자를 넘기지 않는다 — 인증은 SecurityConfig가 요구한다
     @GetMapping("slots")
     public ResponseEntity<MatchSlotsResponse> getSlots(@Valid @ModelAttribute MatchSlotsRequest request) {
-        GetMatchSlotsResult result = getMatchSlotsUsecase.handle(
-                new GetMatchSlotsQuery(request.dateOrToday(), request.distanceMeters()));
+        GetMatchSlotsResult result = getMatchSlotsUsecase.handle(new GetMatchSlotsQuery(request.dateOrToday()));
         return ResponseEntity.ok(MatchSlotsResponse.from(result));
     }
 
