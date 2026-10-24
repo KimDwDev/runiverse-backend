@@ -9,11 +9,15 @@ import com.runiverse.running_service.application.relationship.command.request.Re
 import com.runiverse.running_service.application.relationship.port.in.AcceptFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.CancelFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.DeleteFriendUsecase;
+import com.runiverse.running_service.application.relationship.port.in.GetFriendRecommendationsUsecase;
 import com.runiverse.running_service.application.relationship.port.in.GetFriendsUsecase;
 import com.runiverse.running_service.application.relationship.port.in.RequestFriendUsecase;
 import com.runiverse.running_service.application.relationship.query.friends.GetFriendsQuery;
 import com.runiverse.running_service.application.relationship.query.friends.GetFriendsResult;
+import com.runiverse.running_service.application.relationship.query.recommendation.GetFriendRecommendationsQuery;
+import com.runiverse.running_service.application.relationship.query.recommendation.GetFriendRecommendationsResult;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
+import com.runiverse.running_service.presentation.relationship.response.FriendRecommendationsResponse;
 import com.runiverse.running_service.presentation.relationship.response.FriendsResponse;
 import com.runiverse.running_service.presentation.relationship.response.RelationshipTypeResponse;
 import jakarta.validation.constraints.Min;
@@ -51,6 +55,7 @@ public class RelationshipController {
     private final CancelFriendRequestUsecase cancelFriendRequestUsecase;
     private final DeleteFriendUsecase deleteFriendUsecase;
     private final GetFriendsUsecase getFriendsUsecase;
+    private final GetFriendRecommendationsUsecase getFriendRecommendationsUsecase;
 
     // 경로의 userId는 요청을 받을 사람이다 — 요청하는 사람은 토큰에서만 온다
     @PostMapping("/{userId}/friend-request")
@@ -120,5 +125,13 @@ public class RelationshipController {
                 cursor == null || cursor.isBlank() ? null : cursor,
                 Math.min(limit, MAX_LIMIT)));
         return ResponseEntity.ok(FriendsResponse.from(result));
+    }
+
+    // 남이 볼 경우가 없는 리소스라 /me다 — 대상은 토큰 주체뿐이다
+    @GetMapping("/me/friend-recommendations")
+    public ResponseEntity<FriendRecommendationsResponse> getFriendRecommendations(@AuthenticationPrincipal Jwt jwt) {
+        GetFriendRecommendationsResult result = getFriendRecommendationsUsecase.handle(
+                new GetFriendRecommendationsQuery(UUID.fromString(jwt.getSubject())));
+        return ResponseEntity.ok(FriendRecommendationsResponse.from(result));
     }
 }
