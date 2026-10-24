@@ -29,7 +29,7 @@ class FriendRequestE2eTest extends E2eTestSupport {
 
         // then
         assertThat(requested.status()).isEqualTo(201);
-        assertThat(requested.text("relationType")).isEqualTo("FRIEND_REQUEST_SENT");
+        assertThat(requested.text("relationshipType")).isEqualTo("FRIEND_REQUEST_SENT");
         // 보낸 사람은 자기 요청을 수락할 수 없다
         assertThat(put(friendRequestPath(receiver), requester.accessToken()).status()).isEqualTo(404);
 
@@ -38,11 +38,11 @@ class FriendRequestE2eTest extends E2eTestSupport {
 
         // then
         assertThat(accepted.status()).isEqualTo(200);
-        assertThat(accepted.text("relationType")).isEqualTo("FRIEND");
+        assertThat(accepted.text("relationshipType")).isEqualTo("FRIEND");
         // 수락은 멱등이다 — 다시 보내도 같은 응답이다
         Response acceptedAgain = put(friendRequestPath(requester), receiver.accessToken());
         assertThat(acceptedAgain.status()).isEqualTo(200);
-        assertThat(acceptedAgain.text("relationType")).isEqualTo("FRIEND");
+        assertThat(acceptedAgain.text("relationshipType")).isEqualTo("FRIEND");
         // 친구가 된 뒤에는 어느 쪽에서 요청해도 409다
         assertThat(post(friendRequestPath(receiver), null, requester.accessToken()).status()).isEqualTo(409);
         Response conflict = post(friendRequestPath(requester), null, receiver.accessToken());
@@ -63,9 +63,9 @@ class FriendRequestE2eTest extends E2eTestSupport {
 
         // then
         assertThat(mutual.status()).isEqualTo(200);
-        assertThat(mutual.text("relationType")).isEqualTo("FRIEND");
+        assertThat(mutual.text("relationshipType")).isEqualTo("FRIEND");
         // 요청했던 쪽에서 봐도 친구다 — 수락이 멱등이라 상태를 바꾸지 않고 확인만 한다
-        assertThat(put(friendRequestPath(receiver), requester.accessToken()).text("relationType"))
+        assertThat(put(friendRequestPath(receiver), requester.accessToken()).text("relationshipType"))
                 .isEqualTo("FRIEND");
     }
 
@@ -92,11 +92,11 @@ class FriendRequestE2eTest extends E2eTestSupport {
 
             // then - 먼저 잠근 쪽은 새 요청(201), 뒤에 온 쪽은 그 요청을 받아 수락(200)한다
             assertThat(responses).extracting(Response::status).containsExactlyInAnyOrder(201, 200);
-            assertThat(responses).extracting(response -> response.text("relationType"))
+            assertThat(responses).extracting(response -> response.text("relationshipType"))
                     .containsExactlyInAnyOrder("FRIEND_REQUEST_SENT", "FRIEND");
             // 양쪽 행이 모두 친구다
-            assertThat(put(friendRequestPath(second), first.accessToken()).text("relationType")).isEqualTo("FRIEND");
-            assertThat(put(friendRequestPath(first), second.accessToken()).text("relationType")).isEqualTo("FRIEND");
+            assertThat(put(friendRequestPath(second), first.accessToken()).text("relationshipType")).isEqualTo("FRIEND");
+            assertThat(put(friendRequestPath(first), second.accessToken()).text("relationshipType")).isEqualTo("FRIEND");
         }
     }
 

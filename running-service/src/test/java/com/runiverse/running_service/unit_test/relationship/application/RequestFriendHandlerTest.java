@@ -85,7 +85,7 @@ class RequestFriendHandlerTest {
         RequestFriendResult result = handler.handle(command());
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND_REQUEST_SENT);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND_REQUEST_SENT);
         assertThat(mine.getType()).isEqualTo(RelationshipType.FRIEND_REQUEST_SENT);
         assertThat(theirs.getType()).isEqualTo(RelationshipType.FRIEND_REQUEST_RECEIVED);
         verify(saveUserRelationshipPort).save(mine);
@@ -109,7 +109,7 @@ class RequestFriendHandlerTest {
         RequestFriendResult result = handler.handle(command());
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND);
         assertThat(mine.getType()).isEqualTo(RelationshipType.FRIEND);
         assertThat(theirs.getType()).isEqualTo(RelationshipType.FRIEND);
         verify(saveUserRelationshipPort).save(mine);

@@ -90,7 +90,7 @@ class RelationshipControllerTest {
 
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(201);
-        assertThat(body(result)).containsExactly(Map.entry("relationType", "FRIEND_REQUEST_SENT"));
+        assertThat(body(result)).containsExactly(Map.entry("relationshipType", "FRIEND_REQUEST_SENT"));
     }
 
     @Test
@@ -105,7 +105,7 @@ class RelationshipControllerTest {
 
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(body(result)).containsExactly(Map.entry("relationType", "FRIEND"));
+        assertThat(body(result)).containsExactly(Map.entry("relationshipType", "FRIEND"));
     }
 
     @Test
@@ -181,7 +181,7 @@ class RelationshipControllerTest {
 
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(body(result)).containsExactly(Map.entry("relationType", "FRIEND"));
+        assertThat(body(result)).containsExactly(Map.entry("relationshipType", "FRIEND"));
     }
 
     @Test

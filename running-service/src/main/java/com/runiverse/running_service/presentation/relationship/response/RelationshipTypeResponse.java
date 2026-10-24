@@ -1,7 +1,7 @@
 package com.runiverse.running_service.presentation.relationship.response;
 
-public record RelationTypeResponse(
-        String relationType
+public record RelationshipTypeResponse(
+        String relationshipType
 ) {
 
 }

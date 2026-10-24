@@ -68,7 +68,7 @@ public class RequestFriendIntegrationTest extends IntegrationTestSupport {
         RequestFriendResult result = requestFriendHandler.handle(new RequestFriendCommand(requesterId, receiverId));
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND_REQUEST_SENT);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND_REQUEST_SENT);
         assertThat(relationshipStore.typeOf(requesterId, receiverId)).hasValue(RelationshipType.FRIEND_REQUEST_SENT);
         assertThat(relationshipStore.typeOf(receiverId, requesterId)).hasValue(RelationshipType.FRIEND_REQUEST_RECEIVED);
     }
@@ -97,7 +97,7 @@ public class RequestFriendIntegrationTest extends IntegrationTestSupport {
         RequestFriendResult result = requestFriendHandler.handle(new RequestFriendCommand(receiverId, requesterId));
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(requesterId, receiverId)).hasValue(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(receiverId, requesterId)).hasValue(RelationshipType.FRIEND);
     }

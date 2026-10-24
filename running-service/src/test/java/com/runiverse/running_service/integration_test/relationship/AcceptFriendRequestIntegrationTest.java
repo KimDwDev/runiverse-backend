@@ -49,7 +49,7 @@ public class AcceptFriendRequestIntegrationTest extends IntegrationTestSupport {
                 new AcceptFriendRequestCommand(receiverId, requesterId));
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(receiverId, requesterId)).hasValue(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(requesterId, receiverId)).hasValue(RelationshipType.FRIEND);
     }
@@ -66,7 +66,7 @@ public class AcceptFriendRequestIntegrationTest extends IntegrationTestSupport {
                 new AcceptFriendRequestCommand(receiverId, requesterId));
 
         // then
-        assertThat(result.relationType()).isEqualTo(RelationshipType.FRIEND);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(receiverId, requesterId)).hasValue(RelationshipType.FRIEND);
         assertThat(relationshipStore.typeOf(requesterId, receiverId)).hasValue(RelationshipType.FRIEND);
     }

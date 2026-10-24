@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.relationship.command.request.Re
 import com.runiverse.running_service.application.relationship.port.in.AcceptFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.RequestFriendUsecase;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
-import com.runiverse.running_service.presentation.relationship.response.RelationTypeResponse;
+import com.runiverse.running_service.presentation.relationship.response.RelationshipTypeResponse;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,7 +36,7 @@ public class RelationshipController {
 
     // 경로의 userId는 요청을 받을 사람이다 — 요청하는 사람은 토큰에서만 온다
     @PostMapping("/{userId}/friend-request")
-    public ResponseEntity<RelationTypeResponse> requestFriend(
+    public ResponseEntity<RelationshipTypeResponse> requestFriend(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
     ) {
@@ -44,19 +44,19 @@ public class RelationshipController {
                 UUID.fromString(jwt.getSubject()),
                 UUID.fromString(userId)));
         // 상대가 먼저 요청해 뒀으면 새 요청이 아니라 친구 확정이다 — 만든 게 없으니 201이 아니다
-        HttpStatus status = result.relationType() == RelationshipType.FRIEND ? HttpStatus.OK : HttpStatus.CREATED;
-        return ResponseEntity.status(status).body(new RelationTypeResponse(result.relationType().name()));
+        HttpStatus status = result.relationshipType() == RelationshipType.FRIEND ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(new RelationshipTypeResponse(result.relationshipType().name()));
     }
 
     // 경로의 userId는 요청을 보낸 사람이다 — 수락하는 사람은 토큰에서만 온다
     @PutMapping("/{userId}/friend-request")
-    public ResponseEntity<RelationTypeResponse> acceptFriendRequest(
+    public ResponseEntity<RelationshipTypeResponse> acceptFriendRequest(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
     ) {
         AcceptFriendRequestResult result = acceptFriendRequestUsecase.handle(new AcceptFriendRequestCommand(
                 UUID.fromString(jwt.getSubject()),
                 UUID.fromString(userId)));
-        return ResponseEntity.ok(new RelationTypeResponse(result.relationType().name()));
+        return ResponseEntity.ok(new RelationshipTypeResponse(result.relationshipType().name()));
     }
 }
