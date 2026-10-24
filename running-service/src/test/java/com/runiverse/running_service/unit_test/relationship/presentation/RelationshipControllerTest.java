@@ -17,10 +17,14 @@ import com.runiverse.running_service.application.relationship.exception.InvalidF
 import com.runiverse.running_service.application.relationship.port.in.AcceptFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.CancelFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.DeleteFriendUsecase;
+import com.runiverse.running_service.application.relationship.port.in.GetFriendRecommendationsUsecase;
 import com.runiverse.running_service.application.relationship.port.in.GetFriendsUsecase;
 import com.runiverse.running_service.application.relationship.port.in.RequestFriendUsecase;
 import com.runiverse.running_service.application.relationship.query.friends.GetFriendsQuery;
 import com.runiverse.running_service.application.relationship.query.friends.GetFriendsResult;
+import com.runiverse.running_service.application.relationship.query.recommendation.GetFriendRecommendationsQuery;
+import com.runiverse.running_service.application.relationship.query.recommendation.GetFriendRecommendationsResult;
+import com.runiverse.running_service.application.relationship.query.recommendation.RecommendationReason;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.relationship.controller.RelationshipController;
@@ -82,13 +86,16 @@ class RelationshipControllerTest {
     @Mock
     private GetFriendsUsecase getFriendsUsecase;
 
+    @Mock
+    private GetFriendRecommendationsUsecase getFriendRecommendationsUsecase;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new RelationshipController(
                 requestFriendUsecase, acceptFriendRequestUsecase, cancelFriendRequestUsecase, deleteFriendUsecase,
-                getFriendsUsecase))
+                getFriendsUsecase, getFriendRecommendationsUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
@@ -466,6 +473,46 @@ class RelationshipControllerTest {
         assertThat(body(result))
                 .containsEntry("code", "NOT_FOUND")
                 .containsEntry("message", "요청한 리소스를 찾을 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("추천 친구: 토큰 주체의 추천을 이유와 함께 내리고 사진이 없으면 null이다")
+    void getFriendRecommendations() throws Exception {
+        // given
+        UUID runnerId = UuidCreator.getTimeOrderedEpoch();
+        UUID similarId = UuidCreator.getTimeOrderedEpoch();
+        given(getFriendRecommendationsUsecase.handle(new GetFriendRecommendationsQuery(USER_ID)))
+                .willReturn(new GetFriendRecommendationsResult(List.of(
+                        new GetFriendRecommendationsResult.Recommendation(
+                                runnerId, "철수", "https://cdn/a.png", RecommendationReason.RAN_TOGETHER),
+                        new GetFriendRecommendationsResult.Recommendation(
+                                similarId, "영희", null, RecommendationReason.SIMILAR_PACE))));
+
+        // when
+        MvcResult result = mockMvc.perform(get("/users/me/friend-recommendations")).andReturn();
+
+        // then -> 결과는 모두 요청을 보낼 수 있는 사람이라 relationshipType을 싣지 않는다
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(result).get("recommendations")).isEqualTo(List.of(
+                Map.of("userId", runnerId.toString(), "nickname", "철수",
+                        "profileImageUrl", "https://cdn/a.png", "reason", "RAN_TOGETHER"),
+                nullableMap("userId", similarId.toString(), "nickname", "영희",
+                        "profileImageUrl", null, "reason", "SIMILAR_PACE")));
+    }
+
+    @Test
+    @DisplayName("추천 친구: 후보가 없으면 빈 배열이다")
+    void getFriendRecommendationsEmpty() throws Exception {
+        // given
+        given(getFriendRecommendationsUsecase.handle(new GetFriendRecommendationsQuery(USER_ID)))
+                .willReturn(new GetFriendRecommendationsResult(List.of()));
+
+        // when
+        MvcResult result = mockMvc.perform(get("/users/me/friend-recommendations")).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(result)).containsExactly(Map.entry("recommendations", List.of()));
     }
 
     // Map.of는 null 값을 받지 않는다
