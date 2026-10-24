@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.relationship.application;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.relationship.command.cancel.CancelFriendRequestCommand;
 import com.runiverse.running_service.application.relationship.command.cancel.CancelFriendRequestHandler;
+import com.runiverse.running_service.application.relationship.common.RelationshipEnder;
 import com.runiverse.running_service.application.relationship.exception.FriendRequestNotFoundException;
 import com.runiverse.running_service.application.relationship.port.out.LoadUserRelationshipPort;
 import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;
@@ -47,7 +48,9 @@ public class CancelFriendRequestHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new CancelFriendRequestHandler(loadUserRelationshipPort, saveUserRelationshipPort);
+        // 짝 검증과 저장은 공용 컴포넌트가 맡는다 — 진짜를 끼워 저장 포트까지 이어지는지 본다
+        handler = new CancelFriendRequestHandler(
+                loadUserRelationshipPort, new RelationshipEnder(saveUserRelationshipPort));
         userId = UuidCreator.getTimeOrderedEpoch();
         targetId = UuidCreator.getTimeOrderedEpoch();
     }
