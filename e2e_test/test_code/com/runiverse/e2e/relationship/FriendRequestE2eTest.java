@@ -207,7 +207,46 @@ class FriendRequestE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("친구 요청·수락·취소는 토큰이 필요하다")
+    @DisplayName("친구는 수락했던 쪽도 삭제할 수 있고, 다시 지우면 404이며, 다시 요청하면 새 요청이 된다")
+    void deleteFriendThenRequestAgain() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+        put(friendRequestPath(requester), receiver.accessToken());
+
+        // when - 성립한 뒤로는 방향에 의미가 없어 수락했던 쪽이 지운다
+        Response deleted = delete(friendPath(requester), receiver.accessToken());
+
+        // then
+        assertThat(deleted.status()).isEqualTo(204);
+        // 상대 쪽에서 다시 지워도 이미 친구가 아니다
+        Response deletedAgain = delete(friendPath(receiver), requester.accessToken());
+        assertThat(deletedAgain.status()).isEqualTo(404);
+        assertThat(deletedAgain.text("code")).isEqualTo("NOT_FOUND");
+        // NONE으로 남은 행을 갱신해 새 요청을 만든다
+        assertThat(post(friendRequestPath(receiver), null, requester.accessToken()).status()).isEqualTo(201);
+    }
+
+    @Test
+    @DisplayName("요청 중인 관계는 친구 삭제로 지우지 않는다 — 404이고 요청은 남는다")
+    void deleteFriendWithPendingRequestIsNotFound() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+
+        // when & then
+        assertThat(delete(friendPath(receiver), requester.accessToken()).status()).isEqualTo(404);
+        assertThat(delete(friendPath(requester), receiver.accessToken()).status()).isEqualTo(404);
+        assertThat(delete(friendPath(stranger), requester.accessToken()).status()).isEqualTo(404);
+        // 요청은 그대로라 받은 쪽이 수락할 수 있다
+        assertThat(put(friendRequestPath(requester), receiver.accessToken()).status()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("친구 요청·수락·취소·삭제는 토큰이 필요하다")
     void friendRequestRequiresToken() {
         // given
         TestUser user = signUpAndOnboard();
@@ -216,10 +255,15 @@ class FriendRequestE2eTest extends E2eTestSupport {
         assertThat(post(friendRequestPath(user), null, null).status()).isEqualTo(401);
         assertThat(put(friendRequestPath(user), null).status()).isEqualTo(401);
         assertThat(delete(friendRequestPath(user), null).status()).isEqualTo(401);
+        assertThat(delete(friendPath(user), null).status()).isEqualTo(401);
     }
 
     private static String friendRequestPath(TestUser target) {
         return "/users/" + target.userId() + "/friend-request";
+    }
+
+    private static String friendPath(TestUser target) {
+        return "/users/" + target.userId() + "/friend";
     }
 
     private static void await(CountDownLatch latch) {
