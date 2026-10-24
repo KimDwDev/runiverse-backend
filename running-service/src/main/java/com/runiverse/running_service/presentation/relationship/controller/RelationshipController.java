@@ -3,10 +3,12 @@ package com.runiverse.running_service.presentation.relationship.controller;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestCommand;
 import com.runiverse.running_service.application.relationship.command.accept.AcceptFriendRequestResult;
 import com.runiverse.running_service.application.relationship.command.cancel.CancelFriendRequestCommand;
+import com.runiverse.running_service.application.relationship.command.delete.DeleteFriendCommand;
 import com.runiverse.running_service.application.relationship.command.request.RequestFriendCommand;
 import com.runiverse.running_service.application.relationship.command.request.RequestFriendResult;
 import com.runiverse.running_service.application.relationship.port.in.AcceptFriendRequestUsecase;
 import com.runiverse.running_service.application.relationship.port.in.CancelFriendRequestUsecase;
+import com.runiverse.running_service.application.relationship.port.in.DeleteFriendUsecase;
 import com.runiverse.running_service.application.relationship.port.in.RequestFriendUsecase;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.presentation.relationship.response.RelationshipTypeResponse;
@@ -37,6 +39,7 @@ public class RelationshipController {
     private final RequestFriendUsecase requestFriendUsecase;
     private final AcceptFriendRequestUsecase acceptFriendRequestUsecase;
     private final CancelFriendRequestUsecase cancelFriendRequestUsecase;
+    private final DeleteFriendUsecase deleteFriendUsecase;
 
     // 경로의 userId는 요청을 받을 사람이다 — 요청하는 사람은 토큰에서만 온다
     @PostMapping("/{userId}/friend-request")
@@ -71,6 +74,18 @@ public class RelationshipController {
             @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
     ) {
         cancelFriendRequestUsecase.handle(new CancelFriendRequestCommand(
+                UUID.fromString(jwt.getSubject()),
+                UUID.fromString(userId)));
+        return ResponseEntity.noContent().build();
+    }
+
+    // 경로의 userId는 삭제할 친구다 — 성립한 관계라 누가 요청했었는지는 보지 않는다
+    @DeleteMapping("/{userId}/friend")
+    public ResponseEntity<Void> deleteFriend(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Pattern(regexp = USER_ID_FORMAT, message = "입력값이 올바르지 않습니다.") String userId
+    ) {
+        deleteFriendUsecase.handle(new DeleteFriendCommand(
                 UUID.fromString(jwt.getSubject()),
                 UUID.fromString(userId)));
         return ResponseEntity.noContent().build();
