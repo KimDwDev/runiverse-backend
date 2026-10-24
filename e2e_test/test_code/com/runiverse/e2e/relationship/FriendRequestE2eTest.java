@@ -229,6 +229,25 @@ class FriendRequestE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("친구는 요청했던 쪽도 삭제할 수 있고, 그 뒤 수락했던 쪽에서 다시 지우면 404다")
+    void requesterDeletesFriend() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser receiver = signUpAndOnboard();
+        post(friendRequestPath(receiver), null, requester.accessToken());
+        put(friendRequestPath(requester), receiver.accessToken());
+
+        // when - 요청 방향이 남아 있다면 요청했던 쪽만 지울 수 없거나 404가 된다
+        Response deleted = delete(friendPath(receiver), requester.accessToken());
+
+        // then
+        assertThat(deleted.status()).isEqualTo(204);
+        assertThat(delete(friendPath(requester), receiver.accessToken()).status()).isEqualTo(404);
+        // 수락할 요청도 남지 않는다 — 친구에서 바로 NONE으로 돌아갔다
+        assertThat(put(friendRequestPath(requester), receiver.accessToken()).status()).isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("요청 중인 관계는 친구 삭제로 지우지 않는다 — 404이고 요청은 남는다")
     void deleteFriendWithPendingRequestIsNotFound() {
         // given
