@@ -3,10 +3,17 @@ package com.runiverse.running_service.application.match.query.slot;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// slots는 scheduledStartAt 오름차순이다
+// distances는 targetDistanceMeters 오름차순, 각 slots는 scheduledStartAt 오름차순이다
 public record GetMatchSlotsResult(
-        List<MatchSlot> slots
+        List<DistanceSlots> distances
 ) {
+
+    public record DistanceSlots(
+            int targetDistanceMeters,
+            List<MatchSlot> slots
+    ) {
+
+    }
 
     public record MatchSlot(
             LocalDateTime scheduledStartAt,

@@ -3,10 +3,10 @@ package com.runiverse.running_service.integration_test.match;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
-import com.runiverse.running_service.application.match.exception.InvalidMatchOptionException;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsHandler;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQuery;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
+import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult.DistanceSlots;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult.MatchSlot;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("슬롯 조회 통합 테스트")
 public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
@@ -63,39 +62,62 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
         givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_20, TARGET_DISTANCE, 4);
 
         // when
-        GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW, TARGET_DISTANCE));
+        GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW));
 
         // then -> 9개 슬롯 중 19:00(index 2)·20:00(index 4)만 사람이 있다
-        assertThat(result.slots()).extracting(MatchSlot::waitingCount)
+        assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
                 .containsExactly(0, 0, 3, 0, 4, 0, 0, 0, 0);
-        assertThat(result.slots()).allMatch(MatchSlot::selectable);
+        assertThat(slotsOf(result, TARGET_DISTANCE)).allMatch(MatchSlot::selectable);
     }
 
     @Test
-    @DisplayName("확정된 방·솔로 방·다른 거리·다른 날짜는 대기 인원에 넣지 않는다")
+    @DisplayName("같은 시각이어도 거리가 다르면 각 거리에 따로 센다")
+    void countsEachDistanceSeparately() {
+        // given -> 19:00에 5km 2명, 10km 3명
+        givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19, TARGET_DISTANCE, 2);
+        givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19, 10_000, 3);
+
+        // when
+        GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW));
+
+        // then -> 거리는 오름차순, 대기자 없는 3km도 빠지지 않는다
+        assertThat(result.distances()).extracting(DistanceSlots::targetDistanceMeters)
+                .containsExactly(3_000, 5_000, 10_000);
+        assertThat(slotsOf(result, 3_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
+        assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
+                .containsExactly(0, 0, 2, 0, 0, 0, 0, 0, 0);
+        assertThat(slotsOf(result, 10_000)).extracting(MatchSlot::waitingCount)
+                .containsExactly(0, 0, 3, 0, 0, 0, 0, 0, 0);
+    }
+
+    @Test
+    @DisplayName("확정된 방·솔로 방·다른 날짜·선택지 밖 거리는 대기 인원에 넣지 않는다")
     void excludesRoomsThatAreNotOpenSeats() {
         // given -> 19:00에 모집 중인 1명만 남아야 한다
         givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19, TARGET_DISTANCE, 1);
         givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHED, SLOT_19, TARGET_DISTANCE, 3);
         givenRoom(RunningRoomType.SOLO, RunningRoomStatus.STARTED, SLOT_19, TARGET_DISTANCE, 1);
-        givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19, 10_000, 2);
         givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19.plusDays(1), TARGET_DISTANCE, 2);
+        givenRoom(RunningRoomType.MATCH, RunningRoomStatus.MATCHING, SLOT_19, 7_000, 2);
 
         // when
-        GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW, TARGET_DISTANCE));
+        GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW));
 
         // then
-        assertThat(result.slots()).extracting(MatchSlot::waitingCount)
+        assertThat(result.distances()).extracting(DistanceSlots::targetDistanceMeters)
+                .containsExactly(3_000, 5_000, 10_000);
+        assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
                 .containsExactly(0, 0, 1, 0, 0, 0, 0, 0, 0);
+        assertThat(slotsOf(result, 3_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
+        assertThat(slotsOf(result, 10_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
     }
 
-    @Test
-    @DisplayName("목록 밖 거리는 거절한다")
-    void rejectsUnlistedDistance() {
-        // when & then
-        assertThatThrownBy(() -> handler.handle(new GetMatchSlotsQuery(TOMORROW, 7_000)))
-                .isInstanceOf(InvalidMatchOptionException.class)
-                .hasMessage("목표 거리는 3000, 5000, 10000 중 하나여야 합니다.");
+    private static List<MatchSlot> slotsOf(GetMatchSlotsResult result, int distance) {
+        return result.distances().stream()
+                .filter(distanceSlots -> distanceSlots.targetDistanceMeters() == distance)
+                .findFirst()
+                .orElseThrow()
+                .slots();
     }
 
     // 인원 수만큼 접속 중인 참가자를 실은 방을 직접 둔다
