@@ -345,7 +345,11 @@ public class GlobalExceptionHandler {
     private HttpStatus toStatus(InviteErrorCode code) {
         return switch (code) {
             case INVALID_INVITE_OPTION -> HttpStatus.BAD_REQUEST;
-            case INVITE_START_AT_OUT_OF_RANGE -> HttpStatus.CONFLICT;
+            case INVITE_START_AT_OUT_OF_RANGE,
+                 RUNNING_INVITATION_CLOSED,
+                 NOT_FRIEND,
+                 RUNNING_INVITATION_NOT_PENDING,
+                 RUNNING_ROOM_FULL -> HttpStatus.CONFLICT;
         };
     }
 

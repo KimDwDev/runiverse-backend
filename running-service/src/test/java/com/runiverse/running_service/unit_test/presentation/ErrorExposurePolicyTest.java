@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
-import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;

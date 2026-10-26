@@ -1,7 +1,6 @@
 package com.runiverse.running_service.presentation.common.exception;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
-import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.RelationshipErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
