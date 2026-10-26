@@ -1067,7 +1067,7 @@
       "invitation": {                       // RUNNING_INVITED만
         "runningRoomInvitationId": 31,
         "runningRoomId": 130,
-        "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | EXPIRED — 지금 상태
+        "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | LEFT | EXPIRED — 지금 상태
         "scheduledStartAt": "2026-07-25T19:30:00",
         "targetDistanceMeters": 7000
       }
@@ -1195,7 +1195,7 @@
 - **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 모두 친구(`FRIEND`)여야 한다
   - **이미 대기중이거나 이미 방에 들어와 있는 사람은 건너뛴다** — 오류가 아니다. 응답 `invitations`에서 빠진다
   - **친구가 아닌 사람이 하나라도 섞이면 아무에게도 보내지 않는다**(`409 NOT_FRIEND`) — 화면에서 고른 목록이 친구 목록이라 섞였다면 그사이 관계가 바뀐 것이다. 다시 고르게 한다
-  - 거절했거나 수락 뒤 나간 친구는 같은 초대를 `PENDING`으로 되살린다
+  - 거절(`DECLINED`)했거나 수락 뒤 나간(`LEFT`) 친구는 같은 초대를 `PENDING`으로 되살린다
 - **부수 효과**: 초대받은 사람마다 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
 - **Response `201 Created`** — 이번 요청으로 `PENDING`이 된 초대만 담는다
 
@@ -1592,13 +1592,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     "userId": "01a0f2d4-6180-7000-8000-446655440021",
     "nickname": "영희",
     "profileImageUrl": "https://...",
-    "status": "PENDING",             // PENDING | DECLINED
+    "status": "PENDING",             // PENDING | DECLINED | LEFT
     "isDeleted": false
   }
 ]
 ```
 
-  - `PENDING`(대기중)·`DECLINED`(거절)만 나간다. 수락하면 `players`로 옮겨 가고, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다
+  - `PENDING`(대기중)·`DECLINED`(거절)·`LEFT`(나감)만 나간다. 수락하면 `players`로 옮겨 가고(`ACCEPTED`는 지금 방에 있다는 뜻이다), 나가면 `LEFT`로 현황에 돌아오며, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다
   - 상태가 바뀔 때마다(초대·수락·거절) `INVITE_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
 
 - **참가자별 `status`는 내려보내지 않는다** — 이탈자는 배정 행이 `is_connected=false`가 되어 목록에서 빠지므로 남아 있는 참가자는 아직 끝나지 않은 참가자(`JOINED`·`RUNNING`)다. 방의 진행 단계는 위 `status`가 나른다

@@ -194,15 +194,16 @@
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 초대 방(`type='INVITE'`) |
 | inviter_id | UUID | → users, NOT NULL | 초대한 사람 — 방의 현재 참가자 누구나. 다시 초대하면 마지막으로 초대한 사람으로 바뀐다. **논리 참조** — 보낸 사람이 탈퇴해도 초대는 유효하다(방장이 없어 방이 그대로 남는다) |
 | invitee_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 초대받은 사람 |
-| status | enum | NOT NULL | `PENDING` / `ACCEPTED` / `DECLINED` / `EXPIRED` — [§6](#6-enum-사전) |
+| status | enum | NOT NULL | `PENDING` / `ACCEPTED` / `DECLINED` / `LEFT` / `EXPIRED` — [§6](#6-enum-사전) |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 상태 변경 시각(응답·만료·다시 초대) |
 
 > UNIQUE (running_room_id, invitee_id) — 방·사람 쌍당 한 행. 다시 초대하면 새 행이 아니라 이 행을 `PENDING`으로 되살린다.
-> CHECK `ck_running_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED')`
+> CHECK `ck_running_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')`
 > CHECK `ck_running_room_invitation_users`: `inviter_id <> invitee_id`
 
 > **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다.
-> **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `DECLINED`와 "수락 뒤 방을 나간 `ACCEPTED`"는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
+> **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `ACCEPTED` → `LEFT`(수락해 들어온 방을 나감 — 나가기와 같은 트랜잭션). `DECLINED`·`LEFT`는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
+> **`ACCEPTED`는 "지금 방에 있음"만 뜻한다** — 나가면 `LEFT`로 바뀌므로 초대 상태만 보고 다시 초대할 수 있는지 안다. 거절(`DECLINED`)과 나감(`LEFT`)은 지금은 같게 다루지만, 화면 문구와 이후 정책(예: 나간 사람 재초대 제한)이 갈릴 수 있어 값을 나눈다.
 > **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
 > **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
 > **받은 사람이 탈퇴하면 그 사람의 초대를 지우고, 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 그래서 받은 사람 쪽 알림이 가리키는 초대 행은 항상 있다.
@@ -556,7 +557,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
-| running_room_invitations.status | PENDING / ACCEPTED / DECLINED / EXPIRED | 응답 대기 / 수락(방 입장) / 거절 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
+| running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
 | notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |

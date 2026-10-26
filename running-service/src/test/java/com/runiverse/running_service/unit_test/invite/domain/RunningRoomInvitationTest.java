@@ -119,7 +119,7 @@ class RunningRoomInvitationTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "EXPIRED"})
+        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT", "EXPIRED"})
         @DisplayName("대기 중이 아닌 초대는 수락할 수 없다")
         void cannotAcceptNonPending(RunningRoomInvitationStatus status) {
             // given -> 거절 뒤 들어가려면 다시 초대받아야 한다
@@ -137,7 +137,7 @@ class RunningRoomInvitationTest {
     class ReinviteTest {
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED"})
+        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"DECLINED", "LEFT"})
         @DisplayName("거절했거나 수락 뒤 나간 초대는 같은 행이 대기로 되살아나고 보낸 사람이 바뀐다")
         void revivesAsPending(RunningRoomInvitationStatus status) {
             // given
@@ -153,10 +153,10 @@ class RunningRoomInvitationTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"PENDING", "EXPIRED"})
-        @DisplayName("대기 중이거나 만료된 초대는 되살리지 않고 보낸 사람도 그대로다")
+        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"PENDING", "ACCEPTED", "EXPIRED"})
+        @DisplayName("대기 중·방에 있음·만료된 초대는 되살리지 않고 보낸 사람도 그대로다")
         void cannotReviveNonEnded(RunningRoomInvitationStatus status) {
-            // given -> 대기 중은 애플리케이션이 건너뛰고, 만료는 마감 뒤라 초대 자체가 막힌다
+            // given -> 대기 중·방에 있음은 애플리케이션이 건너뛰고, 만료는 마감 뒤라 초대 자체가 막힌다
             RunningRoomInvitation invitation = stored(status);
 
             // when & then
