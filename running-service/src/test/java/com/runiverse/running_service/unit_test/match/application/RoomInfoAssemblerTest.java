@@ -3,7 +3,10 @@ package com.runiverse.running_service.unit_test.match.application;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
+import com.runiverse.running_service.application.invite.common.InviteProperties;
+import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
@@ -45,6 +48,7 @@ class RoomInfoAssemblerTest {
     private static final UUID OTHER = UuidCreator.getTimeOrderedEpoch();
     private static final Long ROOM_ID = 125L;
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(15);
+    private static final Duration INVITE_CLOSE_OFFSET = Duration.ofMinutes(1);
     private static final Duration READY_OFFSET = Duration.ofSeconds(10);
     private static final Duration FORCE_FINISH_OFFSET = Duration.ofHours(6);
     private static final int PACE_TIE_TOLERANCE = 10;
@@ -80,11 +84,15 @@ class RoomInfoAssemblerTest {
     @BeforeEach
     void setUp() {
         // 페이스 동점 임계는 후보 배정(11번)에서만 쓴다 — 조립에는 마감 오프셋만 걸린다
+        MatchProperties matchProperties = new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
+                PACE_TIE_TOLERANCE, COOLDOWN,
+                LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
+        RecruitmentClosePolicy recruitmentClosePolicy = new RecruitmentClosePolicy(matchProperties,
+                new InviteStartPolicy(new InviteProperties(
+                        Duration.ofMinutes(10), INVITE_CLOSE_OFFSET, 1_000, 42_195), matchProperties));
         roomInfoAssembler = new RoomInfoAssembler(
                 loadMatchPlayersPort, loadPlayerProfilesPort, generateViewUrlPort,
-                new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
-                        PACE_TIE_TOLERANCE, COOLDOWN,
-                        LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000)),
+                recruitmentClosePolicy,
                 loadActiveApplicationPort, loadMatchRoomPort, loadMatchRoomDetailPort);
     }
 
@@ -104,6 +112,19 @@ class RoomInfoAssemblerTest {
         assertThat(roomInfo.status()).isEqualTo(RunningRoomStatus.MATCHING);
         assertThat(roomInfo.targetDistanceMeters()).isEqualTo(TARGET_DISTANCE);
         assertThat(roomInfo.teamAveragePaceSecondsPerKm()).isEqualTo(TEAM_PACE);
+    }
+
+    @Test
+    @DisplayName("초대 방의 모집 마감은 초대 오프셋으로 계산한다")
+    void calculatesInviteCloseAtWithInviteOffset() {
+        // given -> 매칭 오프셋(15분)을 쓰면 시작 15분 전부터 초대 방이 마감으로 보인다
+        givenPlayers(List.of(), Map.of());
+
+        // when
+        RoomInfo roomInfo = roomInfoAssembler.assemble(room(RunningRoomType.INVITE));
+
+        // then
+        assertThat(roomInfo.closeAt()).isEqualTo(START_AT.minus(INVITE_CLOSE_OFFSET));
     }
 
     @Test
@@ -174,9 +195,13 @@ class RoomInfoAssemblerTest {
 
     // 모집 중인 방은 아직 닫히지 않았으므로 closeAt은 비어 있어야 복원된다
     private static RunningRoom room() {
+        return room(RunningRoomType.MATCH);
+    }
+
+    private static RunningRoom room(RunningRoomType type) {
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
-                .type(RunningRoomType.MATCH)
+                .type(type)
                 .status(RunningRoomStatus.MATCHING)
                 .startAt(START_AT)
                 .targetDistance(TARGET_DISTANCE)

@@ -31,7 +31,7 @@ public class RoomInfoAssembler {
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final LoadPlayerProfilesPort loadPlayerProfilesPort;
     private final GenerateViewUrlPort generateViewUrlPort;
-    private final MatchProperties matchProperties;
+    private final RecruitmentClosePolicy recruitmentClosePolicy;
     private final LoadActiveApplicationPort loadActiveApplicationPort;
     private final LoadMatchRoomPort loadMatchRoomPort;
     private final LoadMatchRoomDetailPort loadMatchRoomDetailPort;   // 잠금 없는 조회
@@ -48,7 +48,7 @@ public class RoomInfoAssembler {
                 room.getStatus(),
                 room.getStartAt(),
                 // 저장값이 아니라 계산값이다 — 오프셋을 바꾸면 진행 중인 방의 마감도 함께 움직인다
-                room.getStartAt().minus(matchProperties.closeOffset()),
+                recruitmentClosePolicy.closeAt(room.getType(), room.getStartAt()),
                 room.getTargetDistance().map(Distance::meters).orElse(null),
                 room.getAvgPace().map(Pace::secondsPerKm).orElse(null),
                 players.stream().map(player -> toPlayer(player, profiles)).toList());
