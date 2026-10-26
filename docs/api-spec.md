@@ -1140,10 +1140,13 @@
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `scheduledStartAt` | String | O | KST 시작 시각. **분 단위**(초는 `00`). 선택지가 아니라 자유 입력이다 |
-| `targetDistanceMeters` | Integer | O | 목표 거리(m). 운영 설정의 최소·최대 거리 사이 |
+| `targetDistanceMeters` | Integer | O | 목표 거리(m). 운영 설정의 최소·최대 거리 사이(현재 1,000~42,195) |
 
 - **시각·거리를 선택지로 좁히지 않는다** — 매칭(5-A)과 다른 점이다. 범위만 운영 설정으로 막는다
-  - 거리가 범위를 벗어나거나 시각이 분 단위가 아니면 `400 INVALID_REQUEST`
+  - 거리가 범위를 벗어나거나 시각이 분 단위가 아니면 `400 INVALID_REQUEST`. 둘 다 어긋나면 두 문장을 공백으로 이어 한 번에 보낸다(매칭 `INVALID_MATCH_OPTION`과 같다). 거리 문구의 숫자는 운영값으로 만든다
+    - "시작 시각은 분 단위로만 선택할 수 있습니다."
+    - "목표 거리는 1000m 이상 42195m 이하여야 합니다."
+  - 필드 누락은 Request DTO 검증이다 — "시작 시각은 필수입니다." / "목표 거리는 필수입니다."
   - 시작 시각은 "지금 + 최소 준비 시간(운영 설정 `invite.min-lead-time`, 현재 10분)" 이후, **오늘(KST) 23:59** 이하여야 한다 — 벗어나면 `409 INVITE_START_AT_OUT_OF_RANGE`. 지금 시각에 따라 갈리는 판정이라 요청 검증이 아니다(매칭의 `MATCH_SLOT_CLOSED`와 같다)
 - **동작**: 방을 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다. 예약도 매칭 방과 같게 건다
 - 페이스는 온보딩 값을 쓴다(매칭과 같다)
