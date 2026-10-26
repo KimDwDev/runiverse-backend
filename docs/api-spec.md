@@ -1193,19 +1193,29 @@
 | `inviteeIds` | String[] | O | 초대할 친구의 `userId`. 1~50명, 중복은 하나로 본다 |
 
 - **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 모두 친구(`FRIEND`)여야 한다
-  - **이미 대기중이거나 이미 방에 들어와 있는 사람은 건너뛴다** — 오류가 아니다. 응답 `invitations`에서 빠진다
+  - **건너뛰는 사람** — 오류가 아니다. 응답 `invitations`에서 빠진다
+    - 활성 신청이 있는 사람(매칭 대기·러닝 중·이미 이 방에 들어옴)
+    - 호출자가 이 사람에게 보낸 횟수가 상한(운영 설정, 현재 5)에 닿은 경우
   - **친구가 아닌 사람이 하나라도 섞이면 아무에게도 보내지 않는다**(`409 NOT_FRIEND`) — 화면에서 고른 목록이 친구 목록이라 섞였다면 그사이 관계가 바뀐 것이다. 다시 고르게 한다
-  - 거절(`DECLINED`)했거나 수락 뒤 나간(`LEFT`) 친구는 같은 초대를 `PENDING`으로 되살린다
+  - **대기 중인 친구에게도 다시 보낼 수 있다** — 초대 상태는 `PENDING` 그대로이고 호출자의 보낸 횟수만 오른다
+  - 거절(`DECLINED`)했거나 수락 뒤 나간(`LEFT`) 친구는 같은 초대를 `PENDING`으로 되살린다. 보낸 횟수는 이어서 센다
 - **부수 효과**: 초대받은 사람마다 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
-- **Response `201 Created`** — 이번 요청으로 `PENDING`이 된 초대만 담는다
+- **Response `201 Created`** — 이번 요청으로 실제로 보낸 초대만 담는다(새로 만들었거나, 되살렸거나, 대기 중에 다시 보낸 것)
 
 ```json
 {
   "invitations": [
-    { "runningRoomInvitationId": 31, "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING" }
+    { "runningRoomInvitationId": 31, "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING", "sentCount": 1 }
   ]
 }
 ```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `invitations[].runningRoomInvitationId` | Long | O | 초대 ID — 받는 사람 기준으로 방마다 하나다 |
+| `invitations[].userId` | String | O | 받는 사람 |
+| `invitations[].status` | String | O | 항상 `PENDING` |
+| `invitations[].sentCount` | Integer | O | 호출자가 이 사람에게 보낸 횟수(이번 포함). 상한에 닿으면 다음 요청부터 건너뛴다 |
 
 - **에러 (404 Not Found)**: 방이 없거나, 초대 방이 아니거나, 호출자가 이 방의 현재 참가자가 아니다
 - **에러 (409 Conflict)**

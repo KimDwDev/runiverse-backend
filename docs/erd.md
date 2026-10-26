@@ -7,8 +7,8 @@
 ## 0. 공통 규칙
 
 - **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결·좋아요류(`user_colors`·`feed_likes`·`comment_likes`·`running_room_sessions`)는 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
-- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`, `running_room_invitations.inviter_id`/`invitee_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`·`user_relationships`·`scheduled_jobs`·`colors`).
+- **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`). 한 번만 참조해도 `user_id`로는 역할이 드러나지 않으면 역할명을 쓴다(`running_room_invitations.invitee_id`, `running_room_invitation_senders.inviter_id`). `feeds.running_record_id`는 논리 참조(아래 정책).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`·`running_room_invitation_senders`(복합 PK)·`user_relationships`·`scheduled_jobs`·`colors`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§6](#6-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
 - **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`feed_images`·좋아요류·`user_colors`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다. `notifications`도 `created_at`만 둔다 — 갱신은 `is_read` 하나뿐이고 읽은 시각은 쓰는 곳이 없다.
@@ -192,21 +192,34 @@
 |---|---|---|---|
 | running_room_invitation_id | bigint | PK | API `runningRoomInvitationId`(Long) |
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 초대 방(`type='INVITE'`) |
-| inviter_id | UUID | → users, NOT NULL | 초대한 사람 — 방의 현재 참가자 누구나. 다시 초대하면 마지막으로 초대한 사람으로 바뀐다. **논리 참조** — 보낸 사람이 탈퇴해도 초대는 유효하다(방장이 없어 방이 그대로 남는다) |
 | invitee_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 초대받은 사람 |
 | status | enum | NOT NULL | `PENDING` / `ACCEPTED` / `DECLINED` / `LEFT` / `EXPIRED` — [§6](#6-enum-사전) |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at` = 마지막 상태 변경 시각(응답·만료·다시 초대) |
 
-> UNIQUE (running_room_id, invitee_id) — 방·사람 쌍당 한 행. 다시 초대하면 새 행이 아니라 이 행을 `PENDING`으로 되살린다.
+> UNIQUE (running_room_id, invitee_id) — 방·받는 사람 쌍당 한 행. **상태는 받는 사람 기준으로 하나다** — 누가 몇 번 보냈든 수락·거절·나감·만료는 이 행 하나만 바꾼다. 누가 보냈는지는 `running_room_invitation_senders`가 갖는다.
 > CHECK `ck_running_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')`
-> CHECK `ck_running_room_invitation_users`: `inviter_id <> invitee_id`
 
 > **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다.
 > **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `ACCEPTED` → `LEFT`(수락해 들어온 방을 나감 — 나가기와 같은 트랜잭션). `DECLINED`·`LEFT`는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
 > **`ACCEPTED`는 "지금 방에 있음"만 뜻한다** — 나가면 `LEFT`로 바뀌므로 초대 상태만 보고 다시 초대할 수 있는지 안다. 거절(`DECLINED`)과 나감(`LEFT`)은 지금은 같게 다루지만, 화면 문구와 이후 정책(예: 나간 사람 재초대 제한)이 갈릴 수 있어 값을 나눈다.
 > **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
 > **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
-> **받은 사람이 탈퇴하면 그 사람의 초대를 지우고, 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 그래서 받은 사람 쪽 알림이 가리키는 초대 행은 항상 있다.
+> **받은 사람이 탈퇴하면 그 사람의 초대를 지우고(보낸 기록도 CASCADE), 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 그래서 받은 사람 쪽 알림이 가리키는 초대 행은 항상 있다.
+
+### running_room_invitation_senders (러닝 초대 보낸 기록)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| running_room_invitation_id | bigint | PK, FK → running_room_invitations, ON DELETE CASCADE | 어느 초대에 보냈는가 |
+| inviter_id | UUID | PK, → users | 보낸 사람 — 방의 현재 참가자 누구나. **논리 참조** — 보낸 사람이 탈퇴해도 기록과 초대는 남는다 |
+| send_count | int | NOT NULL | 이 사람이 이 초대에 보낸 횟수. 운영 설정 상한(`invite.max-send-count`, 현재 5)을 넘으면 그 사람에게는 보내지 않는다 |
+| created_at / updated_at | timestamp | NOT NULL | `created_at` = 처음 보낸 시각, `updated_at` = 마지막으로 보낸 시각 |
+
+> PK (running_room_invitation_id, inviter_id) — 한 초대에 보낸 사람당 한 행. 같은 사람이 다시 보내면 행을 늘리지 않고 `send_count`만 올린다.
+> CHECK `ck_running_room_invitation_sender_count`: `send_count >= 1`
+> **보낸 사람 ≠ 받는 사람은 앱이 지킨다** — 받는 사람이 부모 행에 있어 CHECK로 걸 수 없다. 받는 사람은 그 방 참가자가 아니고(활성 신청이 없다) 보낸 사람은 참가자라 같은 사람일 수 없지만, 도메인이 한 번 더 막는다.
+> **횟수는 거절·나감 뒤에도 이어서 센다** — 다시 초대로 상태가 `PENDING`으로 돌아가도 `send_count`는 초기화하지 않는다. 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다.
+> **대기 중인 초대에도 다시 보낼 수 있다** — 상태는 그대로 `PENDING`이고 보낸 기록만 쌓인다(독촉). 받는 사람 쪽 알림도 보낼 때마다 쌓인다.
 
 ### running_records
 
@@ -584,7 +597,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_relationships.(user_id, type, updated_at, target_id) | 친구 목록(10-7) — 묶음(`type`)마다 따로 읽어 `updated_at`·`target_id` 역순 정렬과 커서 조건을 인덱스가 처리한다. 묶음을 `CASE`로 한 번에 정렬하면 인덱스 순서를 쓰지 못해 묶음 단위로 나눠 읽는다. 역방향 스캔이라 컬럼에 `DESC`를 붙이지 않는다 |
 | user_relationships.target_id | 탈퇴 시 `target_id` 쪽 CASCADE 삭제 — 차단 여부 확인은 상대 행을 `(user_id, target_id)`로 찾아 이 인덱스가 필요 없다 |
 | notifications.(user_id, created_at) | 알림함 최신순 조회·안 읽은 수 — 보관 기간 조건도 `created_at` 범위로 탄다 |
-| running_room_invitations.invitee_id | 받은 초대 조회 — UNIQUE가 `running_room_id` 방향만 커버한다. 방의 초대 현황은 UNIQUE가 맡는다 |
+| running_room_invitations.invitee_id | 받은 초대 조회 — UNIQUE가 `running_room_id` 방향만 커버한다. 방의 초대 현황은 UNIQUE가 맡는다. `running_room_invitation_senders`는 PK가 초대 ID로 시작해 초대별 보낸 기록 조회를 덮는다 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
 | feeds.created_at | **[MVP 제외]** 피드 타임라인 최신순 정렬 |
