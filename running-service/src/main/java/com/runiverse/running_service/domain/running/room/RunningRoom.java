@@ -7,12 +7,16 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyLeftRoomException;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
+import com.runiverse.running_service.domain.running.room.exception.NotInvitedException;
 import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
+import com.runiverse.running_service.domain.running.room.exception.RoomNotInvitableException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomTypeRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.SelfInvitationException;
 import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
 import com.runiverse.running_service.domain.running.room.vo.PlayerCount;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.Builder;
@@ -39,6 +43,7 @@ public class RunningRoom {
     private PlayerCount playerCount;
     private Pace avgPace;       // 시작 전에 참가자가 0이 되면 null — 시작 후에는 바꾸지 않는다
     private final List<RoomSession> sessions;    // 방이 맺고 있는 관계들
+    private final List<RoomInvitation> invitations;   // 초대 방만 갖는다 — 방 행을 잠그면 함께 잠긴다
 
     //
     @Builder
@@ -46,7 +51,7 @@ public class RunningRoom {
                         LocalDateTime startAt, LocalDateTime closeAt,
                         Integer targetDistance, Integer avgPace,
                         int currentPlayerCount, int maxPlayerCount,
-                        List<SessionDraft> sessions) {
+                        List<SessionDraft> sessions, List<InvitationDraft> invitations) {
         this.runningRoomId = runningRoomId == null ? null : new RunningRoomId(runningRoomId);
         if (type == null) {
             throw new RunningRoomTypeRequiredException();
@@ -66,6 +71,11 @@ public class RunningRoom {
         this.sessions = new ArrayList<>();
         if (sessions != null) {
             sessions.forEach(draft -> this.sessions.add(RoomSession.from(draft)));
+        }
+        // 초대도 세션과 같다 — 밖에서는 InvitationDraft까지만 채울 수 있다
+        this.invitations = new ArrayList<>();
+        if (invitations != null) {
+            invitations.forEach(draft -> this.invitations.add(RoomInvitation.from(draft)));
         }
     }
 
@@ -205,12 +215,74 @@ public class RunningRoom {
             this.closeAt = leftAt;
         }
         session.leave();
+        // 초대로 들어온 사람이면 "지금 방에 있음"을 거둔다 — 그래야 다시 초대할 수 있다
+        if (invitationStatusOf(userId).orElse(null) == RunningRoomInvitationStatus.ACCEPTED) {
+            changeInvitationStatus(userId, RunningRoomInvitationStatus.LEFT);
+        }
     }
 
     // 완주로 자리를 비운다 — 인원도 방 상태도 건드리지 않는다.
     // leave()를 쓰면 마지막 완주자가 인원을 0으로 만들어 방이 CANCELLED가 된다
     public void finishSession(UserId userId) {
         session(userId).finish();
+    }
+
+    // 초대 — 보냈으면 이 보낸 사람의 행을, 건너뛰면 빈 값을 돌려준다.
+    // 시각 기준 마감·친구·다른 방의 활성 신청은 운영값이거나 다른 애그리거트라 애플리케이션이 먼저 본다
+    public Optional<RoomInvitation> invite(UserId inviterId, UserId inviteeId, int maxInviteCount) {
+        if (type != RunningRoomType.INVITE || status != RunningRoomStatus.MATCHING) {
+            throw new RoomNotInvitableException();
+        }
+        if (!session(inviterId).isConnected()) {
+            throw new NotRoomPlayerException();   // 나간 사람은 부를 수 없다
+        }
+        if (inviterId.equals(inviteeId)) {
+            throw new SelfInvitationException();
+        }
+        // 이미 이 방에 있다 — 오류가 아니라 건너뛴다
+        if (findSession(inviteeId).filter(RoomSession::isConnected).isPresent()) {
+            return Optional.empty();
+        }
+        Optional<RoomInvitation> sent = invitations.stream()
+                .filter(invitation -> invitation.isFor(inviteeId) && invitation.isSentBy(inviterId))
+                .findFirst();
+        // 상한은 보낸 사람마다 센다 — 닿았으면 상태도 건드리지 않는다
+        if (sent.isPresent() && sent.get().getInviteCount().hasReached(maxInviteCount)) {
+            return Optional.empty();
+        }
+        // 거절했거나 나간 사람은 다른 보낸 사람의 행까지 함께 대기로 되살린다
+        RunningRoomInvitationStatus current = invitationStatusOf(inviteeId).orElse(null);
+        if (current != null && current != RunningRoomInvitationStatus.PENDING) {
+            changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.PENDING);
+        }
+        if (sent.isPresent()) {
+            sent.get().resend();   // 대기 중에 다시 보냄(독촉) 포함
+            return sent;
+        }
+        RoomInvitation opened = RoomInvitation.open(inviterId, inviteeId);
+        invitations.add(opened);
+        return Optional.of(opened);
+    }
+
+    // 수락 — 매칭 합류와 같게 자리를 잡고, 누구의 초대로 들어오든 받는 사람의 행을 모두 수락으로 바꾼다
+    public void acceptInvitation(UserId inviteeId, RunningPlayerId runningPlayerId) {
+        // 합류보다 먼저 본다 — 합류 뒤에 터지면 인원만 오른 채 남는다
+        received(inviteeId).get(0).getStatus().transitionTo(RunningRoomInvitationStatus.ACCEPTED);
+        join(inviteeId, runningPlayerId);   // 자리가 없거나 모집 중이 아니면 초대는 PENDING 그대로다
+        changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.ACCEPTED);
+    }
+
+    // 거절 — 방 화면이 "거절"을 보여야 해서 행을 지우지 않는다
+    public void declineInvitation(UserId inviteeId) {
+        changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.DECLINED);
+    }
+
+    // 받는 사람 기준이라 행 하나만 보면 된다 — 받은 초대가 없으면 빈 값
+    public Optional<RunningRoomInvitationStatus> invitationStatusOf(UserId inviteeId) {
+        return invitations.stream()
+                .filter(invitation -> invitation.isFor(inviteeId))
+                .map(RoomInvitation::getStatus)
+                .findFirst();
     }
 
     public boolean isNew() {
@@ -237,12 +309,33 @@ public class RunningRoom {
         return Collections.unmodifiableList(sessions);
     }
 
+    public List<RoomInvitation> getInvitations() {
+        return Collections.unmodifiableList(invitations);
+    }
+
     private RoomSession session(UserId userId) {
         return findSession(userId).orElseThrow(NotRoomPlayerException::new);
     }
 
     private Optional<RoomSession> findSession(UserId userId) {
         return sessions.stream().filter(session -> session.isSameUser(userId)).findFirst();
+    }
+
+    private List<RoomInvitation> received(UserId inviteeId) {
+        List<RoomInvitation> received = invitations.stream()
+                .filter(invitation -> invitation.isFor(inviteeId))
+                .toList();
+        if (received.isEmpty()) {
+            throw new NotInvitedException();
+        }
+        return received;
+    }
+
+    // 같은 받는 사람의 행은 늘 같은 상태라 첫 행으로 전이를 먼저 확인한다 — 반쯤 바뀐 채로 남지 않는다
+    private void changeInvitationStatus(UserId inviteeId, RunningRoomInvitationStatus next) {
+        List<RoomInvitation> received = received(inviteeId);
+        received.get(0).getStatus().transitionTo(next);
+        received.forEach(invitation -> invitation.changeStatus(next));
     }
 
     // 닫힌 시각은 종료 상태와 짝이다 — DB에서 복원할 때 어긋난 행을 여기서 잡는다
