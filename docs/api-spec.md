@@ -48,8 +48,8 @@
 |---|--------|------|------|
 | 17 | POST | `/api/v1/running-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
 | 18 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
-| 19 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
-| 20 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/decline` | 초대 거절 — 사용 화면: 알림함 |
+| 19 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
+| 20 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -1065,7 +1065,6 @@
       },
       "relationshipType": null,             // FRIEND_* 알림만 — 지금 actor와의 관계
       "invitation": {                       // RUNNING_INVITED만
-        "runningRoomInvitationId": 31,
         "runningRoomId": 130,
         "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | LEFT | EXPIRED — 지금 상태
         "scheduledStartAt": "2026-07-25T19:30:00",
@@ -1205,17 +1204,16 @@
 ```json
 {
   "invitations": [
-    { "runningRoomInvitationId": 31, "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING", "sentCount": 1 }
+    { "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING", "inviteCount": 1 }
   ]
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `invitations[].runningRoomInvitationId` | Long | O | 초대 ID — 받는 사람 기준으로 방마다 하나다 |
 | `invitations[].userId` | String | O | 받는 사람 |
 | `invitations[].status` | String | O | 항상 `PENDING` |
-| `invitations[].sentCount` | Integer | O | 호출자가 이 사람에게 보낸 횟수(이번 포함). 상한에 닿으면 다음 요청부터 건너뛴다 |
+| `invitations[].inviteCount` | Integer | O | 호출자가 이 사람에게 보낸 횟수(이번 포함). 상한에 닿으면 다음 요청부터 건너뛴다 |
 
 - **에러 (404 Not Found)**: 방이 없거나, 초대 방이 아니거나, 호출자가 이 방의 현재 참가자가 아니다
 - **에러 (409 Conflict)**
@@ -1236,11 +1234,11 @@
 
 - **인증**: 필요
 
-### 4-3. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/accept` — 초대 수락
+### 4-3. `POST /api/v1/running-rooms/{runningRoomId}/invitations/accept` — 초대 수락
 
 - **화면**: 알림함 (초대 알림의 수락 버튼)
-- **Request 본문이 없다**
-- **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 초대를 `ACCEPTED`로 바꾼다. 기존 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다. 수락한 사람은 응답을 받은 뒤 스트림을 열어 `INVITE_ROOM_ENTRANCE`를 받는다
+- **Request 본문이 없다** — 받는 사람은 토큰 주체다. 경로의 방에서 나에게 온 초대를 수락한다. 누가 보냈든 초대는 받는 사람 기준으로 하나라 보낸 사람을 고르지 않는다
+- **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 나에게 온 초대 행을 모두 `ACCEPTED`로 바꾼다. 기존 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다. 수락한 사람은 응답을 받은 뒤 스트림을 열어 `INVITE_ROOM_ENTRANCE`를 받는다
   - **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 순서를 정한다
   - 매칭 쿨다운 중에도 수락할 수 있다
 - 응답을 받으면 클라는 `GET /running-matches/stream`을 연다
@@ -1252,7 +1250,7 @@
 }
 ```
 
-- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (404 Not Found)**: 방이 없거나, 이 방에서 나에게 온 초대가 없다
 - **에러 (409 Conflict)** — 판정 순서대로
   - `RUNNING_INVITATION_CLOSED` — 만료됐거나(모집 마감·방 취소) 방이 모집 중이 아니다
   - `RUNNING_INVITATION_NOT_PENDING` — 이미 수락했거나 거절한 초대다. 거절 뒤 다시 들어가려면 다시 초대받아야 한다
@@ -1274,13 +1272,13 @@
 
 - **인증**: 필요
 
-### 4-4. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/decline` — 초대 거절
+### 4-4. `POST /api/v1/running-rooms/{runningRoomId}/invitations/decline` — 초대 거절
 
 - **화면**: 알림함 (초대 알림의 거절 버튼)
-- **Request 본문이 없다**
-- 초대를 `DECLINED`로 바꾸고 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 방 화면에 "거절"이 보인다. **행을 지우지 않는다**(친구 요청 거절과 다르다)
+- **Request 본문이 없다** — 받는 사람은 토큰 주체다
+- 이 방에서 나에게 온 초대 행을 모두 `DECLINED`로 바꾸고 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 방 화면에 "거절"이 보인다. **행을 지우지 않는다**(친구 요청 거절과 다르다)
 - **Response `204 No Content`**
-- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (404 Not Found)**: 방이 없거나, 이 방에서 나에게 온 초대가 없다
 - **에러 (409 Conflict)**: `RUNNING_INVITATION_NOT_PENDING` — 대기중인 초대가 아니다(이미 응답했거나 만료됐다)
 - **인증**: 필요
 
@@ -1598,7 +1596,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 "invitations": [
   {
-    "runningRoomInvitationId": 31,
     "userId": "01a0f2d4-6180-7000-8000-446655440021",
     "nickname": "영희",
     "profileImageUrl": "https://...",

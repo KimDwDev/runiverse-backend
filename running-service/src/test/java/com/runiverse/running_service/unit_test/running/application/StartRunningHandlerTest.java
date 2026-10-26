@@ -368,17 +368,5 @@ public class StartRunningHandlerTest {
                     .isInstanceOf(RunningNotStartableException.class);
             verifyNoInteractions(updateRunningRoomPort, updateRunningPlayerPort);
         }
-
-        @Test
-        @DisplayName("아직 수락하지 않은 초대는 시작하지 못한다")
-        void rejectInvitedPlayer() {
-            // given -> loadActive는 deleted_at만 보므로 INVITED도 살아 있는 채로 올라온다
-            givenStore(room(RunningRoomStatus.MATCHED), player(RunningPlayerStatus.INVITED));
-
-            // when & then
-            assertThatThrownBy(StartRunningHandlerTest.this::start)
-                    .isInstanceOf(RunningNotStartableException.class);
-            verifyNoInteractions(updateRunningRoomPort, updateRunningPlayerPort);
-        }
     }
 }

@@ -816,18 +816,6 @@ public class RunningFinisherTest {
         }
 
         @Test
-        @DisplayName("수락하지 않은 초대도 종료 대상이 아니다")
-        void rejectInvitedPlayer() {
-            // given
-            givenPlayer(player(RunningPlayerStatus.INVITED, null));
-
-            // when & then
-            assertThatThrownBy(RunningFinisherTest.this::finish)
-                    .isInstanceOf(RunningNotStartableException.class);
-            verifyNoInteractions(updateRunningPlayerPort, deleteRunningTrackPort);
-        }
-
-        @Test
         @DisplayName("참가자는 있는데 방이 없으면 거부한다")
         void rejectUnknownRoom() {
             // given -> 목표 거리를 정하는 쪽이 방이라 방 없이는 판정할 수 없다
