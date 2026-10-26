@@ -2,6 +2,8 @@ package com.runiverse.running_service.application.invite.common;
 
 import com.runiverse.running_service.application.invite.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -56,6 +58,13 @@ public class InviteStartPolicy {
     // 모집 마감 = start_at - 초대 마감 오프셋. 컬럼에 저장하지 않는다 — 매칭과 같은 이유다
     public LocalDateTime closeAt(LocalDateTime startAt) {
         return startAt.minus(inviteProperties.closeOffset());
+    }
+
+    // 초대·수락을 받는가 — 모집 중이고 마감 전이어야 한다. 마감 시각 자체는 이미 닫힌 것으로 본다.
+    // 마감 예약(MATCH_CLOSE)이 아직 안 돌아 MATCHING으로 남아 있어도 시각이 지났으면 닫힌 것이다
+    public boolean isRecruiting(RunningRoom room, LocalDateTime now) {
+        return room.getStatus() == RunningRoomStatus.MATCHING
+                && now.isBefore(closeAt(room.getStartAt()));
     }
 
     private boolean allowsDistance(int distanceMeters) {

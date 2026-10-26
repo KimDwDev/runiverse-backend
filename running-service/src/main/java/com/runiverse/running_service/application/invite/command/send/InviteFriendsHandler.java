@@ -17,7 +17,6 @@ import com.runiverse.running_service.application.match.port.out.MatchStreamEvent
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,8 +53,8 @@ public class InviteFriendsHandler implements InviteFriendsUsecase {
                 .filter(locked -> locked.getType() == RunningRoomType.INVITE)
                 .filter(locked -> isInRoom(locked, inviterId))
                 .orElseThrow(InviteRoomNotFoundException::new);
-        // 2. 모집 중이고 마감 전인가 — 마감 예약이 아직 안 돌았어도 시각이 지났으면 닫힌 것이다
-        if (!isRecruiting(room, LocalDateTime.now())) {
+        // 2. 모집 중이고 마감 전인가 — 경계는 수락과 같아야 해 정책이 함께 판정한다
+        if (!inviteStartPolicy.isRecruiting(room, LocalDateTime.now())) {
             throw new RunningInvitationClosedException();
         }
         // 3. 하나라도 친구가 아니면 아무에게도 보내지 않는다 — 자기 자신도 친구가 아니라 여기서 걸린다
@@ -91,9 +90,4 @@ public class InviteFriendsHandler implements InviteFriendsUsecase {
                 .anyMatch(session -> session.isSameUser(userId) && session.isConnected());
     }
 
-    // 마감 시각 자체는 이미 닫힌 것으로 본다
-    private boolean isRecruiting(RunningRoom room, LocalDateTime now) {
-        return room.getStatus() == RunningRoomStatus.MATCHING
-                && now.isBefore(inviteStartPolicy.closeAt(room.getStartAt()));
-    }
 }

@@ -5,10 +5,14 @@ import com.runiverse.running_service.application.invite.common.InviteProperties;
 import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
 import com.runiverse.running_service.application.invite.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
@@ -160,6 +164,63 @@ class InviteStartPolicyTest {
         void pastIsRejected() {
             // when & then
             assertThat(policy.isSelectable(NOW.minusMinutes(1), NOW)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("모집 중 판정 테스트")
+    class RecruitingTest {
+
+        private RunningRoom roomOf(RunningRoomStatus status) {
+            return RunningRoom.builder()
+                    .runningRoomId(130L)
+                    .type(RunningRoomType.INVITE)
+                    .status(status)
+                    .startAt(VALID_START)
+                    .closeAt(status.isTerminal() ? NOW : null)
+                    .targetDistance(VALID_DISTANCE)
+                    .avgPace(330)
+                    .currentPlayerCount(status == RunningRoomStatus.CANCELLED ? 0 : 1)
+                    .maxPlayerCount(4)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("모집 중이고 마감 전이면 받는다")
+        void recruitingBeforeCloseAt() {
+            // when & then
+            assertThat(policy.isRecruiting(roomOf(RunningRoomStatus.MATCHING), NOW)).isTrue();
+        }
+
+        @Test
+        @DisplayName("마감 1나노초 전까지는 받는다")
+        void justBeforeCloseAt() {
+            // when & then
+            assertThat(policy.isRecruiting(roomOf(RunningRoomStatus.MATCHING),
+                    policy.closeAt(VALID_START).minusNanos(1))).isTrue();
+        }
+
+        @Test
+        @DisplayName("마감 시각 자체는 이미 닫혔다")
+        void closeAtIsExclusive() {
+            // when & then -> 초대·수락이 같은 경계를 쓴다
+            assertThat(policy.isRecruiting(roomOf(RunningRoomStatus.MATCHING), policy.closeAt(VALID_START)))
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("마감 예약이 안 돌아 모집 중으로 남아 있어도 시각이 지났으면 닫혔다")
+        void pastCloseAtWhileMatching() {
+            // when & then
+            assertThat(policy.isRecruiting(roomOf(RunningRoomStatus.MATCHING), VALID_START)).isFalse();
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = RunningRoomStatus.class, names = "MATCHING", mode = EnumSource.Mode.EXCLUDE)
+        @DisplayName("모집 중이 아닌 방은 마감 전이어도 닫혔다")
+        void notMatchingIsClosed(RunningRoomStatus status) {
+            // when & then
+            assertThat(policy.isRecruiting(roomOf(status), NOW)).isFalse();
         }
     }
 
