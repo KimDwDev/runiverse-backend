@@ -29,6 +29,7 @@ public class RunningRoom {
 
     private static final int SOLO_MAX_PLAYER = 1;
     private static final int MATCH_MAX_PLAYER = 4;
+    private static final int INVITE_MAX_PLAYER = 4;
     private final RunningRoomId runningRoomId;   // 저장 전에는 null
     private final RunningRoomType type;          // 생성 후 바뀌지 않는다
     private final LocalDateTime startAt;
@@ -94,6 +95,22 @@ public class RunningRoom {
                 .avgPace(avgPace)
                 .currentPlayerCount(1)
                 .maxPlayerCount(MATCH_MAX_PLAYER)
+                .build();
+        room.sessions.add(RoomSession.open(userId, runningPlayerId));
+        return room;
+    }
+
+    // 초대 — 만든 사람 혼자 MATCHING으로 태어나 초대 수락으로만 사람이 들어온다.
+    // 후보 스캔은 type='MATCH'만 보므로 여기서 막을 것은 없다
+    public static RunningRoom openInvite(UserId userId, RunningPlayerId runningPlayerId,
+                                         int avgPace, Integer targetDistance, LocalDateTime startAt) {
+        RunningRoom room = builder()
+                .type(RunningRoomType.INVITE)
+                .startAt(startAt)
+                .targetDistance(targetDistance)
+                .avgPace(avgPace)
+                .currentPlayerCount(1)
+                .maxPlayerCount(INVITE_MAX_PLAYER)
                 .build();
         room.sessions.add(RoomSession.open(userId, runningPlayerId));
         return room;
