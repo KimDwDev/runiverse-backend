@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.invite.exception;
 
 import com.runiverse.running_service.application.common.exception.BusinessException;
+import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 
 public class InviteStartAtOutOfRangeException extends BusinessException {
 

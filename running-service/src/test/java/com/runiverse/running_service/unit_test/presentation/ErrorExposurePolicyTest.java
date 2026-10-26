@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;
@@ -89,6 +90,19 @@ public class ErrorExposurePolicyTest {
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.CONFLICT,
                 InviteErrorCode.INVITE_START_AT_OUT_OF_RANGE.getCode())).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = InviteErrorCode.class, names = {
+            "RUNNING_INVITATION_CLOSED",
+            "NOT_FRIEND",
+            "RUNNING_INVITATION_NOT_PENDING",
+            "RUNNING_ROOM_FULL"
+    })
+    @DisplayName("초대·수락·거절 거부는 409 그대로 노출한다")
+    void invitationConflictsAreExposed(InviteErrorCode errorCode) {
+        // 가려지면 500으로 바뀌어, 클라가 다시 고르게 할지·버튼을 다시 그릴지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(HttpStatus.CONFLICT, errorCode.getCode())).isTrue();
     }
 
     @Test

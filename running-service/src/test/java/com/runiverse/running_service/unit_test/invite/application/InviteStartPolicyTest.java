@@ -1,5 +1,6 @@
 package com.runiverse.running_service.unit_test.invite.application;
 
+import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.invite.common.InviteProperties;
 import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
 import com.runiverse.running_service.application.invite.exception.InvalidInviteOptionException;
