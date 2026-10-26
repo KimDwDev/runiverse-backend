@@ -1,5 +1,8 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.application.invite.port.out.LoadActiveUserIdsPort;
+import com.runiverse.running_service.application.invite.port.out.LockInviteRoomPort;
+import com.runiverse.running_service.application.invite.port.out.UpdateInviteRoomPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
@@ -33,9 +36,11 @@ import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.Tuple;
@@ -43,9 +48,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -62,7 +69,9 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
         // 스냅샷 조회 — 잠그지 않는 것만 lockById와 다르다
         LoadMatchRoomDetailPort,
-        LoadUserStatusPort {
+        LoadUserStatusPort,
+        // 초대 유스케이스도 같은 방 애그리거트다 — 잠금·저장은 시그니처가 같아 기존 메서드가 만족시킨다
+        LockInviteRoomPort, UpdateInviteRoomPort, LoadActiveUserIdsPort {
 
     private final EntityManager entityManager;
 
@@ -111,7 +120,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                         session.isConnected()))
                 .toList();
         sessions.forEach(entityManager::persist);
-        return toDomain(roomEntity, sessions);
+        // 갓 연 방에는 초대가 없다 — 초대는 방이 저장된 뒤 update로만 생긴다
+        return toDomain(roomEntity, sessions, List.of());
     }
 
     @Override
@@ -127,6 +137,24 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         return count > 0;
     }
 
+    // existsActive를 여러 명에게 한 번에 묻는다 — idx_running_player_user(user_id, deleted_at)를 탄다
+    @Override
+    public Set<UserId> loadActiveUserIds(Collection<UserId> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();   // 빈 IN ()은 DB마다 문법 오류다
+        }
+        return entityManager.createQuery("""
+                        SELECT DISTINCT p.userId
+                        FROM RunningPlayerJpaEntity p
+                        WHERE p.userId IN :userIds
+                          AND p.deletedAt IS NULL
+                        """, UUID.class)
+                .setParameter("userIds", userIds.stream().map(UserId::value).toList())
+                .getResultStream()
+                .map(UserId::new)
+                .collect(Collectors.toSet());
+    }
+
     @Override
     public Optional<RunningRoom> loadById(RunningRoomId runningRoomId) {
         return entityManager.createQuery("""
@@ -139,7 +167,7 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .getResultStream()
                 .findFirst()
                 // 세션 없이는 "이 방 참가자인가"를 판정할 수 없다 — 방과 항상 함께 복원한다
-                .map(entity -> toDomain(entity, loadSessions(entity)));
+                .map(this::restore);
     }
 
     @Override
@@ -189,6 +217,7 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
             target.changeLeaveCount(session.getLeaveCount().value());
             target.changeConnected(session.isConnected());
         });
+        updateInvitations(entity, room);
     }
 
     @Override
@@ -385,11 +414,11 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                         """, RunningRoomJpaEntity.class)
                 .setParameter("runningRoomId", runningRoomId.value())
                 // 방 행만 잠근다 — 인원 갱신이 겹치면 정원을 넘길 수 있다.
-                // 세션은 별도 조회라 잠기지 않는다(같은 방의 다른 신청과만 경쟁한다)
+                // 세션·초대는 별도 조회라 잠기지 않는다 — 고치는 쪽이 모두 이 방 행부터 잠그므로 줄이 선다
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultStream()
                 .findFirst()
-                .map(entity -> toDomain(entity, loadSessions(entity)));
+                .map(this::restore);
     }
 
     // 스냅샷 조회가 신청·취소와 경합하면 안 된다 — 여긴 잠그지 않는 것만 lockById와 다르다.
@@ -405,7 +434,7 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .setParameter("runningRoomId", runningRoomId.value())
                 .getResultStream()
                 .findFirst()
-                .map(entity -> toDomain(entity, loadSessions(entity)));
+                .map(this::restore);
     }
 
     // 활성 신청과 현재 배정된 방을 한 번에 읽는다 — 상태 판정에 필요한 값만 뽑아
@@ -447,12 +476,59 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 record.getTotalElevationGain());
     }
 
+    // 초대도 방 애그리거트의 내부 엔티티라 별도 포트 없이 여기서 함께 반영한다.
+    // 키는 (보낸 사람, 받는 사람)이다 — 도메인이 행을 지우지 않으므로 없으면 만들고 있으면 맞추기만 한다.
+    // 그래서 초대 없이 복원된 방이 저장돼도 기존 행이 지워지지 않는다
+    private void updateInvitations(RunningRoomJpaEntity entity, RunningRoom room) {
+        if (room.getInvitations().isEmpty()) {
+            return;
+        }
+        Map<InvitationKey, RunningRoomInvitationJpaEntity> stored = loadInvitations(entity).stream()
+                .collect(Collectors.toMap(
+                        invitation -> new InvitationKey(invitation.getInviterId(), invitation.getInviteeId()),
+                        invitation -> invitation));
+        room.getInvitations().forEach(invitation -> {
+            UUID inviterId = invitation.getInviterId().value();
+            UUID inviteeId = invitation.getInviteeId().value();
+            RunningRoomInvitationJpaEntity target = stored.get(new InvitationKey(inviterId, inviteeId));
+            if (target == null) {
+                // 이 보낸 사람이 이 받는 사람에게 처음 보냈다
+                entityManager.persist(RunningRoomInvitationJpaEntity.create(
+                        entity, inviterId, inviteeId,
+                        invitation.getStatus(), invitation.getInviteCount().value()));
+                return;
+            }
+            target.changeStatus(invitation.getStatus());
+            target.changeInviteCount(invitation.getInviteCount().value());
+        });
+    }
+
+    // 방을 복원하는 모든 경로가 이걸 탄다 — 나가기(LEFT)도 초대를 봐야 해서 초대 방이면 늘 함께 읽는다
+    private RunningRoom restore(RunningRoomJpaEntity entity) {
+        return toDomain(entity, loadSessions(entity), loadInvitations(entity));
+    }
+
     private List<RunningRoomSessionJpaEntity> loadSessions(RunningRoomJpaEntity room) {
         return entityManager.createQuery("""
                         SELECT s
                         FROM RunningRoomSessionJpaEntity s
                         WHERE s.room = :room
                         """, RunningRoomSessionJpaEntity.class)
+                .setParameter("room", room)
+                .getResultList();
+    }
+
+    // 초대는 초대 방에만 있다 — 매칭·솔로 방은 쿼리를 내보내지 않는다.
+    // PK 선두(running_room_id)를 탄다
+    private List<RunningRoomInvitationJpaEntity> loadInvitations(RunningRoomJpaEntity room) {
+        if (room.getType() != RunningRoomType.INVITE) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                        SELECT i
+                        FROM RunningRoomInvitationJpaEntity i
+                        WHERE i.room = :room
+                        """, RunningRoomInvitationJpaEntity.class)
                 .setParameter("room", room)
                 .getResultList();
     }
@@ -471,7 +547,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
     }
 
     private RunningRoom toDomain(RunningRoomJpaEntity entity,
-                                 List<RunningRoomSessionJpaEntity> sessions) {
+                                 List<RunningRoomSessionJpaEntity> sessions,
+                                 List<RunningRoomInvitationJpaEntity> invitations) {
         return RunningRoom.builder()
                 .runningRoomId(entity.getRunningRoomId())
                 .type(entity.getType())
@@ -488,6 +565,17 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                                 new RunningPlayerId(s.getRunningPlayerId()),
                                 s.getLeaveCount(), s.isConnected()))
                         .toList())
+                .invitations(invitations.stream()
+                        .map(i -> new InvitationDraft(
+                                new UserId(i.getInviterId()),
+                                new UserId(i.getInviteeId()),
+                                i.getStatus(), i.getInviteCount()))
+                        .toList())
                 .build();
+    }
+
+    // 초대 행의 방 안 키 — 방은 이미 정해져 있어 (보낸 사람, 받는 사람)만으로 가른다
+    private record InvitationKey(UUID inviterId, UUID inviteeId) {
+
     }
 }
