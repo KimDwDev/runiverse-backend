@@ -58,7 +58,7 @@ public class OpenInviteRoomIntegrationTest extends IntegrationTestSupport {
             Duration.ofMinutes(10), READY_OFFSET, FORCE_FINISH_OFFSET, 10, Duration.ofMinutes(20),
             LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
     private static final InviteProperties INVITE_PROPERTIES = new InviteProperties(
-            Duration.ofMinutes(10), CLOSE_OFFSET, 1_000, 42_195);
+            Duration.ofMinutes(10), CLOSE_OFFSET, 1_000, 42_195, 5);
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;

@@ -35,7 +35,7 @@ class InviteStartPolicyTest {
     private static final String DISTANCE_MESSAGE = "목표 거리는 1000m 이상 42195m 이하여야 합니다.";
 
     private static InviteStartPolicy policyOf(Duration closeOffset, Duration readyOffset) {
-        InviteProperties inviteProperties = new InviteProperties(MIN_LEAD_TIME, closeOffset, 1_000, 42_195);
+        InviteProperties inviteProperties = new InviteProperties(MIN_LEAD_TIME, closeOffset, 1_000, 42_195, 5);
         MatchProperties matchProperties = new MatchProperties(
                 Duration.ofMinutes(10), readyOffset, Duration.ofHours(6), 10, Duration.ofMinutes(20),
                 LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));

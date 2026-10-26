@@ -89,7 +89,7 @@ class RoomInfoAssemblerTest {
                 LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
         RecruitmentClosePolicy recruitmentClosePolicy = new RecruitmentClosePolicy(matchProperties,
                 new InviteStartPolicy(new InviteProperties(
-                        Duration.ofMinutes(10), INVITE_CLOSE_OFFSET, 1_000, 42_195), matchProperties));
+                        Duration.ofMinutes(10), INVITE_CLOSE_OFFSET, 1_000, 42_195, 5), matchProperties));
         roomInfoAssembler = new RoomInfoAssembler(
                 loadMatchPlayersPort, loadPlayerProfilesPort, generateViewUrlPort,
                 recruitmentClosePolicy,

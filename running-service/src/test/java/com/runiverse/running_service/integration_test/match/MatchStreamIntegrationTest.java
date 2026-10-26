@@ -67,7 +67,7 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
             CLOSE_OFFSET, Duration.ofSeconds(10), Duration.ofHours(6), 10, Duration.ofMinutes(20),
             LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
     private static final InviteProperties INVITE_PROPERTIES = new InviteProperties(
-            Duration.ofMinutes(10), Duration.ofMinutes(1), 1_000, 42_195);
+            Duration.ofMinutes(10), Duration.ofMinutes(1), 1_000, 42_195, 5);
 
     private SignUpHandler signUpHandler;
     private CompleteOnboardingHandler completeOnboardingHandler;
