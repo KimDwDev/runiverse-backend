@@ -1,5 +1,8 @@
 package com.runiverse.running_service.presentation.running.controller;
 
+import com.runiverse.running_service.application.invite.command.open.OpenInviteRoomCommand;
+import com.runiverse.running_service.application.invite.command.open.OpenInviteRoomResult;
+import com.runiverse.running_service.application.invite.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomResult;
 import com.runiverse.running_service.application.running.port.in.GetRunningResultsUsecase;
@@ -9,9 +12,12 @@ import com.runiverse.running_service.application.running.query.result.GetRunning
 import com.runiverse.running_service.application.running.query.result.GetRunningResultsResult;
 import com.runiverse.running_service.application.running.query.split.GetRunningSplitResultsQuery;
 import com.runiverse.running_service.application.running.query.split.GetRunningSplitResultsResult;
+import com.runiverse.running_service.presentation.running.request.OpenInviteRoomRequest;
+import com.runiverse.running_service.presentation.running.response.OpenInviteRoomResponse;
 import com.runiverse.running_service.presentation.running.response.RunningResultsResponse;
 import com.runiverse.running_service.presentation.running.response.RunningSplitResultsResponse;
 import com.runiverse.running_service.presentation.running.response.SoloRunningStartResponse;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +27,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,6 +39,7 @@ import java.util.UUID;
 public class RunningRoomController {
 
     private final OpenSoloRoomUsecase startSoloRunningUsecase;
+    private final OpenInviteRoomUsecase openInviteRoomUsecase;
     private final GetRunningResultsUsecase getRunningResultsUsecase;
     private final GetRunningSplitResultsUsecase getRunningSplitResultsUsecase;
 
@@ -42,6 +50,18 @@ public class RunningRoomController {
                 new OpenSoloRoomCommand(userId));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new SoloRunningStartResponse(result.runningRoomId()));
+    }
+
+    @PostMapping("/invite")
+    public ResponseEntity<OpenInviteRoomResponse> openInvite(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody OpenInviteRoomRequest request
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        OpenInviteRoomResult result = openInviteRoomUsecase.handle(new OpenInviteRoomCommand(
+                userId, request.scheduledStartAt(), request.targetDistanceMeters()));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new OpenInviteRoomResponse(result.runningRoomId()));
     }
 
     @GetMapping("/{runningRoomId}/results")
