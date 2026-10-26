@@ -1,6 +1,7 @@
 package com.runiverse.e2e.invite;
 
 import com.runiverse.e2e.E2eTestSupport;
+import com.runiverse.e2e.MatchStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,15 @@ class InviteRoomE2eTest extends E2eTestSupport {
         assertThat(waiting.number("runningRoomId")).isEqualTo(runningRoomId);
         assertThat(LocalDateTime.parse(waiting.text("scheduledStartAt"))).isEqualTo(start);
         assertThat(waiting.number("targetDistanceMeters")).isEqualTo(DISTANCE);
+
+        // 연결 직후 스냅샷의 모집 마감은 매칭 오프셋(10분)이 아니라 초대 오프셋(1분)이다.
+        // 초대 방 전용 이벤트(INVITE_ROOM_ENTRANCE)가 붙으면 이벤트 이름만 바뀐다
+        try (MatchStream stream = openMatchStream(host.accessToken())) {
+            assertThat(stream.status()).isEqualTo(200);
+            Map<String, Object> snapshot = stream.await("MATCH_ROOM_UPDATED");
+            assertThat(((Number) snapshot.get("runningRoomId")).intValue()).isEqualTo(runningRoomId);
+            assertThat(LocalDateTime.parse((String) snapshot.get("closeAt"))).isEqualTo(start.minusMinutes(1));
+        }
 
         // 2. 활성 신청은 방 종류와 무관하게 하나다 — 초대 방도 매칭도 더 열 수 없다
         Response again = open(host, start, DISTANCE);
