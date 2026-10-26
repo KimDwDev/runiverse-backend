@@ -20,7 +20,10 @@ public record InviteProperties(
         // 목표 거리는 자유 입력이라 선택지가 아니라 범위로 막는다.
         // Distance VO 상한(500km)은 저장 가능한 값의 한계라 입력 범위와 다르다
         @NotNull @Positive Integer minDistanceMeters,
-        @NotNull @Positive Integer maxDistanceMeters
+        @NotNull @Positive Integer maxDistanceMeters,
+        // 한 보낸 사람이 한 방에서 한 사람에게 보낼 수 있는 횟수 — 닿으면 그 사람은 건너뛴다.
+        // 거절·나감 뒤에도 이어서 센다 — 거절당한 뒤 계속 보내는 것을 막는 게 목적이다
+        @NotNull @Positive Integer maxInviteCount
 ) {
 
     // null 검사는 @NotNull이 따로 보고한다 — 여기서 터지면 원인이 가려진다
