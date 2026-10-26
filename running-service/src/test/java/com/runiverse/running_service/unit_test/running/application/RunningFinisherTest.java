@@ -432,6 +432,24 @@ public class RunningFinisherTest {
         }
 
         @Test
+        @DisplayName("초대 방에서는 동료가 있고 비율이 미달이어도 제재하지 않는다")
+        void exemptsInviteRoomFromPenalty() {
+            // given -> 매칭 방이면 제재되는 조건(2인 이상·79.8%)을 그대로 두고 방 종류만 바꾼다.
+            //          제재는 모르는 사람끼리 모이는 매칭의 약속 장치라 친구끼리인 초대 방에는 없다
+            RunningPlayer player = player(RunningPlayerStatus.RUNNING, null);
+            givenPlayer(player);
+            givenRoom(room(RunningRoomType.INVITE, TARGET));
+            givenTrack(track(1_598, 2.5));
+
+            // when
+            finish();
+
+            // then
+            assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.RUNNING_LEFT_NO_PENALTY);
+            verifyNoInteractions(startMatchCooldownPort);
+        }
+
+        @Test
         @DisplayName("완주하면 쿨다운을 걸지 않는다")
         void doesNotStartCooldownOnComplete() {
             // given -> 목표를 채운 러닝
