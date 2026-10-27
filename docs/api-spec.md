@@ -1284,7 +1284,7 @@
 
 - **화면**: 알림함 (초대 알림의 거절 버튼)
 - **Request 본문이 없다** — 받는 사람은 토큰 주체다
-- 이 방에서 나에게 온 초대 행을 모두 `DECLINED`로 바꾸고 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 방 화면에 "거절"이 보인다. **행을 지우지 않는다**(친구 요청 거절과 다르다)
+- 이 방에서 나에게 온 초대 행을 모두 `DECLINED`로 바꾸고 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 거절한 사람은 현황(`RoomInfo.invitations`)에서 빠진다. **행은 지우지 않는다**(친구 요청 거절과 다르다) — 다시 초대할 때 보낸 횟수를 이어서 센다
 - **Response `204 No Content`**
 - **에러 (404 Not Found)**: 방이 없거나, 이 방에서 나에게 온 초대가 없다
 - **에러 (409 Conflict)**: `RUNNING_INVITATION_NOT_PENDING` — 대기중인 초대가 아니다(이미 응답했거나 만료됐다)
@@ -1602,7 +1602,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`invitations`** — 초대 방에서 아직 참가자가 아닌 초대만 담는다
+- **`invitations`** — 초대 방에서 **아직 응답하지 않은(`PENDING`) 초대만** 담는다
 
 ```json
 "invitations": [
@@ -1610,13 +1610,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     "userId": "01a0f2d4-6180-7000-8000-446655440021",
     "nickname": "영희",
     "profileImageUrl": "https://...",
-    "status": "PENDING",             // PENDING | DECLINED | LEFT
+    "status": "PENDING",             // 항상 PENDING — 응답 전인 초대만 담는다
     "isDeleted": false
   }
 ]
 ```
 
-  - `PENDING`(대기중)·`DECLINED`(거절)·`LEFT`(나감)만 나간다. 수락하면 `players`로 옮겨 가고(`ACCEPTED`는 지금 방에 있다는 뜻이다), 나가면 `LEFT`로 현황에 돌아오며, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다
+  - `PENDING`(대기중)만 나간다. 수락하면 `players`로 옮겨 가고(`ACCEPTED`는 지금 방에 있다는 뜻이다), 거절(`DECLINED`)·나감(`LEFT`)은 현황에서 빠지며, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다. 거절·나감한 친구도 다시 초대하면 `PENDING`으로 돌아온다
+  - `status` 필드는 응답 모양을 유지하려고 남긴다 — 지금은 늘 `PENDING`이다
   - 상태가 바뀔 때마다(초대·수락·거절) `INVITE_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
 
 - **참가자별 `status`는 내려보내지 않는다** — 이탈자는 배정 행이 `is_connected=false`가 되어 목록에서 빠지므로 남아 있는 참가자는 아직 끝나지 않은 참가자(`JOINED`·`RUNNING`)다. 방의 진행 단계는 위 `status`가 나른다

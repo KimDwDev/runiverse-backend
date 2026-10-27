@@ -205,7 +205,7 @@
 > **같은 받는 사람의 행들은 늘 같은 상태다** — 상태는 받는 사람 기준의 사실이다(D가 수락하면 누구의 초대든 D는 방에 들어간 것이다). 수락·거절·나감·다시 초대는 그 방의 그 받는 사람 행을 **모두 잠그고 함께** 바꾼다. DB가 강제하지 못하므로 애플리케이션이 받는 사람 단위 애그리거트로 지킨다. 새 보낸 사람의 행은 지금 상태를 따라 만든다.
 > **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다 — 초대받아도 매칭·솔로를 할 수 있다.
 > **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `ACCEPTED` → `LEFT`(수락해 들어온 방을 나감 — 나가기와 같은 트랜잭션). `DECLINED`·`LEFT`는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
-> **`ACCEPTED`는 "지금 방에 있음"만 뜻한다** — 나가면 `LEFT`로 바뀐다. 거절(`DECLINED`)과 나감(`LEFT`)은 지금은 같게 다루지만, 화면 문구와 이후 정책이 갈릴 수 있어 값을 나눈다.
+> **`ACCEPTED`는 "지금 방에 있음"만 뜻한다** — 나가면 `LEFT`로 바뀐다. 거절(`DECLINED`)과 나감(`LEFT`)은 지금은 같게 다룬다 — 둘 다 현황에서 빠지고 다시 초대로 되살아난다. 이후 정책이 갈릴 수 있어 값을 나눈다.
 > **대기 중인 초대에도 다시 보낼 수 있다** — 상태는 그대로 `PENDING`이고 보낸 사람의 `invite_count`만 오른다(독촉). **횟수는 거절·나감 뒤에도 이어서 센다** — 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다.
 > **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
 > **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
@@ -560,7 +560,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | feeds.visibility | FRIENDS / PUBLIC / PRIVATE | 피드별 개별 저장 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
-| running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 방 화면에 보여준다 |
+| running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 화면(`RoomInfo.invitations`)은 `PENDING`만 보여주지만, 다시 초대할 때 보낸 횟수를 이어서 세려면 행이 남아야 한다 |
 | notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | colors.category | DISTANCE / SPEED / ENDURANCE / CONSISTENCY / CADENCE / INTERVAL / EVEN_PACE / HILLS / RECOVERY / COMPANY / ADVERSITY / MILESTONE | 12범주 — 거리 / 속도 / 지구력 / 꾸준함 / 케이던스 / 인터벌 / 균등페이스 / 언덕 / 회복 / 동행 / 악조건극복 / 이정표 |
 | user_onboardings.gender | MALE / FEMALE | |

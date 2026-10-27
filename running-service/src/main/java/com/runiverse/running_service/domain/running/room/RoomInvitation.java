@@ -56,4 +56,8 @@ public class RoomInvitation {
     public boolean isSentBy(UserId inviterId) {
         return this.inviterId.equals(inviterId);
     }
+
+    public boolean isPending() {
+        return status == RunningRoomInvitationStatus.PENDING;
+    }
 }

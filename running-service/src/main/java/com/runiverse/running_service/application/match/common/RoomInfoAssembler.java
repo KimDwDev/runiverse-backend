@@ -15,7 +15,6 @@ import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -26,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 // 스트림의 방 상태 이벤트(MATCH_*·INVITE_ROOM_*)가 같은 RoomInfo를 쓴다 — 조립은 여기 한 곳에서만 한다
@@ -35,11 +33,6 @@ import java.util.UUID;
 public class RoomInfoAssembler {
 
     private static final String DELETED_NICKNAME = "탈퇴한 사용자";
-    // 현황에 그리는 상태 — ACCEPTED는 players로 옮겨 가고 EXPIRED는 마감 뒤라 그리지 않는다
-    private static final Set<RunningRoomInvitationStatus> SHOWN_INVITATION_STATUSES = Set.of(
-            RunningRoomInvitationStatus.PENDING,
-            RunningRoomInvitationStatus.DECLINED,
-            RunningRoomInvitationStatus.LEFT);
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final LoadPlayerProfilesPort loadPlayerProfilesPort;
     private final GenerateViewUrlPort generateViewUrlPort;
@@ -69,16 +62,16 @@ public class RoomInfoAssembler {
                 invitees.stream().map(invitee -> toInvitee(invitee, profiles)).toList());
     }
 
-    // 받는 사람마다 한 건 — 보낸 사람별 행은 상태가 같아 첫 행만 쓴다.
-    // 모집이 끝나면 남은 초대는 의미가 없어 비운다 — 마감 갱신이 빈 현황으로 나가 "더는 초대받지 않는다"를 알린다.
-    // 매칭 방은 초대가 없어 언제나 빈다
+    // 응답 전인(PENDING) 초대만 받는 사람마다 한 건 — 보낸 사람별 행은 상태가 같아 첫 행만 쓴다.
+    // 수락은 players로 옮겨 가고, 거절·나감은 현황에서 빠지며(다시 초대하면 돌아온다), 만료는 마감 뒤라 그리지 않는다.
+    // 모집이 끝나면 PENDING도 만료돼 비고, 매칭 방은 초대가 없어 언제나 빈다
     private static List<RoomInvitation> shownInvitees(RunningRoom room) {
         if (room.getStatus() != RunningRoomStatus.MATCHING) {
             return List.of();
         }
         Map<UserId, RoomInvitation> byInvitee = new LinkedHashMap<>();
         room.getInvitations().stream()
-                .filter(invitation -> SHOWN_INVITATION_STATUSES.contains(invitation.getStatus()))
+                .filter(RoomInvitation::isPending)
                 .forEach(invitation -> byInvitee.putIfAbsent(invitation.getInviteeId(), invitation));
         return List.copyOf(byInvitee.values());
     }
