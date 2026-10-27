@@ -13,6 +13,7 @@ import com.runiverse.running_service.application.match.port.out.MatchStreamPort;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,8 +40,8 @@ class OpenMatchStreamHandlerTest {
     private static final UUID USER_ID = UuidCreator.getTimeOrderedEpoch();
     private static final long ROOM_ID = 125L;
     private static final RoomInfo ROOM_INFO = new RoomInfo(
-            ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
-            LocalDateTime.now().plusHours(1), 5_000, 360, List.of());
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
+            LocalDateTime.now().plusHours(1), 5_000, 360, List.of(), List.of());
 
     @Mock
     private MatchStreamPort matchStreamPort;

@@ -17,9 +17,11 @@ import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
+import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -185,6 +187,120 @@ class RoomInfoAssemblerTest {
         assertThat(withdrawn.introduction()).isNull();
         assertThat(withdrawn.averagePaceSecondsPerKm()).isEqualTo(390);
         assertThat(withdrawn.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("방 종류를 싣고 매칭 방의 초대 현황은 비어 있다")
+    void carriesTypeAndEmptyInvitationsForMatchRoom() {
+        // given
+        givenPlayers(List.of(), Map.of());
+
+        // when
+        RoomInfo roomInfo = roomInfoAssembler.assemble(room());
+
+        // then -> 클라가 방 화면을 가르고, 매칭 방은 invitations가 항상 빈 배열이다
+        assertThat(roomInfo.type()).isEqualTo(RunningRoomType.MATCH);
+        assertThat(roomInfo.invitations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("초대 방은 대기·거절·나감만 받는 사람당 한 건씩 프로필을 붙여 싣는다")
+    void showsInviteesOncePerInviteeWithProfile() {
+        // given -> 대기 중인 사람은 보낸 사람이 둘이라 행이 둘이다
+        UUID pending = UuidCreator.getTimeOrderedEpoch();
+        UUID declined = UuidCreator.getTimeOrderedEpoch();
+        UUID left = UuidCreator.getTimeOrderedEpoch();
+        UUID accepted = UuidCreator.getTimeOrderedEpoch();
+        RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
+                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1),
+                new InvitationDraft(new UserId(OTHER), new UserId(pending), RunningRoomInvitationStatus.PENDING, 2),
+                new InvitationDraft(new UserId(ME), new UserId(declined), RunningRoomInvitationStatus.DECLINED, 1),
+                new InvitationDraft(new UserId(ME), new UserId(left), RunningRoomInvitationStatus.LEFT, 1),
+                new InvitationDraft(new UserId(ME), new UserId(accepted), RunningRoomInvitationStatus.ACCEPTED, 1)));
+        given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
+                .willReturn(List.of(new MatchPlayer(ME, 360)));
+        // 참가자와 초대 대상을 한 번에 읽는다
+        given(loadPlayerProfilesPort.loadProfiles(List.of(ME, pending, declined, left))).willReturn(Map.of(
+                ME, new PlayerProfile(ME, "동완러너", null, null),
+                pending, new PlayerProfile(pending, "영희", IMAGE_KEY, null),
+                declined, new PlayerProfile(declined, "철수", null, null),
+                left, new PlayerProfile(left, "민수", null, null)));
+        given(generateViewUrlPort.generate(IMAGE_KEY)).willReturn(IMAGE_URL);
+
+        // when
+        RoomInfo roomInfo = roomInfoAssembler.assemble(room);
+
+        // then -> ACCEPTED는 players로 옮겨 가 현황에서 빠진다
+        assertThat(roomInfo.type()).isEqualTo(RunningRoomType.INVITE);
+        assertThat(roomInfo.invitations()).containsExactly(
+                new RoomInfo.RoomInvitee(pending, "영희", IMAGE_URL, RunningRoomInvitationStatus.PENDING, false),
+                new RoomInfo.RoomInvitee(declined, "철수", null, RunningRoomInvitationStatus.DECLINED, false),
+                new RoomInfo.RoomInvitee(left, "민수", null, RunningRoomInvitationStatus.LEFT, false));
+    }
+
+    @Test
+    @DisplayName("만료된 초대는 현황에 싣지 않는다")
+    void hidesExpiredInvitations() {
+        // given
+        UUID expired = UuidCreator.getTimeOrderedEpoch();
+        RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
+                new InvitationDraft(new UserId(ME), new UserId(expired), RunningRoomInvitationStatus.EXPIRED, 1)));
+        givenPlayers(List.of(), Map.of());
+
+        // when & then
+        assertThat(roomInfoAssembler.assemble(room).invitations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("모집이 끝난 초대 방은 남은 초대가 있어도 현황을 비운다")
+    void emptiesInvitationsAfterRecruitment() {
+        // given -> 마감 갱신이 빈 현황으로 나가 "더는 초대받지 않는다"를 알린다
+        UUID pending = UuidCreator.getTimeOrderedEpoch();
+        RunningRoom room = inviteRoom(RunningRoomStatus.MATCHED, List.of(
+                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1)));
+        givenPlayers(List.of(), Map.of());
+
+        // when
+        RoomInfo roomInfo = roomInfoAssembler.assemble(room);
+
+        // then -> 초대 대상의 프로필도 읽지 않는다(givenPlayers가 참가자 ID만으로 스텁했다)
+        assertThat(roomInfo.status()).isEqualTo(RunningRoomStatus.MATCHED);
+        assertThat(roomInfo.invitations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("초대 대상의 프로필이 없으면 탈퇴로 표시한다")
+    void marksMissingInviteeAsDeleted() {
+        // given -> 탈퇴하면 FK CASCADE로 행이 지워지지만, 형식은 참가자와 같게 둔다
+        UUID pending = UuidCreator.getTimeOrderedEpoch();
+        RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
+                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1)));
+        given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID))).willReturn(List.of());
+        given(loadPlayerProfilesPort.loadProfiles(List.of(pending))).willReturn(Map.of());
+
+        // when
+        RoomInfo.RoomInvitee invitee = roomInfoAssembler.assemble(room).invitations().getFirst();
+
+        // then
+        assertThat(invitee.nickname()).isEqualTo("탈퇴한 사용자");
+        assertThat(invitee.profileImageUrl()).isNull();
+        assertThat(invitee.isDeleted()).isTrue();
+    }
+
+    private static RunningRoom inviteRoom(RunningRoomStatus status, List<InvitationDraft> invitations) {
+        return RunningRoom.builder()
+                .runningRoomId(ROOM_ID)
+                .type(RunningRoomType.INVITE)
+                .status(status)
+                .startAt(START_AT)
+                .targetDistance(TARGET_DISTANCE)
+                .avgPace(TEAM_PACE)
+                .currentPlayerCount(1)
+                .maxPlayerCount(4)
+                .sessions(List.of(new SessionDraft(
+                        new UserId(ME), new RunningPlayerId(1L), 0, true)))
+                .invitations(invitations)
+                .build();
     }
 
     private void givenPlayers(List<MatchPlayer> players, Map<UUID, PlayerProfile> profiles) {

@@ -171,8 +171,8 @@ class AcceptInvitationHandlerTest {
         given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
                 .willReturn(List.of(new MatchPlayer(host.value(), HOST_PACE)));
         given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
-                ROOM_ID, RunningRoomStatus.MATCHING, startAt, startAt.minus(CLOSE_OFFSET),
-                TARGET_DISTANCE, HOST_PACE, List.of()));
+                ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, startAt, startAt.minus(CLOSE_OFFSET),
+                TARGET_DISTANCE, HOST_PACE, List.of(), List.of()));
     }
 
     private AcceptInvitationResult accept() {

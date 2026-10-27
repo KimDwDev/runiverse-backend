@@ -117,7 +117,7 @@ class DeclineInvitationHandlerTest {
             RunningRoom room = room(RunningRoomStatus.MATCHING, received(RunningRoomInvitationStatus.PENDING));
             givenLocked(room);
             given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
-                    ROOM_ID, RunningRoomStatus.MATCHING, START, START.minusMinutes(1), 7_000, 330, List.of()));
+                    ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, START, START.minusMinutes(1), 7_000, 330, List.of(), List.of()));
 
             // when
             decline();
@@ -138,7 +138,7 @@ class DeclineInvitationHandlerTest {
             RunningRoom room = room(RunningRoomStatus.MATCHED, received(RunningRoomInvitationStatus.PENDING));
             givenLocked(room);
             given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
-                    ROOM_ID, RunningRoomStatus.MATCHED, START, START.minusMinutes(1), 7_000, 330, List.of()));
+                    ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHED, START, START.minusMinutes(1), 7_000, 330, List.of(), List.of()));
 
             // when
             decline();

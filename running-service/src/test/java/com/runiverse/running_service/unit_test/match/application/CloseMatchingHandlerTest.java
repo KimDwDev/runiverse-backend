@@ -47,8 +47,8 @@ class CloseMatchingHandlerTest {
     private static final int TARGET_DISTANCE = 5_000;
     // 조립 결과는 이 테스트의 주제가 아니다 — 어떤 이벤트로 나가는지만 본다
     private static final RoomInfo ROOM_INFO = new RoomInfo(
-            ROOM_ID, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(10),
-            LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of());
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(10),
+            LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
 
     @Mock
     private LockMatchRoomPort lockMatchRoomPort;

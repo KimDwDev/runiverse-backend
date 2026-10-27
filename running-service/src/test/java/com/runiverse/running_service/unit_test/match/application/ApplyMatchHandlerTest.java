@@ -75,9 +75,9 @@ class ApplyMatchHandlerTest {
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
     private static final RoomInfo ROOM_INFO = new RoomInfo(
-            ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
             LocalDateTime.now().plusHours(2).minus(CLOSE_OFFSET),
-            TARGET_DISTANCE, AVG_PACE, List.of());
+            TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
 
     @Mock
     private MatchCooldownPort matchCooldownPort;

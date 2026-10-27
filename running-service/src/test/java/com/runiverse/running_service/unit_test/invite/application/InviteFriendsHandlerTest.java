@@ -149,8 +149,8 @@ class InviteFriendsHandlerTest {
 
     private void givenAssembled() {
         given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
-                ROOM_ID, RunningRoomStatus.MATCHING, openStart(), openStart().minus(CLOSE_OFFSET),
-                TARGET_DISTANCE, PACE, List.of()));
+                ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, openStart(), openStart().minus(CLOSE_OFFSET),
+                TARGET_DISTANCE, PACE, List.of(), List.of()));
     }
 
     private InviteFriendsResult invite(UserId... invitees) {
