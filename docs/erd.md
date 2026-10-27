@@ -18,7 +18,7 @@
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§6 enum 사전](#6-enum-사전).
 - **`deleted_at`**: `feeds`는 소프트 삭제, `comments`는 답글이 있을 때의 톰스톤, `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§5](#5-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`notifications`·`running_room_invitations`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`notifications`·`user_colors`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`feeds`·`comments`·`running_records`·`feed_likes`·`comment_likes`·`running_room_invitations`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
   - **CASCADE에 기대지 않고 앱이 먼저 지운다** — 온보딩 값과 로그인 수단은 `delete_users`로 옮겨야 하는데 DB 연쇄 삭제는 애플리케이션을 거치지 않는다. 기존 개발 DB처럼 FK가 붙지 않은 환경도 있어 CASCADE 유무와 무관하게 동작해야 한다.
 - **`running_players`는 상태와 무관하게 유지한다.** 탈퇴 전 일반 취소·이탈·러닝 종료 처리를 적용한다(시작 전 신청도 지우지 않고 취소처럼 닫는다). 시작한 방의 참가 row와 세션은 기록 없는 참가자도 과거 결과에 남기기 위해, 그 밖의 신청 이력은 통계에 쓰기 위해 남긴다.
   - 논리 참조 `user_id` 컬럼은 전부 **NOT NULL**이다(nullable은 스냅샷 테이블 `delete_feeds`·`delete_comments`뿐).
@@ -192,24 +192,24 @@
 |---|---|---|---|
 | running_room_id | bigint | PK, FK → running_rooms, ON DELETE CASCADE | 초대 방(`type='INVITE'`) |
 | inviter_id | UUID | PK, → users | 보낸 사람 — 방의 현재 참가자 누구나. **논리 참조** — 보낸 사람이 탈퇴해도 초대는 남는다(방장이 없어 방이 그대로 남는다) |
-| invitee_id | UUID | PK, FK → users, ON DELETE CASCADE | 받는 사람 |
+| invitee_id | UUID | PK, → users | 받는 사람. **논리 참조** — 받는 사람이 탈퇴해도 초대는 남는다(탈퇴 정리가 같은 트랜잭션에서 이 행을 고친다) |
 | status | enum | NOT NULL | `PENDING` / `ACCEPTED` / `DECLINED` / `LEFT` / `EXPIRED` — [§6](#6-enum-사전) |
 | invite_count | int | NOT NULL | 이 보낸 사람이 이 받는 사람에게 보낸 횟수. 운영 설정 상한(`invite.max-invite-count`, 현재 5)에 닿으면 그 사람에게는 보내지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | `created_at` = 처음 보낸 시각, `updated_at` = 마지막 변경(보냄·응답·만료) 시각 |
 
 > PK (running_room_id, inviter_id, invitee_id) — "이 방에서 누가 누구에게" 한 행. 같은 사람이 다시 보내면 행을 늘리지 않고 `invite_count`만 올린다. 초대 ID(대리키)를 두지 않는다 — 받는 사람의 초대는 (방, 받는 사람)으로 정해지고 API도 방 ID로 가리킨다.
-> CHECK `ck_running_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')`
-> CHECK `ck_running_room_invitation_invite_count`: `invite_count >= 1`
-> CHECK `ck_running_room_invitation_users`: `inviter_id <> invitee_id`
+> CHECK `ck_room_invitation_status`: `status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')`
+> CHECK `ck_room_invitation_invite_count`: `invite_count >= 1`
+> CHECK `ck_room_invitation_users`: `inviter_id <> invitee_id`
 
-> **같은 받는 사람의 행들은 늘 같은 상태다** — 상태는 받는 사람 기준의 사실이다(D가 수락하면 누구의 초대든 D는 방에 들어간 것이다). 수락·거절·나감·다시 초대는 그 방의 그 받는 사람 행을 **모두 잠그고 함께** 바꾼다. DB가 강제하지 못하므로 애플리케이션이 받는 사람 단위 애그리거트로 지킨다. 새 보낸 사람의 행은 지금 상태를 따라 만든다.
+> **같은 받는 사람의 행들은 늘 같은 상태다** — 상태는 받는 사람 기준의 사실이다(D가 수락하면 누구의 초대든 D는 방에 들어간 것이다). 수락·거절·나감·다시 초대는 방을 잠그고 그 방의 그 받는 사람 행을 **모두 함께** 바꾼다. DB가 강제하지 못하므로 애플리케이션이 받는 사람 단위 애그리거트로 지킨다. 새 보낸 사람의 행은 지금 상태를 따라 만든다.
 > **초대는 신청이 아니다** — 수락하기 전에는 `running_players` 행을 만들지 않는다. 수락하면 그때 `running_players(JOINED)`·`running_room_sessions`를 매칭 참가와 같게 만든다. 활성 신청 판정(`running_players.deleted_at IS NULL`)이 초대에 걸리지 않게 하려는 것이다 — 초대받아도 매칭·솔로를 할 수 있다.
 > **전이**: `PENDING` → `ACCEPTED`(수락) / `DECLINED`(거절) / `EXPIRED`(모집 마감 확정·방 취소와 같은 트랜잭션). `ACCEPTED` → `LEFT`(수락해 들어온 방을 나감 — 나가기와 같은 트랜잭션). `DECLINED`·`LEFT`는 다시 초대로 `PENDING`이 된다. `EXPIRED`는 끝이다 — 마감 뒤에는 초대할 수 없다.
 > **`ACCEPTED`는 "지금 방에 있음"만 뜻한다** — 나가면 `LEFT`로 바뀐다. 거절(`DECLINED`)과 나감(`LEFT`)은 지금은 같게 다룬다 — 둘 다 현황에서 빠지고 다시 초대로 되살아난다. 이후 정책이 갈릴 수 있어 값을 나눈다.
 > **대기 중인 초대에도 다시 보낼 수 있다** — 상태는 그대로 `PENDING`이고 보낸 사람의 `invite_count`만 오른다(독촉). **횟수는 거절·나감 뒤에도 이어서 센다** — 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다.
 > **자리가 차서 수락하지 못한 초대는 `PENDING`으로 남는다** — 자리가 나면 다시 수락할 수 있다.
 > **거절을 상태로 남긴다** — 방 화면이 거절을 보여준다. `user_relationships`가 거절을 `NONE`(관계 없음)으로 처리하는 것과 다르다.
-> **받은 사람이 탈퇴하면 그 사람의 초대를 지우고, 보낸 사람이 탈퇴해도 초대는 남긴다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다.
+> **탈퇴해도 초대는 지우지 않는다** — 방장이 없어 보낸 사람이 빠져도 방과 초대는 그대로 유효하다. 받은 사람의 행은 탈퇴 정리가 같은 트랜잭션에서 `LEFT`로 바꾸므로 FK CASCADE로 먼저 지워지면 안 된다. 대기 중이던 받은 사람은 방 화면 현황에서 뺀다.
 
 ### running_records
 
@@ -393,7 +393,7 @@
 | notification_id | bigint | PK | API `notificationId`(Long) |
 | user_id | UUID | FK → users, NOT NULL, ON DELETE CASCADE | 받는 사람 |
 | actor_id | UUID | → users, NOT NULL | 알림을 일으킨 사람(요청·수락·초대한 사람). 논리 참조 — 탈퇴해도 알림은 남고 탈퇴 유저 형식으로 보인다 |
-| running_room_id | bigint | → running_rooms, nullable | `RUNNING_INVITED`만 값이 있다 — 받는 사람(`user_id`)과 함께 그 방의 초대를 가리킨다. 논리 참조 — 초대는 받은 사람이 탈퇴할 때만 지워지고, 그때 이 알림도 함께 지워진다 |
+| running_room_id | bigint | → running_rooms, nullable | `RUNNING_INVITED`만 값이 있다 — 받는 사람(`user_id`)과 함께 그 방의 초대를 가리킨다. 논리 참조 — 초대 행은 지우지 않아 가리키는 초대가 늘 있다 |
 | type | enum | NOT NULL | `FRIEND_REQUESTED` / `FRIEND_ACCEPTED` / `RUNNING_INVITED` — [§6](#6-enum-사전) |
 | is_read | boolean | NOT NULL, default false | 알림함을 열면 받는 사람의 안 읽은 알림을 모두 true로 바꾼다 |
 | created_at | timestamp | NOT NULL | 정렬·보관 기간 기준 |
@@ -578,7 +578,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 7. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요). `running_segments (running_record_id, segment_number)`·`running_splits (running_segment_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다. 구간은 기록 → 조각 → 구간 순으로 찾는다 — 두 UNIQUE가 각 단계의 FK 조회와 연쇄 삭제를 커버한다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`user_colors`·`feed_likes`·`comment_likes`는 별도 불필요하고, `running_room_invitations`의 방 단위 조회도 PK가 덮는다). `running_segments (running_record_id, segment_number)`·`running_splits (running_segment_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). `colors`는 마스터라 전체 조회만 하므로 인덱스가 없다. 구간은 기록 → 조각 → 구간 순으로 찾는다 — 두 UNIQUE가 각 단계의 FK 조회와 연쇄 삭제를 커버한다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
@@ -587,7 +587,6 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_relationships.(user_id, type, updated_at, target_id) | 친구 목록(10-7) — 묶음(`type`)마다 따로 읽어 `updated_at`·`target_id` 역순 정렬과 커서 조건을 인덱스가 처리한다. 묶음을 `CASE`로 한 번에 정렬하면 인덱스 순서를 쓰지 못해 묶음 단위로 나눠 읽는다. 역방향 스캔이라 컬럼에 `DESC`를 붙이지 않는다 |
 | user_relationships.target_id | 탈퇴 시 `target_id` 쪽 CASCADE 삭제 — 차단 여부 확인은 상대 행을 `(user_id, target_id)`로 찾아 이 인덱스가 필요 없다 |
 | notifications.(user_id, created_at) | 알림함 최신순 조회·안 읽은 수 — 보관 기간 조건도 `created_at` 범위로 탄다 |
-| running_room_invitations.(running_room_id, invitee_id) | 수락·거절 때 그 방의 그 받는 사람 행을 모두 잠근다 — PK는 (방, 보낸 사람) 순이라 이 조회를 덮지 못한다. 방의 초대 현황도 이 인덱스를 탄다. "호출자가 이 방에서 보낸 기록"은 PK가 덮는다 |
 | running_room_invitations.invitee_id | 받은 초대 목록 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
