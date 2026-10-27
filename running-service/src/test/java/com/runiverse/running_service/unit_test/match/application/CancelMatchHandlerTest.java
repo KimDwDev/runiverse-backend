@@ -189,6 +189,21 @@ class CancelMatchHandlerTest {
     }
 
     @Test
+    @DisplayName("초대 방에서는 마감이 지나 2명 이상 남은 방을 나가도 제재하지 않는다")
+    void leavingInviteRoomIsExempt() {
+        // given -> 매칭 방이었으면 제재받는 조건이다(마감이 지났고 나 말고도 참가자가 있다)
+        givenActiveMatch(inviteRoom(startAfter(Duration.ofMinutes(5)), 3));
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then -> 제재는 모르는 사람끼리 모이는 매칭에만 있다
+        assertThat(leftPlayer().getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_NO_PENALTY);
+        verifyNoInteractions(matchCooldownPort);
+    }
+
+    @Test
     @DisplayName("마지막 참가자가 나가면 방이 취소된다")
     void lastPlayerLeavingCancelsRoom() {
         // given -> 참가자가 0이 된 방은 후보 스캔에 계속 걸리므로 닫아야 한다
@@ -357,6 +372,10 @@ class CancelMatchHandlerTest {
 
     private static RunningRoom soloRoom(LocalDateTime startAt) {
         return matchRoom(RunningRoomType.SOLO, startAt, 1, 1);
+    }
+
+    private static RunningRoom inviteRoom(LocalDateTime startAt, int currentPlayerCount) {
+        return matchRoom(RunningRoomType.INVITE, startAt, currentPlayerCount, 4);
     }
 
     // 나 말고 나머지 인원은 다른 유저의 세션으로 채운다 — 세션 키가 유저다
