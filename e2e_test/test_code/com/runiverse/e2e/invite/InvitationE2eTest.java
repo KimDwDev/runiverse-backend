@@ -32,7 +32,7 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     private int openRoom(TestUser host) {
-        Response opened = post("/running-rooms/invite", Map.of(
+        Response opened = post("/match-rooms/invite", Map.of(
                 "scheduledStartAt", selectableStartOrSkip().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "targetDistanceMeters", DISTANCE), host.accessToken());
         assertThat(opened.status()).isEqualTo(201);
@@ -48,17 +48,17 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     private Response invite(TestUser inviter, int roomId, TestUser... invitees) {
-        return post("/running-rooms/" + roomId + "/invitations",
+        return post("/match-rooms/" + roomId + "/invitations",
                 Map.of("inviteeIds", Arrays.stream(invitees).map(TestUser::userId).toList()),
                 inviter.accessToken());
     }
 
     private Response accept(TestUser invitee, int roomId) {
-        return post("/running-rooms/" + roomId + "/invitations/accept", null, invitee.accessToken());
+        return post("/match-rooms/" + roomId + "/invitations/accept", null, invitee.accessToken());
     }
 
     private Response decline(TestUser invitee, int roomId) {
-        return post("/running-rooms/" + roomId + "/invitations/decline", null, invitee.accessToken());
+        return post("/match-rooms/" + roomId + "/invitations/decline", null, invitee.accessToken());
     }
 
     @SuppressWarnings("unchecked")
@@ -124,14 +124,14 @@ class InvitationE2eTest extends E2eTestSupport {
             }
 
             // 5. 나가기 — 매칭과 같은 경로다. 현황에 나감으로 돌아온다
-            assertThat(delete("/running-matches", friend.accessToken()).status()).isEqualTo(204);
+            assertThat(post("/match-rooms/leave", null, friend.accessToken()).status()).isEqualTo(204);
             Map<String, Object> afterLeave = hostStream.await("INVITE_ROOM_UPDATED");
             assertThat(listOf(afterLeave, "players")).extracting(player -> player.get("userId"))
                     .containsExactly(host.userId());
             assertThat(listOf(afterLeave, "invitations")).extracting(invitee -> invitee.get("status"))
                     .containsExactly("LEFT");
         }
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     @Test
@@ -157,7 +157,7 @@ class InvitationE2eTest extends E2eTestSupport {
         // 3. 참가자가 아닌 사람은 초대할 수 없다 — 방이 있는지도 알려 주지 않는다
         assertThat(invite(stranger, roomId, host).status()).isEqualTo(404);
 
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     @Test
@@ -185,13 +185,13 @@ class InvitationE2eTest extends E2eTestSupport {
         assertThat(blocked.text("code")).isEqualTo("RUNNING_ALREADY_IN_PROGRESS");
 
         // 3. 자기 방을 나가면 다시 수락할 수 있다
-        assertThat(delete("/running-matches", later.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, later.accessToken()).status()).isEqualTo(204);
         assertThat(accept(later, roomId).status()).isEqualTo(201);
 
         assertThat(busyRoom).isNotEqualTo(roomId);
-        assertThat(delete("/running-matches", busy.accessToken()).status()).isEqualTo(204);
-        assertThat(delete("/running-matches", later.accessToken()).status()).isEqualTo(204);
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, busy.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, later.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     @Test
@@ -202,13 +202,13 @@ class InvitationE2eTest extends E2eTestSupport {
         int roomId = openRoom(host);
 
         // when
-        Response response = post("/running-rooms/" + roomId + "/invitations",
+        Response response = post("/match-rooms/" + roomId + "/invitations",
                 Map.of("inviteeIds", List.of()), host.accessToken());
 
         // then
         assertThat(response.status()).isEqualTo(400);
         assertThat(response.text("code")).isEqualTo("INVALID_REQUEST");
         assertThat(response.text("message")).isEqualTo("초대할 친구는 1명 이상 50명 이하여야 합니다.");
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 }

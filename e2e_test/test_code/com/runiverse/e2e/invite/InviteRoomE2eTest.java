@@ -32,7 +32,7 @@ class InviteRoomE2eTest extends E2eTestSupport {
     }
 
     private Response open(TestUser user, LocalDateTime scheduledStartAt, int targetDistanceMeters) {
-        return post("/running-rooms/invite", Map.of(
+        return post("/match-rooms/invite", Map.of(
                 "scheduledStartAt", scheduledStartAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "targetDistanceMeters", targetDistanceMeters), user.accessToken());
     }
@@ -77,10 +77,10 @@ class InviteRoomE2eTest extends E2eTestSupport {
         assertThat(post("/running-rooms/solo", Map.of(), host.accessToken()).status()).isEqualTo(409);
 
         // 3. 나가기는 매칭과 같은 경로다 — 혼자였으니 방이 닫히고 대기가 끝난다
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
         assertThat(get("/users/me/status", host.accessToken()).text("status")).isEqualTo("IDLE");
         assertThat(open(host, start, DISTANCE).status()).isEqualTo(201);
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     @Test
@@ -124,7 +124,7 @@ class InviteRoomE2eTest extends E2eTestSupport {
         TestUser user = signUpAndOnboard();
 
         // when
-        Response response = post("/running-rooms/invite",
+        Response response = post("/match-rooms/invite",
                 Map.of("targetDistanceMeters", DISTANCE), user.accessToken());
 
         // then

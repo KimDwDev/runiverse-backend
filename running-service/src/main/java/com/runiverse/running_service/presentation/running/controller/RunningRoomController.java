@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
-// 초대 방의 개설·초대·수락·거절은 모집 단계라 매칭 도메인(presentation/match InviteRoomController)에 있다
+// 모집 단계(매칭 신청·나가기·초대)는 /match-rooms — presentation/match MatchRoomController에 있다
 @RestController
 @RequestMapping("running-rooms")
 @RequiredArgsConstructor
