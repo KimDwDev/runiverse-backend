@@ -30,7 +30,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -61,9 +60,6 @@ class RunningRoomInvitationPersistenceTest {
 
     @Mock
     private TypedQuery<RunningRoomInvitationJpaEntity> invitationQuery;
-
-    @Mock
-    private TypedQuery<UUID> userIdQuery;
 
     @InjectMocks
     private RunningPersistenceAdapter adapter;
@@ -240,37 +236,6 @@ class RunningRoomInvitationPersistenceTest {
             // then
             verify(entityManager, never()).remove(any());
             assertThat(untouched.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
-        }
-    }
-
-    @Nested
-    @DisplayName("활성 신청 일괄 조회 테스트")
-    class LoadActiveUserIdsTest {
-
-        @Test
-        @DisplayName("넘긴 사람 중 활성 신청이 있는 사람만 돌려준다")
-        void returnsActiveOnly() {
-            // given
-            when(entityManager.createQuery(anyString(), eq(UUID.class))).thenReturn(userIdQuery);
-            when(userIdQuery.setParameter(anyString(), any())).thenReturn(userIdQuery);
-            when(userIdQuery.getResultStream()).thenReturn(Stream.of(invitee));
-
-            // when
-            Set<UserId> active = adapter.loadActiveUserIds(List.of(new UserId(invitee), new UserId(otherInviter)));
-
-            // then
-            assertThat(active).containsExactly(new UserId(invitee));
-            ArgumentCaptor<Object> ids = ArgumentCaptor.forClass(Object.class);
-            verify(userIdQuery).setParameter(eq("userIds"), ids.capture());
-            assertThat(ids.getValue()).isEqualTo(List.of(invitee, otherInviter));
-        }
-
-        @Test
-        @DisplayName("빈 목록이면 쿼리를 내보내지 않는다")
-        void emptyInputSkipsQuery() {
-            // when & then -> 빈 IN ()은 문법 오류다
-            assertThat(adapter.loadActiveUserIds(List.of())).isEmpty();
-            verify(entityManager, never()).createQuery(anyString(), eq(UUID.class));
         }
     }
 }

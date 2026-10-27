@@ -32,15 +32,12 @@ import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 // RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다.
@@ -54,9 +51,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
         CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
         LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
-        LoadMatchRoomDetailPort,
-        // 초대할 친구들의 활성 신청을 한 번에 본다 — 초대의 잠금·저장은 매칭 포트를 함께 쓴다
-        LoadActiveUserIdsPort {
+        LoadMatchRoomDetailPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();
@@ -91,12 +86,6 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     public boolean existsActive(UserId userId) {
         return players.values().stream()
                 .anyMatch(player -> player.getUserId().equals(userId) && player.isActive());
-    }
-
-    // existsActive를 여러 명에게 한 번에 묻는다
-    @Override
-    public Set<UserId> loadActiveUserIds(Collection<UserId> userIds) {
-        return userIds.stream().filter(this::existsActive).collect(Collectors.toSet());
     }
 
     // 어댑터의 toDomain처럼 분리된 객체를 돌려준다 —

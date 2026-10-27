@@ -7,8 +7,10 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidInvitationStatusTransitionException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidInviteCountException;
+import com.runiverse.running_service.domain.running.room.exception.InviteCountReachedException;
 import com.runiverse.running_service.domain.running.room.exception.NotInvitedException;
 import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotInvitableException;
@@ -25,7 +27,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -172,15 +173,14 @@ public class RunningRoomInvitationTest {
             RunningRoom room = openedRoom();
 
             // when
-            Optional<RoomInvitation> sent = room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
+            room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
 
             // then
-            assertThat(sent).hasValueSatisfying(invitation -> {
-                assertThat(invitation.getInviterId()).isEqualTo(HOST);
-                assertThat(invitation.getInviteeId()).isEqualTo(INVITEE);
-                assertThat(invitation.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
-                assertThat(invitation.getInviteCount().value()).isEqualTo(1);
-            });
+            RoomInvitation invitation = rowOf(room, HOST, INVITEE);
+            assertThat(invitation.getInviterId()).isEqualTo(HOST);
+            assertThat(invitation.getInviteeId()).isEqualTo(INVITEE);
+            assertThat(invitation.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(invitation.getInviteCount().value()).isEqualTo(1);
             assertThat(room.getInvitations()).hasSize(1);
         }
 
@@ -191,11 +191,10 @@ public class RunningRoomInvitationTest {
             RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 2)));
 
             // when -> 독촉
-            Optional<RoomInvitation> sent = room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
+            room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
 
             // then
-            assertThat(sent).hasValueSatisfying(invitation ->
-                    assertThat(invitation.getInviteCount().value()).isEqualTo(3));
+            assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(3);
             assertThat(room.getInvitations()).hasSize(1);
             assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
         }
@@ -225,11 +224,10 @@ public class RunningRoomInvitationTest {
                     sent(MEMBER, INVITEE, status, 1)));
 
             // when
-            Optional<RoomInvitation> sent = room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
+            room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
 
             // then
-            assertThat(sent).hasValueSatisfying(invitation ->
-                    assertThat(invitation.getInviteCount().value()).isEqualTo(3));
+            assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(3);
             assertThat(statusesOf(room, INVITEE)).containsOnly(RunningRoomInvitationStatus.PENDING);
             assertThat(rowOf(room, MEMBER, INVITEE).getInviteCount().value()).isEqualTo(1);
         }
@@ -249,17 +247,16 @@ public class RunningRoomInvitationTest {
         }
 
         @Test
-        @DisplayName("보낸 횟수가 상한에 닿으면 건너뛰고 상태도 바꾸지 않는다")
-        void skipsWhenCountReached() {
+        @DisplayName("보낸 횟수가 상한에 닿으면 막고 상태도 바꾸지 않는다")
+        void rejectsWhenCountReached() {
             // given
             RunningRoom room = recruiting(List.of(
                     sent(HOST, INVITEE, RunningRoomInvitationStatus.DECLINED, MAX_INVITE_COUNT)));
 
-            // when
-            Optional<RoomInvitation> sent = room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
-
-            // then -> 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다
-            assertThat(sent).isEmpty();
+            // when & then -> 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다. 애플리케이션이 409로 먼저 거른다
+            assertThat(room.hasReachedInviteLimit(HOST, INVITEE, MAX_INVITE_COUNT)).isTrue();
+            assertThatThrownBy(() -> room.invite(HOST, INVITEE, MAX_INVITE_COUNT))
+                    .isInstanceOf(InviteCountReachedException.class);
             assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(MAX_INVITE_COUNT);
             assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.DECLINED);
         }
@@ -272,24 +269,43 @@ public class RunningRoomInvitationTest {
                     sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, MAX_INVITE_COUNT)));
 
             // when
-            Optional<RoomInvitation> sent = room.invite(MEMBER, INVITEE, MAX_INVITE_COUNT);
+            room.invite(MEMBER, INVITEE, MAX_INVITE_COUNT);
 
             // then
-            assertThat(sent).isPresent();
+            assertThat(room.hasReachedInviteLimit(MEMBER, INVITEE, MAX_INVITE_COUNT)).isFalse();
+            assertThat(rowOf(room, MEMBER, INVITEE).getInviteCount().value()).isEqualTo(1);
         }
 
         @Test
-        @DisplayName("이미 방에 있는 사람은 건너뛴다")
-        void skipsMember() {
+        @DisplayName("아직 보낸 적 없으면 상한에 닿지 않았다")
+        void noRowHasNotReachedLimit() {
+            // when & then
+            assertThat(openedRoom().hasReachedInviteLimit(HOST, INVITEE, MAX_INVITE_COUNT)).isFalse();
+        }
+
+        @Test
+        @DisplayName("이미 방에 있는 사람은 막는다")
+        void rejectsMember() {
             // given
             RunningRoom room = recruiting(List.of());
 
-            // when
-            Optional<RoomInvitation> sent = room.invite(HOST, MEMBER, MAX_INVITE_COUNT);
-
-            // then -> 오류가 아니다
-            assertThat(sent).isEmpty();
+            // when & then -> 애플리케이션이 isInRoom으로 409를 먼저 낸다
+            assertThat(room.isInRoom(MEMBER)).isTrue();
+            assertThatThrownBy(() -> room.invite(HOST, MEMBER, MAX_INVITE_COUNT))
+                    .isInstanceOf(AlreadyRoomPlayerException.class);
             assertThat(room.getInvitations()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("나간 세션은 방에 있는 것이 아니다")
+        void leftSessionIsNotInRoom() {
+            // given
+            RunningRoom room = restored(RunningRoomStatus.MATCHING, List.of(
+                    connected(HOST, HOST_PLAYER), new SessionDraft(MEMBER, MEMBER_PLAYER, 1, false)), List.of());
+
+            // when & then
+            assertThat(room.isInRoom(MEMBER)).isFalse();
+            assertThat(room.isInRoom(STRANGER)).isFalse();
         }
 
         @Test
@@ -545,11 +561,10 @@ public class RunningRoomInvitationTest {
             room.leave(MEMBER, LEFT_AT);
 
             // when
-            Optional<RoomInvitation> sent = room.invite(HOST, MEMBER, MAX_INVITE_COUNT);
+            room.invite(HOST, MEMBER, MAX_INVITE_COUNT);
 
             // then
-            assertThat(sent).hasValueSatisfying(invitation ->
-                    assertThat(invitation.getInviteCount().value()).isEqualTo(2));
+            assertThat(rowOf(room, HOST, MEMBER).getInviteCount().value()).isEqualTo(2);
             assertThat(room.invitationStatusOf(MEMBER)).contains(RunningRoomInvitationStatus.PENDING);
         }
 

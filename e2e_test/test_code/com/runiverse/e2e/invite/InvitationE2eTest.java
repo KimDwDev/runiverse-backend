@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -47,10 +46,10 @@ class InvitationE2eTest extends E2eTestSupport {
                 .isBetween(200, 299);
     }
 
-    private Response invite(TestUser inviter, int roomId, TestUser... invitees) {
+    // 한 번에 한 명이다
+    private Response invite(TestUser inviter, int roomId, TestUser invitee) {
         return post("/match-rooms/" + roomId + "/invitations",
-                Map.of("inviteeIds", Arrays.stream(invitees).map(TestUser::userId).toList()),
-                inviter.accessToken());
+                Map.of("inviteeId", invitee.userId()), inviter.accessToken());
     }
 
     private Response accept(TestUser invitee, int roomId) {
@@ -81,14 +80,11 @@ class InvitationE2eTest extends E2eTestSupport {
 
             // when - 1. 초대 — 초대는 신청이 아니라 받은 사람은 여전히 IDLE이다
             Response sent = invite(host, roomId, friend);
-            assertThat(sent.status()).isEqualTo(201);
-            assertThat(sent.objects("invitations")).singleElement().satisfies(invitation -> {
-                assertThat(invitation.get("userId")).isEqualTo(friend.userId());
-                assertThat(invitation.get("status")).isEqualTo("PENDING");
-                assertThat(((Number) invitation.get("inviteCount")).intValue()).isEqualTo(1);
+            assertThat(sent.status()).isEqualTo(204);
+            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations")).singleElement().satisfies(invitee -> {
+                assertThat(invitee.get("userId")).isEqualTo(friend.userId());
+                assertThat(invitee.get("status")).isEqualTo("PENDING");
             });
-            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations"))
-                    .extracting(invitee -> invitee.get("status")).containsExactly("PENDING");
             assertThat(get("/users/me/status", friend.accessToken()).text("status")).isEqualTo("IDLE");
 
             // 2. 거절 — 현황은 응답 전인 초대만 담아 거절한 사람은 빠진다. 다시 거절하면 409다
@@ -100,9 +96,7 @@ class InvitationE2eTest extends E2eTestSupport {
             assertThat(accept(friend, roomId).text("code")).isEqualTo("RUNNING_INVITATION_NOT_PENDING");
 
             // 3. 다시 초대 — 행이 남아 있어 대기로 되살아나고 횟수는 이어서 센다. 현황에 다시 보인다
-            Response resent = invite(host, roomId, friend);
-            assertThat(((Number) resent.objects("invitations").getFirst().get("inviteCount")).intValue())
-                    .isEqualTo(2);
+            assertThat(invite(host, roomId, friend).status()).isEqualTo(204);
             assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations"))
                     .extracting(invitee -> invitee.get("status")).containsExactly("PENDING");
 
@@ -115,6 +109,10 @@ class InvitationE2eTest extends E2eTestSupport {
                     .containsExactlyInAnyOrder(host.userId(), friend.userId());
             assertThat(listOf(afterAccept, "invitations")).isEmpty();
             assertThat(get("/users/me/status", friend.accessToken()).text("status")).isEqualTo("WAITING");
+            // 이미 들어온 친구를 다시 부르면 "매칭 중"이 아니라 이미 방에 있다고 알린다
+            Response again = invite(host, roomId, friend);
+            assertThat(again.status()).isEqualTo(409);
+            assertThat(again.text("code")).isEqualTo("INVITEE_ALREADY_IN_ROOM");
 
             // 수락한 사람의 스트림은 초대 방 입장 스냅샷부터 받는다
             try (MatchStream friendStream = openMatchStream(friend.accessToken())) {
@@ -151,6 +149,7 @@ class InvitationE2eTest extends E2eTestSupport {
         Response notFriend = invite(host, roomId, stranger);
         assertThat(notFriend.status()).isEqualTo(409);
         assertThat(notFriend.text("code")).isEqualTo("NOT_FRIEND");
+        assertThat(notFriend.text("message")).isEqualTo("친구가 아닙니다.");
         assertThat(accept(stranger, roomId).status()).isEqualTo(404);
 
         // 3. 참가자가 아닌 사람은 초대할 수 없다 — 방이 있는지도 알려 주지 않는다
@@ -160,7 +159,7 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("다른 활성 신청이 있는 친구는 건너뛰고, 초대 뒤에 신청이 생기면 수락이 막힌다")
+    @DisplayName("다른 방에서 매칭 중인 친구는 이유와 함께 거절되고, 초대 뒤에 신청이 생기면 수락이 막힌다")
     void activeApplicationBlocksInvitation() {
         // given
         TestUser host = signUpAndOnboard();
@@ -171,11 +170,22 @@ class InvitationE2eTest extends E2eTestSupport {
         int roomId = openRoom(host);
         int busyRoom = openRoom(busy);
 
-        // when - 1. 활성 신청이 있는 친구는 응답에서 빠진다 — 오류가 아니다
-        Response sent = invite(host, roomId, busy, later);
-        assertThat(sent.status()).isEqualTo(201);
-        assertThat(sent.objects("invitations")).extracting(invitation -> invitation.get("userId"))
-                .containsExactly(later.userId());
+        // when - 1. 다른 방에서 매칭 중인 친구는 건너뛰지 않고 이유를 알린다
+        Response busyInvite = invite(host, roomId, busy);
+        assertThat(busyInvite.status()).isEqualTo(409);
+        assertThat(busyInvite.text("code")).isEqualTo("INVITEE_IN_MATCHING");
+        assertThat(busyInvite.text("message")).isEqualTo("지금 매칭 중인 친구입니다.");
+        assertThat(invite(host, roomId, later).status()).isEqualTo(204);
+
+        // 솔로 방을 연 친구는 시작 전이어도 러닝 중이다 — 솔로는 모집 단계가 없다
+        TestUser solo = signUpAndOnboard();
+        befriend(host, solo);
+        assertThat(post("/running-rooms/solo", Map.of(), solo.accessToken()).status()).isEqualTo(201);
+        Response soloInvite = invite(host, roomId, solo);
+        assertThat(soloInvite.status()).isEqualTo(409);
+        assertThat(soloInvite.text("code")).isEqualTo("INVITEE_RUNNING");
+        assertThat(soloInvite.text("message")).isEqualTo("지금 러닝 중인 친구입니다.");
+        assertThat(post("/match-rooms/leave", null, solo.accessToken()).status()).isEqualTo(204);
 
         // 2. 초대받은 뒤 자기 방을 열었다 — 수락이 막히고 초대는 대기로 남는다
         openRoom(later);
@@ -201,7 +211,7 @@ class InvitationE2eTest extends E2eTestSupport {
         TestUser friend = signUpAndOnboard();
         befriend(host, friend);
         int roomId = openRoom(host);
-        assertThat(invite(host, roomId, friend).status()).isEqualTo(201);
+        assertThat(invite(host, roomId, friend).status()).isEqualTo(204);
 
         // when -> 방이 취소된다
         assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
@@ -217,20 +227,20 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("빈 초대 목록은 Request 검증 문구로 400이다")
-    void emptyInviteesIsBadRequest() {
+    @DisplayName("초대할 친구가 빠지면 Request 검증 문구로 400이다")
+    void missingInviteeIsBadRequest() {
         // given
         TestUser host = signUpAndOnboard();
         int roomId = openRoom(host);
 
         // when
         Response response = post("/match-rooms/" + roomId + "/invitations",
-                Map.of("inviteeIds", List.of()), host.accessToken());
+                Map.of(), host.accessToken());
 
         // then
         assertThat(response.status()).isEqualTo(400);
         assertThat(response.text("code")).isEqualTo("INVALID_REQUEST");
-        assertThat(response.text("message")).isEqualTo("초대할 친구는 1명 이상 50명 이하여야 합니다.");
+        assertThat(response.text("message")).isEqualTo("초대할 친구는 필수입니다.");
         assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 }

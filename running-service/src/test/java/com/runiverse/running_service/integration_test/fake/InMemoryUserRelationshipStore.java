@@ -1,6 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.match.port.out.LoadFriendIdsPort;
+import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
 import com.runiverse.running_service.application.relationship.port.out.EnsureUserRelationshipPairPort;
 import com.runiverse.running_service.application.relationship.port.out.LoadUserRelationshipPort;
 import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;
@@ -10,18 +10,15 @@ import com.runiverse.running_service.domain.relationship.UserRelationship;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.UUID;
 
 // 페이크 조립은 한 스레드라 잠금을 흉내 내지 않는다 — 실제 잠금은 E2E에서만 확인된다
 public class InMemoryUserRelationshipStore implements LoadUserRelationshipPort, SaveUserRelationshipPort,
-        EnsureUserRelationshipPairPort, LoadFriendIdsPort {
+        EnsureUserRelationshipPairPort, CheckFriendPort {
 
     // user_relationships의 한 행 — 꺼낼 때마다 새 도메인 객체를 만들어 저장 전 변경이 새지 않게 한다
     public record Row(long id, UUID userId, UUID targetId, RelationshipType type, LocalDateTime updatedAt) {
@@ -65,12 +62,10 @@ public class InMemoryUserRelationshipStore implements LoadUserRelationshipPort, 
         rows.put(key, new Row(id, userId, targetId, relationship.getType(), updatedAt));
     }
 
-    // 실제 쿼리처럼 내 행이 FRIEND인 대상만 고른다 — 친구는 대칭이라 내 행만 보면 된다
+    // 실제 쿼리처럼 내 행이 FRIEND인가만 본다 — 친구는 대칭이라 내 행만 보면 된다
     @Override
-    public Set<UserId> loadFriendIds(UserId userId, Collection<UserId> targetIds) {
-        return targetIds.stream()
-                .filter(target -> typeOf(userId.value(), target.value()).orElse(null) == RelationshipType.FRIEND)
-                .collect(Collectors.toSet());
+    public boolean isFriend(UserId userId, UserId targetId) {
+        return typeOf(userId.value(), targetId.value()).orElse(null) == RelationshipType.FRIEND;
     }
 
     // 친구 목록 페이크가 user_id 선두로 읽는다

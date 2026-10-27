@@ -45,11 +45,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -66,9 +64,8 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
         LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
         // 스냅샷 조회 — 잠그지 않는 것만 lockById와 다르다
         LoadMatchRoomDetailPort,
-        LoadUserStatusPort,
-        // 초대할 친구들의 활성 신청을 한 번에 본다 — 초대의 잠금·저장은 매칭 포트를 함께 쓴다
-        LoadActiveUserIdsPort {
+        // 홈 상태 판정과 초대 대상의 지금 상태(매칭 중·러닝 중)를 함께 가른다
+        LoadUserStatusPort {
 
     private final EntityManager entityManager;
 
@@ -132,24 +129,6 @@ public class RunningPersistenceAdapter implements CreateRunningPlayerPort, Creat
                 .setParameter("userId", userId.value())
                 .getSingleResult();
         return count > 0;
-    }
-
-    // existsActive를 여러 명에게 한 번에 묻는다 — idx_running_player_user(user_id, deleted_at)를 탄다
-    @Override
-    public Set<UserId> loadActiveUserIds(Collection<UserId> userIds) {
-        if (userIds.isEmpty()) {
-            return Set.of();   // 빈 IN ()은 DB마다 문법 오류다
-        }
-        return entityManager.createQuery("""
-                        SELECT DISTINCT p.userId
-                        FROM RunningPlayerJpaEntity p
-                        WHERE p.userId IN :userIds
-                          AND p.deletedAt IS NULL
-                        """, UUID.class)
-                .setParameter("userIds", userIds.stream().map(UserId::value).toList())
-                .getResultStream()
-                .map(UserId::new)
-                .collect(Collectors.toSet());
     }
 
     @Override

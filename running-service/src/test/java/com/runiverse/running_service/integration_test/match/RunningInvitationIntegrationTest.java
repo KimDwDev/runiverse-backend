@@ -24,6 +24,9 @@ import com.runiverse.running_service.application.match.common.RecruitmentClosePo
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
 import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
+import com.runiverse.running_service.application.match.exception.InviteCountExceededException;
+import com.runiverse.running_service.application.match.exception.InviteeAlreadyInRoomException;
+import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
@@ -61,7 +64,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -139,8 +141,8 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         inviteHandler = new InviteFriendsHandler(
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
-                relationshipStore,   // LoadFriendIdsPort
-                runningStore,        // LoadActiveUserIdsPort
+                relationshipStore,   // CheckFriendPort
+                runningStore,        // LoadUserStatusPort — 친구의 지금 상태
                 inviteStartPolicy, INVITE_PROPERTIES, roomInfoAssembler, eventPublisher);
         acceptHandler = new AcceptInvitationHandler(
                 runningStore,        // LockMatchRoomPort
@@ -171,11 +173,10 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         RecordingMatchStreamConnection hostStream = connect(host, roomId);
 
         // when
-        InviteFriendsResult result = invite(host, roomId, friend);
+        invite(host, roomId, friend);
 
         // then
-        assertThat(result.invitations()).containsExactly(
-                new SentInvitation(friend, RunningRoomInvitationStatus.PENDING, 1));
+        assertThat(inviteCountOf(roomId, host, friend)).isEqualTo(1);
         RoomInfo shown = lastInviteRoomOf(hostStream);
         assertThat(shown.invitations()).singleElement().satisfies(invitee -> {
             assertThat(invitee.userId()).isEqualTo(friend);
@@ -234,11 +235,10 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 .contains(RunningRoomInvitationStatus.DECLINED);
 
         // when -> 같은 사람이 다시 부른다
-        InviteFriendsResult again = invite(host, roomId, friend);
+        invite(host, roomId, friend);
 
         // then
-        assertThat(again.invitations()).containsExactly(
-                new SentInvitation(friend, RunningRoomInvitationStatus.PENDING, 2));
+        assertThat(inviteCountOf(roomId, host, friend)).isEqualTo(2);
         assertThat(lastInviteRoomOf(hostStream).invitations())
                 .extracting(RoomInfo.RoomInvitee::status)
                 .containsExactly(RunningRoomInvitationStatus.PENDING);
@@ -282,10 +282,10 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         assertThat(shown.invitations()).isEmpty();
 
         // when
-        InviteFriendsResult again = invite(host, roomId, friend);
+        invite(host, roomId, friend);
 
         // then -> 나간 뒤 다시 들어올 수 있다 — 다시 부르면 대기로 현황에 돌아온다
-        assertThat(again.invitations()).extracting(SentInvitation::inviteCount).containsExactly(2);
+        assertThat(inviteCountOf(roomId, host, friend)).isEqualTo(2);
         assertThat(lastInviteRoomOf(hostStream).invitations()).extracting(RoomInfo.RoomInvitee::userId)
                 .containsExactly(friend);
         accept(friend, roomId);
@@ -309,35 +309,60 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("친구가 아닌 사람이 섞이면 아무에게도 보내지 않는다")
-    void nonFriendBlocksWholeRequest() {
+    @DisplayName("친구가 아니면 409이고 초대가 생기지 않는다")
+    void nonFriendIsRejected() {
         // given
         UUID host = onboardedUser();
-        UUID friend = friendOf(host);
         UUID stranger = onboardedUser();
         Long roomId = open(host);
 
         // when & then
-        assertThatThrownBy(() -> invite(host, roomId, friend, stranger)).isInstanceOf(NotFriendException.class);
+        assertThatThrownBy(() -> invite(host, roomId, stranger)).isInstanceOf(NotFriendException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().getInvitations()).isEmpty();
     }
 
     @Test
-    @DisplayName("다른 활성 신청이 있는 친구에게는 초대가 가지 않는다")
-    void skipsFriendWithActiveApplication() {
+    @DisplayName("다른 방에서 매칭 중인 친구는 매칭 중이라는 이유로 거절되고 초대가 생기지 않는다")
+    void rejectsFriendInMatching() {
         // given -> 친구가 자기 초대 방을 열어 활성 신청이 있다
         UUID host = onboardedUser();
         UUID busy = friendOf(host);
-        UUID free = friendOf(host);
         Long roomId = open(host);
         open(busy);
 
-        // when
-        InviteFriendsResult result = invite(host, roomId, busy, free);
-
-        // then -> 오류가 아니라 응답에서 빠진다
-        assertThat(result.invitations()).extracting(SentInvitation::userId).containsExactly(free);
+        // when & then -> 건너뛰지 않고 이유를 알린다
+        assertThatThrownBy(() -> invite(host, roomId, busy)).isInstanceOf(InviteeInMatchingException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(busy))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("이미 방에 들어온 친구를 다시 부르면 이미 방에 있다는 이유로 거절된다")
+    void rejectsFriendAlreadyInRoom() {
+        // given
+        UUID host = onboardedUser();
+        UUID friend = friendOf(host);
+        Long roomId = open(host);
+        invite(host, roomId, friend);
+        accept(friend, roomId);
+
+        // when & then
+        assertThatThrownBy(() -> invite(host, roomId, friend)).isInstanceOf(InviteeAlreadyInRoomException.class);
+    }
+
+    @Test
+    @DisplayName("같은 친구에게 상한만큼 보내면 그다음은 횟수 초과로 거절되고 상태는 그대로다")
+    void rejectsAfterMaxCount() {
+        // given -> 상한은 5회다
+        UUID host = onboardedUser();
+        UUID friend = friendOf(host);
+        Long roomId = open(host);
+        for (int i = 0; i < 5; i++) {
+            invite(host, roomId, friend);
+        }
+
+        // when & then
+        assertThatThrownBy(() -> invite(host, roomId, friend)).isInstanceOf(InviteCountExceededException.class);
+        assertThat(inviteCountOf(roomId, host, friend)).isEqualTo(5);
     }
 
     @Test
@@ -444,8 +469,20 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         return openHandler.handle(new OpenInviteRoomCommand(userId, startAt, TARGET_DISTANCE)).runningRoomId();
     }
 
-    private InviteFriendsResult invite(UUID inviter, Long roomId, UUID... invitees) {
-        return inviteHandler.handle(new InviteFriendsCommand(inviter, roomId, Arrays.asList(invitees)));
+    // 한 번에 한 명이다 — 여러 명은 사람마다 부른다
+    private void invite(UUID inviter, Long roomId, UUID... invitees) {
+        for (UUID invitee : invitees) {
+            inviteHandler.handle(new InviteFriendsCommand(inviter, roomId, invitee));
+        }
+    }
+
+    private int inviteCountOf(Long roomId, UUID inviter, UUID invitee) {
+        return runningStore.findRoom(roomId).orElseThrow().getInvitations().stream()
+                .filter(invitation -> invitation.isFor(new UserId(invitee)) && invitation.isSentBy(new UserId(inviter)))
+                .findFirst()
+                .orElseThrow()
+                .getInviteCount()
+                .value();
     }
 
     private void accept(UUID invitee, Long roomId) {

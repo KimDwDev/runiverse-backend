@@ -24,7 +24,6 @@ import com.runiverse.running_service.presentation.match.request.MatchSlotsReques
 import com.runiverse.running_service.presentation.match.request.OpenInviteRoomRequest;
 import com.runiverse.running_service.presentation.match.response.AcceptInvitationResponse;
 import com.runiverse.running_service.presentation.match.response.ApplyMatchResponse;
-import com.runiverse.running_service.presentation.match.response.InviteFriendsResponse;
 import com.runiverse.running_service.presentation.match.response.MatchSlotsResponse;
 import com.runiverse.running_service.presentation.match.response.OpenInviteRoomResponse;
 import jakarta.validation.Valid;
@@ -98,17 +97,16 @@ public class MatchRoomController {
                 .body(new OpenInviteRoomResponse(result.runningRoomId()));
     }
 
-    // 수락·거절은 받는 사람이 토큰 주체라 본문이 없다
+    // 한 명씩 보낸다 — 못 보내면 그 친구가 왜 안 되는지를 409로 알린다. 수락·거절은 받는 사람이 토큰 주체라 본문이 없다
     @PostMapping("{runningRoomId}/invitations")
-    public ResponseEntity<InviteFriendsResponse> inviteFriends(
+    public ResponseEntity<Void> inviteFriends(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Min(value = 1, message = "입력값이 올바르지 않습니다.") Long runningRoomId,
             @Valid @RequestBody InviteFriendsRequest request
     ) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        InviteFriendsResult result = inviteFriendsUsecase.handle(
-                new InviteFriendsCommand(userId, runningRoomId, request.inviteeIds()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(InviteFriendsResponse.from(result));
+        inviteFriendsUsecase.handle(new InviteFriendsCommand(userId, runningRoomId, request.inviteeId()));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("{runningRoomId}/invitations/accept")

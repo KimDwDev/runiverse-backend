@@ -13,6 +13,7 @@ import com.runiverse.running_service.application.match.exception.InvitationNotFo
 import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.InviteRoomNotFoundException;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
+import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
@@ -25,7 +26,6 @@ import com.runiverse.running_service.application.match.port.in.InviteFriendsUsec
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQuery;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.match.controller.MatchRoomController;
@@ -360,45 +360,61 @@ class MatchRoomControllerTest {
     }
 
     @Test
-    @DisplayName("친구 초대: 토큰 주체·경로 방 ID·대상 목록을 넘기고 201로 보낸 초대만 돌려준다")
-    void 친구_초대는_201로_보낸_초대를_돌려준다() throws Exception {
-        // given -> 값이 다르게 바인딩되면 이 스텁이 맞지 않아 빈 응답이 된다
+    @DisplayName("친구 초대: 토큰 주체·경로 방 ID·대상 한 명을 넘기고 본문 없이 204다")
+    void 친구_초대는_204다() throws Exception {
+        // given
         UUID friend = UuidCreator.getTimeOrderedEpoch();
-        given(inviteFriendsUsecase.handle(new InviteFriendsCommand(USER_ID, 130L, List.of(friend))))
-                .willReturn(new InviteFriendsResult(List.of(new InviteFriendsResult.SentInvitation(
-                        friend, RunningRoomInvitationStatus.PENDING, 1))));
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"inviteeIds":["%s"]}
+                                {"inviteeId":"%s"}
                                 """.formatted(friend)))
                 .andReturn();
 
-        // then
-        assertThat(result.getResponse().getStatus()).isEqualTo(201);
-        assertThat(body(result)).containsExactly(Map.entry("invitations", List.of(Map.of(
-                "userId", friend.toString(), "status", "PENDING", "inviteCount", 1))));
+        // then -> 초대 현황은 스트림이 나른다
+        assertThat(result.getResponse().getStatus()).isEqualTo(204);
+        assertThat(result.getResponse().getContentAsByteArray()).isEmpty();
+        then(inviteFriendsUsecase).should().handle(new InviteFriendsCommand(USER_ID, 130L, friend));
     }
 
     @Test
-    @DisplayName("친구 초대: 대상이 비면 400이고 유스케이스를 부르지 않는다")
-    void 친구_초대는_빈_목록에_400이다() throws Exception {
+    @DisplayName("친구 초대: 대상이 빠지면 400이고 유스케이스를 부르지 않는다")
+    void 친구_초대는_대상이_없으면_400이다() throws Exception {
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"inviteeIds":[]}
-                                """))
+                        .content("{}"))
                 .andReturn();
 
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(body(result))
                 .containsEntry("code", "INVALID_REQUEST")
-                .containsEntry("message", "초대할 친구는 1명 이상 50명 이하여야 합니다.");
+                .containsEntry("message", "초대할 친구는 필수입니다.");
         then(inviteFriendsUsecase).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("친구 초대: 친구가 매칭 중이면 409 INVITEE_IN_MATCHING으로 이유가 그대로 나간다")
+    void 친구_초대는_매칭_중이면_409다() throws Exception {
+        // given -> 노출 목록에서 빠지면 500으로 가려진다
+        willThrow(new InviteeInMatchingException()).given(inviteFriendsUsecase).handle(any());
+
+        // when
+        MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"inviteeId":"%s"}
+                                """.formatted(UuidCreator.getTimeOrderedEpoch())))
+                .andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(result))
+                .containsEntry("code", "INVITEE_IN_MATCHING")
+                .containsEntry("message", "지금 매칭 중인 친구입니다.");
     }
 
     @Test
@@ -408,7 +424,7 @@ class MatchRoomControllerTest {
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"inviteeIds":["not-a-uuid"]}
+                                {"inviteeId":"not-a-uuid"}
                                 """))
                 .andReturn();
 
@@ -425,7 +441,7 @@ class MatchRoomControllerTest {
         MvcResult result = mockMvc.perform(post("/match-rooms/0/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"inviteeIds":["%s"]}
+                                {"inviteeId":"%s"}
                                 """.formatted(UuidCreator.getTimeOrderedEpoch())))
                 .andReturn();
 
@@ -435,16 +451,16 @@ class MatchRoomControllerTest {
     }
 
     @Test
-    @DisplayName("친구 초대: 친구가 아닌 사람이 섞이면 409 NOT_FRIEND로 그대로 나간다")
+    @DisplayName("친구 초대: 친구가 아니면 409 NOT_FRIEND로 그대로 나간다")
     void 친구_초대는_친구가_아니면_409다() throws Exception {
         // given -> 노출 목록에서 빠지면 500으로 가려진다
-        given(inviteFriendsUsecase.handle(any())).willThrow(new NotFriendException());
+        willThrow(new NotFriendException()).given(inviteFriendsUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"inviteeIds":["%s"]}
+                                {"inviteeId":"%s"}
                                 """.formatted(UuidCreator.getTimeOrderedEpoch())))
                 .andReturn();
 
@@ -459,13 +475,13 @@ class MatchRoomControllerTest {
     @DisplayName("친구 초대: 방이 없거나 참가자가 아니면 404 NOT_FOUND다")
     void 친구_초대는_방을_못_찾으면_404다() throws Exception {
         // given
-        given(inviteFriendsUsecase.handle(any())).willThrow(new InviteRoomNotFoundException());
+        willThrow(new InviteRoomNotFoundException()).given(inviteFriendsUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"inviteeIds":["%s"]}
+                                {"inviteeId":"%s"}
                                 """.formatted(UuidCreator.getTimeOrderedEpoch())))
                 .andReturn();
 

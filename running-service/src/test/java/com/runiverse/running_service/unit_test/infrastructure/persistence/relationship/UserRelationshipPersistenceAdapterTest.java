@@ -26,9 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,7 +55,7 @@ public class UserRelationshipPersistenceAdapterTest {
     private TypedQuery<FriendRow> friendQuery;
 
     @Mock
-    private TypedQuery<UUID> friendIdQuery;
+    private TypedQuery<Long> friendCountQuery;
 
     @InjectMocks
     private UserRelationshipPersistenceAdapter adapter;
@@ -272,33 +270,34 @@ public class UserRelationshipPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("넘긴 사람 중 친구인 사람만 돌려준다")
-    void loadFriendIdsReturnsFriendsOnly() {
+    @DisplayName("내 행이 FRIEND면 친구다")
+    void isFriendWhenMyRowIsFriend() {
         // given
-        UUID stranger = UuidCreator.getTimeOrderedEpoch();
-        when(entityManager.createQuery(anyString(), eq(UUID.class))).thenReturn(friendIdQuery);
-        when(friendIdQuery.setParameter(anyString(), any())).thenReturn(friendIdQuery);
-        when(friendIdQuery.getResultStream()).thenReturn(Stream.of(targetId));
+        givenFriendCount(1L);
 
-        // when
-        Set<UserId> friends = adapter.loadFriendIds(
-                new UserId(userId), List.of(new UserId(targetId), new UserId(stranger)));
-
-        // then -> 친구는 대칭이라 내 행(user_id = 나)만 FRIEND로 거른다
-        assertThat(friends).containsExactly(new UserId(targetId));
-        verify(friendIdQuery).setParameter("userId", userId);
-        verify(friendIdQuery).setParameter("targetIds", List.of(targetId, stranger));
-        verify(friendIdQuery).setParameter("type", RelationshipType.FRIEND);
+        // when & then -> 친구는 대칭이라 내 행(user_id = 나)만 FRIEND로 거른다
+        assertThat(adapter.isFriend(new UserId(userId), new UserId(targetId))).isTrue();
+        verify(friendCountQuery).setParameter("userId", userId);
+        verify(friendCountQuery).setParameter("targetId", targetId);
+        verify(friendCountQuery).setParameter("type", RelationshipType.FRIEND);
         // 초대는 관계를 바꾸지 않아 잠그지 않는다
-        verify(friendIdQuery, never()).setLockMode(any());
+        verify(friendCountQuery, never()).setLockMode(any());
     }
 
     @Test
-    @DisplayName("빈 목록이면 친구 조회를 내보내지 않는다")
-    void loadFriendIdsSkipsEmptyInput() {
-        // when & then -> 빈 IN ()은 문법 오류다
-        assertThat(adapter.loadFriendIds(new UserId(userId), List.of())).isEmpty();
-        verify(entityManager, never()).createQuery(anyString(), eq(UUID.class));
+    @DisplayName("내 행이 FRIEND가 아니면 친구가 아니다")
+    void isNotFriendWithoutFriendRow() {
+        // given -> 요청 중·없음·차단은 모두 FRIEND가 아니다
+        givenFriendCount(0L);
+
+        // when & then
+        assertThat(adapter.isFriend(new UserId(userId), new UserId(targetId))).isFalse();
+    }
+
+    private void givenFriendCount(long count) {
+        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(friendCountQuery);
+        when(friendCountQuery.setParameter(anyString(), any())).thenReturn(friendCountQuery);
+        when(friendCountQuery.getSingleResult()).thenReturn(count);
     }
 
     private String capturedFriendJpql() {
