@@ -32,8 +32,8 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -127,7 +127,7 @@ class AcceptInvitationHandlerTest {
     }
 
     private RunningRoom room(RunningRoomStatus status, LocalDateTime startAt, int members,
-                             RunningRoomInvitationStatus invitationStatus) {
+                             RoomInvitationStatus invitationStatus) {
         List<SessionDraft> sessions = new ArrayList<>();
         sessions.add(new SessionDraft(host, new RunningPlayerId(1L), 0, true));
         for (int i = 1; i < members; i++) {
@@ -151,7 +151,7 @@ class AcceptInvitationHandlerTest {
     }
 
     private RunningRoom pendingRoom(int members) {
-        return room(RunningRoomStatus.MATCHING, startAt, members, RunningRoomInvitationStatus.PENDING);
+        return room(RunningRoomStatus.MATCHING, startAt, members, RoomInvitationStatus.PENDING);
     }
 
     private void givenLocked(RunningRoom room) {
@@ -209,7 +209,7 @@ class AcceptInvitationHandlerTest {
             });
             // 누가 보냈든 받는 사람 기준이다
             assertThat(room.getInvitations()).extracting(RoomInvitation::getStatus)
-                    .containsOnly(RunningRoomInvitationStatus.ACCEPTED);
+                    .containsOnly(RoomInvitationStatus.ACCEPTED);
             verify(updateMatchRoomPort).update(room);
             verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
         }
@@ -263,7 +263,7 @@ class AcceptInvitationHandlerTest {
         @DisplayName("만료된 초대는 닫힌 것으로 거절한다")
         void rejectsExpired() {
             // given -> 만료는 응답이 아니라 방이 닫힌 것이다
-            givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, RunningRoomInvitationStatus.EXPIRED));
+            givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, RoomInvitationStatus.EXPIRED));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
@@ -276,7 +276,7 @@ class AcceptInvitationHandlerTest {
         @DisplayName("모집 중이 아닌 방은 대기 중 초대라도 닫힌 것으로 거절한다")
         void rejectsNotRecruiting(RunningRoomStatus status) {
             // given
-            givenLocked(room(status, startAt, 1, RunningRoomInvitationStatus.PENDING));
+            givenLocked(room(status, startAt, 1, RoomInvitationStatus.PENDING));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
@@ -289,7 +289,7 @@ class AcceptInvitationHandlerTest {
         void rejectsPastCloseAt() {
             // given -> 시작 30초 전이면 마감(1분 전)이 이미 지났다
             givenLocked(room(RunningRoomStatus.MATCHING, LocalDateTime.now().plusSeconds(30), 1,
-                    RunningRoomInvitationStatus.PENDING));
+                    RoomInvitationStatus.PENDING));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
@@ -298,9 +298,9 @@ class AcceptInvitationHandlerTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT"})
         @DisplayName("이미 응답한 초대는 거절한다")
-        void rejectsAnswered(RunningRoomInvitationStatus status) {
+        void rejectsAnswered(RoomInvitationStatus status) {
             // given -> 거절 뒤 들어가려면 다시 초대받아야 한다
             givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, status));
 
@@ -320,7 +320,7 @@ class AcceptInvitationHandlerTest {
             // when & then -> 신청 행을 만들기 전에 끝난다
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(RunningRoomFullException.class);
-            assertThat(room.invitationStatusOf(invitee)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(invitee)).contains(RoomInvitationStatus.PENDING);
             verifyNoInteractions(existsActiveRunningPlayerPort, createRunningPlayerPort, updateMatchRoomPort);
         }
 

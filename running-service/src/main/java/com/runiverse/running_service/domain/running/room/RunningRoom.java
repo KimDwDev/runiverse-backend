@@ -16,8 +16,8 @@ import com.runiverse.running_service.domain.running.room.exception.RunningRoomTy
 import com.runiverse.running_service.domain.running.room.exception.SelfInvitationException;
 import com.runiverse.running_service.domain.running.room.exception.StartAtRequiredException;
 import com.runiverse.running_service.domain.running.room.vo.PlayerCount;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.Builder;
@@ -221,8 +221,8 @@ public class RunningRoom {
         }
         session.leave();
         // 초대로 들어온 사람이면 "지금 방에 있음"을 거둔다 — 그래야 다시 초대할 수 있다
-        if (invitationStatusOf(userId).orElse(null) == RunningRoomInvitationStatus.ACCEPTED) {
-            changeInvitationStatus(userId, RunningRoomInvitationStatus.LEFT);
+        if (invitationStatusOf(userId).orElse(null) == RoomInvitationStatus.ACCEPTED) {
+            changeInvitationStatus(userId, RoomInvitationStatus.LEFT);
         }
     }
 
@@ -252,9 +252,9 @@ public class RunningRoom {
             throw new InviteCountReachedException();   // 상태도 건드리지 않는다
         }
         // 거절했거나 나간 사람은 다른 보낸 사람의 행까지 함께 대기로 되살린다
-        RunningRoomInvitationStatus current = invitationStatusOf(inviteeId).orElse(null);
-        if (current != null && current != RunningRoomInvitationStatus.PENDING) {
-            changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.PENDING);
+        RoomInvitationStatus current = invitationStatusOf(inviteeId).orElse(null);
+        if (current != null && current != RoomInvitationStatus.PENDING) {
+            changeInvitationStatus(inviteeId, RoomInvitationStatus.PENDING);
         }
         sentBy(inviterId, inviteeId).ifPresentOrElse(
                 RoomInvitation::resend,   // 대기 중에 다시 보냄(독촉) 포함
@@ -276,18 +276,18 @@ public class RunningRoom {
     // 수락 — 매칭 합류와 같게 자리를 잡고, 누구의 초대로 들어오든 받는 사람의 행을 모두 수락으로 바꾼다
     public void acceptInvitation(UserId inviteeId, RunningPlayerId runningPlayerId) {
         // 합류보다 먼저 본다 — 합류 뒤에 터지면 인원만 오른 채 남는다
-        received(inviteeId).get(0).getStatus().transitionTo(RunningRoomInvitationStatus.ACCEPTED);
+        received(inviteeId).get(0).getStatus().transitionTo(RoomInvitationStatus.ACCEPTED);
         join(inviteeId, runningPlayerId);   // 자리가 없거나 모집 중이 아니면 초대는 PENDING 그대로다
-        changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.ACCEPTED);
+        changeInvitationStatus(inviteeId, RoomInvitationStatus.ACCEPTED);
     }
 
     // 거절 — 행을 지우지 않는다. 현황에서는 빠지지만 다시 초대할 때 보낸 횟수를 이어서 세야 한다
     public void declineInvitation(UserId inviteeId) {
-        changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.DECLINED);
+        changeInvitationStatus(inviteeId, RoomInvitationStatus.DECLINED);
     }
 
     // 받는 사람 기준이라 행 하나만 보면 된다 — 받은 초대가 없으면 빈 값
-    public Optional<RunningRoomInvitationStatus> invitationStatusOf(UserId inviteeId) {
+    public Optional<RoomInvitationStatus> invitationStatusOf(UserId inviteeId) {
         return invitations.stream()
                 .filter(invitation -> invitation.isFor(inviteeId))
                 .map(RoomInvitation::getStatus)
@@ -347,7 +347,7 @@ public class RunningRoom {
     }
 
     // 같은 받는 사람의 행은 늘 같은 상태라 첫 행으로 전이를 먼저 확인한다 — 반쯤 바뀐 채로 남지 않는다
-    private void changeInvitationStatus(UserId inviteeId, RunningRoomInvitationStatus next) {
+    private void changeInvitationStatus(UserId inviteeId, RoomInvitationStatus next) {
         List<RoomInvitation> received = received(inviteeId);
         received.get(0).getStatus().transitionTo(next);
         received.forEach(invitation -> invitation.changeStatus(next));
@@ -357,8 +357,8 @@ public class RunningRoom {
     // 받는 사람마다 행이 여럿이어도 PENDING이면 모두 PENDING이라 행 단위로 바꿔도 받는 사람 기준이 지켜진다
     private void expirePendingInvitations() {
         invitations.stream()
-                .filter(invitation -> invitation.getStatus() == RunningRoomInvitationStatus.PENDING)
-                .forEach(invitation -> invitation.changeStatus(RunningRoomInvitationStatus.EXPIRED));
+                .filter(invitation -> invitation.getStatus() == RoomInvitationStatus.PENDING)
+                .forEach(invitation -> invitation.changeStatus(RoomInvitationStatus.EXPIRED));
     }
 
     // 닫힌 시각은 종료 상태와 짝이다 — DB에서 복원할 때 어긋난 행을 여기서 잡는다

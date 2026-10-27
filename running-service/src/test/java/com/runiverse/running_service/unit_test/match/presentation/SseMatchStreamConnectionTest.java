@@ -3,7 +3,7 @@ package com.runiverse.running_service.unit_test.match.presentation;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.presentation.match.response.InviteRoomEntranceResponse;
@@ -70,7 +70,7 @@ class SseMatchStreamConnectionTest {
     void entranceCarriesStartsInMsFlat() throws Exception {
         // given
         RoomInfo room = roomOf(RunningRoomType.INVITE, List.of(new RoomInfo.RoomInvitee(
-                INVITEE, "영희", null, RunningRoomInvitationStatus.PENDING, false)));
+                INVITEE, "영희", null, RoomInvitationStatus.PENDING, false)));
 
         // when
         connection.send(MatchStreamEvent.snapshot(room, START.minusMinutes(20)));

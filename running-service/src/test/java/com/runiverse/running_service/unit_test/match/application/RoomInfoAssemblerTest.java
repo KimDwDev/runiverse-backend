@@ -20,8 +20,8 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -212,11 +212,11 @@ class RoomInfoAssemblerTest {
         UUID left = UuidCreator.getTimeOrderedEpoch();
         UUID accepted = UuidCreator.getTimeOrderedEpoch();
         RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
-                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1),
-                new InvitationDraft(new UserId(OTHER), new UserId(pending), RunningRoomInvitationStatus.PENDING, 2),
-                new InvitationDraft(new UserId(ME), new UserId(declined), RunningRoomInvitationStatus.DECLINED, 1),
-                new InvitationDraft(new UserId(ME), new UserId(left), RunningRoomInvitationStatus.LEFT, 1),
-                new InvitationDraft(new UserId(ME), new UserId(accepted), RunningRoomInvitationStatus.ACCEPTED, 1)));
+                new InvitationDraft(new UserId(ME), new UserId(pending), RoomInvitationStatus.PENDING, 1),
+                new InvitationDraft(new UserId(OTHER), new UserId(pending), RoomInvitationStatus.PENDING, 2),
+                new InvitationDraft(new UserId(ME), new UserId(declined), RoomInvitationStatus.DECLINED, 1),
+                new InvitationDraft(new UserId(ME), new UserId(left), RoomInvitationStatus.LEFT, 1),
+                new InvitationDraft(new UserId(ME), new UserId(accepted), RoomInvitationStatus.ACCEPTED, 1)));
         given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
                 .willReturn(List.of(new MatchPlayer(ME, 360)));
         // 참가자와 초대 대상을 한 번에 읽는다
@@ -231,7 +231,7 @@ class RoomInfoAssemblerTest {
         // then -> 수락은 players로 옮겨 가고 거절·나감은 현황에서 빠진다. 빠진 사람의 프로필은 읽지 않는다
         assertThat(roomInfo.type()).isEqualTo(RunningRoomType.INVITE);
         assertThat(roomInfo.invitations()).containsExactly(
-                new RoomInfo.RoomInvitee(pending, "영희", IMAGE_URL, RunningRoomInvitationStatus.PENDING, false));
+                new RoomInfo.RoomInvitee(pending, "영희", IMAGE_URL, RoomInvitationStatus.PENDING, false));
     }
 
     @Test
@@ -240,7 +240,7 @@ class RoomInfoAssemblerTest {
         // given
         UUID expired = UuidCreator.getTimeOrderedEpoch();
         RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
-                new InvitationDraft(new UserId(ME), new UserId(expired), RunningRoomInvitationStatus.EXPIRED, 1)));
+                new InvitationDraft(new UserId(ME), new UserId(expired), RoomInvitationStatus.EXPIRED, 1)));
         givenPlayers(List.of(), Map.of());
 
         // when & then
@@ -253,7 +253,7 @@ class RoomInfoAssemblerTest {
         // given -> 마감 갱신이 빈 현황으로 나가 "더는 초대받지 않는다"를 알린다
         UUID pending = UuidCreator.getTimeOrderedEpoch();
         RunningRoom room = inviteRoom(RunningRoomStatus.MATCHED, List.of(
-                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1)));
+                new InvitationDraft(new UserId(ME), new UserId(pending), RoomInvitationStatus.PENDING, 1)));
         givenPlayers(List.of(), Map.of());
 
         // when
@@ -271,8 +271,8 @@ class RoomInfoAssemblerTest {
         UUID alive = UuidCreator.getTimeOrderedEpoch();
         UUID withdrawn = UuidCreator.getTimeOrderedEpoch();
         RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
-                new InvitationDraft(new UserId(ME), new UserId(alive), RunningRoomInvitationStatus.PENDING, 1),
-                new InvitationDraft(new UserId(ME), new UserId(withdrawn), RunningRoomInvitationStatus.PENDING, 1)));
+                new InvitationDraft(new UserId(ME), new UserId(alive), RoomInvitationStatus.PENDING, 1),
+                new InvitationDraft(new UserId(ME), new UserId(withdrawn), RoomInvitationStatus.PENDING, 1)));
         given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID))).willReturn(List.of());
         given(loadPlayerProfilesPort.loadProfiles(List.of(alive, withdrawn)))
                 .willReturn(Map.of(alive, new PlayerProfile(alive, "영희", null, null)));
@@ -282,7 +282,7 @@ class RoomInfoAssemblerTest {
 
         // then
         assertThat(roomInfo.invitations()).containsExactly(
-                new RoomInfo.RoomInvitee(alive, "영희", null, RunningRoomInvitationStatus.PENDING, false));
+                new RoomInfo.RoomInvitee(alive, "영희", null, RoomInvitationStatus.PENDING, false));
     }
 
     private static RunningRoom inviteRoom(RunningRoomStatus status, List<InvitationDraft> invitations) {

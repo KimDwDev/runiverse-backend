@@ -22,8 +22,8 @@ import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -57,14 +57,14 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
         RunningRoom room = lockMatchRoomPort.lockById(roomId)
                 .filter(locked -> locked.invitationStatusOf(inviteeId).isPresent())
                 .orElseThrow(InvitationNotFoundException::new);
-        RunningRoomInvitationStatus status = room.invitationStatusOf(inviteeId).orElseThrow();
+        RoomInvitationStatus status = room.invitationStatusOf(inviteeId).orElseThrow();
         // 2~4. 명세의 판정 순서 그대로다 — 만료·마감 → 응답함 → 자리 없음.
         //      만료는 응답이 아니라 방이 닫힌 것이라 NOT_PENDING보다 앞이다
-        if (status == RunningRoomInvitationStatus.EXPIRED
+        if (status == RoomInvitationStatus.EXPIRED
                 || !inviteStartPolicy.isRecruiting(room, LocalDateTime.now())) {
             throw new RunningInvitationClosedException();
         }
-        if (status != RunningRoomInvitationStatus.PENDING) {
+        if (status != RoomInvitationStatus.PENDING) {
             throw new InvitationNotPendingException();
         }
         // 자리가 없으면 초대는 PENDING 그대로다 — 누가 나가면 다시 수락할 수 있다

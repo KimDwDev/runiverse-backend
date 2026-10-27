@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,13 +58,13 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     // 받는 사람 기준의 상태 — 같은 방의 같은 받는 사람 행은 늘 같은 값이다(애그리거트가 지킨다)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private RunningRoomInvitationStatus status;
+    private RoomInvitationStatus status;
     // 이 보낸 사람이 이 받는 사람에게 보낸 횟수 — 거절·나감 뒤에도 이어서 센다
     @Column(name = "invite_count", nullable = false)
     private int inviteCount;
 
     private RunningRoomInvitationJpaEntity(RunningRoomJpaEntity room, UUID inviterId, UUID inviteeId,
-                                           RunningRoomInvitationStatus status, int inviteCount) {
+                                           RoomInvitationStatus status, int inviteCount) {
         this.room = room;
         this.inviterId = inviterId;
         this.inviteeId = inviteeId;
@@ -73,12 +73,12 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     }
 
     public static RunningRoomInvitationJpaEntity create(RunningRoomJpaEntity room, UUID inviterId,
-                                                        UUID inviteeId, RunningRoomInvitationStatus status,
+                                                        UUID inviteeId, RoomInvitationStatus status,
                                                         int inviteCount) {
         return new RunningRoomInvitationJpaEntity(room, inviterId, inviteeId, status, inviteCount);
     }
 
-    public void changeStatus(RunningRoomInvitationStatus status) {
+    public void changeStatus(RoomInvitationStatus status) {
         this.status = status;
     }
 

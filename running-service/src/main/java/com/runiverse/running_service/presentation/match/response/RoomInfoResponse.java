@@ -1,7 +1,7 @@
 package com.runiverse.running_service.presentation.match.response;
 
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 
@@ -63,7 +63,7 @@ public record RoomInfoResponse(
             UUID userId,
             String nickname,
             String profileImageUrl,
-            RunningRoomInvitationStatus status,
+            RoomInvitationStatus status,
             boolean isDeleted
     ) {
 

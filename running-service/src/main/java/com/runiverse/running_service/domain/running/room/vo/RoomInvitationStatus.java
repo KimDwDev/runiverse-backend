@@ -5,7 +5,7 @@ import com.runiverse.running_service.domain.running.room.exception.InvalidInvita
 import java.util.Set;
 
 // 받는 사람 기준의 상태 — 같은 방의 같은 받는 사람 행은 보낸 사람이 달라도 늘 같은 값이다
-public enum RunningRoomInvitationStatus {
+public enum RoomInvitationStatus {
     PENDING,    // 응답 전
     ACCEPTED,   // 수락해 지금 방에 있다 — 나가면 LEFT로 바뀐다
     DECLINED,   // 거절 — 현황에서는 빠지지만 다시 초대할 때 보낸 횟수를 이어 세려고 지우지 않는다
@@ -13,14 +13,14 @@ public enum RunningRoomInvitationStatus {
     EXPIRED;    // 모집 마감·방 취소로 끝났다
 
     // 애그리거트가 상태를 바꾸기 전에 호출 -> 위반은 여기서 잡는다
-    public RunningRoomInvitationStatus transitionTo(RunningRoomInvitationStatus next) {
+    public RoomInvitationStatus transitionTo(RoomInvitationStatus next) {
         if (!allowedNext().contains(next)) {
             throw new InvalidInvitationStatusTransitionException();
         }
         return next;
     }
 
-    private Set<RunningRoomInvitationStatus> allowedNext() {
+    private Set<RoomInvitationStatus> allowedNext() {
         return switch (this) {
             case PENDING -> Set.of(ACCEPTED, DECLINED, EXPIRED);
             case ACCEPTED -> Set.of(LEFT);

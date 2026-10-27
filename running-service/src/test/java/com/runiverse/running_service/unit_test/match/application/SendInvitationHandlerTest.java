@@ -27,8 +27,8 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -186,7 +186,7 @@ class SendInvitationHandlerTest {
             invite();
 
             // then
-            assertThat(rowOf(room).getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(rowOf(room).getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
             assertThat(rowOf(room).getInviteCount().value()).isEqualTo(1);
             verify(updateMatchRoomPort).update(room);
             verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
@@ -197,7 +197,7 @@ class SendInvitationHandlerTest {
         void resendKeepsCounting() {
             // given
             RunningRoom room = recruitingRoom(List.of(
-                    new InvitationDraft(inviter, friend, RunningRoomInvitationStatus.PENDING, 2)));
+                    new InvitationDraft(inviter, friend, RoomInvitationStatus.PENDING, 2)));
             givenLocked(room);
             givenFriend(true);
             givenIdle();
@@ -208,13 +208,13 @@ class SendInvitationHandlerTest {
 
             // then
             assertThat(rowOf(room).getInviteCount().value()).isEqualTo(3);
-            assertThat(rowOf(room).getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(rowOf(room).getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"DECLINED", "LEFT"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"DECLINED", "LEFT"})
         @DisplayName("거절했거나 나간 친구는 대기로 되살아난다")
-        void revivesAnswered(RunningRoomInvitationStatus status) {
+        void revivesAnswered(RoomInvitationStatus status) {
             // given
             RunningRoom room = recruitingRoom(List.of(new InvitationDraft(inviter, friend, status, 1)));
             givenLocked(room);
@@ -226,7 +226,7 @@ class SendInvitationHandlerTest {
             invite();
 
             // then
-            assertThat(rowOf(room).getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(rowOf(room).getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
             assertThat(rowOf(room).getInviteCount().value()).isEqualTo(2);
         }
     }
@@ -384,14 +384,14 @@ class SendInvitationHandlerTest {
         void rejectsCountExceeded() {
             // given -> 거절당한 뒤 계속 보내는 것을 막는다
             RunningRoom room = recruitingRoom(List.of(new InvitationDraft(
-                    inviter, friend, RunningRoomInvitationStatus.DECLINED, MAX_INVITE_COUNT)));
+                    inviter, friend, RoomInvitationStatus.DECLINED, MAX_INVITE_COUNT)));
             givenLocked(room);
             givenFriend(true);
             givenIdle();
 
             // when & then
             assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteCountExceededException.class);
-            assertThat(rowOf(room).getStatus()).isEqualTo(RunningRoomInvitationStatus.DECLINED);
+            assertThat(rowOf(room).getStatus()).isEqualTo(RoomInvitationStatus.DECLINED);
             assertThat(rowOf(room).getInviteCount().value()).isEqualTo(MAX_INVITE_COUNT);
             verifyNoInteractions(updateMatchRoomPort, eventPublisher);
         }
