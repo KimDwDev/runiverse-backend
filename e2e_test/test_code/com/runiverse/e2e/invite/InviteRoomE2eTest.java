@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,13 +58,16 @@ class InviteRoomE2eTest extends E2eTestSupport {
         assertThat(LocalDateTime.parse(waiting.text("scheduledStartAt"))).isEqualTo(start);
         assertThat(waiting.number("targetDistanceMeters")).isEqualTo(DISTANCE);
 
-        // 연결 직후 스냅샷의 모집 마감은 매칭 오프셋(10분)이 아니라 초대 오프셋(1분)이다.
-        // 초대 방 전용 이벤트(INVITE_ROOM_ENTRANCE)가 붙으면 이벤트 이름만 바뀐다
+        // 연결 직후 스냅샷은 초대 방 전용 입장 이벤트다 — 모집 마감은 매칭 오프셋(10분)이 아니라 초대 오프셋(1분)이고,
+        // 시작까지 남은 시간을 함께 싣는다
         try (MatchStream stream = openMatchStream(host.accessToken())) {
             assertThat(stream.status()).isEqualTo(200);
-            Map<String, Object> snapshot = stream.await("MATCH_ROOM_UPDATED");
+            Map<String, Object> snapshot = stream.await("INVITE_ROOM_ENTRANCE");
             assertThat(((Number) snapshot.get("runningRoomId")).intValue()).isEqualTo(runningRoomId);
+            assertThat(snapshot.get("type")).isEqualTo("INVITE");
             assertThat(LocalDateTime.parse((String) snapshot.get("closeAt"))).isEqualTo(start.minusMinutes(1));
+            assertThat(((Number) snapshot.get("startsInMs")).longValue()).isPositive();
+            assertThat((List<?>) snapshot.get("invitations")).isEmpty();
         }
 
         // 2. 활성 신청은 방 종류와 무관하게 하나다 — 초대 방도 매칭도 더 열 수 없다

@@ -1,5 +1,8 @@
 package com.runiverse.running_service.integration_test.fake;
 
+import com.runiverse.running_service.application.invite.port.out.LoadActiveUserIdsPort;
+import com.runiverse.running_service.application.invite.port.out.LockInviteRoomPort;
+import com.runiverse.running_service.application.invite.port.out.UpdateInviteRoomPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
@@ -26,17 +29,21 @@ import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 // RunningPersistenceAdapter를 대신한다 — 실제 어댑터처럼 bigserial ID를 채워 돌려준다.
@@ -50,7 +57,9 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         CreateMatchApplicationPort, ExistsActiveApplicationPort,
         CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
         LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
-        LoadMatchRoomDetailPort {
+        LoadMatchRoomDetailPort,
+        // 초대도 같은 방 애그리거트다 — 잠금·저장은 시그니처가 같아 기존 메서드가 만족시킨다
+        LockInviteRoomPort, UpdateInviteRoomPort, LoadActiveUserIdsPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();
@@ -85,6 +94,12 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
     public boolean existsActive(UserId userId) {
         return players.values().stream()
                 .anyMatch(player -> player.getUserId().equals(userId) && player.isActive());
+    }
+
+    // existsActive를 여러 명에게 한 번에 묻는다
+    @Override
+    public Set<UserId> loadActiveUserIds(Collection<UserId> userIds) {
+        return userIds.stream().filter(this::existsActive).collect(Collectors.toSet());
     }
 
     // 어댑터의 toDomain처럼 분리된 객체를 돌려준다 —
@@ -219,6 +234,11 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         room.getSessions().forEach(session -> sessions.add(new SessionDraft(
                 session.getUserId(), session.getRunningPlayerId(),
                 session.getLeaveCount().value(), session.isConnected())));
+        // 초대도 분리해 복사한다 — 저장본을 그대로 주면 update()를 빼먹어도 변경이 새어 반영된다
+        List<InvitationDraft> invitations = new ArrayList<>();
+        room.getInvitations().forEach(invitation -> invitations.add(new InvitationDraft(
+                invitation.getInviterId(), invitation.getInviteeId(),
+                invitation.getStatus(), invitation.getInviteCount().value())));
         return RunningRoom.builder()
                 .runningRoomId(id)
                 .type(room.getType())
@@ -230,6 +250,7 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
                 .currentPlayerCount(room.getPlayerCount().current())
                 .maxPlayerCount(room.getPlayerCount().max())
                 .sessions(sessions)
+                .invitations(invitations)
                 .build();
     }
 
