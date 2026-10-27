@@ -1,7 +1,7 @@
-package com.runiverse.running_service.unit_test.running.presentation;
+package com.runiverse.running_service.unit_test.match.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.presentation.running.request.InviteFriendsRequest;
+import com.runiverse.running_service.presentation.match.request.InviteFriendsRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;

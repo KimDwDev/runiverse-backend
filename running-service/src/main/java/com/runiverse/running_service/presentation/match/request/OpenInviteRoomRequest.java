@@ -1,4 +1,4 @@
-package com.runiverse.running_service.presentation.running.request;
+package com.runiverse.running_service.presentation.match.request;
 
 import jakarta.validation.constraints.NotNull;
 
