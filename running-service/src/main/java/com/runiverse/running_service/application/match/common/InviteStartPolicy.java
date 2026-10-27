@@ -41,7 +41,7 @@ public class InviteStartPolicy {
         }
         if (!violations.isEmpty()) {
             // 사용자가 입력한 값의 문제라 INFO다. userId는 MDC가 붙인다
-            log.info("[초대] 방 개설 실패: 입력값 범위 밖 - startAt={}, distanceM={}", startAt, distanceMeters);
+            log.info("[매칭] 초대 방 개설 실패: 입력값 범위 밖 - startAt={}, distanceM={}", startAt, distanceMeters);
             throw new InvalidInviteOptionException(String.join(" ", violations));
         }
     }
