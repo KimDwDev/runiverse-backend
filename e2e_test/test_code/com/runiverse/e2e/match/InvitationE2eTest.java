@@ -1,4 +1,4 @@
-package com.runiverse.e2e.invite;
+package com.runiverse.e2e.match;
 
 import com.runiverse.e2e.E2eTestSupport;
 import com.runiverse.e2e.MatchStream;
