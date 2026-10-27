@@ -30,12 +30,8 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "running_room_invitations",
-        indexes = {
-                // 받는 사람 단위로 행을 모아 본다 — PK가 (방, 보낸 사람) 순이라 이 조회를 덮지 못한다
-                @Index(name = "idx_room_invitation_room_invitee", columnList = "running_room_id, invitee_id"),
-                // 받은 초대 목록
-                @Index(name = "idx_room_invitation_invitee", columnList = "invitee_id")
-        }
+        // 받은 초대 목록
+        indexes = @Index(name = "idx_room_invitation_invitee", columnList = "invitee_id")
 )
 @IdClass(RunningRoomInvitationJpaEntity.Pk.class)
 @Check(name = "ck_room_invitation_status",
