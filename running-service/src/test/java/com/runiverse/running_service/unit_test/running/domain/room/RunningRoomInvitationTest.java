@@ -632,6 +632,24 @@ public class RunningRoomInvitationTest {
         }
 
         @Test
+        @DisplayName("초대로 들어온 마지막 사람이 나가면 방이 취소되고 본인은 나감, 남은 대기 초대는 만료된다")
+        void lastInviteeLeaveExpiresOthers() {
+            // given -> 만든 사람은 먼저 나갔고 초대로 들어온 사람만 남았다
+            RunningRoom room = restored(RunningRoomStatus.MATCHING,
+                    List.of(new SessionDraft(HOST, HOST_PLAYER, 1, false), connected(MEMBER, MEMBER_PLAYER)),
+                    List.of(sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1),
+                            sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
+
+            // when
+            room.leave(MEMBER, LEFT_AT);
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.EXPIRED);
+        }
+
+        @Test
         @DisplayName("사람이 남아 있으면 나가도 대기 중인 초대는 그대로다")
         void leaveWithOthersKeepsPending() {
             // given
@@ -646,6 +664,21 @@ public class RunningRoomInvitationTest {
         }
 
         @Test
+        @DisplayName("사람이 남아 있으면 다른 사람이 나가도 수락·거절·나감은 그대로다")
+        void leaveWithOthersKeepsAnswered() {
+            // given
+            RunningRoom room = mixedRoom();
+
+            // when -> 초대 없이 들어온 사람이 나간다
+            room.leave(HOST, LEFT_AT);
+
+            // then
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.ACCEPTED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RoomInvitationStatus.LEFT);
+        }
+
+        @Test
         @DisplayName("방을 취소하면 대기 중인 초대가 만료된다")
         void cancelExpiresPending() {
             // given
@@ -657,6 +690,29 @@ public class RunningRoomInvitationTest {
             // then
             assertThat(statusesOf(room, INVITEE)).containsOnly(RoomInvitationStatus.EXPIRED);
             assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+        }
+
+        @Test
+        @DisplayName("시작한 방을 취소해도 수락·거절·나감·만료는 그대로다")
+        void cancelStartedRoomKeepsAnswered() {
+            // given -> 시작한 방이라 대기 중이던 초대는 마감 때 이미 만료됐다
+            UserId expired = newUser();
+            RunningRoom room = restored(RunningRoomStatus.STARTED,
+                    List.of(connected(HOST, HOST_PLAYER), connected(MEMBER, MEMBER_PLAYER)),
+                    List.of(sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1),
+                            sent(HOST, declined, RoomInvitationStatus.DECLINED, 1),
+                            sent(HOST, left, RoomInvitationStatus.LEFT, 1),
+                            sent(HOST, expired, RoomInvitationStatus.EXPIRED, 1)));
+
+            // when
+            room.cancel(START.plusMinutes(30));
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.ACCEPTED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(expired)).contains(RoomInvitationStatus.EXPIRED);
         }
 
         @Test
