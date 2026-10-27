@@ -248,6 +248,47 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("초대한 친구가 탈퇴하면 방에 있던 사람은 바로, 대기 중이던 사람은 다시 연결한 스냅샷에서 빠진다")
+    void deletedInviteesDisappearFromRoom() {
+        // given -> 한 명은 수락해 방에 있고, 한 명은 아직 답하지 않았다
+        TestUser host = signUpAndOnboard();
+        TestUser joined = signUpAndOnboard();
+        TestUser pending = signUpAndOnboard();
+        befriend(host, joined);
+        befriend(host, pending);
+        int roomId = openRoom(host);
+        assertThat(invite(host, roomId, joined).status()).isEqualTo(204);
+        assertThat(accept(joined, roomId).status()).isEqualTo(201);
+        assertThat(invite(host, roomId, pending).status()).isEqualTo(204);
+
+        try (MatchStream hostStream = openMatchStream(host.accessToken())) {
+            hostStream.await("INVITE_ROOM_ENTRANCE");
+
+            // when - 1. 방에 있던 사람이 탈퇴한다 — 나가기처럼 참가자에서 빠진다
+            assertThat(delete("/users/me", joined.accessToken()).status()).isEqualTo(204);
+
+            // then
+            Map<String, Object> afterDelete = hostStream.await("INVITE_ROOM_UPDATED");
+            assertThat(listOf(afterDelete, "players")).extracting(player -> player.get("userId"))
+                    .containsExactly(host.userId());
+            assertThat(listOf(afterDelete, "invitations")).extracting(invitee -> invitee.get("userId"))
+                    .containsExactly(pending.userId());
+        }
+
+        // when - 2. 대기 중이던 사람이 탈퇴한다 — 초대 행은 남지만 보여 줄 프로필이 없다
+        assertThat(delete("/users/me", pending.accessToken()).status()).isEqualTo(204);
+
+        // then -> 다시 연결한 스냅샷의 현황에서 빠진다
+        try (MatchStream hostStream = openMatchStream(host.accessToken())) {
+            Map<String, Object> entrance = hostStream.await("INVITE_ROOM_ENTRANCE");
+            assertThat(listOf(entrance, "players")).extracting(player -> player.get("userId"))
+                    .containsExactly(host.userId());
+            assertThat(listOf(entrance, "invitations")).isEmpty();
+        }
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
+    }
+
+    @Test
     @DisplayName("같은 친구에게 상한(5회)만큼 보내면 그다음은 횟수 초과로 거절된다")
     void inviteCountExceeded() {
         // given
