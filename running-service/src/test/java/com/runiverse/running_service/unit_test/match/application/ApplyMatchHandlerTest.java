@@ -136,7 +136,7 @@ class ApplyMatchHandlerTest {
     @Test
     @DisplayName("페이스는 입력받지 않고 온보딩 값을 복사한다")
     void copiesAvgPaceFromOnboarding() {
-        // given -> 매칭 조건에 페이스 항목이 없다(api-spec 5-A)
+        // given -> 매칭 조건에 페이스 항목이 없다
         givenApplicable();
         LocalDateTime startAt = slotAfter(Duration.ofHours(2));
 
@@ -227,7 +227,7 @@ class ApplyMatchHandlerTest {
     @Test
     @DisplayName("마감 시각 정각도 이미 마감으로 본다")
     void rejectsExactlyAtCloseTime() {
-        // given -> 그 시점에 인원과 무관하게 확정이 일어난다(feature-spec 확정 판정)
+        // given -> 그 시점에 인원과 무관하게 확정이 일어난다
         LocalDateTime startAt = LocalDateTime.now().plus(CLOSE_OFFSET);
 
         // when & then

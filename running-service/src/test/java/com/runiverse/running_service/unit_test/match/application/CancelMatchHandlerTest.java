@@ -147,7 +147,7 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("혼자 남은 방에서는 마감이 지났어도 제재하지 않는다")
     void leavingAloneIsExempt() {
-        // given -> 1인으로 확정된 방. 혼자 뛰기를 강제하지 않기 위한 출구다(feature-spec)
+        // given -> 1인으로 확정된 방. 혼자 뛰기를 강제하지 않기 위한 출구다
         givenActiveMatch(room(startAfter(Duration.ofMinutes(5)), 1));
 
         // when
@@ -162,7 +162,7 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("마감 정각부터 제재 구간이다")
     void penaltyStartsExactlyAtCloseTime() {
-        // given -> 그 시점에 확정 판정이 돈다. 유예는 두지 않는다(feature-spec)
+        // given -> 그 시점에 확정 판정이 돈다. 유예는 두지 않는다
         givenActiveMatch(room(LocalDateTime.now().plus(CLOSE_OFFSET), 3));
 
         // when
@@ -176,7 +176,7 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("솔로 방에서 나가는 것은 제재하지 않는다")
     void leavingSoloRoomIsExempt() {
-        // given -> 확정 후 방 이탈 제재는 MATCH에만 적용한다(feature-spec)
+        // given -> 확정 후 방 이탈 제재는 MATCH에만 적용한다
         givenActiveMatch(soloRoom(startAfter(Duration.ofMinutes(5))));
 
         // when
@@ -191,7 +191,7 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("마지막 참가자가 나가면 방이 취소된다")
     void lastPlayerLeavingCancelsRoom() {
-        // given -> 참가자가 0이 된 방은 후보 스캔에 계속 걸리므로 닫아야 한다(feature-spec)
+        // given -> 참가자가 0이 된 방은 후보 스캔에 계속 걸리므로 닫아야 한다
         givenActiveMatch(room(startAfter(Duration.ofHours(2)), 1));
 
         // when
@@ -207,7 +207,7 @@ class CancelMatchHandlerTest {
     @Test
     @DisplayName("남은 사람이 있으면 방은 유지된다")
     void roomSurvivesWhenOthersRemain() {
-        // given -> 혼자 남아도 방은 취소하지 않는다(api-spec 5-A)
+        // given -> 혼자 남아도 방은 취소하지 않는다
         givenActiveMatch(room(startAfter(Duration.ofHours(2)), 2));
 
         // when

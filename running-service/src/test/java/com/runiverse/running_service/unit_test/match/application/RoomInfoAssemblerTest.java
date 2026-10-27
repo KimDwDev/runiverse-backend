@@ -170,7 +170,7 @@ class RoomInfoAssemblerTest {
     @Test
     @DisplayName("탈퇴한 참가자는 자리를 유지한 채 익명으로 내려간다")
     void marksWithdrawnPlayerAsDeleted() {
-        // given -> 탈퇴하면 users 행이 지워져 프로필 조회 결과에서 빠진다(api-spec §0)
+        // given -> 탈퇴하면 users 행이 지워져 프로필 조회 결과에서 빠진다
         givenPlayers(
                 List.of(new MatchPlayer(ME, 360), new MatchPlayer(OTHER, 390)),
                 Map.of(ME, new PlayerProfile(ME, "동완러너", null, null)));
