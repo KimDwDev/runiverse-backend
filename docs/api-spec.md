@@ -62,7 +62,7 @@
 | 21 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
 | 22 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
 | 23 | GET | `/api/v1/running-matches/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 24 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 24 | GET | `/api/v1/running-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
 | 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 5종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다.
@@ -1150,7 +1150,7 @@
 - **동작**: 방을 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다. 예약도 매칭 방과 같게 건다
 - 페이스는 온보딩 값을 쓴다(매칭과 같다)
 - **매칭 쿨다운 중에도 만들 수 있다** — 쿨다운은 매칭 신청만 막는다
-- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다 — 연결 직후 `INVITE_ROOM_ENTRANCE` 스냅샷이 온다
+- 응답을 받으면 클라는 `GET /running-rooms/stream`을 연다 — 연결 직후 `INVITE_ROOM_ENTRANCE` 스냅샷이 온다
 - **Response `201 Created`**
 
 ```json
@@ -1241,7 +1241,7 @@
 - **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 나에게 온 초대 행을 모두 `ACCEPTED`로 바꾼다. 기존 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다. 수락한 사람은 응답을 받은 뒤 스트림을 열어 `INVITE_ROOM_ENTRANCE`를 받는다
   - **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 순서를 정한다
   - 매칭 쿨다운 중에도 수락할 수 있다
-- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다
+- 응답을 받으면 클라는 `GET /running-rooms/stream`을 연다
 - **Response `201 Created`**
 
 ```json
@@ -1288,7 +1288,7 @@
 
 | 구간 | 방식 | 이유 |
 |---|---|---|
-| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
+| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-rooms/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 구간 (5-C·5-D) | **WebSocket** `/api/v1/ws/running` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
 **솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
@@ -1323,9 +1323,11 @@
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
-#### `GET /api/v1/running-matches/stream` — 매칭 이벤트 스트림 (SSE)
+#### `GET /api/v1/running-rooms/stream` — 방 상태 이벤트 스트림 (SSE)
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
+- **매칭 방·초대 방이 같은 스트림을 쓴다** — 활성 신청이 사람당 하나라 스트림도 하나면 된다. 매칭 전용이 아니라 신청·취소(`/running-matches`)와 달리 방 리소스 아래에 둔다. 방 종류는 이벤트 이름(`MATCH_*`·`INVITE_ROOM_*`)과 `RoomInfo.type`이 가른다
+  - 예전 경로 `/running-matches/stream`은 없앴다 — 남겨 두지 않는다
 - **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.

@@ -361,7 +361,7 @@
 
 **매칭·러닝 설계**: 구간마다 통신 방식이 다르다 — **매칭은 REST + SSE**, **러닝 구간은 WebSocket**(`/api/v1/ws/running`)이다.
 
-- 매칭 구간은 클라가 보내는 것이 신청·취소 둘뿐이라 양방향 채널이 필요 없다 — REST로 보내고 현황은 SSE 스트림(`/running-matches/stream`)으로 받는다. 러닝 구간은 위치를 주기 발신하는 고빈도 양방향 구간이라 WebSocket을 쓴다.
+- 매칭 구간은 클라가 보내는 것이 신청·취소 둘뿐이라 양방향 채널이 필요 없다 — REST로 보내고 현황은 SSE 스트림(`/running-rooms/stream`)으로 받는다. 러닝 구간은 위치를 주기 발신하는 고빈도 양방향 구간이라 WebSocket을 쓴다.
 - 대기 인원·성사·취소는 SSE 이벤트로 전달된다(`api-spec.md` 5번).
 - **SSE 연결은 화면 생명주기에 묶지 않는다.** 매칭 대기 중 현황 배너가 모든 화면에서 유지돼야 하므로 홈을 벗어나도 스트림은 살아 있어야 한다. 이는 클라이언트 아키텍처 제약이다.
 - 방 상태 이벤트(`MATCH_STARTED`·`MATCH_ROOM_UPDATED`, 초대 방은 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`)는 **전체 상태를 담는다** — 놓친 이벤트를 되짚을 필요가 없어 재연결은 곧 스냅샷 재수신이다. 앱 재시작처럼 스트림이 끊긴 뒤에는 다시 연결할 때 오는 스냅샷이 같은 정보를 돌려준다. `RUNNING_READY`는 스냅샷으로 다시 오지 않으며, 놓치면 아래처럼 기기 시각으로 대신한다.
@@ -637,7 +637,7 @@
 - **만료**: 모집 마감 확정(`MATCH_CLOSE`)이나 방 취소(`CANCELLED`)와 **같은 트랜잭션에서** 남은 `PENDING`을 `EXPIRED`로 바꾼다. 마감 뒤에 받아 주면 시작 통지와 겹치거나 그 뒤에 들어와 카운트다운을 받지 못한 채 출발을 맞을 수 있다.
 - **방에 남은 사람이 없으면** 매칭 방과 같이 `CANCELLED`로 닫는다. 만든 사람이 나가도 방은 유지된다 — 방장이 없다.
 - **나가기는 매칭과 같고 제재는 없다.** 나가기는 `DELETE /running-matches`를 그대로 쓴다. 초대 방에서는 시점·인원과 무관하게 이탈은 `MATCHED_LEFT_NO_PENALTY`, 조기 종료는 `RUNNING_LEFT_NO_PENALTY`(목표를 채우면 `COMPLETED`), 미출석 강제 종료도 `_NO_PENALTY`로 남기고 쿨다운을 걸지 않는다. 제재는 모르는 사람끼리 모이는 매칭에서 약속을 지키게 하려는 장치라, 서로 아는 사이인 초대 방에는 필요 없다.
-- **방 상태 이벤트는 초대 방 전용이다** — 스트림(`/running-matches/stream`)은 같지만, 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`(방 정보 + 시작까지 남은 시간 `startsInMs`), 그 뒤 변화는 `INVITE_ROOM_UPDATED`가 나른다. 초대 현황도 방 정보(`RoomInfo`)에 실린다.
+- **방 상태 이벤트는 초대 방 전용이다** — 스트림(`/running-rooms/stream`)은 같지만, 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`(방 정보 + 시작까지 남은 시간 `startsInMs`), 그 뒤 변화는 `INVITE_ROOM_UPDATED`가 나른다. 초대 현황도 방 정보(`RoomInfo`)에 실린다.
   - 매칭 방의 `MATCH_STARTED`·`MATCH_ROOM_UPDATED`는 보내지 않는다. 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 확정 연출이 없다. 마감은 `INVITE_ROOM_UPDATED`(초대 만료 반영)로만 알리고, 카운트다운은 매칭과 같이 `RUNNING_READY`로 들어간다.
 
 **업적**: 저장된 기록에서 **조회할 때 계산하는 파생값이다.** 획득 테이블을 두지 않는다 — 달성 시각·달성 알림이 없어 굳혀 둘 이유가 없고, 기준값을 바꾸면 바로 반영된다.
