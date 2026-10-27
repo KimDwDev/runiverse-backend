@@ -40,7 +40,7 @@ public class DeclineInvitationHandler implements DeclineInvitationUsecase {
         if (room.invitationStatusOf(inviteeId).orElseThrow() != RunningRoomInvitationStatus.PENDING) {
             throw new InvitationNotPendingException();
         }
-        // 3. 보낸 사람별 행을 모두 거절로 바꾼다 — 지우지 않는다(방 화면이 "거절"을 보여야 한다)
+        // 3. 보낸 사람별 행을 모두 거절로 바꾼다 — 지우지 않는다(현황에서는 빠지지만 다시 초대할 때 보낸 횟수를 이어서 센다)
         room.declineInvitation(inviteeId);
         updateMatchRoomPort.update(room);
         // 4. 방 참가자에게 초대 현황을 알린다

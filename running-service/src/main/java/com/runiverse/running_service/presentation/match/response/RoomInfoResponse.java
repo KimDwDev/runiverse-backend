@@ -58,7 +58,7 @@ public record RoomInfoResponse(
         }
     }
 
-    // PENDING·DECLINED·LEFT만 나간다 — 수락한 사람은 players로 옮겨 간다
+    // 응답 전인(PENDING) 초대만 나간다 — 수락한 사람은 players로 옮겨 가고 거절·나감은 빠진다
     public record InvitationResponse(
             UUID userId,
             String nickname,

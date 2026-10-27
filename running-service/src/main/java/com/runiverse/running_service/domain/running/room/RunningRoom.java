@@ -276,7 +276,7 @@ public class RunningRoom {
         changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.ACCEPTED);
     }
 
-    // 거절 — 방 화면이 "거절"을 보여야 해서 행을 지우지 않는다
+    // 거절 — 행을 지우지 않는다. 현황에서는 빠지지만 다시 초대할 때 보낸 횟수를 이어서 세야 한다
     public void declineInvitation(UserId inviteeId) {
         changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.DECLINED);
     }
@@ -342,7 +342,7 @@ public class RunningRoom {
         received.forEach(invitation -> invitation.changeStatus(next));
     }
 
-    // 응답 전인 초대만 끝낸다 — 거절·나감은 그대로 남아 방 화면 기록이 된다.
+    // 응답 전인 초대만 끝낸다 — 거절·나감은 이미 응답이 끝나 그대로 둔다.
     // 받는 사람마다 행이 여럿이어도 PENDING이면 모두 PENDING이라 행 단위로 바꿔도 받는 사람 기준이 지켜진다
     private void expirePendingInvitations() {
         invitations.stream()
