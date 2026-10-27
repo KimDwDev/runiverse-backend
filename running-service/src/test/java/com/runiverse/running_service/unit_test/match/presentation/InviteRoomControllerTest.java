@@ -21,7 +21,6 @@ import com.runiverse.running_service.application.match.port.in.InviteFriendsUsec
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
-import com.runiverse.running_service.presentation.match.controller.InviteRoomController;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,8 +79,8 @@ class InviteRoomControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new InviteRoomController(
-                        openInviteRoomUsecase, inviteFriendsUsecase,
-                        acceptInvitationUsecase, declineInvitationUsecase))
+                openInviteRoomUsecase, inviteFriendsUsecase,
+                acceptInvitationUsecase, declineInvitationUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))

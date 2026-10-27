@@ -9,7 +9,6 @@ import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQ
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
-import com.runiverse.running_service.presentation.match.controller.RunningMatchController;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

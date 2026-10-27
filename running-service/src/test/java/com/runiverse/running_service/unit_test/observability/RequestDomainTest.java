@@ -4,7 +4,6 @@ import com.runiverse.running_service.observability.RequestDomain;
 import com.runiverse.running_service.presentation.app.controller.AppController;
 import com.runiverse.running_service.presentation.auth.controller.AuthController;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
-import com.runiverse.running_service.presentation.match.controller.RunningMatchController;
 import com.runiverse.running_service.presentation.running.controller.RunningRoomController;
 import com.runiverse.running_service.presentation.user.controller.UserController;
 import org.junit.jupiter.api.DisplayName;

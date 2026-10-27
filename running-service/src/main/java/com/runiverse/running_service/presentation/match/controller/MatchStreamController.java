@@ -26,7 +26,7 @@ import java.util.UUID;
 @RestController
 // 매칭 방·초대 방이 함께 쓰는 방 상태 스트림 — 방 종류는 이벤트 이름(MATCH_*·INVITE_ROOM_*)이 가른다.
 // 신청·취소(/running-matches)와 달리 매칭 전용이 아니라 방 리소스 아래에 둔다
-@RequestMapping("running-rooms")
+@RequestMapping("match-rooms")
 @RequiredArgsConstructor
 public class MatchStreamController {
 
