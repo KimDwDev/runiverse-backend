@@ -7,6 +7,8 @@ import com.runiverse.running_service.application.match.exception.RunningInvitati
 import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
@@ -14,8 +16,6 @@ import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Distance;
@@ -41,9 +41,9 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
     private final LockMatchRoomPort lockMatchRoomPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
     private final InviteStartPolicy inviteStartPolicy;
-    private final ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
+    private final ExistsActiveApplicationPort existsActiveApplicationPort;
     private final LoadUserAvgPacePort loadUserAvgPacePort;
-    private final CreateRunningPlayerPort createRunningPlayerPort;
+    private final CreateMatchApplicationPort createMatchApplicationPort;
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final RoomInfoAssembler roomInfoAssembler;
     private final ApplicationEventPublisher eventPublisher;
@@ -73,7 +73,7 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
         }
         // 5. 활성 신청은 매칭과 합쳐 하나다 — 초대받은 사이 매칭을 시작했으면 막힌다.
         //    쿨다운은 보지 않는다 — 매칭 신청만 막는다
-        if (existsActiveRunningPlayerPort.existsActive(inviteeId)) {
+        if (existsActiveApplicationPort.existsActive(inviteeId)) {
             throw new AlreadyRunningException();
         }
         // 6. 페이스는 온보딩 값을 쓴다(매칭과 같다)
@@ -81,7 +81,7 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
                 .orElseThrow(OnboardingNotCompletedException::new);
         // 7. 신청을 먼저 만들어 ID를 확보한다 — 방의 세션이 이 ID로 참조한다.
         //    시각·거리는 방을 따른다 — 초대 방은 만들 때 둘 다 정해진다
-        RunningPlayer player = createRunningPlayerPort.create(RunningPlayer.request(
+        RunningPlayer player = createMatchApplicationPort.create(RunningPlayer.request(
                 command.userId(), pace.secondsPerKm(),
                 room.getTargetDistance().map(Distance::meters).orElseThrow(), room.getStartAt()));
         // 8. 자리를 잡고 받은 행을 모두 수락으로 바꾼다 — 누구의 초대로 들어오든 결과가 같다.

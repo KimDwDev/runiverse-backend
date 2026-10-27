@@ -82,10 +82,10 @@ public class OpenInviteRoomIntegrationTest extends IntegrationTestSupport {
         doReturn(true).when(inviteStartPolicy).isSelectable(any(), any());
         handler = new OpenInviteRoomHandler(
                 inviteStartPolicy,
-                runningStore,     // ExistsActiveRunningPlayerPort
+                runningStore,     // ExistsActiveApplicationPort
                 onboardingStore,  // LoadUserAvgPacePort — 페이스 출처가 user_onboardings다
-                runningStore,     // CreateRunningPlayerPort
-                runningStore,     // CreateRunningRoomPort
+                runningStore,     // CreateMatchApplicationPort
+                runningStore,     // CreateMatchRoomPort
                 new ScheduleJobHandler(scheduledJobStore, event -> {
                 }),               // ScheduleJobPort
                 MATCH_PROPERTIES

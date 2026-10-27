@@ -148,9 +148,9 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
                 inviteStartPolicy,
-                runningStore,        // ExistsActiveRunningPlayerPort
+                runningStore,        // ExistsActiveApplicationPort
                 onboardingStore,     // LoadUserAvgPacePort
-                runningStore,        // CreateRunningPlayerPort
+                runningStore,        // CreateMatchApplicationPort
                 matchStore,          // LoadMatchPlayersPort
                 roomInfoAssembler, eventPublisher);
         declineHandler = new DeclineInvitationHandler(
