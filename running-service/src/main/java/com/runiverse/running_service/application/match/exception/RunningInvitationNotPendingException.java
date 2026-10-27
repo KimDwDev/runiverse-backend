@@ -4,9 +4,9 @@ import com.runiverse.running_service.application.common.exception.BusinessExcept
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 
 // 이미 수락·거절했거나 나갔다 — 다시 들어가려면 다시 초대받아야 한다
-public class InvitationNotPendingException extends BusinessException {
+public class RunningInvitationNotPendingException extends BusinessException {
 
-    public InvitationNotPendingException() {
+    public RunningInvitationNotPendingException() {
         super(InviteErrorCode.RUNNING_INVITATION_NOT_PENDING);
     }
 }

@@ -3,8 +3,8 @@ package com.runiverse.running_service.application.match.command.inviteaccept;
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
@@ -65,7 +65,7 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
             throw new RunningInvitationClosedException();
         }
         if (status != RoomInvitationStatus.PENDING) {
-            throw new InvitationNotPendingException();
+            throw new RunningInvitationNotPendingException();
         }
         // 자리가 없으면 초대는 PENDING 그대로다 — 누가 나가면 다시 수락할 수 있다
         if (room.getPlayerCount().isFull()) {

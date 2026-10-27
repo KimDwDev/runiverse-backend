@@ -23,12 +23,12 @@ import com.runiverse.running_service.application.match.common.MatchRoomChangedEv
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.InviteCountExceededException;
 import com.runiverse.running_service.application.match.exception.InviteeAlreadyInRoomException;
 import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
@@ -255,7 +255,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         declineHandler.handle(new DeclineInvitationCommand(friend, roomId));
 
         // when & then
-        assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(InvitationNotPendingException.class);
+        assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(RunningInvitationNotPendingException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().getPlayerCount().current()).isEqualTo(1);
     }
 
@@ -443,7 +443,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // 만료는 방이 닫힌 것이라 수락은 CLOSED, 거절은 응답할 대기 초대가 없어 NOT_PENDING이다
         assertThatThrownBy(() -> accept(pending, roomId)).isInstanceOf(RunningInvitationClosedException.class);
         assertThatThrownBy(() -> declineHandler.handle(new DeclineInvitationCommand(pending, roomId)))
-                .isInstanceOf(InvitationNotPendingException.class);
+                .isInstanceOf(RunningInvitationNotPendingException.class);
     }
 
     @Test

@@ -1,7 +1,7 @@
 package com.runiverse.running_service.application.match.command.invitedecline;
 
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.port.in.DeclineInvitationUsecase;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -38,7 +38,7 @@ public class DeclineInvitationHandler implements DeclineInvitationUsecase {
         // 2. 대기 중인 초대만 거절한다 — 이미 응답했거나 만료됐으면 409.
         //    마감은 따로 보지 않는다 — 거절은 자리를 잡지 않아 마감과 무관하다
         if (room.invitationStatusOf(inviteeId).orElseThrow() != RoomInvitationStatus.PENDING) {
-            throw new InvitationNotPendingException();
+            throw new RunningInvitationNotPendingException();
         }
         // 3. 보낸 사람별 행을 모두 거절로 바꾼다 — 지우지 않는다(현황에서는 빠지지만 다시 초대할 때 보낸 횟수를 이어서 센다)
         room.declineInvitation(inviteeId);

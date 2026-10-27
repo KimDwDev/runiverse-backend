@@ -10,12 +10,12 @@ import com.runiverse.running_service.application.match.command.inviteopen.OpenIn
 import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.InviteRoomNotFoundException;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
 import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase;
@@ -562,7 +562,7 @@ class MatchRoomControllerTest {
     @DisplayName("초대 거절: 대기 중이 아니면 409 RUNNING_INVITATION_NOT_PENDING으로 그대로 나간다")
     void 초대_거절은_대기_중이_아니면_409다() throws Exception {
         // given
-        willThrow(new InvitationNotPendingException()).given(declineInvitationUsecase).handle(any());
+        willThrow(new RunningInvitationNotPendingException()).given(declineInvitationUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations/decline")).andReturn();

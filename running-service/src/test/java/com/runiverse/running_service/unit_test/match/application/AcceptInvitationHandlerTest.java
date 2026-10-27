@@ -8,8 +8,8 @@ import com.runiverse.running_service.application.match.command.inviteaccept.Acce
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
@@ -306,7 +306,7 @@ class AcceptInvitationHandlerTest {
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
-                    .isInstanceOf(InvitationNotPendingException.class);
+                    .isInstanceOf(RunningInvitationNotPendingException.class);
             verifyNoInteractions(existsActiveRunningPlayerPort, createRunningPlayerPort, updateMatchRoomPort);
         }
 

@@ -4,7 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationCommand;
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationHandler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
@@ -186,7 +186,7 @@ class DeclineInvitationHandlerTest {
 
             // when & then
             assertThatThrownBy(DeclineInvitationHandlerTest.this::decline)
-                    .isInstanceOf(InvitationNotPendingException.class);
+                    .isInstanceOf(RunningInvitationNotPendingException.class);
             assertThat(room.getInvitations()).extracting(RoomInvitation::getStatus).containsOnly(status);
             verifyNoInteractions(updateMatchRoomPort, roomInfoAssembler, eventPublisher);
         }
