@@ -25,6 +25,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -362,6 +364,20 @@ public class StartRunningHandlerTest {
         void rejectCancelledRoom() {
             // given
             givenStore(room(RunningRoomStatus.CANCELLED), player(RunningPlayerStatus.JOINED));
+
+            // when & then
+            assertThatThrownBy(StartRunningHandlerTest.this::start)
+                    .isInstanceOf(RunningNotStartableException.class);
+            verifyNoInteractions(updateRunningRoomPort, updateRunningPlayerPort);
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = RunningPlayerStatus.class, names = {"JOINED", "RUNNING"},
+                mode = EnumSource.Mode.EXCLUDE)
+        @DisplayName("끝난 상태의 신청은 시작하지 못한다")
+        void rejectFinishedPlayer(RunningPlayerStatus status) {
+            // given -> lockActive는 deleted_at만 보므로 끝난 상태인데 deleted_at이 비면 살아 있는 채로 올라온다
+            givenStore(room(RunningRoomStatus.MATCHED), player(status));
 
             // when & then
             assertThatThrownBy(StartRunningHandlerTest.this::start)
