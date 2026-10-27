@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.invite.common.InviteProperties;
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.InviteProperties;
+import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.port.out.MatchCooldownPort;

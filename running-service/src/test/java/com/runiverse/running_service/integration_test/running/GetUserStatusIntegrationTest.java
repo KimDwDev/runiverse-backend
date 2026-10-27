@@ -2,8 +2,8 @@ package com.runiverse.running_service.integration_test.running;
 
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
-import com.runiverse.running_service.application.invite.common.InviteProperties;
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.InviteProperties;
+import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;

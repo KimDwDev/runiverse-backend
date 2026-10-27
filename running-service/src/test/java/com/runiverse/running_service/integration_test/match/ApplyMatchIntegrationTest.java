@@ -8,8 +8,8 @@ import com.runiverse.running_service.application.match.command.apply.ApplyMatchH
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
 import com.runiverse.running_service.application.match.command.broadcast.BroadMatchEventHandler;
 import com.runiverse.running_service.application.match.command.broadcast.BroadcastMatchEventCommand;
-import com.runiverse.running_service.application.invite.common.InviteProperties;
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.InviteProperties;
+import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;

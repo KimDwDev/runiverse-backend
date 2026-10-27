@@ -9,8 +9,8 @@ import com.runiverse.running_service.application.match.command.broadcast.BroadMa
 import com.runiverse.running_service.application.match.command.broadcast.BroadcastMatchEventCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
-import com.runiverse.running_service.application.invite.common.InviteProperties;
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.InviteProperties;
+import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;

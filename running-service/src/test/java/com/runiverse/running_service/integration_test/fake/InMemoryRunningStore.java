@@ -1,17 +1,15 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.invite.port.out.LoadActiveUserIdsPort;
-import com.runiverse.running_service.application.invite.port.out.LockInviteRoomPort;
-import com.runiverse.running_service.application.invite.port.out.UpdateInviteRoomPort;
+import com.runiverse.running_service.application.match.port.out.LoadActiveUserIdsPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomDetailPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchApplicationPort;
-import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchApplicationPort;
-import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
 import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
@@ -58,8 +56,8 @@ public class InMemoryRunningStore implements CreateRunningPlayerPort, CreateRunn
         CreateMatchRoomPort, UpdateMatchRoomPort, LockMatchRoomPort,
         LoadActiveApplicationPort, LockMatchApplicationPort, UpdateMatchApplicationPort,
         LoadMatchRoomDetailPort,
-        // 초대도 같은 방 애그리거트다 — 잠금·저장은 시그니처가 같아 기존 메서드가 만족시킨다
-        LockInviteRoomPort, UpdateInviteRoomPort, LoadActiveUserIdsPort {
+        // 초대할 친구들의 활성 신청을 한 번에 본다 — 초대의 잠금·저장은 매칭 포트를 함께 쓴다
+        LoadActiveUserIdsPort {
 
     private final Map<Long, RunningPlayer> players = new LinkedHashMap<>();
     private final Map<Long, RunningRoom> rooms = new LinkedHashMap<>();

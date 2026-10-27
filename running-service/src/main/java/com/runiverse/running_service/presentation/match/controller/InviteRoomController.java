@@ -1,16 +1,16 @@
 package com.runiverse.running_service.presentation.match.controller;
 
-import com.runiverse.running_service.application.invite.command.accept.AcceptInvitationCommand;
-import com.runiverse.running_service.application.invite.command.accept.AcceptInvitationResult;
-import com.runiverse.running_service.application.invite.command.decline.DeclineInvitationCommand;
-import com.runiverse.running_service.application.invite.command.open.OpenInviteRoomCommand;
-import com.runiverse.running_service.application.invite.command.open.OpenInviteRoomResult;
-import com.runiverse.running_service.application.invite.command.send.InviteFriendsCommand;
-import com.runiverse.running_service.application.invite.command.send.InviteFriendsResult;
-import com.runiverse.running_service.application.invite.port.in.AcceptInvitationUsecase;
-import com.runiverse.running_service.application.invite.port.in.DeclineInvitationUsecase;
-import com.runiverse.running_service.application.invite.port.in.InviteFriendsUsecase;
-import com.runiverse.running_service.application.invite.port.in.OpenInviteRoomUsecase;
+import com.runiverse.running_service.application.match.command.inviteaccept.AcceptInvitationCommand;
+import com.runiverse.running_service.application.match.command.inviteaccept.AcceptInvitationResult;
+import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationCommand;
+import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
+import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomResult;
+import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
+import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult;
+import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
+import com.runiverse.running_service.application.match.port.in.DeclineInvitationUsecase;
+import com.runiverse.running_service.application.match.port.in.InviteFriendsUsecase;
+import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.presentation.match.request.InviteFriendsRequest;
 import com.runiverse.running_service.presentation.match.request.OpenInviteRoomRequest;
 import com.runiverse.running_service.presentation.match.response.AcceptInvitationResponse;

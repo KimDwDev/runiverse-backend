@@ -1,6 +1,5 @@
 package com.runiverse.running_service.application.match.common;
 
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

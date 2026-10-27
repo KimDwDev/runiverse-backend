@@ -1,6 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.invite.port.out.LoadFriendIdsPort;
+import com.runiverse.running_service.application.match.port.out.LoadFriendIdsPort;
 import com.runiverse.running_service.application.relationship.port.out.EnsureUserRelationshipPairPort;
 import com.runiverse.running_service.application.relationship.port.out.LoadUserRelationshipPort;
 import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;

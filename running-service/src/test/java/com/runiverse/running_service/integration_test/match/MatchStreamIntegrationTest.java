@@ -11,8 +11,8 @@ import com.runiverse.running_service.application.match.command.stream.CloseMatch
 import com.runiverse.running_service.application.match.command.stream.CloseMatchStreamHandler;
 import com.runiverse.running_service.application.match.command.stream.OpenMatchStreamCommand;
 import com.runiverse.running_service.application.match.command.stream.OpenMatchStreamHandler;
-import com.runiverse.running_service.application.invite.common.InviteProperties;
-import com.runiverse.running_service.application.invite.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.InviteProperties;
+import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
