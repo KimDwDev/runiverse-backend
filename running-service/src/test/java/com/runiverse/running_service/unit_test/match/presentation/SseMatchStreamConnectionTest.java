@@ -29,7 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
-// 와이어 계약 — 이벤트 이름마다 data 형태가 다르다(api-spec 5-B). 무엇을 실어 보내는지만 본다
+// 와이어 계약 — 이벤트 이름마다 data 형태가 다르다. 무엇을 실어 보내는지만 본다
 @ExtendWith(MockitoExtension.class)
 @DisplayName("매칭 스트림 SSE 전송 단위 테스트")
 class SseMatchStreamConnectionTest {

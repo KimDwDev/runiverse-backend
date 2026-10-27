@@ -15,7 +15,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// 초대 행 조회·저장(running_room_invitations)과 친구·활성 신청 일괄 조회 JPQL을 실제 DB에서 탄다
+// 초대 행 조회·저장(running_room_invitations)과 친구 확인·받는 사람 상태 조회 JPQL을 실제 DB에서 탄다
 @DisplayName("배포 이미지 대상 러닝 초대·수락·거절 E2E 테스트")
 class InvitationE2eTest extends E2eTestSupport {
 

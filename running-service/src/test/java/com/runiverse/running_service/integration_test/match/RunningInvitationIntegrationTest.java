@@ -155,7 +155,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 roomInfoAssembler, eventPublisher);
         declineHandler = new DeclineInvitationHandler(
                 runningStore, runningStore, roomInfoAssembler, eventPublisher);
-        // 나가기는 매칭 방과 같은 DELETE /running-matches다
+        // 나가기는 매칭 방과 같은 POST /match-rooms/leave다
         cancelHandler = new CancelMatchHandler(
                 runningStore, matchStore, runningStore, matchStore, runningStore, runningStore,
                 new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, eventPublisher);

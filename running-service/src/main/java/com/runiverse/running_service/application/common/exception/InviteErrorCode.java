@@ -23,7 +23,7 @@ public enum InviteErrorCode implements ErrorCode {
     INVITEE_RUNNING("INVITEE_RUNNING", "지금 러닝 중인 친구입니다."),
     // 호출자가 이 친구에게 보낸 횟수가 상한(invite.max-invite-count)에 닿았다
     INVITE_COUNT_EXCEEDED("INVITE_COUNT_EXCEEDED", "더 이상 이 친구에게 초대를 보낼 수 없습니다."),
-    // 이미 수락·거절했거나 나갔다 — 다시 들어가려면 다시 초대받아야 한다
+    // 이미 수락·거절했거나 나갔거나 만료됐다(수락은 만료를 마감으로 먼저 거른다) — 거절·나감은 다시 초대받으면 대기로 돌아온다
     RUNNING_INVITATION_NOT_PENDING("RUNNING_INVITATION_NOT_PENDING", "이미 응답한 초대입니다."),
     // 자리가 다 찼다 — 초대는 PENDING으로 남아 누가 나가면 다시 수락할 수 있다
     RUNNING_ROOM_FULL("RUNNING_ROOM_FULL", "방이 가득 찼습니다.");

@@ -56,7 +56,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-// 한 번에 한 명이다 — 못 보내면 그 사람이 왜 안 되는지를 409로 알린다(api-spec 4-2 에러 표 순서)
+// 한 번에 한 명이다 — 못 보내면 그 사람이 왜 안 되는지를 409로 알린다
 @ExtendWith(MockitoExtension.class)
 @DisplayName("친구 초대 단위 테스트")
 class SendInvitationHandlerTest {

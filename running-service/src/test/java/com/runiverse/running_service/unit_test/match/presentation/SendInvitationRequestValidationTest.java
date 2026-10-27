@@ -15,7 +15,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// DTO는 대상이 있는지만 본다. 친구 여부·지금 상태·보낸 횟수는 SendInvitationHandler가 본다 — 문구는 api-spec 4-2 그대로다
+// DTO는 대상이 있는지만 본다. 친구 여부·지금 상태·보낸 횟수는 SendInvitationHandler가 본다
 @DisplayName("친구 초대 요청 DTO 검증 단위 테스트")
 class SendInvitationRequestValidationTest {
 

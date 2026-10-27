@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 // 한 번에 한 명이다 — 못 보내는 경우는 건너뛰지 않고 그 사람이 왜 안 되는지를 409로 알린다.
-// 판정 순서는 api-spec 4-2 에러 표 그대로다
+// 아래 번호 순서로 보고, 먼저 걸린 이유 하나만 알린다
 @Service
 @RequiredArgsConstructor
 @Transactional

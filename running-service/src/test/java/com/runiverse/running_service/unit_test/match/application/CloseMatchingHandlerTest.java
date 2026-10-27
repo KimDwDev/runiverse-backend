@@ -101,7 +101,7 @@ class CloseMatchingHandlerTest {
     @Test
     @DisplayName("초대 방 마감은 확정 연출 없이 INVITE_ROOM_UPDATED로만 알린다")
     void publishesUpdatedOnInviteRoomClose() {
-        // given -> 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니다(api-spec 4번)
+        // given -> 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니다
         RoomInfo inviteRoomInfo = new RoomInfo(
                 ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(1),
                 LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of(), List.of());

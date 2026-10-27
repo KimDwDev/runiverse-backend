@@ -58,7 +58,7 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
                 .filter(locked -> locked.invitationStatusOf(inviteeId).isPresent())
                 .orElseThrow(InvitationNotFoundException::new);
         RoomInvitationStatus status = room.invitationStatusOf(inviteeId).orElseThrow();
-        // 2~4. 명세의 판정 순서 그대로다 — 만료·마감 → 응답함 → 자리 없음.
+        // 2~4. 만료·마감 → 응답함 → 자리 없음 순서로 본다.
         //      만료는 응답이 아니라 방이 닫힌 것이라 NOT_PENDING보다 앞이다
         if (status == RoomInvitationStatus.EXPIRED
                 || !inviteStartPolicy.isRecruiting(room, LocalDateTime.now())) {
