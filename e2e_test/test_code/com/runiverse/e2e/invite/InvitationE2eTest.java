@@ -195,6 +195,29 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("혼자인 방에서 만든 사람이 나가면 대기 중이던 초대가 만료돼 수락할 수 없다")
+    void lastLeaveExpiresInvitation() {
+        // given
+        TestUser host = signUpAndOnboard();
+        TestUser friend = signUpAndOnboard();
+        befriend(host, friend);
+        int roomId = openRoom(host);
+        assertThat(invite(host, roomId, friend).status()).isEqualTo(201);
+
+        // when -> 방이 취소된다
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
+
+        // then -> 초대 행이 EXPIRED로 저장됐다 — 수락은 방이 닫힌 것, 거절은 대기 초대가 아닌 것으로 막힌다
+        Response accepted = accept(friend, roomId);
+        assertThat(accepted.status()).isEqualTo(409);
+        assertThat(accepted.text("code")).isEqualTo("RUNNING_INVITATION_CLOSED");
+        Response declined = decline(friend, roomId);
+        assertThat(declined.status()).isEqualTo(409);
+        assertThat(declined.text("code")).isEqualTo("RUNNING_INVITATION_NOT_PENDING");
+        assertThat(get("/users/me/status", friend.accessToken()).text("status")).isEqualTo("IDLE");
+    }
+
+    @Test
     @DisplayName("빈 초대 목록은 Request 검증 문구로 400이다")
     void emptyInviteesIsBadRequest() {
         // given

@@ -139,6 +139,7 @@ public class RunningRoom {
     public void cancel(LocalDateTime closeAt) {
         this.status = status.transitionTo(RunningRoomStatus.CANCELLED);
         this.closeAt = closeAt;
+        expirePendingInvitations();
     }
 
     // 참가자 페이스는 다른 애그리거트라 application이 읽어 넘긴다
@@ -181,9 +182,11 @@ public class RunningRoom {
                 && avgPace != null;
     }
 
-    // 모집 마감(start_at - 오프셋) 도달 — 인원 수와 무관하게 확정된다(1인이면 1인으로 확정돼 혼자 뛴다)
+    // 모집 마감(start_at - 오프셋) 도달 — 인원 수와 무관하게 확정된다(1인이면 1인으로 확정돼 혼자 뛴다).
+    // 남은 초대는 더 이상 수락할 수 없어 만료로 끝낸다
     public void closeMatching() {
         this.status = status.transitionTo(RunningRoomStatus.MATCHED);
+        expirePendingInvitations();
     }
 
     // 나갔던 사람이 돌아옴 — 러닝 중에도 가능해서 join()의 모집 조건을 타지 않는다
@@ -213,6 +216,7 @@ public class RunningRoom {
         this.status = nextStatus;
         if (lastOne) {
             this.closeAt = leftAt;
+            expirePendingInvitations();   // 방이 취소돼 남은 초대는 수락할 곳이 없다
         }
         session.leave();
         // 초대로 들어온 사람이면 "지금 방에 있음"을 거둔다 — 그래야 다시 초대할 수 있다
@@ -336,6 +340,14 @@ public class RunningRoom {
         List<RoomInvitation> received = received(inviteeId);
         received.get(0).getStatus().transitionTo(next);
         received.forEach(invitation -> invitation.changeStatus(next));
+    }
+
+    // 응답 전인 초대만 끝낸다 — 거절·나감은 그대로 남아 방 화면 기록이 된다.
+    // 받는 사람마다 행이 여럿이어도 PENDING이면 모두 PENDING이라 행 단위로 바꿔도 받는 사람 기준이 지켜진다
+    private void expirePendingInvitations() {
+        invitations.stream()
+                .filter(invitation -> invitation.getStatus() == RunningRoomInvitationStatus.PENDING)
+                .forEach(invitation -> invitation.changeStatus(RunningRoomInvitationStatus.EXPIRED));
     }
 
     // 닫힌 시각은 종료 상태와 짝이다 — DB에서 복원할 때 어긋난 행을 여기서 잡는다

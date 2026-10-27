@@ -567,4 +567,111 @@ public class RunningRoomInvitationTest {
             assertThat(room.invitationStatusOf(HOST)).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("만료 테스트")
+    class ExpireTest {
+
+        private final UserId declined = newUser();
+        private final UserId left = newUser();
+
+        // 대기 중 2행(보낸 사람 둘)·거절·나감·수락해 방에 있음이 섞인 방
+        private RunningRoom mixedRoom() {
+            return recruiting(List.of(
+                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1),
+                    sent(MEMBER, INVITEE, RunningRoomInvitationStatus.PENDING, 2),
+                    sent(HOST, declined, RunningRoomInvitationStatus.DECLINED, 1),
+                    sent(HOST, left, RunningRoomInvitationStatus.LEFT, 1),
+                    sent(HOST, MEMBER, RunningRoomInvitationStatus.ACCEPTED, 1)));
+        }
+
+        @Test
+        @DisplayName("모집이 마감되면 대기 중인 초대만 보낸 사람과 상관없이 모두 만료된다")
+        void closeExpiresOnlyPending() {
+            // given
+            RunningRoom room = mixedRoom();
+
+            // when
+            room.closeMatching();
+
+            // then -> 거절·나감은 방 화면 기록이라 그대로 남고, 방에 있는 사람도 그대로다
+            assertThat(statusesOf(room, INVITEE)).hasSize(2).containsOnly(RunningRoomInvitationStatus.EXPIRED);
+            assertThat(room.invitationStatusOf(declined)).contains(RunningRoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RunningRoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RunningRoomInvitationStatus.ACCEPTED);
+        }
+
+        @Test
+        @DisplayName("마지막 참가자가 나가 방이 취소되면 대기 중인 초대가 만료된다")
+        void lastLeaveExpiresPending() {
+            // given -> 만든 사람 혼자인 방
+            RunningRoom room = restored(RunningRoomStatus.MATCHING, List.of(connected(HOST, HOST_PLAYER)),
+                    List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+
+            // when
+            room.leave(HOST, LEFT_AT);
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.EXPIRED);
+        }
+
+        @Test
+        @DisplayName("사람이 남아 있으면 나가도 대기 중인 초대는 그대로다")
+        void leaveWithOthersKeepsPending() {
+            // given
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+
+            // when
+            room.leave(MEMBER, LEFT_AT);
+
+            // then -> 모집은 계속된다
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("방을 취소하면 대기 중인 초대가 만료된다")
+        void cancelExpiresPending() {
+            // given
+            RunningRoom room = mixedRoom();
+
+            // when
+            room.cancel(LEFT_AT);
+
+            // then
+            assertThat(statusesOf(room, INVITEE)).containsOnly(RunningRoomInvitationStatus.EXPIRED);
+            assertThat(room.invitationStatusOf(declined)).contains(RunningRoomInvitationStatus.DECLINED);
+        }
+
+        @Test
+        @DisplayName("만료된 초대는 수락·거절·다시 초대 모두 할 수 없다")
+        void expiredIsFinal() {
+            // given -> 마감 뒤라 방도 더 이상 모집하지 않는다
+            RunningRoom room = mixedRoom();
+            room.closeMatching();
+
+            // when & then
+            assertThatThrownBy(() -> room.acceptInvitation(INVITEE, INVITEE_PLAYER))
+                    .isInstanceOf(InvalidInvitationStatusTransitionException.class);
+            assertThatThrownBy(() -> room.declineInvitation(INVITEE))
+                    .isInstanceOf(InvalidInvitationStatusTransitionException.class);
+            assertThatThrownBy(() -> room.invite(HOST, INVITEE, MAX_INVITE_COUNT))
+                    .isInstanceOf(RoomNotInvitableException.class);
+        }
+
+        @Test
+        @DisplayName("초대가 없는 방도 마감·취소가 그대로 된다")
+        void noInvitationsIsNoop() {
+            // given -> 매칭 방은 초대가 없다
+            RunningRoom room = RunningRoom.openMatch(HOST, HOST_PLAYER, PACE, TARGET_DISTANCE, START);
+
+            // when
+            room.closeMatching();
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+            assertThat(room.getInvitations()).isEmpty();
+        }
+    }
 }

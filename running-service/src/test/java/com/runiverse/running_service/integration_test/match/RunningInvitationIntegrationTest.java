@@ -18,10 +18,14 @@ import com.runiverse.running_service.application.match.exception.InvitationNotFo
 import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.application.match.command.broadcast.BroadMatchEventHandler;
 import com.runiverse.running_service.application.match.command.broadcast.BroadcastMatchEventCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchCommand;
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
+import com.runiverse.running_service.application.match.command.close.CloseMatchingCommand;
+import com.runiverse.running_service.application.match.command.close.CloseMatchingHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
@@ -94,6 +98,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     private AcceptInvitationHandler acceptHandler;
     private DeclineInvitationHandler declineHandler;
     private CancelMatchHandler cancelHandler;
+    private CloseMatchingHandler closeHandler;
     private LocalDateTime startAt;
     private int userSequence;
 
@@ -154,6 +159,8 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         cancelHandler = new CancelMatchHandler(
                 runningStore, matchStore, runningStore, matchStore, runningStore, runningStore,
                 new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, eventPublisher);
+        // 모집 마감 예약이 깨워 부르는 핸들러 — 테스트는 시각을 기다리지 않고 바로 부른다
+        closeHandler = new CloseMatchingHandler(runningStore, runningStore, roomInfoAssembler, eventPublisher);
     }
 
     @Test
@@ -382,6 +389,55 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(runningStore.findRoom(roomId).orElseThrow().getPlayerCount().current()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("모집이 마감되면 대기 중인 초대는 만료로 저장되고 현황이 비며, 그 뒤 수락·거절은 막힌다")
+    void closeExpiresPendingInvitations() {
+        // given -> 한 명은 대기 중, 한 명은 거절했다
+        UUID host = onboardedUser();
+        UUID pending = friendOf(host);
+        UUID declined = friendOf(host);
+        Long roomId = open(host);
+        invite(host, roomId, pending, declined);
+        declineHandler.handle(new DeclineInvitationCommand(declined, roomId));
+        RecordingMatchStreamConnection hostStream = connect(host, roomId);
+
+        // when -> 마감 예약이 깨웠다
+        closeHandler.handle(new CloseMatchingCommand(roomId));
+
+        // then -> 저장된 행: 대기만 만료, 거절은 기록으로 남는다
+        RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
+        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+        assertThat(room.invitationStatusOf(new UserId(pending))).contains(RunningRoomInvitationStatus.EXPIRED);
+        assertThat(room.invitationStatusOf(new UserId(declined))).contains(RunningRoomInvitationStatus.DECLINED);
+        // 마감은 확정 연출 없이 빈 현황으로만 알린다
+        RoomInfo shown = lastInviteRoomOf(hostStream);
+        assertThat(shown.status()).isEqualTo(RunningRoomStatus.MATCHED);
+        assertThat(shown.invitations()).isEmpty();
+        // 만료는 방이 닫힌 것이라 수락은 CLOSED, 거절은 응답할 대기 초대가 없어 NOT_PENDING이다
+        assertThatThrownBy(() -> accept(pending, roomId)).isInstanceOf(RunningInvitationClosedException.class);
+        assertThatThrownBy(() -> declineHandler.handle(new DeclineInvitationCommand(pending, roomId)))
+                .isInstanceOf(InvitationNotPendingException.class);
+    }
+
+    @Test
+    @DisplayName("혼자인 방에서 만든 사람이 나가 방이 취소되면 대기 중인 초대가 만료된다")
+    void lastLeaveExpiresPendingInvitations() {
+        // given
+        UUID host = onboardedUser();
+        UUID friend = friendOf(host);
+        Long roomId = open(host);
+        invite(host, roomId, friend);
+
+        // when
+        cancelHandler.handle(new CancelMatchCommand(host));
+
+        // then
+        RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
+        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+        assertThat(room.invitationStatusOf(new UserId(friend))).contains(RunningRoomInvitationStatus.EXPIRED);
+        assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(RunningInvitationClosedException.class);
     }
 
     private Long open(UUID userId) {
