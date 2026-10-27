@@ -38,10 +38,10 @@ import java.util.UUID;
         }
 )
 @IdClass(RunningRoomInvitationJpaEntity.Pk.class)
-@Check(name = "ck_running_room_invitation_status",
+@Check(name = "ck_room_invitation_status",
         constraints = "status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')")
-@Check(name = "ck_running_room_invitation_invite_count", constraints = "invite_count >= 1")
-@Check(name = "ck_running_room_invitation_users", constraints = "inviter_id <> invitee_id")
+@Check(name = "ck_room_invitation_invite_count", constraints = "invite_count >= 1")
+@Check(name = "ck_room_invitation_users", constraints = "inviter_id <> invitee_id")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
 
