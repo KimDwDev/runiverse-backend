@@ -265,22 +265,24 @@ class RoomInfoAssemblerTest {
     }
 
     @Test
-    @DisplayName("초대 대상의 프로필이 없으면 탈퇴로 표시한다")
-    void marksMissingInviteeAsDeleted() {
-        // given -> 탈퇴하면 FK CASCADE로 행이 지워지지만, 형식은 참가자와 같게 둔다
-        UUID pending = UuidCreator.getTimeOrderedEpoch();
+    @DisplayName("받는 사람이 탈퇴한 초대는 현황에 싣지 않는다")
+    void hidesInvitationOfDeletedInvitee() {
+        // given -> 탈퇴해도 초대 행은 남지만 users 행이 지워져 프로필 조회 결과에서 빠진다
+        UUID alive = UuidCreator.getTimeOrderedEpoch();
+        UUID withdrawn = UuidCreator.getTimeOrderedEpoch();
         RunningRoom room = inviteRoom(RunningRoomStatus.MATCHING, List.of(
-                new InvitationDraft(new UserId(ME), new UserId(pending), RunningRoomInvitationStatus.PENDING, 1)));
+                new InvitationDraft(new UserId(ME), new UserId(alive), RunningRoomInvitationStatus.PENDING, 1),
+                new InvitationDraft(new UserId(ME), new UserId(withdrawn), RunningRoomInvitationStatus.PENDING, 1)));
         given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID))).willReturn(List.of());
-        given(loadPlayerProfilesPort.loadProfiles(List.of(pending))).willReturn(Map.of());
+        given(loadPlayerProfilesPort.loadProfiles(List.of(alive, withdrawn)))
+                .willReturn(Map.of(alive, new PlayerProfile(alive, "영희", null, null)));
 
         // when
-        RoomInfo.RoomInvitee invitee = roomInfoAssembler.assemble(room).invitations().getFirst();
+        RoomInfo roomInfo = roomInfoAssembler.assemble(room);
 
         // then
-        assertThat(invitee.nickname()).isEqualTo("탈퇴한 사용자");
-        assertThat(invitee.profileImageUrl()).isNull();
-        assertThat(invitee.isDeleted()).isTrue();
+        assertThat(roomInfo.invitations()).containsExactly(
+                new RoomInfo.RoomInvitee(alive, "영희", null, RunningRoomInvitationStatus.PENDING, false));
     }
 
     private static RunningRoom inviteRoom(RunningRoomStatus status, List<InvitationDraft> invitations) {
