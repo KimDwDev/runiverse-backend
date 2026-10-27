@@ -1,8 +1,8 @@
 package com.runiverse.running_service.unit_test.match.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsHandler;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationHandler;
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
@@ -59,7 +59,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 // 한 번에 한 명이다 — 못 보내면 그 사람이 왜 안 되는지를 409로 알린다(api-spec 4-2 에러 표 순서)
 @ExtendWith(MockitoExtension.class)
 @DisplayName("친구 초대 단위 테스트")
-class InviteFriendsHandlerTest {
+class SendInvitationHandlerTest {
 
     private static final long ROOM_ID = 130L;
     private static final int PACE = 330;
@@ -90,13 +90,13 @@ class InviteFriendsHandlerTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    private InviteFriendsHandler handler;
+    private SendInvitationHandler handler;
     private UserId inviter;
     private UserId friend;
 
     @BeforeEach
     void setUp() {
-        handler = new InviteFriendsHandler(
+        handler = new SendInvitationHandler(
                 lockMatchRoomPort, updateMatchRoomPort, checkFriendPort, loadUserStatusPort,
                 new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES), INVITE_PROPERTIES,
                 roomInfoAssembler, eventPublisher);
@@ -158,7 +158,7 @@ class InviteFriendsHandlerTest {
     }
 
     private void invite() {
-        handler.handle(new InviteFriendsCommand(inviter.value(), ROOM_ID, friend.value()));
+        handler.handle(new SendInvitationCommand(inviter.value(), ROOM_ID, friend.value()));
     }
 
     private RoomInvitation rowOf(RunningRoom room) {
@@ -242,7 +242,7 @@ class InviteFriendsHandlerTest {
             given(lockMatchRoomPort.lockById(new RunningRoomId(ROOM_ID))).willReturn(Optional.empty());
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
             verifyNoInteractions(checkFriendPort, loadUserStatusPort, updateMatchRoomPort);
         }
 
@@ -254,7 +254,7 @@ class InviteFriendsHandlerTest {
                     List.of(new SessionDraft(inviter, new RunningPlayerId(1L), 0, true)), List.of()));
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
             verifyNoInteractions(checkFriendPort, updateMatchRoomPort);
         }
 
@@ -266,7 +266,7 @@ class InviteFriendsHandlerTest {
                     List.of(new SessionDraft(newUser(), new RunningPlayerId(1L), 0, true)), List.of()));
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
             verifyNoInteractions(checkFriendPort, updateMatchRoomPort);
         }
 
@@ -279,7 +279,7 @@ class InviteFriendsHandlerTest {
                     new SessionDraft(inviter, new RunningPlayerId(1L), 1, false)), List.of()));
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteRoomNotFoundException.class);
         }
 
         @Test
@@ -290,7 +290,7 @@ class InviteFriendsHandlerTest {
                     List.of(new SessionDraft(inviter, new RunningPlayerId(1L), 0, true)), List.of()));
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite)
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite)
                     .isInstanceOf(RunningInvitationClosedException.class);
             verifyNoInteractions(checkFriendPort, updateMatchRoomPort);
         }
@@ -304,7 +304,7 @@ class InviteFriendsHandlerTest {
                     List.of(new SessionDraft(inviter, new RunningPlayerId(1L), 0, true)), List.of()));
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite)
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite)
                     .isInstanceOf(RunningInvitationClosedException.class);
             verifyNoInteractions(checkFriendPort, updateMatchRoomPort);
         }
@@ -318,7 +318,7 @@ class InviteFriendsHandlerTest {
             givenFriend(false);
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(NotFriendException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(NotFriendException.class);
             assertThat(room.getInvitations()).isEmpty();
             verifyNoInteractions(loadUserStatusPort, updateMatchRoomPort, eventPublisher);
         }
@@ -331,7 +331,7 @@ class InviteFriendsHandlerTest {
             given(checkFriendPort.isFriend(inviter, inviter)).willReturn(false);
 
             // when & then
-            assertThatThrownBy(() -> handler.handle(new InviteFriendsCommand(inviter.value(), ROOM_ID, inviter.value())))
+            assertThatThrownBy(() -> handler.handle(new SendInvitationCommand(inviter.value(), ROOM_ID, inviter.value())))
                     .isInstanceOf(NotFriendException.class);
             verifyNoInteractions(updateMatchRoomPort);
         }
@@ -346,7 +346,7 @@ class InviteFriendsHandlerTest {
             givenFriend(true);
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite)
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite)
                     .isInstanceOf(InviteeAlreadyInRoomException.class);
             verifyNoInteractions(loadUserStatusPort, updateMatchRoomPort);
         }
@@ -361,7 +361,7 @@ class InviteFriendsHandlerTest {
             givenActive(type, roomStatus);
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteeInMatchingException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteeInMatchingException.class);
             verifyNoInteractions(updateMatchRoomPort, eventPublisher);
         }
 
@@ -375,7 +375,7 @@ class InviteFriendsHandlerTest {
             givenActive(type, roomStatus);
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteeRunningException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteeRunningException.class);
             verifyNoInteractions(updateMatchRoomPort, eventPublisher);
         }
 
@@ -390,7 +390,7 @@ class InviteFriendsHandlerTest {
             givenIdle();
 
             // when & then
-            assertThatThrownBy(InviteFriendsHandlerTest.this::invite).isInstanceOf(InviteCountExceededException.class);
+            assertThatThrownBy(SendInvitationHandlerTest.this::invite).isInstanceOf(InviteCountExceededException.class);
             assertThat(rowOf(room).getStatus()).isEqualTo(RunningRoomInvitationStatus.DECLINED);
             assertThat(rowOf(room).getInviteCount().value()).isEqualTo(MAX_INVITE_COUNT);
             verifyNoInteractions(updateMatchRoomPort, eventPublisher);

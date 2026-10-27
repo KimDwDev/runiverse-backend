@@ -8,20 +8,20 @@ import com.runiverse.running_service.application.match.command.inviteaccept.Acce
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomResult;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
 import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
 import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;
 import com.runiverse.running_service.application.match.port.in.DeclineInvitationUsecase;
 import com.runiverse.running_service.application.match.port.in.GetMatchSlotsUsecase;
-import com.runiverse.running_service.application.match.port.in.InviteFriendsUsecase;
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
+import com.runiverse.running_service.application.match.port.in.SendInvitationUsecase;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQuery;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
 import com.runiverse.running_service.presentation.match.request.ApplyMatchRequest;
-import com.runiverse.running_service.presentation.match.request.InviteFriendsRequest;
 import com.runiverse.running_service.presentation.match.request.MatchSlotsRequest;
 import com.runiverse.running_service.presentation.match.request.OpenInviteRoomRequest;
+import com.runiverse.running_service.presentation.match.request.SendInvitationRequest;
 import com.runiverse.running_service.presentation.match.response.AcceptInvitationResponse;
 import com.runiverse.running_service.presentation.match.response.ApplyMatchResponse;
 import com.runiverse.running_service.presentation.match.response.MatchSlotsResponse;
@@ -55,7 +55,7 @@ public class MatchRoomController {
     private final ApplyMatchUsecase applyMatchUsecase;
     private final CancelMatchUsecase cancelMatchUsecase;
     private final OpenInviteRoomUsecase openInviteRoomUsecase;
-    private final InviteFriendsUsecase inviteFriendsUsecase;
+    private final SendInvitationUsecase sendInvitationUsecase;
     private final AcceptInvitationUsecase acceptInvitationUsecase;
     private final DeclineInvitationUsecase declineInvitationUsecase;
 
@@ -99,13 +99,13 @@ public class MatchRoomController {
 
     // 한 명씩 보낸다 — 못 보내면 그 친구가 왜 안 되는지를 409로 알린다. 수락·거절은 받는 사람이 토큰 주체라 본문이 없다
     @PostMapping("{runningRoomId}/invitations")
-    public ResponseEntity<Void> inviteFriends(
+    public ResponseEntity<Void> sendInvitation(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Min(value = 1, message = "입력값이 올바르지 않습니다.") Long runningRoomId,
-            @Valid @RequestBody InviteFriendsRequest request
+            @Valid @RequestBody SendInvitationRequest request
     ) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        inviteFriendsUsecase.handle(new InviteFriendsCommand(userId, runningRoomId, request.inviteeId()));
+        sendInvitationUsecase.handle(new SendInvitationCommand(userId, runningRoomId, request.inviteeId()));
         return ResponseEntity.noContent().build();
     }
 

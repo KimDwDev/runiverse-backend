@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.match.command.inviteaccept.Acce
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomResult;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
 import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
@@ -22,8 +22,8 @@ import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;
 import com.runiverse.running_service.application.match.port.in.DeclineInvitationUsecase;
 import com.runiverse.running_service.application.match.port.in.GetMatchSlotsUsecase;
-import com.runiverse.running_service.application.match.port.in.InviteFriendsUsecase;
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
+import com.runiverse.running_service.application.match.port.in.SendInvitationUsecase;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQuery;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
@@ -94,7 +94,7 @@ class MatchRoomControllerTest {
     private OpenInviteRoomUsecase openInviteRoomUsecase;
 
     @Mock
-    private InviteFriendsUsecase inviteFriendsUsecase;
+    private SendInvitationUsecase sendInvitationUsecase;
 
     @Mock
     private AcceptInvitationUsecase acceptInvitationUsecase;
@@ -108,7 +108,7 @@ class MatchRoomControllerTest {
     void setUp() {
         mockMvc = standaloneSetup(new MatchRoomController(
                 getMatchSlotsUsecase, applyMatchUsecase, cancelMatchUsecase,
-                openInviteRoomUsecase, inviteFriendsUsecase,
+                openInviteRoomUsecase, sendInvitationUsecase,
                 acceptInvitationUsecase, declineInvitationUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -376,7 +376,7 @@ class MatchRoomControllerTest {
         // then -> 초대 현황은 스트림이 나른다
         assertThat(result.getResponse().getStatus()).isEqualTo(204);
         assertThat(result.getResponse().getContentAsByteArray()).isEmpty();
-        then(inviteFriendsUsecase).should().handle(new InviteFriendsCommand(USER_ID, 130L, friend));
+        then(sendInvitationUsecase).should().handle(new SendInvitationCommand(USER_ID, 130L, friend));
     }
 
     @Test
@@ -393,14 +393,14 @@ class MatchRoomControllerTest {
         assertThat(body(result))
                 .containsEntry("code", "INVALID_REQUEST")
                 .containsEntry("message", "초대할 친구는 필수입니다.");
-        then(inviteFriendsUsecase).shouldHaveNoInteractions();
+        then(sendInvitationUsecase).shouldHaveNoInteractions();
     }
 
     @Test
     @DisplayName("친구 초대: 친구가 매칭 중이면 409 INVITEE_IN_MATCHING으로 이유가 그대로 나간다")
     void 친구_초대는_매칭_중이면_409다() throws Exception {
         // given -> 노출 목록에서 빠지면 500으로 가려진다
-        willThrow(new InviteeInMatchingException()).given(inviteFriendsUsecase).handle(any());
+        willThrow(new InviteeInMatchingException()).given(sendInvitationUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
@@ -431,7 +431,7 @@ class MatchRoomControllerTest {
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(body(result)).containsEntry("code", "MALFORMED_REQUEST_BODY");
-        then(inviteFriendsUsecase).shouldHaveNoInteractions();
+        then(sendInvitationUsecase).shouldHaveNoInteractions();
     }
 
     @Test
@@ -447,14 +447,14 @@ class MatchRoomControllerTest {
 
         // then
         assertInvalidRequest(result);
-        then(inviteFriendsUsecase).shouldHaveNoInteractions();
+        then(sendInvitationUsecase).shouldHaveNoInteractions();
     }
 
     @Test
     @DisplayName("친구 초대: 친구가 아니면 409 NOT_FRIEND로 그대로 나간다")
     void 친구_초대는_친구가_아니면_409다() throws Exception {
         // given -> 노출 목록에서 빠지면 500으로 가려진다
-        willThrow(new NotFriendException()).given(inviteFriendsUsecase).handle(any());
+        willThrow(new NotFriendException()).given(sendInvitationUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")
@@ -475,7 +475,7 @@ class MatchRoomControllerTest {
     @DisplayName("친구 초대: 방이 없거나 참가자가 아니면 404 NOT_FOUND다")
     void 친구_초대는_방을_못_찾으면_404다() throws Exception {
         // given
-        willThrow(new InviteRoomNotFoundException()).given(inviteFriendsUsecase).handle(any());
+        willThrow(new InviteRoomNotFoundException()).given(sendInvitationUsecase).handle(any());
 
         // when
         MvcResult result = mockMvc.perform(post("/match-rooms/130/invitations")

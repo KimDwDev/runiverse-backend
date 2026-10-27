@@ -11,7 +11,7 @@ import com.runiverse.running_service.application.match.exception.InviteeInMatchi
 import com.runiverse.running_service.application.match.exception.InviteeRunningException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
-import com.runiverse.running_service.application.match.port.in.InviteFriendsUsecase;
+import com.runiverse.running_service.application.match.port.in.SendInvitationUsecase;
 import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
@@ -35,7 +35,7 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class InviteFriendsHandler implements InviteFriendsUsecase {
+public class SendInvitationHandler implements SendInvitationUsecase {
 
     private final LockMatchRoomPort lockMatchRoomPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
@@ -47,7 +47,7 @@ public class InviteFriendsHandler implements InviteFriendsUsecase {
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    public void handle(InviteFriendsCommand command) {
+    public void handle(SendInvitationCommand command) {
         UserId inviterId = new UserId(command.userId());
         UserId inviteeId = new UserId(command.inviteeId());
         // 1. 방을 잠그고 본다 — 없거나, 초대 방이 아니거나, 호출자가 지금 이 방에 없으면 셋 다 404다.
@@ -69,7 +69,7 @@ public class InviteFriendsHandler implements InviteFriendsUsecase {
             throw new InviteeAlreadyInRoomException();
         }
         // 5. 다른 방의 활성 신청 — 이 방 애그리거트는 볼 수 없어 따로 읽는다
-        loadUserStatusPort.loadStatus(inviteeId).ifPresent(InviteFriendsHandler::rejectBusy);
+        loadUserStatusPort.loadStatus(inviteeId).ifPresent(SendInvitationHandler::rejectBusy);
         // 6. 이 친구에게 보낸 횟수가 상한에 닿았나 — 보낸 사람마다 센다
         int maxInviteCount = inviteProperties.maxInviteCount();
         if (room.hasReachedInviteLimit(inviterId, inviteeId, maxInviteCount)) {

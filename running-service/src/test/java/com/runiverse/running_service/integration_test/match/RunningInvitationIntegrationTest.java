@@ -14,8 +14,8 @@ import com.runiverse.running_service.application.match.command.invitedecline.Dec
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationHandler;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomHandler;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsHandler;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationHandler;
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
@@ -94,7 +94,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     private MatchRoomMemberRegistry matchRoomMemberRegistry;
     private MatchStreamRegistryAdapter matchStreamRegistry;
     private OpenInviteRoomHandler openHandler;
-    private InviteFriendsHandler inviteHandler;
+    private SendInvitationHandler inviteHandler;
     private AcceptInvitationHandler acceptHandler;
     private DeclineInvitationHandler declineHandler;
     private CancelMatchHandler cancelHandler;
@@ -138,7 +138,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 inviteStartPolicy, runningStore, onboardingStore, runningStore, runningStore,
                 new ScheduleJobHandler(new InMemoryScheduledJobStore(), event -> {
                 }), MATCH_PROPERTIES);
-        inviteHandler = new InviteFriendsHandler(
+        inviteHandler = new SendInvitationHandler(
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
                 relationshipStore,   // CheckFriendPort
@@ -472,7 +472,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     // 한 번에 한 명이다 — 여러 명은 사람마다 부른다
     private void invite(UUID inviter, Long roomId, UUID... invitees) {
         for (UUID invitee : invitees) {
-            inviteHandler.handle(new InviteFriendsCommand(inviter, roomId, invitee));
+            inviteHandler.handle(new SendInvitationCommand(inviter, roomId, invitee));
         }
     }
 
