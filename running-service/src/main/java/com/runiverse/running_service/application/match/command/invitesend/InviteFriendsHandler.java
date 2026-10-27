@@ -1,22 +1,27 @@
 package com.runiverse.running_service.application.match.command.invitesend;
 
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult.SentInvitation;
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
+import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
+import com.runiverse.running_service.application.match.exception.InviteCountExceededException;
 import com.runiverse.running_service.application.match.exception.InviteRoomNotFoundException;
+import com.runiverse.running_service.application.match.exception.InviteeAlreadyInRoomException;
+import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
+import com.runiverse.running_service.application.match.exception.InviteeRunningException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
 import com.runiverse.running_service.application.match.port.in.InviteFriendsUsecase;
-import com.runiverse.running_service.application.match.port.out.LoadActiveUserIdsPort;
-import com.runiverse.running_service.application.match.port.out.LoadFriendIdsPort;
+import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
-import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
-import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
-import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
+import com.runiverse.running_service.application.running.port.out.LoadUserStatusPort;
+import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,10 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 
+// 한 번에 한 명이다 — 못 보내는 경우는 건너뛰지 않고 그 사람이 왜 안 되는지를 409로 알린다.
+// 판정 순서는 api-spec 4-2 에러 표 그대로다
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -35,59 +39,54 @@ public class InviteFriendsHandler implements InviteFriendsUsecase {
 
     private final LockMatchRoomPort lockMatchRoomPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
-    private final LoadFriendIdsPort loadFriendIdsPort;
-    private final LoadActiveUserIdsPort loadActiveUserIdsPort;
+    private final CheckFriendPort checkFriendPort;
+    private final LoadUserStatusPort loadUserStatusPort;
     private final InviteStartPolicy inviteStartPolicy;
     private final InviteProperties inviteProperties;
     private final RoomInfoAssembler roomInfoAssembler;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    public InviteFriendsResult handle(InviteFriendsCommand command) {
+    public void handle(InviteFriendsCommand command) {
         UserId inviterId = new UserId(command.userId());
-        // 0. 중복은 하나로 본다 — 요청 순서는 응답 순서로 남긴다
-        List<UserId> inviteeIds = command.inviteeIds().stream().distinct().map(UserId::new).toList();
+        UserId inviteeId = new UserId(command.inviteeId());
         // 1. 방을 잠그고 본다 — 없거나, 초대 방이 아니거나, 호출자가 지금 이 방에 없으면 셋 다 404다.
         //    애그리거트도 같은 규칙을 지키지만 그쪽 예외는 500이라 여기서 먼저 거른다
         RunningRoom room = lockMatchRoomPort.lockById(new RunningRoomId(command.runningRoomId()))
                 .filter(locked -> locked.getType() == RunningRoomType.INVITE)
-                .filter(locked -> isInRoom(locked, inviterId))
+                .filter(locked -> locked.isInRoom(inviterId))
                 .orElseThrow(InviteRoomNotFoundException::new);
         // 2. 모집 중이고 마감 전인가 — 경계는 수락과 같아야 해 정책이 함께 판정한다
         if (!inviteStartPolicy.isRecruiting(room, LocalDateTime.now())) {
             throw new RunningInvitationClosedException();
         }
-        // 3. 하나라도 친구가 아니면 아무에게도 보내지 않는다 — 자기 자신도 친구가 아니라 여기서 걸린다
-        Set<UserId> friendIds = loadFriendIdsPort.loadFriendIds(inviterId, inviteeIds);
-        if (!friendIds.containsAll(inviteeIds)) {
+        // 3. 친구인가 — 자기 자신도 친구가 아니라 여기서 걸린다(도메인의 자기 초대 예외는 500이다)
+        if (!checkFriendPort.isFriend(inviterId, inviteeId)) {
             throw new NotFriendException();
         }
-        // 4. 활성 신청이 있는 사람은 건너뛴다 — 다른 방이라 이 방 애그리거트가 볼 수 없다.
-        //    이 방에 이미 들어온 사람도 여기 잡히고, 방도 한 번 더 거른다
-        Set<UserId> activeIds = loadActiveUserIdsPort.loadActiveUserIds(inviteeIds);
-        List<SentInvitation> sent = new ArrayList<>();
-        for (UserId inviteeId : inviteeIds) {
-            if (activeIds.contains(inviteeId)) {
-                continue;
-            }
-            // 상한에 닿은 사람은 방이 건너뛴다
-            room.invite(inviterId, inviteeId, inviteProperties.maxInviteCount())
-                    .ifPresent(invitation -> sent.add(new SentInvitation(
-                            inviteeId.value(), invitation.getStatus(), invitation.getInviteCount().value())));
+        // 4. 이미 이 방에 있나 — 아래 활성 신청 판정보다 먼저 봐야 "매칭 중"이 아니라 정확한 이유가 나간다
+        if (room.isInRoom(inviteeId)) {
+            throw new InviteeAlreadyInRoomException();
         }
-        // 5. 아무에게도 안 보냈으면 바뀐 것이 없다 — 저장도 알림도 하지 않는다
-        if (!sent.isEmpty()) {
-            updateMatchRoomPort.update(room);
-            // 방 참가자에게 초대 현황을 알린다 — 조립은 트랜잭션 안에서 한다(자기 쓰기를 본다)
-            eventPublisher.publishEvent(new MatchRoomChangedEvent(
-                    MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));
+        // 5. 다른 방의 활성 신청 — 이 방 애그리거트는 볼 수 없어 따로 읽는다
+        loadUserStatusPort.loadStatus(inviteeId).ifPresent(InviteFriendsHandler::rejectBusy);
+        // 6. 이 친구에게 보낸 횟수가 상한에 닿았나 — 보낸 사람마다 센다
+        int maxInviteCount = inviteProperties.maxInviteCount();
+        if (room.hasReachedInviteLimit(inviterId, inviteeId, maxInviteCount)) {
+            throw new InviteCountExceededException();
         }
-        return new InviteFriendsResult(sent);
+        room.invite(inviterId, inviteeId, maxInviteCount);
+        updateMatchRoomPort.update(room);
+        // 방 참가자에게 초대 현황을 알린다 — 조립은 트랜잭션 안에서 한다(자기 쓰기를 본다)
+        eventPublisher.publishEvent(new MatchRoomChangedEvent(
+                MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));
     }
 
-    private static boolean isInRoom(RunningRoom room, UserId userId) {
-        return room.getSessions().stream()
-                .anyMatch(session -> session.isSameUser(userId) && session.isConnected());
+    // 솔로는 모집 단계가 없어 시작 전이어도 러닝으로 본다. 시작된 방도 러닝이고, 그 밖은 모집·확정 후 대기다
+    private static void rejectBusy(UserStatusRow status) {
+        if (status.type() == RunningRoomType.SOLO || status.roomStatus() == RunningRoomStatus.STARTED) {
+            throw new InviteeRunningException();
+        }
+        throw new InviteeInMatchingException();
     }
-
 }

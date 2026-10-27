@@ -3,21 +3,18 @@ package com.runiverse.running_service.unit_test.match.application;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
 import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsHandler;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult.SentInvitation;
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
-import com.runiverse.running_service.application.match.exception.InviteRoomNotFoundException;
-import com.runiverse.running_service.application.match.exception.NotFriendException;
-import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
-import com.runiverse.running_service.application.match.port.out.LoadActiveUserIdsPort;
-import com.runiverse.running_service.application.match.port.out.LoadFriendIdsPort;
-import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
-import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
+import com.runiverse.running_service.application.match.exception.InviteRoomNotFoundException;
+import com.runiverse.running_service.application.match.exception.NotFriendException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.port.out.LoadFriendIdsPort;
+import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
+import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.InvitationDraft;
@@ -149,7 +146,8 @@ class InviteFriendsHandlerTest {
 
     private void givenAssembled() {
         given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
-                ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, openStart(), openStart().minus(CLOSE_OFFSET),
+                ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, openStart(),
+                openStart().minus(CLOSE_OFFSET),
                 TARGET_DISTANCE, PACE, List.of(), List.of()));
     }
 

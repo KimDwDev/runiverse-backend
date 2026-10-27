@@ -7,6 +7,7 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyLeftRoomException;
 import com.runiverse.running_service.domain.running.room.exception.AlreadyRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.InvalidCloseAtException;
+import com.runiverse.running_service.domain.running.room.exception.InviteCountReachedException;
 import com.runiverse.running_service.domain.running.room.exception.NotInvitedException;
 import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayerException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotInvitableException;
@@ -231,9 +232,10 @@ public class RunningRoom {
         session(userId).finish();
     }
 
-    // 초대 — 보냈으면 이 보낸 사람의 행을, 건너뛰면 빈 값을 돌려준다.
-    // 시각 기준 마감·친구·다른 방의 활성 신청은 운영값이거나 다른 애그리거트라 애플리케이션이 먼저 본다
-    public Optional<RoomInvitation> invite(UserId inviterId, UserId inviteeId, int maxInviteCount) {
+    // 초대 — 한 명씩 보낸다. 못 보내는 경우는 건너뛰지 않고 막는다.
+    // 시각 기준 마감·친구·다른 방의 활성 신청은 운영값이거나 다른 애그리거트라 애플리케이션이 먼저 본다.
+    // 이미 방에 있음·횟수 상한도 애플리케이션이 isInRoom·hasReachedInviteLimit로 먼저 409를 내고, 여기는 방어선이다
+    public void invite(UserId inviterId, UserId inviteeId, int maxInviteCount) {
         if (type != RunningRoomType.INVITE || status != RunningRoomStatus.MATCHING) {
             throw new RoomNotInvitableException();
         }
@@ -243,29 +245,32 @@ public class RunningRoom {
         if (inviterId.equals(inviteeId)) {
             throw new SelfInvitationException();
         }
-        // 이미 이 방에 있다 — 오류가 아니라 건너뛴다
-        if (findSession(inviteeId).filter(RoomSession::isConnected).isPresent()) {
-            return Optional.empty();
+        if (isInRoom(inviteeId)) {
+            throw new AlreadyRoomPlayerException();
         }
-        Optional<RoomInvitation> sent = invitations.stream()
-                .filter(invitation -> invitation.isFor(inviteeId) && invitation.isSentBy(inviterId))
-                .findFirst();
-        // 상한은 보낸 사람마다 센다 — 닿았으면 상태도 건드리지 않는다
-        if (sent.isPresent() && sent.get().getInviteCount().hasReached(maxInviteCount)) {
-            return Optional.empty();
+        if (hasReachedInviteLimit(inviterId, inviteeId, maxInviteCount)) {
+            throw new InviteCountReachedException();   // 상태도 건드리지 않는다
         }
         // 거절했거나 나간 사람은 다른 보낸 사람의 행까지 함께 대기로 되살린다
         RunningRoomInvitationStatus current = invitationStatusOf(inviteeId).orElse(null);
         if (current != null && current != RunningRoomInvitationStatus.PENDING) {
             changeInvitationStatus(inviteeId, RunningRoomInvitationStatus.PENDING);
         }
-        if (sent.isPresent()) {
-            sent.get().resend();   // 대기 중에 다시 보냄(독촉) 포함
-            return sent;
-        }
-        RoomInvitation opened = RoomInvitation.open(inviterId, inviteeId);
-        invitations.add(opened);
-        return Optional.of(opened);
+        sentBy(inviterId, inviteeId).ifPresentOrElse(
+                RoomInvitation::resend,   // 대기 중에 다시 보냄(독촉) 포함
+                () -> invitations.add(RoomInvitation.open(inviterId, inviteeId)));
+    }
+
+    // 지금 이 방의 참가자인가 — 나간 세션은 아니다
+    public boolean isInRoom(UserId userId) {
+        return findSession(userId).filter(RoomSession::isConnected).isPresent();
+    }
+
+    // 상한은 보낸 사람마다 센다 — 아직 보낸 적 없으면 닿지 않았다
+    public boolean hasReachedInviteLimit(UserId inviterId, UserId inviteeId, int maxInviteCount) {
+        return sentBy(inviterId, inviteeId)
+                .filter(invitation -> invitation.getInviteCount().hasReached(maxInviteCount))
+                .isPresent();
     }
 
     // 수락 — 매칭 합류와 같게 자리를 잡고, 누구의 초대로 들어오든 받는 사람의 행을 모두 수락으로 바꾼다
@@ -323,6 +328,12 @@ public class RunningRoom {
 
     private Optional<RoomSession> findSession(UserId userId) {
         return sessions.stream().filter(session -> session.isSameUser(userId)).findFirst();
+    }
+
+    private Optional<RoomInvitation> sentBy(UserId inviterId, UserId inviteeId) {
+        return invitations.stream()
+                .filter(invitation -> invitation.isFor(inviteeId) && invitation.isSentBy(inviterId))
+                .findFirst();
     }
 
     private List<RoomInvitation> received(UserId inviteeId) {

@@ -9,7 +9,6 @@ import com.runiverse.running_service.application.match.command.invitedecline.Dec
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomResult;
 import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult;
 import com.runiverse.running_service.application.match.port.in.AcceptInvitationUsecase;
 import com.runiverse.running_service.application.match.port.in.ApplyMatchUsecase;
 import com.runiverse.running_service.application.match.port.in.CancelMatchUsecase;

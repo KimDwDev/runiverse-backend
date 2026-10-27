@@ -8,7 +8,6 @@ import com.runiverse.running_service.application.match.command.invitedecline.Dec
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomResult;
 import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsResult;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
 import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
@@ -108,9 +107,9 @@ class MatchRoomControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new MatchRoomController(
-                        getMatchSlotsUsecase, applyMatchUsecase, cancelMatchUsecase,
-                        openInviteRoomUsecase, inviteFriendsUsecase,
-                        acceptInvitationUsecase, declineInvitationUsecase))
+                getMatchSlotsUsecase, applyMatchUsecase, cancelMatchUsecase,
+                openInviteRoomUsecase, inviteFriendsUsecase,
+                acceptInvitationUsecase, declineInvitationUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
