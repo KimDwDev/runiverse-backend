@@ -96,6 +96,10 @@ public class ErrorExposurePolicyTest {
     @EnumSource(value = InviteErrorCode.class, names = {
             "RUNNING_INVITATION_CLOSED",
             "NOT_FRIEND",
+            "INVITEE_ALREADY_IN_ROOM",
+            "INVITEE_IN_MATCHING",
+            "INVITEE_RUNNING",
+            "INVITE_COUNT_EXCEEDED",
             "RUNNING_INVITATION_NOT_PENDING",
             "RUNNING_ROOM_FULL"
     })

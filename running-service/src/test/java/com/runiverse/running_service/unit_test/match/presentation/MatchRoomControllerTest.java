@@ -453,7 +453,7 @@ class MatchRoomControllerTest {
         assertThat(result.getResponse().getStatus()).isEqualTo(409);
         assertThat(body(result))
                 .containsEntry("code", "NOT_FRIEND")
-                .containsEntry("message", "친구에게만 초대를 보낼 수 있습니다.");
+                .containsEntry("message", "친구가 아닙니다.");
     }
 
     @Test

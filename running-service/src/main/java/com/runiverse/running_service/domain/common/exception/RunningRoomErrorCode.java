@@ -25,6 +25,7 @@ public enum RunningRoomErrorCode implements ErrorCode {
     SELF_INVITATION("SELF_INVITATION", "자기 자신은 초대할 수 없습니다."),
     NOT_INVITED("NOT_INVITED", "이 방에서 받은 초대가 없습니다."),
     INVALID_INVITE_COUNT("INVALID_INVITE_COUNT", "초대 횟수는 1 이상이어야 합니다."),
+    INVITE_COUNT_REACHED("INVITE_COUNT_REACHED", "이 사람에게 보낼 수 있는 초대 횟수를 넘었습니다."),
     INVALID_INVITATION_STATUS_TRANSITION("INVALID_INVITATION_STATUS_TRANSITION", "허용되지 않는 초대 상태 변경입니다.");
     private final String code;
     private final String message;
