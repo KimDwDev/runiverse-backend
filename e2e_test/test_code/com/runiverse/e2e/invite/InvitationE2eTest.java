@@ -91,20 +91,20 @@ class InvitationE2eTest extends E2eTestSupport {
                     .extracting(invitee -> invitee.get("status")).containsExactly("PENDING");
             assertThat(get("/users/me/status", friend.accessToken()).text("status")).isEqualTo("IDLE");
 
-            // 2. 거절 — 행이 남아 현황에 거절로 보인다. 다시 거절하면 409다
+            // 2. 거절 — 현황은 응답 전인 초대만 담아 거절한 사람은 빠진다. 다시 거절하면 409다
             assertThat(decline(friend, roomId).status()).isEqualTo(204);
-            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations"))
-                    .extracting(invitee -> invitee.get("status")).containsExactly("DECLINED");
+            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations")).isEmpty();
             Response declinedAgain = decline(friend, roomId);
             assertThat(declinedAgain.status()).isEqualTo(409);
             assertThat(declinedAgain.text("code")).isEqualTo("RUNNING_INVITATION_NOT_PENDING");
             assertThat(accept(friend, roomId).text("code")).isEqualTo("RUNNING_INVITATION_NOT_PENDING");
 
-            // 3. 다시 초대 — 같은 행이 대기로 되살아나고 횟수는 이어서 센다
+            // 3. 다시 초대 — 행이 남아 있어 대기로 되살아나고 횟수는 이어서 센다. 현황에 다시 보인다
             Response resent = invite(host, roomId, friend);
             assertThat(((Number) resent.objects("invitations").getFirst().get("inviteCount")).intValue())
                     .isEqualTo(2);
-            hostStream.await("INVITE_ROOM_UPDATED");
+            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations"))
+                    .extracting(invitee -> invitee.get("status")).containsExactly("PENDING");
 
             // 4. 수락 — 신청·세션이 생겨 참가자로 옮겨 가고 현황에서 빠진다
             Response accepted = accept(friend, roomId);
@@ -123,13 +123,12 @@ class InvitationE2eTest extends E2eTestSupport {
                 assertThat(((Number) entrance.get("startsInMs")).longValue()).isPositive();
             }
 
-            // 5. 나가기 — 매칭과 같은 경로다. 현황에 나감으로 돌아온다
+            // 5. 나가기 — 매칭과 같은 경로다. 참가자에서 빠지고 현황에도 보이지 않는다
             assertThat(post("/match-rooms/leave", null, friend.accessToken()).status()).isEqualTo(204);
             Map<String, Object> afterLeave = hostStream.await("INVITE_ROOM_UPDATED");
             assertThat(listOf(afterLeave, "players")).extracting(player -> player.get("userId"))
                     .containsExactly(host.userId());
-            assertThat(listOf(afterLeave, "invitations")).extracting(invitee -> invitee.get("status"))
-                    .containsExactly("LEFT");
+            assertThat(listOf(afterLeave, "invitations")).isEmpty();
         }
         assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }

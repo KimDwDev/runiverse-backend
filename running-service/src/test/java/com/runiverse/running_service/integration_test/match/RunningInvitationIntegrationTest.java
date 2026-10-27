@@ -218,7 +218,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("거절하면 현황에 거절로 남고 다시 초대하면 대기로 되살아나며 횟수는 이어서 센다")
+    @DisplayName("거절하면 현황에서 빠지지만 행은 남아, 다시 초대하면 대기로 돌아오고 횟수는 이어서 센다")
     void declineThenReinvite() {
         // given
         UUID host = onboardedUser();
@@ -230,10 +230,10 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // when
         declineHandler.handle(new DeclineInvitationCommand(friend, roomId));
 
-        // then -> 행을 지우지 않는다
-        assertThat(lastInviteRoomOf(hostStream).invitations())
-                .extracting(RoomInfo.RoomInvitee::status)
-                .containsExactly(RunningRoomInvitationStatus.DECLINED);
+        // then -> 현황은 응답 전인 초대만 담는다. 행은 지우지 않는다
+        assertThat(lastInviteRoomOf(hostStream).invitations()).isEmpty();
+        assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(friend)))
+                .contains(RunningRoomInvitationStatus.DECLINED);
 
         // when -> 같은 사람이 다시 부른다
         InviteFriendsResult again = invite(host, roomId, friend);
@@ -262,7 +262,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("수락해 들어온 사람이 나가면 현황에 나감으로 돌아오고 다시 초대할 수 있다")
+    @DisplayName("수락해 들어온 사람이 나가면 참가자와 현황 모두에서 빠지고 다시 초대할 수 있다")
     void leaveThenReinvite() {
         // given
         UUID host = onboardedUser();
@@ -280,14 +280,16 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         assertThat(statusesOf(room, friend)).containsOnly(RunningRoomInvitationStatus.LEFT);
         assertThat(room.getPlayerCount().current()).isEqualTo(1);
         RoomInfo shown = lastInviteRoomOf(hostStream);
-        assertThat(shown.invitations()).extracting(RoomInfo.RoomInvitee::status)
-                .containsExactly(RunningRoomInvitationStatus.LEFT);
+        assertThat(shown.players()).extracting(RoomInfo.RoomPlayer::userId).containsExactly(host);
+        assertThat(shown.invitations()).isEmpty();
 
         // when
         InviteFriendsResult again = invite(host, roomId, friend);
 
-        // then -> 나간 뒤 다시 들어올 수 있다
+        // then -> 나간 뒤 다시 들어올 수 있다 — 다시 부르면 대기로 현황에 돌아온다
         assertThat(again.invitations()).extracting(SentInvitation::inviteCount).containsExactly(2);
+        assertThat(lastInviteRoomOf(hostStream).invitations()).extracting(RoomInfo.RoomInvitee::userId)
+                .containsExactly(friend);
         accept(friend, roomId);
         assertThat(runningStore.findRoom(roomId).orElseThrow().getPlayerCount().current()).isEqualTo(2);
     }

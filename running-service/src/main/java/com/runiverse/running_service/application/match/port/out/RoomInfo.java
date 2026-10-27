@@ -42,7 +42,7 @@ public record RoomInfo(
             UUID userId,
             String nickname,
             String profileImageUrl,
-            // PENDING·DECLINED·LEFT만 실린다 — ACCEPTED는 players로 옮겨 가고 EXPIRED는 그리지 않는다
+            // 응답 전인 초대만 실려 지금은 늘 PENDING이다 — 응답 모양을 유지하려고 필드를 남긴다
             RunningRoomInvitationStatus status,
             boolean isDeleted
     ) {

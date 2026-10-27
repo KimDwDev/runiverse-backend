@@ -204,7 +204,7 @@ class RoomInfoAssemblerTest {
     }
 
     @Test
-    @DisplayName("초대 방은 대기·거절·나감만 받는 사람당 한 건씩 프로필을 붙여 싣는다")
+    @DisplayName("초대 방은 응답 전인 초대만 받는 사람당 한 건씩 프로필을 붙여 싣는다")
     void showsInviteesOncePerInviteeWithProfile() {
         // given -> 대기 중인 사람은 보낸 사람이 둘이라 행이 둘이다
         UUID pending = UuidCreator.getTimeOrderedEpoch();
@@ -220,22 +220,18 @@ class RoomInfoAssemblerTest {
         given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
                 .willReturn(List.of(new MatchPlayer(ME, 360)));
         // 참가자와 초대 대상을 한 번에 읽는다
-        given(loadPlayerProfilesPort.loadProfiles(List.of(ME, pending, declined, left))).willReturn(Map.of(
+        given(loadPlayerProfilesPort.loadProfiles(List.of(ME, pending))).willReturn(Map.of(
                 ME, new PlayerProfile(ME, "동완러너", null, null),
-                pending, new PlayerProfile(pending, "영희", IMAGE_KEY, null),
-                declined, new PlayerProfile(declined, "철수", null, null),
-                left, new PlayerProfile(left, "민수", null, null)));
+                pending, new PlayerProfile(pending, "영희", IMAGE_KEY, null)));
         given(generateViewUrlPort.generate(IMAGE_KEY)).willReturn(IMAGE_URL);
 
         // when
         RoomInfo roomInfo = roomInfoAssembler.assemble(room);
 
-        // then -> ACCEPTED는 players로 옮겨 가 현황에서 빠진다
+        // then -> 수락은 players로 옮겨 가고 거절·나감은 현황에서 빠진다. 빠진 사람의 프로필은 읽지 않는다
         assertThat(roomInfo.type()).isEqualTo(RunningRoomType.INVITE);
         assertThat(roomInfo.invitations()).containsExactly(
-                new RoomInfo.RoomInvitee(pending, "영희", IMAGE_URL, RunningRoomInvitationStatus.PENDING, false),
-                new RoomInfo.RoomInvitee(declined, "철수", null, RunningRoomInvitationStatus.DECLINED, false),
-                new RoomInfo.RoomInvitee(left, "민수", null, RunningRoomInvitationStatus.LEFT, false));
+                new RoomInfo.RoomInvitee(pending, "영희", IMAGE_URL, RunningRoomInvitationStatus.PENDING, false));
     }
 
     @Test
