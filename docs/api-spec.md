@@ -47,7 +47,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 17 | POST | `/api/v1/match-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
-| 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
+| 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (한 명씩, 성공 204) — 사용 화면: 초대 방 |
 | 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
 | 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
 
@@ -1178,68 +1178,41 @@
 
 ### 4-2. `POST /api/v1/match-rooms/{runningRoomId}/invitations` — 친구 초대
 
-- **화면**: 초대 방 — 친구 초대 버튼에서 여러 명을 골라 한 번에 보낸다
+- **화면**: 초대 방 — 친구 초대 버튼. **한 번에 한 명씩 보낸다** — 여러 명을 고르는 화면이면 클라가 사람마다 한 번씩 부르고 결과를 사람마다 보여준다(방 정원이 4명이라 많아야 3번이다)
 - **Request**
 
 ```json
 {
-  "inviteeIds": [
-    "01a0f2d4-6180-7000-8000-446655440013",
-    "01a0f2d4-6180-7000-8000-446655440021"
-  ]
+  "inviteeId": "01a0f2d4-6180-7000-8000-446655440013"
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `inviteeIds` | String[] | O | 초대할 친구의 `userId`. 1~50명, 중복은 하나로 본다 |
+| `inviteeId` | String | O | 초대할 친구의 `userId` |
 
-- **요청 검증 (`400 INVALID_REQUEST`)** — Request DTO 검증이다. 중복은 오류가 아니다
+- **요청 검증 (`400 INVALID_REQUEST`)** — Request DTO 검증이다
   - 필드 누락: "초대할 친구는 필수입니다."
-  - 0명이거나 50명 초과: "초대할 친구는 1명 이상 50명 이하여야 합니다."
-  - 목록 안에 `null`이 섞임: "입력값이 올바르지 않습니다."
   - `userId`가 UUID 형식이 아니면 검증 전에 본문 파싱이 실패한다 — `400 MALFORMED_REQUEST_BODY`("요청 본문을 읽을 수 없습니다.", §0 공통)
-- **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 모두 친구(`FRIEND`)여야 한다
-  - **건너뛰는 사람** — 오류가 아니다. 응답 `invitations`에서 빠진다
-    - 활성 신청이 있는 사람(매칭 대기·러닝 중·이미 이 방에 들어옴)
-    - 호출자가 이 사람에게 보낸 횟수가 상한(운영 설정, 현재 5)에 닿은 경우
-  - **친구가 아닌 사람이 하나라도 섞이면 아무에게도 보내지 않는다**(`409 NOT_FRIEND`) — 화면에서 고른 목록이 친구 목록이라 섞였다면 그사이 관계가 바뀐 것이다. 다시 고르게 한다
-  - **대기 중인 친구에게도 다시 보낼 수 있다** — 초대 상태는 `PENDING` 그대로이고 호출자의 보낸 횟수만 오른다
+- **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 친구(`FRIEND`)이며 지금 아무 활성 신청도 없어야 한다
+  - **못 보내면 건너뛰지 않고 이유를 에러로 돌려준다** — 아래 에러 표. 클라는 메시지를 그대로 보여주면 된다
+  - **대기 중인 친구에게도 다시 보낼 수 있다** — 초대 상태는 `PENDING` 그대로이고 호출자의 보낸 횟수만 오른다(독촉)
   - 거절(`DECLINED`)했거나 수락 뒤 나간(`LEFT`) 친구는 같은 초대를 `PENDING`으로 되살린다. 보낸 횟수는 이어서 센다
-- **부수 효과**: 초대받은 사람마다 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
-- **Response `201 Created`** — 이번 요청으로 실제로 보낸 초대만 담는다(새로 만들었거나, 되살렸거나, 대기 중에 다시 보낸 것)
-
-```json
-{
-  "invitations": [
-    { "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING", "inviteCount": 1 }
-  ]
-}
-```
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---|---|
-| `invitations[].userId` | String | O | 받는 사람 |
-| `invitations[].status` | String | O | 항상 `PENDING` |
-| `invitations[].inviteCount` | Integer | O | 호출자가 이 사람에게 보낸 횟수(이번 포함). 상한에 닿으면 다음 요청부터 건너뛴다 |
-
+- **부수 효과**: 초대받은 사람에게 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
+- **Response `204 No Content`** — 본문이 없다. 초대 현황은 스트림의 `INVITE_ROOM_UPDATED`가 나른다
 - **에러 (404 Not Found)**: 방이 없거나, 초대 방이 아니거나, 호출자가 이 방의 현재 참가자가 아니다
-- **에러 (409 Conflict)**
-  - `RUNNING_INVITATION_CLOSED` — 모집 중인 방이 아니거나 모집 마감이 지났다
-  - `NOT_FRIEND` — 친구가 아닌 사람이 섞여 있다
+- **에러 (409 Conflict)** — 판정 순서대로
 
-```json
-{
-  "code": "RUNNING_INVITATION_CLOSED",
-  "message": "초대를 받을 수 없는 방입니다."
-}
+| 코드 | 메시지 | 경우 |
+|---|---|---|
+| `RUNNING_INVITATION_CLOSED` | 초대를 받을 수 없는 방입니다. | 모집 중인 방이 아니거나 모집 마감이 지났다 |
+| `NOT_FRIEND` | 친구가 아닙니다. | 친구가 아니다(자기 자신 포함) |
+| `INVITEE_ALREADY_IN_ROOM` | 이미 방에 들어와 있는 친구입니다. | 친구가 이미 이 방의 참가자다 |
+| `INVITEE_IN_MATCHING` | 지금 매칭 중인 친구입니다. | 친구가 다른 매칭 방·초대 방에서 대기 중이다(모집 중·확정 후 시작 전) |
+| `INVITEE_RUNNING` | 지금 러닝 중인 친구입니다. | 친구가 러닝 중이다 — 시작된 방에 있거나, 솔로 방을 열었다(솔로는 모집 단계가 없어 시작 전이어도 러닝으로 본다) |
+| `INVITE_COUNT_EXCEEDED` | 더 이상 이 친구에게 초대를 보낼 수 없습니다. | 호출자가 이 친구에게 보낸 횟수가 상한(운영 설정 `invite.max-invite-count`, 현재 5)에 닿았다 |
 
-{
-  "code": "NOT_FRIEND",
-  "message": "친구에게만 초대를 보낼 수 있습니다."
-}
-```
-
+- **친구의 지금 상태(매칭 중·러닝 중)를 초대한 사람에게 알려준다** — 친구 사이라 드러내도 된다고 본다
 - **인증**: 필요
 
 ### 4-3. `POST /api/v1/match-rooms/{runningRoomId}/invitations/accept` — 초대 수락

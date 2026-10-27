@@ -64,6 +64,10 @@ public final class ErrorExposurePolicy {
             // 초대·수락·거절 거부 — 가려지면 앱이 다시 고르게 할지·버튼을 다시 그릴지 가를 수 없다
             InviteErrorCode.RUNNING_INVITATION_CLOSED.getCode(),
             InviteErrorCode.NOT_FRIEND.getCode(),
+            InviteErrorCode.INVITEE_ALREADY_IN_ROOM.getCode(),
+            InviteErrorCode.INVITEE_IN_MATCHING.getCode(),
+            InviteErrorCode.INVITEE_RUNNING.getCode(),
+            InviteErrorCode.INVITE_COUNT_EXCEEDED.getCode(),
             InviteErrorCode.RUNNING_INVITATION_NOT_PENDING.getCode(),
             InviteErrorCode.RUNNING_ROOM_FULL.getCode()
     );
