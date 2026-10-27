@@ -42,14 +42,14 @@
 ### 4. 매칭완료 대기방 · 초대 러닝 (초대 페이지 / 초대 방)
 
 - 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번) — 초대 방도 같은 스트림을 쓰되 이벤트는 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`이고, 초대 현황이 `RoomInfo`에 실린다
-- 나가기: `DELETE /api/v1/running-matches` — 초대 방도 같다
+- 나가기: `POST /api/v1/match-rooms/leave` — 초대 방도 같다
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | POST | `/api/v1/running-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
-| 18 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
-| 19 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
-| 20 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
+| 17 | POST | `/api/v1/match-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
+| 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
+| 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
+| 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -57,12 +57,15 @@
 
 **매칭 HTTP**
 
+- 모집 단계(매칭 방·초대 방)의 API는 `/match-rooms` 아래 둔다. 시작 뒤의 방 단위 동작(솔로 개설·결과 조회)은 `/running-rooms`다
+  - 예전 경로 `/running-matches`(신청·취소·슬롯·스트림)와 `/running-rooms/invite`·`/running-rooms/{runningRoomId}/invitations`는 없앴다 — 남겨 두지 않는다. 취소는 `DELETE`가 아니라 `POST /match-rooms/leave`다
+
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 22 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 23 | GET | `/api/v1/running-matches/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 24 | GET | `/api/v1/running-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
+| 21 | POST | `/api/v1/match-rooms` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 22 | POST | `/api/v1/match-rooms/leave` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 23 | GET | `/api/v1/match-rooms/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 24 | GET | `/api/v1/match-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
 | 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 5종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다.
@@ -1114,7 +1117,7 @@
 
 ## 4. 초대 러닝
 
-친구끼리 시각·거리를 정해 뛰는 방이다. **방이 생기는 방식(4-1)과 사람이 들어오는 방식(4-2~4-4), 그리고 모집 마감 시각과 제재 없음만 매칭과 다르고, 그 밖은 매칭 방과 같은 경로를 탄다** — 방 정보는 매칭 스트림의 `RoomInfo`(5-B)로 받고, 나가기는 `DELETE /running-matches`(5-A), 카운트다운·러닝은 5-C·5-D 그대로다. 생명주기 근거는 `feature-spec.md` 초대 러닝 생명주기 절.
+친구끼리 시각·거리를 정해 뛰는 방이다. **방이 생기는 방식(4-1)과 사람이 들어오는 방식(4-2~4-4), 그리고 모집 마감 시각과 제재 없음만 매칭과 다르고, 그 밖은 매칭 방과 같은 경로를 탄다** — 방 정보는 매칭 스트림의 `RoomInfo`(5-B)로 받고, 나가기는 `POST /match-rooms/leave`(5-A), 카운트다운·러닝은 5-C·5-D 그대로다. 생명주기 근거는 `feature-spec.md` 초대 러닝 생명주기 절.
 
 - 초대 방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)과 슬롯별 대기 인원 집계에 잡히지 않는다.
 - 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다. 초대 수는 제한하지 않는다.
@@ -1124,7 +1127,7 @@
 - **제재가 없다** — 언제 나가든(5-A), 조기 종료하든(5-D) `_NO_PENALTY`이고 쿨다운을 걸지 않는다.
 - **방 상태 이벤트가 따로 있다** — 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`, 그 뒤 갱신은 `INVITE_ROOM_UPDATED`다(5-B). 매칭 방의 `MATCH_STARTED`·`MATCH_ROOM_UPDATED`는 보내지 않는다 — 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 확정 연출을 두지 않는다. `RUNNING_READY`(5-C)는 매칭 방과 같다.
 
-### 4-1. `POST /api/v1/running-rooms/invite` — 초대 방 개설
+### 4-1. `POST /api/v1/match-rooms/invite` — 초대 방 개설
 
 - **화면**: 초대 페이지
 - **Request**
@@ -1150,7 +1153,7 @@
 - **동작**: 방을 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다. 예약도 매칭 방과 같게 건다
 - 페이스는 온보딩 값을 쓴다(매칭과 같다)
 - **매칭 쿨다운 중에도 만들 수 있다** — 쿨다운은 매칭 신청만 막는다
-- 응답을 받으면 클라는 `GET /running-rooms/stream`을 연다 — 연결 직후 `INVITE_ROOM_ENTRANCE` 스냅샷이 온다
+- 응답을 받으면 클라는 `GET /match-rooms/stream`을 연다 — 연결 직후 `INVITE_ROOM_ENTRANCE` 스냅샷이 온다
 - **Response `201 Created`**
 
 ```json
@@ -1173,7 +1176,7 @@
 
 - **인증**: 필요
 
-### 4-2. `POST /api/v1/running-rooms/{runningRoomId}/invitations` — 친구 초대
+### 4-2. `POST /api/v1/match-rooms/{runningRoomId}/invitations` — 친구 초대
 
 - **화면**: 초대 방 — 친구 초대 버튼에서 여러 명을 골라 한 번에 보낸다
 - **Request**
@@ -1239,14 +1242,14 @@
 
 - **인증**: 필요
 
-### 4-3. `POST /api/v1/running-rooms/{runningRoomId}/invitations/accept` — 초대 수락
+### 4-3. `POST /api/v1/match-rooms/{runningRoomId}/invitations/accept` — 초대 수락
 
 - **화면**: 알림함 (초대 알림의 수락 버튼)
 - **Request 본문이 없다** — 받는 사람은 토큰 주체다. 경로의 방에서 나에게 온 초대를 수락한다. 누가 보냈든 초대는 받는 사람 기준으로 하나라 보낸 사람을 고르지 않는다
 - **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 나에게 온 초대 행을 모두 `ACCEPTED`로 바꾼다. 기존 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다. 수락한 사람은 응답을 받은 뒤 스트림을 열어 `INVITE_ROOM_ENTRANCE`를 받는다
   - **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 순서를 정한다
   - 매칭 쿨다운 중에도 수락할 수 있다
-- 응답을 받으면 클라는 `GET /running-rooms/stream`을 연다
+- 응답을 받으면 클라는 `GET /match-rooms/stream`을 연다
 - **Response `201 Created`**
 
 ```json
@@ -1277,7 +1280,7 @@
 
 - **인증**: 필요
 
-### 4-4. `POST /api/v1/running-rooms/{runningRoomId}/invitations/decline` — 초대 거절
+### 4-4. `POST /api/v1/match-rooms/{runningRoomId}/invitations/decline` — 초대 거절
 
 - **화면**: 알림함 (초대 알림의 거절 버튼)
 - **Request 본문이 없다** — 받는 사람은 토큰 주체다
@@ -1293,14 +1296,14 @@
 
 | 구간 | 방식 | 이유 |
 |---|---|---|
-| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-rooms/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
+| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/match-rooms/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 구간 (5-C·5-D) | **WebSocket** `/api/v1/ws/running` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
 **솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
 ### `POST /api/v1/running-rooms/solo` — 솔로 러닝 개시
 
-- **클라가 만드는 방은 솔로(이 API)와 초대 방(4-1 `POST /running-rooms/invite`)이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 방 종류는 `type`을 본문으로 받지 않고 경로(`/solo`·`/invite`)로 가른다
+- **클라가 만드는 방은 솔로(이 API)와 초대 방(4-1 `POST /match-rooms/invite`)이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 방 종류는 `type`을 본문으로 받지 않고 경로(`/solo`·`/invite`)로 가른다
 - **Request 본문이 없다.** 목표 거리도 받지 않는다 — 솔로는 사용자가 끝내야 끝나므로 방의 `target_distance`는 null이다. 페이스는 온보딩 값을 쓴다
 - **Response `201 Created`**
 
@@ -1312,8 +1315,8 @@
 
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
   - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로에는 시작 예약을 걸지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
-  - **강제 종료 예약도 걸지 않는다.** 앱이 방 번호를 잃었을 때의 복구는 `GET /users/me/status`의 `runningRoomId`로 한다 — `READY`면 이어 뛸 때 `RUNNING_START`, 그만둘 때 `DELETE /running-matches`이고, `RUNNING`이면 `RUNNING_START`로 다시 붙어 `RUNNING_FINISH`로 끝낸다
-- 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
+  - **강제 종료 예약도 걸지 않는다.** 앱이 방 번호를 잃었을 때의 복구는 `GET /users/me/status`의 `runningRoomId`로 한다 — `READY`면 이어 뛸 때 `RUNNING_START`, 그만둘 때 `POST /match-rooms/leave`이고, `RUNNING`이면 `RUNNING_START`로 다시 붙어 `RUNNING_FINISH`로 끝낸다
+- 이 방은 `GET /match-rooms/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**
   - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
   - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
@@ -1328,16 +1331,16 @@
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
-#### `GET /api/v1/running-rooms/stream` — 방 상태 이벤트 스트림 (SSE)
+#### `GET /api/v1/match-rooms/stream` — 방 상태 이벤트 스트림 (SSE)
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
-- **매칭 방·초대 방이 같은 스트림을 쓴다** — 활성 신청이 사람당 하나라 스트림도 하나면 된다. 매칭 전용이 아니라 신청·취소(`/running-matches`)와 달리 방 리소스 아래에 둔다. 방 종류는 이벤트 이름(`MATCH_*`·`INVITE_ROOM_*`)과 `RoomInfo.type`이 가른다
+- **매칭 방·초대 방이 같은 스트림을 쓴다** — 활성 신청이 사람당 하나라 스트림도 하나면 된다. 방 종류는 이벤트 이름(`MATCH_*`·`INVITE_ROOM_*`)과 `RoomInfo.type`이 가른다
   - 예전 경로 `/running-matches/stream`은 없앴다 — 남겨 두지 않는다
 - **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.
   - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.** 스냅샷 이벤트는 매칭 방이 `MATCH_ROOM_UPDATED`, 초대 방이 `INVITE_ROOM_ENTRANCE`다.
-- **종료 시점**: `RUNNING_STARTED` ack 뒤, 또는 매칭 취소(`DELETE /running-matches`)의 204를 받은 뒤 클라이언트가 닫는다.
+- **종료 시점**: `RUNNING_STARTED` ack 뒤, 또는 매칭 취소(`POST /match-rooms/leave`)의 204를 받은 뒤 클라이언트가 닫는다.
 - **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면, 탈퇴하면 닫는다(새 연결·탈퇴는 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다 — 다른 인스턴스의 옛 스트림은 30분 만료나 전송 실패로 정리된다). 활성 신청이 남아 있으면 클라는 다시 연결하고 연결 직후 스냅샷으로 상태를 복원한다.
 - **연결을 화면 생명주기에 묶지 않는다.** 홈을 벗어나도 스트림은 살아 있어야 한다(근거는 `feature-spec.md` 매칭·러닝 설계 절)
 - **이벤트 형식** — 타입은 SSE `event` 필드로, 본문은 `data`에 JSON으로 싣는다
@@ -1359,7 +1362,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **keep-alive**: 주기적으로 주석 라인(`:ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
-#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
+#### `GET /api/v1/match-rooms/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
 - **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`). 거리는 받지 않는다 — 고를 수 있는 모든 거리를 한 번에 내려 주므로, 모달에서 거리를 바꿔도 다시 요청하지 않는다
@@ -1410,7 +1413,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - 형식 오류(`date=2026/07/25`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
 
-#### `POST /api/v1/running-matches` — 매칭 신청
+#### `POST /api/v1/match-rooms` — 매칭 신청
 
 - **화면**: 홈 (매칭 버튼)
 - **Request**
@@ -1427,7 +1430,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
-- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /running-matches/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
+- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /match-rooms/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용. 그 값이 없으면(온보딩 미완료) `409 ONBOARDING_NOT_COMPLETED`
 - **모집 인원도 입력받지 않음** — 서버가 최대 4명까지 모으고, 마감 때 1명이면 1인으로 확정한다 (`desiredPlayerCount` 필드 없음)
@@ -1482,7 +1485,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
-- 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
+- 클라는 `GET /match-rooms/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
   - **`slots`로 1차 차단하지 않는 동안에는** 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
 
 - **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
@@ -1520,9 +1523,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 페이스를 입력받지 않고 온보딩 값을 쓰기 때문에, 값이 없으면 매칭 조건을 만들 수 없어 신청을 받지 않는다
 - **인증**: 필요
 
-#### `DELETE /api/v1/running-matches` — 매칭 취소·방 나가기 (겸용)
+#### `POST /api/v1/match-rooms/leave` — 매칭 취소·방 나가기 (겸용)
 
-- **토큰 주체의 활성 신청 하나를 취소한다** — 경로가 복수형이지만 컬렉션 전체를 지우는 것이 아니다. 신청은 유저당 하나뿐이라 경로에 식별자를 두지 않으며, `POST /running-matches`로 만든 것을 같은 경로에서 지운다
+- **토큰 주체의 활성 신청 하나를 끝낸다** — 신청은 유저당 하나뿐이라 경로에 식별자를 두지 않는다. `DELETE /match-rooms`가 아니라 동작 경로(`/leave`)인 이유는 **방을 지우는 게 아니라 내가 빠지는 것**이라서다 — 혼자 나가도 방은 남은 사람과 함께 그대로 있다
+- 예전 경로 `DELETE /running-matches`는 없앴다 — 남겨 두지 않는다
 - **솔로 방의 시작 전 신청도 이 경로로 닫는다** — 솔로를 열고 WS에 붙기 전에 그만둘 때 쓴다. 방은 `CANCELLED`, 신청은 `MATCHED_LEFT_NO_PENALTY`이며 제재는 없다. 이미 뛰는 중(`RUNNING`)이면 아래와 같이 409다
 - **서버가 모집 마감 시각으로 분기**
   - 대기 중(마감 전) = 대기 취소(`status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
@@ -1557,7 +1561,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 매칭 상태만 따로 묻는 엔드포인트는 두지 않는다. 앱 진입·포그라운드 복귀 시 **유저 상태 API(2-2)**가 `IDLE`·`WAITING`·`READY`를 돌려주고, 클라이언트는 그 값으로 스트림 연결 여부를 정한다.
 
 - **전원에게 스트림을 열지 않는 이유**: 매칭을 걸지 않은 사용자가 대다수인데 모두에게 연결을 유지하는 것은 서버 커넥션과 단말 배터리 양쪽에 부담이다. 그래서 상태를 먼저 묻고 활성 신청이 있을 때만 연결한다
-- **방 정보는 스트림이 나른다** — 2-2는 `runningRoomId`까지만 주고, 참가자 목록·마감 시각은 연결 직후의 `RoomInfo` 스냅샷이 채운다. 신청 직후에는 `POST /running-matches`가 준 `runningRoomId`로 바로 스트림을 연다
+- **방 정보는 스트림이 나른다** — 2-2는 `runningRoomId`까지만 주고, 참가자 목록·마감 시각은 연결 직후의 `RoomInfo` 스냅샷이 채운다. 신청 직후에는 `POST /match-rooms`가 준 `runningRoomId`로 바로 스트림을 연다
 - **매칭이 저절로 실패하는 상태는 없다** — 마감은 인원과 무관하게 항상 확정으로 끝나므로 `FAILED`에 해당하는 값이 없다. 취소는 사용자가 직접 한 행동이라 그 즉시 `IDLE`로 돌아간다
 - **1인 확정도 `READY`다.** 클라이언트는 `RoomInfo.players`가 1건인 경우를 혼자 확정된 상태로 그리며, 이때 나가기는 페널티가 없다(5-B)
 
@@ -1674,7 +1678,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### 방 나가기 — 별도 이벤트 없음
 
-- 확정된 방에서 나가기도 **`DELETE /running-matches`** 사용 (5-A 참고 — 서버가 모집 마감 시각으로 분기)
+- 확정된 방에서 나가기도 **`POST /match-rooms/leave`** 사용 (5-A 참고 — 서버가 모집 마감 시각으로 분기)
 - 나간 사람만 `MATCHED_LEFT_*` 처리, 방은 유지되고 그대로 러닝을 진행한다
 - **확정 후 이탈에는 페널티가 붙는다** — 모집 마감(`start_at - 오프셋`) 이후에 나가면 일정 시간 매칭 신청이 제한된다(`409 MATCH_COOLDOWN`). 만료는 Redis 키의 TTL이 판정한다(`feature-spec.md` 쿨다운 저장 절)
 - **혼자 남은 방은 예외다** — 이탈 시점 `current_player_count`가 `1`이면 면제(`MATCHED_LEFT_NO_PENALTY`)다. 1인으로 확정된 방과 이탈로 혼자 남은 방 모두 해당하며, 나가면 활성 신청이 끝나 곧바로 재신청할 수 있다
