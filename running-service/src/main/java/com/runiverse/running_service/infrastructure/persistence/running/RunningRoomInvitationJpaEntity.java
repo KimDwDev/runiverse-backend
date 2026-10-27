@@ -51,7 +51,7 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     @Id
     @Column(name = "inviter_id", nullable = false, updatable = false)
     private UUID inviterId;
-    // 받는 사람 — 논리 참조다. 받는 사람이 탈퇴해도 초대는 남는다(탈퇴 정리가 같은 트랜잭션에서 이 행을 고친다)
+    // 받는 사람 — 논리 참조다. 받는 사람이 탈퇴해도 초대는 남는다(방에 있다 탈퇴하면 탈퇴 정리가 같은 트랜잭션에서 이 행을 `LEFT`로 고친다)
     @Id
     @Column(name = "invitee_id", nullable = false, updatable = false)
     private UUID inviteeId;
