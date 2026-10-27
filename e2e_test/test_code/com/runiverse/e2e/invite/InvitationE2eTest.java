@@ -227,6 +227,66 @@ class InvitationE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("같은 친구에게 상한(5회)만큼 보내면 그다음은 횟수 초과로 거절된다")
+    void inviteCountExceeded() {
+        // given
+        TestUser host = signUpAndOnboard();
+        TestUser friend = signUpAndOnboard();
+        befriend(host, friend);
+        int roomId = openRoom(host);
+
+        // when - 대기 중에도 다시 보낼 수 있다(독촉) — 실제 설정(invite.max-invite-count=5)까지는 통과한다
+        for (int i = 0; i < 5; i++) {
+            assertThat(invite(host, roomId, friend).status()).isEqualTo(204);
+        }
+        Response exceeded = invite(host, roomId, friend);
+
+        // then -> 보낸 횟수는 DB(invite_count)에 쌓인 값으로 판정된다
+        assertThat(exceeded.status()).isEqualTo(409);
+        assertThat(exceeded.text("code")).isEqualTo("INVITE_COUNT_EXCEEDED");
+        assertThat(exceeded.text("message")).isEqualTo("더 이상 이 친구에게 초대를 보낼 수 없습니다.");
+        // 상한에 닿아도 초대는 대기로 남아 수락할 수 있다
+        assertThat(accept(friend, roomId).status()).isEqualTo(201);
+
+        assertThat(post("/match-rooms/leave", null, friend.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
+    }
+
+    @Test
+    @DisplayName("4명이 찬 방에도 초대는 가지만 수락은 막히고, 한 명이 나가면 수락할 수 있다")
+    void fullRoomBlocksAcceptUntilSomeoneLeaves() {
+        // given -> 방장 + 셋이 들어와 정원 4명이 찼다
+        TestUser host = signUpAndOnboard();
+        int roomId = openRoom(host);
+        List<TestUser> members = List.of(signUpAndOnboard(), signUpAndOnboard(), signUpAndOnboard());
+        for (TestUser member : members) {
+            befriend(host, member);
+            assertThat(invite(host, roomId, member).status()).isEqualTo(204);
+            assertThat(accept(member, roomId).status()).isEqualTo(201);
+        }
+        TestUser waiting = signUpAndOnboard();
+        befriend(host, waiting);
+
+        // when - 1. 꽉 찬 방에도 초대는 보낼 수 있다 — 막히는 건 수락뿐이다
+        assertThat(invite(host, roomId, waiting).status()).isEqualTo(204);
+        Response full = accept(waiting, roomId);
+
+        // then
+        assertThat(full.status()).isEqualTo(409);
+        assertThat(full.text("code")).isEqualTo("RUNNING_ROOM_FULL");
+        assertThat(full.text("message")).isEqualTo("방이 가득 찼습니다.");
+        assertThat(get("/users/me/status", waiting.accessToken()).text("status")).isEqualTo("IDLE");
+
+        // 2. 한 명이 나가면 대기로 남아 있던 초대를 수락할 수 있다
+        assertThat(post("/match-rooms/leave", null, members.getFirst().accessToken()).status()).isEqualTo(204);
+        assertThat(accept(waiting, roomId).status()).isEqualTo(201);
+
+        for (TestUser stayer : List.of(host, members.get(1), members.get(2), waiting)) {
+            assertThat(post("/match-rooms/leave", null, stayer.accessToken()).status()).isEqualTo(204);
+        }
+    }
+
+    @Test
     @DisplayName("초대할 친구가 빠지면 Request 검증 문구로 400이다")
     void missingInviteeIsBadRequest() {
         // given
