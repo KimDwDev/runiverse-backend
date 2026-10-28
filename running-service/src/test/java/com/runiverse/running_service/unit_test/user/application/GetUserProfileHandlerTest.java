@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.user.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.common.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.common.UserImageUrlResolver;
 import com.runiverse.running_service.application.user.exception.ProfileNotFoundException;
@@ -10,6 +11,7 @@ import com.runiverse.running_service.application.user.query.profile.GetUserProfi
 import com.runiverse.running_service.application.user.query.profile.GetUserProfileQuery;
 import com.runiverse.running_service.application.user.query.profile.GetUserProfileResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.Nickname;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
@@ -20,6 +22,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,13 +53,17 @@ public class GetUserProfileHandlerTest {
     @Mock
     private GenerateViewUrlPort generateViewUrlPort;
 
+    @Mock
+    private LoadRelationshipTypesPort loadRelationshipTypesPort;
+
     private GetUserProfileHandler handler;
 
     // URL 변환은 공유 컴포넌트가 맡는다 — 실물을 끼워 서명 포트와의 상호작용까지 그대로 본다
     @BeforeEach
     void setUp() {
         handler = new GetUserProfileHandler(
-                loadUserByIdPort, loadNicknamePort, new UserImageUrlResolver(generateViewUrlPort));
+                loadUserByIdPort, loadNicknamePort, new UserImageUrlResolver(generateViewUrlPort),
+                loadRelationshipTypesPort);
     }
 
     private static User userWith(UUID userId, String profileImageKey, String introduction) {
@@ -68,7 +76,7 @@ public class GetUserProfileHandlerTest {
     }
 
     @Test
-    @DisplayName("타인의 프로필은 isMe가 false이고 친구 상태가 담긴다")
+    @DisplayName("타인의 프로필은 isMe가 false이고 조회자 기준 지금 관계가 담긴다")
     void returnsOtherUserProfile() {
         // given
         UUID viewerId = UuidCreator.getTimeOrderedEpoch();
@@ -79,22 +87,41 @@ public class GetUserProfileHandlerTest {
         when(loadNicknamePort.loadNickname(new UserId(targetUserId)))
                 .thenReturn(Optional.of(new Nickname(NICKNAME)));
         when(generateViewUrlPort.generate(key)).thenReturn(VIEW_URL);
+        when(loadRelationshipTypesPort.loadTypes(new UserId(viewerId), List.of(targetUserId)))
+                .thenReturn(Map.of(targetUserId, RelationshipType.FRIEND_REQUEST_RECEIVED));
 
         // when
         GetUserProfileResult result = handler.handle(new GetUserProfileQuery(viewerId, targetUserId));
 
-        // then -> 타인이면 친구 요청 버튼을 가르는 값이 필요하다
+        // then -> 타인이면 친구 버튼을 가르는 값이 필요하다(10-6 표)
         assertThat(result.userId()).isEqualTo(targetUserId);
         assertThat(result.isMe()).isFalse();
         assertThat(result.nickname()).isEqualTo(NICKNAME);
         assertThat(result.profileImageUrl()).isEqualTo(VIEW_URL);
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
-        assertThat(result.friendStatus()).isNotNull();
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND_REQUEST_RECEIVED);
     }
 
     @Test
-    @DisplayName("본인의 프로필은 isMe가 true이고 친구 상태가 없다")
-    void returnsOwnProfileWithoutFriendStatus() {
+    @DisplayName("관계 행이 없는 사람이면 NONE이다")
+    void returnsNoneWithoutRelationshipRow() {
+        // given -> 관계 행은 처음 요청할 때 생긴다
+        UUID viewerId = UuidCreator.getTimeOrderedEpoch();
+        UUID targetUserId = UuidCreator.getTimeOrderedEpoch();
+        when(loadUserByIdPort.loadById(new UserId(targetUserId)))
+                .thenReturn(Optional.of(userWith(targetUserId, null, INTRODUCTION)));
+        when(loadRelationshipTypesPort.loadTypes(new UserId(viewerId), List.of(targetUserId))).thenReturn(Map.of());
+
+        // when
+        GetUserProfileResult result = handler.handle(new GetUserProfileQuery(viewerId, targetUserId));
+
+        // then
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.NONE);
+    }
+
+    @Test
+    @DisplayName("본인의 프로필은 isMe가 true이고 관계가 없으며 관계를 읽지 않는다")
+    void returnsOwnProfileWithoutRelationship() {
         // given -> 조회하는 쪽과 대상이 같다
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         when(loadUserByIdPort.loadById(new UserId(userId)))
@@ -107,7 +134,8 @@ public class GetUserProfileHandlerTest {
 
         // then -> 본인에게는 친구 관계가 없어 NONE이 아니라 null이다
         assertThat(result.isMe()).isTrue();
-        assertThat(result.friendStatus()).isNull();
+        assertThat(result.relationshipType()).isNull();
+        verifyNoInteractions(loadRelationshipTypesPort);
     }
 
     @Test
