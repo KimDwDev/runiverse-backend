@@ -29,10 +29,11 @@
 |---|--------|------|------|
 | 11 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
 | 12 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
-| 13 | GET | `/api/v1/app/version` | 플랫폼별 최소·최신 앱 버전 — 업데이트 강제·안내 판정, 인증 불필요 — 사용 화면: 앱 진입(스플래시)·포그라운드 복귀 |
-| 14 | GET | `/api/v1/users/me/notifications` | 인앱 알림 목록 (최신순, 항목별 현재 상태 포함) — 사용 화면: 알림함 |
-| 15 | GET | `/api/v1/users/me/notifications/unread-count` | 안 읽은 알림 수 — 하단 탭 배지 — 사용 화면: 전역 |
-| 16 | POST | `/api/v1/users/me/notifications/read` | 알림 모두 읽음 — 알림함을 열 때 |
+| 13 | GET | `/api/v1/users/me/stream` | 유저 스트림 (SSE) — 연결 직후 유저 현재 상태 스냅샷, 앱이 켜져 있는 동안 유지 — 사용 화면: 전역 |
+| 14 | GET | `/api/v1/app/version` | 플랫폼별 최소·최신 앱 버전 — 업데이트 강제·안내 판정, 인증 불필요 — 사용 화면: 앱 진입(스플래시)·포그라운드 복귀 |
+| 15 | GET | `/api/v1/users/me/notifications` | 인앱 알림 목록 (최신순, 항목별 현재 상태 포함) — 사용 화면: 알림함 |
+| 16 | GET | `/api/v1/users/me/notifications/unread-count` | 안 읽은 알림 수 — 하단 탭 배지 — 사용 화면: 전역 |
+| 17 | POST | `/api/v1/users/me/notifications/read` | 알림 모두 읽음 — 알림함을 열 때 |
 
 ### 3. 홈 화면
 
@@ -46,10 +47,10 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | POST | `/api/v1/match-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
-| 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (한 명씩, 성공 204) — 사용 화면: 초대 방 |
-| 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
-| 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
+| 18 | POST | `/api/v1/match-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
+| 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (한 명씩, 성공 204) — 사용 화면: 초대 방 |
+| 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
+| 21 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -62,11 +63,11 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | POST | `/api/v1/match-rooms` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 22 | POST | `/api/v1/match-rooms/leave` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 23 | GET | `/api/v1/match-rooms/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 24 | GET | `/api/v1/match-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
-| 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
+| 22 | POST | `/api/v1/match-rooms` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 23 | POST | `/api/v1/match-rooms/leave` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 24 | GET | `/api/v1/match-rooms/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 25 | GET | `/api/v1/match-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
+| 26 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
 **매칭 SSE** — 이벤트 5종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다.
 
@@ -95,87 +96,87 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 26 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
-| 27 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
+| 27 | GET | `/api/v1/running-rooms/{runningRoomId}/results` | 참가자 전원 결과 스냅샷 — 사용 화면: 러닝 후 대시보드 |
+| 28 | GET | `/api/v1/running-rooms/{runningRoomId}/split-results` | 구간별 상세 + 경로 |
 
 ### 7. 기록 화면
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 28 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
+| 29 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
 
 ### 8. 피드 목록 페이지 (+댓글 모달) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 29 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
-| 30 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
-| 31 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
-| 32 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
-| 33 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
-| 34 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
-| 35 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
-| 36 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
-| 37 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
-| 38 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
-| 39 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
+| 30 | GET | `/api/v1/feeds` | 피드 목록, `tab=FRIENDS\|ALL`, 무한 스크롤 |
+| 31 | GET | `/api/v1/feeds/{feedId}` | 피드 단건 — 사용 화면: 푸시 랜딩, 프로필 그리드 탭 |
+| 32 | POST | `/api/v1/feeds/{feedId}/like` | 좋아요 (응답에 갱신 카운트) |
+| 33 | DELETE | `/api/v1/feeds/{feedId}/like` | 좋아요 취소 |
+| 34 | GET | `/api/v1/feeds/{feedId}/comments` | 댓글 목록 (등록순, 답글 제외) |
+| 35 | POST | `/api/v1/feeds/{feedId}/comments` | 댓글/답글 작성 (`parentCommentId` 옵션, depth 1 제한) |
+| 36 | PATCH | `/api/v1/comments/{commentId}` | 댓글 수정 (작성자 본인만) |
+| 37 | GET | `/api/v1/comments/{commentId}/replies` | 답글 지연 로딩 ("답글 N개 보기") |
+| 38 | DELETE | `/api/v1/comments/{commentId}` | 댓글 삭제 (작성자 or 피드 소유자, 레딧 방식) |
+| 39 | POST | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 |
+| 40 | DELETE | `/api/v1/comments/{commentId}/like` | 댓글 좋아요 취소 |
 
 ### 9. 피드 작성 페이지 (+프로필의 피드 편집) [MVP 제외]
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 40 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
-| 41 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
-| 42 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
-| 43 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
+| 41 | POST | `/api/v1/feeds/images/presigned-url` | 피드 이미지 업로드 URL 발급 (여러 장) |
+| 42 | POST | `/api/v1/feeds` | 피드 작성 (텍스트/이미지 최소 1, 공개범위, 기록 템플릿 `runningRecordId`) |
+| 43 | PATCH | `/api/v1/feeds/{feedId}` | 피드 수정 (내용·이미지·공개범위) — 사용 화면: 프로필(피드 편집) |
+| 44 | DELETE | `/api/v1/feeds/{feedId}` | 피드 삭제 (소프트delete) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 44 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 45 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·관계) |
-| 46 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
-| 47 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
-| 48 | PUT | `/api/v1/users/{userId}/friend-request` | 친구 요청 수락 — 요청을 친구로 확정 |
-| 49 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
-| 50 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
-| 51 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인이면 확정·보낸 요청·받은 요청, 타인이면 확정만 |
-| 52 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
-| 53 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
-| 54 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
-| 55 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
-| 56 | POST | `/api/v1/users/{userId}/block` | 유저 차단 — 사용 화면: 타인 프로필 |
-| 57 | DELETE | `/api/v1/users/{userId}/block` | 차단 해제 — 사용 화면: 차단 목록 |
-| 58 | GET | `/api/v1/users/me/blocks` | 내 차단 목록 |
+| 45 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
+| 46 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·관계) |
+| 47 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
+| 48 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
+| 49 | PUT | `/api/v1/users/{userId}/friend-request` | 친구 요청 수락 — 요청을 친구로 확정 |
+| 50 | DELETE | `/api/v1/users/{userId}/friend-request` | 요청 취소(보낸 쪽) · 거절(받은 쪽) |
+| 51 | DELETE | `/api/v1/users/{userId}/friend` | 친구 삭제 |
+| 52 | GET | `/api/v1/users/{userId}/friends` | 친구 목록 (+이름 검색) — 본인이면 확정·보낸 요청·받은 요청, 타인이면 확정만 |
+| 53 | GET | `/api/v1/users/{userId}/colors` | 컬러 컬렉션 (마스터 전체 + 획득 여부) **[MVP 제외]** |
+| 54 | GET | `/api/v1/users/search` | 사용자 검색 — 친구 추가 진입점 (`?q=검색어`) |
+| 55 | GET | `/api/v1/users/{userId}/achievements` | 업적 (활성 업적별 단계·기준값) |
+| 56 | GET | `/api/v1/users/me/friend-recommendations` | 추천 친구 (함께 뛴 사람 + 페이스 비슷한 사람) — 사용 화면: 친구 목록 페이지 |
+| 57 | POST | `/api/v1/users/{userId}/block` | 유저 차단 — 사용 화면: 타인 프로필 |
+| 58 | DELETE | `/api/v1/users/{userId}/block` | 차단 해제 — 사용 화면: 차단 목록 |
+| 59 | GET | `/api/v1/users/me/blocks` | 내 차단 목록 |
 
 ### 11. 프로필 편집 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 59 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
-| 60 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
-| 61 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
-| 62 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 63 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
-| 64 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
-| 65 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
-| 66 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
-| 67 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
-| 68 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
-| 69 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
-| 70 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
+| 60 | POST | `/api/v1/users/me/profile-image/presigned-url` | 프로필 사진 업로드 URL 발급 |
+| 61 | PATCH | `/api/v1/users/me/profile-image` | 업로드한 사진 반영 — S3 존재·소유자 검증 |
+| 62 | GET | `/api/v1/users/{userId}/profile-image` | 프로필 사진 URL 조회 — 인증 불필요 |
+| 63 | DELETE | `/api/v1/users/me/profile-image` | 프로필 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 64 | POST | `/api/v1/users/me/background-image/presigned-url` | 배경 사진 업로드 URL 발급 |
+| 65 | PATCH | `/api/v1/users/me/background-image` | 업로드한 배경 사진 반영 — S3 존재·소유자 검증 |
+| 66 | GET | `/api/v1/users/{userId}/background-image` | 배경 사진 URL 조회 — 인증 불필요 |
+| 67 | DELETE | `/api/v1/users/me/background-image` | 배경 사진 삭제 — S3 객체는 남기고 키 연결만 끊음 |
+| 68 | GET | `/api/v1/users/me/profile` | 프로필 편집용 조회 — 소개글·성별·생일·키·몸무게 |
+| 69 | PATCH | `/api/v1/users/me/profile` | 프로필 수정 — 소개글·성별·생일·키·몸무게 부분 수정 |
+| 70 | PATCH | `/api/v1/users/me/nickname` | 닉네임 변경 (중복 시 409) |
+| 71 | POST | `/api/v1/users/nickname/availability` | 닉네임 중복 확인 — 사용 화면: 프로필 편집, 온보딩 |
 
 ### 12. 설정 페이지
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 71 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
-| 72 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
-| 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
-| 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
+| 72 | PATCH | `/api/v1/users/me/password` | 비밀번호 변경 (로컬 계정만) |
+| 73 | GET | `/api/v1/users/me/settings` | 알림 on/off(단일) + 프로필 공개범위 조회 |
+| 74 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
+| 75 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 73개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 73개 + SSE 스트림 2개(매칭 이벤트 3종 · 유저 이벤트 1종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -995,7 +996,27 @@
   - 두 값 모두 **`running_rooms` 쪽이 정본이다.** `running_players.target_distance`는 NOT NULL이라 목표 없는 솔로에도 값이 들어가므로, `null`을 그대로 보내려면 방의 값을 써야 한다
 - **`type`이 `INVITE`면 초대 방이다** — 상태 판정과 클라가 할 일은 `MATCH`와 같다(초대 방 화면을 그릴지만 가른다). 초대를 받기만 한 사람은 활성 신청이 없어 `IDLE`이다
 - **`WAITING`은 `MATCH`·`INVITE`만 가능하다** — 솔로는 모집 단계 없이 `MATCHED`로 태어난다
+- **유저 스트림(아래)이 연결 직후 같은 값을 보낸다** — 이 API는 구버전 앱과 스트림 연결 실패 시의 대체 경로로 남긴다
 - **인증**: 필요
+
+#### 유저 스트림 — `GET /api/v1/users/me/stream` (SSE)
+
+- **인증**: 필요 / **Content-Type**: `text/event-stream`
+- **앱이 켜져 있는 동안 연다** — 앱 진입·포그라운드 복귀 때 연결한다. 활성 신청과 무관하게 **로그인만 하면 언제나 열린다**(매칭 스트림 5-A와 다르다 — 거절하는 경우가 없다)
+- **연결 직후 `USER_STATUS` 1건을 보낸다** — `data`는 2-2 응답과 같은 형식이고 같은 판정을 쓴다. 클라는 이 값으로 갈 화면과 매칭 스트림 연결 여부를 정한다
+- **상태가 바뀌어도 `USER_STATUS`를 다시 보내지 않는다** — 연결 순간의 스냅샷이다. 매칭 중 변화는 매칭 스트림이, 러닝 중 변화는 WS가 나른다
+- **매칭 스트림과 별개다** — 매칭 중에는 둘 다 열려 있다. 한쪽 연결이 다른 쪽을 밀어내지 않는다
+- **keep-alive**: 15초마다 주석 라인(`:ping`)을 보낸다 — 이벤트가 아니므로 클라 이벤트 핸들러에 잡히지 않는다
+- **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면 닫는다(새 연결은 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다). 클라는 다시 연결하고 연결 직후 스냅샷으로 상태를 복원한다
+  - 탈퇴 시 닫기는 아직 없다 — 탈퇴 개편 때 매칭 스트림과 같은 방식으로 붙인다. 그전까지 탈퇴한 사람의 스트림은 30분 만료로 정리된다
+- **알림 단계에서 늘어날 것**: 스냅샷에 안 읽은 알림 수(`unreadCount`), 새 알림 이벤트(`NOTIFICATION_CREATED`)
+
+```
+event:USER_STATUS
+data:{"status":"IDLE","type":null,"runningRoomId":null,"scheduledStartAt":null,"targetDistanceMeters":null,"cooldownUntil":null}
+
+:ping
+```
 
 ### 2-3. `GET /api/v1/app/version` — 앱 버전 확인
 
@@ -1099,7 +1120,7 @@
 
 - **화면**: 전역 — 하단 탭 배지
 - **Response `200 OK`**: `{ "unreadCount": 3 }`
-- **실시간으로 밀어 주지 않는다** — 앱 진입·포그라운드 복귀·탭 전환 때 클라가 다시 묻는다. 전원에게 스트림을 열지 않는다는 원칙(5-A 매칭 상태 복원)과 같은 이유다
+- **알림 단계에서 유저 스트림(2-2 아래)으로 옮긴다** — 연결 직후 `USER_STATUS` 스냅샷에 `unreadCount`를 싣고, 새 알림은 이벤트로 밀어 준다. 아직 구현 전이라 이 API를 따로 남길지는 그때 정한다
 - 보관 기간이 지난 알림은 세지 않는다
 - **인증**: 필요
 
@@ -1533,7 +1554,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 매칭 상태만 따로 묻는 엔드포인트는 두지 않는다. 앱 진입·포그라운드 복귀 시 **유저 상태 API(2-2)**가 `IDLE`·`WAITING`·`READY`를 돌려주고, 클라이언트는 그 값으로 스트림 연결 여부를 정한다.
 
-- **전원에게 스트림을 열지 않는 이유**: 매칭을 걸지 않은 사용자가 대다수인데 모두에게 연결을 유지하는 것은 서버 커넥션과 단말 배터리 양쪽에 부담이다. 그래서 상태를 먼저 묻고 활성 신청이 있을 때만 연결한다
+- **매칭 스트림은 활성 신청이 있을 때만 연다** — 방 단위 이벤트라 붙을 방이 없으면 보낼 것이 없다. 앱이 켜져 있는 동안의 개인 채널은 유저 스트림(2-2 아래)이 맡는다 — 앱을 켠 사용자마다 연결 하나를 유지하는 비용을 받아들이고 알림·상태를 한 채널로 모았다. 상태는 그 스트림의 연결 직후 스냅샷으로 받는다(2-2도 같은 값을 준다)
 - **방 정보는 스트림이 나른다** — 2-2는 `runningRoomId`까지만 주고, 참가자 목록·마감 시각은 연결 직후의 `RoomInfo` 스냅샷이 채운다. 신청 직후에는 `POST /match-rooms`가 준 `runningRoomId`로 바로 스트림을 연다
 - **매칭이 저절로 실패하는 상태는 없다** — 마감은 인원과 무관하게 항상 확정으로 끝나므로 `FAILED`에 해당하는 값이 없다. 취소는 사용자가 직접 한 행동이라 그 즉시 `IDLE`로 돌아간다
 - **1인 확정도 `READY`다.** 클라이언트는 `RoomInfo.players`가 1건인 경우를 혼자 확정된 상태로 그리며, 이때 나가기는 페널티가 없다(5-B)
