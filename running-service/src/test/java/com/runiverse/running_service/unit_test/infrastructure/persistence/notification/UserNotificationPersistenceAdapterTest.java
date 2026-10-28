@@ -15,6 +15,7 @@ import com.runiverse.running_service.infrastructure.persistence.notification.Use
 import com.runiverse.running_service.infrastructure.persistence.notification.UserNotificationPersistenceAdapter;
 import com.runiverse.running_service.support.LogCapture;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -288,6 +289,39 @@ class UserNotificationPersistenceAdapterTest {
             assertThat(jpql.getValue()).contains("n.read = false").contains("n.createdAt >= :since");
             verify(countQuery).setParameter("userId", RECIPIENT_ID);
             verify(countQuery).setParameter("since", SINCE);
+        }
+    }
+
+    @Nested
+    @DisplayName("모두 읽음")
+    class MarkAllRead {
+
+        @Mock
+        private Query updateQuery;
+
+        @Test
+        @DisplayName("내 안 읽은 알림만 읽음으로 바꾸며 갱신 시각을 직접 세팅하고 바꾼 수를 돌려준다")
+        void marksUnreadAndSetsUpdatedAt() {
+            // given
+            LocalDateTime now = LocalDateTime.of(2026, 10, 28, 20, 0);
+            when(entityManager.createQuery(anyString())).thenReturn(updateQuery);
+            when(updateQuery.setParameter(anyString(), any())).thenReturn(updateQuery);
+            when(updateQuery.executeUpdate()).thenReturn(3);
+
+            // when
+            int readCount = adapter.markAllRead(new UserId(RECIPIENT_ID), now);
+
+            // then -> 벌크 갱신은 @UpdateTimestamp를 거치지 않는다
+            assertThat(readCount).isEqualTo(3);
+            ArgumentCaptor<String> jpql = ArgumentCaptor.forClass(String.class);
+            verify(entityManager).createQuery(jpql.capture());
+            assertThat(jpql.getValue())
+                    .contains("SET n.read = true, n.updatedAt = :now")
+                    .contains("n.userId = :userId")
+                    .contains("n.read = false")
+                    .doesNotContain("createdAt");
+            verify(updateQuery).setParameter("userId", RECIPIENT_ID);
+            verify(updateQuery).setParameter("now", now);
         }
     }
 }

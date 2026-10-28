@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.persistence.notification;
 
 import com.runiverse.running_service.application.notification.port.out.CountUnreadUserNotificationsPort;
 import com.runiverse.running_service.application.notification.port.out.LoadUserNotificationsPort;
+import com.runiverse.running_service.application.notification.port.out.MarkUserNotificationsReadPort;
 import com.runiverse.running_service.application.notification.port.out.SaveUserNotificationPort;
 import com.runiverse.running_service.application.notification.port.out.UserNotificationPage;
 import com.runiverse.running_service.application.notification.port.out.UserNotificationRow;
@@ -21,7 +22,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class UserNotificationPersistenceAdapter implements SaveUserNotificationPort, LoadUserNotificationsPort,
-        CountUnreadUserNotificationsPort {
+        CountUnreadUserNotificationsPort, MarkUserNotificationsReadPort {
 
     // idx_user_notification_list(user_id, user_notification_id)를 거꾸로 읽는다.
     // 보관 기간(created_at)은 읽은 행에 거는 필터다 — ID와 생성 시각의 순서가 같아 경계 밖은 끝에 몰려 있다
@@ -42,6 +43,15 @@ public class UserNotificationPersistenceAdapter implements SaveUserNotificationP
             WHERE n.userId = :userId
               AND n.read = false
               AND n.createdAt >= :since
+            """;
+
+    // 벌크 갱신은 엔티티를 거치지 않아 @UpdateTimestamp가 돌지 않는다 — updated_at을 직접 세팅한다.
+    // 부분 인덱스(user_id) WHERE is_read = false로 바꿀 행만 찾는다
+    private static final String MARK_ALL_READ = """
+            UPDATE UserNotificationJpaEntity n
+            SET n.read = true, n.updatedAt = :now
+            WHERE n.userId = :userId
+              AND n.read = false
             """;
 
     private final EntityManager entityManager;
@@ -85,6 +95,14 @@ public class UserNotificationPersistenceAdapter implements SaveUserNotificationP
                 .setParameter("userId", userId.value())
                 .setParameter("since", since)
                 .getSingleResult();
+    }
+    
+    @Override
+    public int markAllRead(UserId userId, LocalDateTime now) {
+        return entityManager.createQuery(MARK_ALL_READ)
+                .setParameter("userId", userId.value())
+                .setParameter("now", now)
+                .executeUpdate();
     }
 
     // 되살리지 못한 행은 그 행만 뺀다 — 알림 하나 때문에 알림함 전체가 열리지 않으면 안 된다.
