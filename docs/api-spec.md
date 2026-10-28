@@ -1082,9 +1082,9 @@
         "userId": "01a0f2d4-6180-7000-8000-446655440013",
         "nickname": "철수",
         "profileImageUrl": "https://...",
-        "isDeleted": false
+        "isDeleted": false,
+        "relationshipType": "FRIEND"        // 지금 나와 이 사람의 관계 — 모든 종류에 있다
       },
-      "relationshipType": null,             // FRIEND_* 알림만 — 지금 actor와의 관계
       "invitation": {                       // RUNNING_INVITED만
         "runningRoomId": 130,
         "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | LEFT | EXPIRED — 지금 상태
@@ -1102,12 +1102,13 @@
 | `type` | String | O | 알림 종류 — erd §6 `notifications.type` |
 | `isRead` | Boolean | O | 읽음 여부 |
 | `actor` | Object | O | 알림을 일으킨 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
-| `relationshipType` | String | X | `FRIEND_REQUESTED`·`FRIEND_ACCEPTED`일 때 **지금** actor와의 관계(§0). `RUNNING_INVITED`면 `null` |
+| `actor.relationshipType` | String | X | **지금** 나와 이 사람의 관계(§0). 알림 종류와 무관하게 늘 싣는다. 탈퇴한 사람이면 `null` |
 | `invitation` | Object | X | `RUNNING_INVITED`일 때만 있고 그 밖에는 `null` |
 | `invitation.status` | String | O | 초대의 **지금** 상태 — `PENDING`이면 수락·거절 버튼을 그린다 |
 
-- **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `relationshipType`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
-  - 친구 요청 알림: `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6) 버튼, 그 밖이면 결과만 보여준다
+- **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `actor.relationshipType`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
+  - 친구 요청 알림: `actor.relationshipType`이 `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6) 버튼, 그 밖이면 결과만 보여준다
+  - **관계를 `actor` 안에 둔다** — 사람에 딸린 값이라 사람 객체에 붙인다. 종류마다 있고 없고가 갈리지 않아 클라 분기가 줄고, 다른 목록(10-7·10-9)이 사람마다 관계를 싣는 것과 같은 결이다
   - 초대 알림: `PENDING`이면 수락(4-3)·거절(4-4) 버튼, `ACCEPTED`면 탭하면 초대 방으로 간다
 - **보관 기간(운영값)이 지난 알림은 나오지 않는다**
 - **이 조회는 읽음 처리를 하지 않는다** — 읽음은 2-6이 한다
