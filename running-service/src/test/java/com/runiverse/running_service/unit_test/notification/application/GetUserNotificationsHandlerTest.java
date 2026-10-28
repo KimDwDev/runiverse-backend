@@ -176,7 +176,7 @@ class GetUserNotificationsHandlerTest {
     }
 
     @Test
-    @DisplayName("일으킨 사람이 탈퇴했으면 탈퇴 표시만 하고 닉네임·사진·관계를 싣지 않는다")
+    @DisplayName("일으킨 사람이 탈퇴했으면 탈퇴 유저 형식으로 싣고 관계는 싣지 않는다")
     void marksDeletedActor() {
         // given -> 탈퇴하면 users 행이 지워져 프로필이 나오지 않는다
         givenPage(List.of(friendRequested(912L)), null);
@@ -186,9 +186,9 @@ class GetUserNotificationsHandlerTest {
         // when
         GetUserNotificationsResult result = firstPage();
 
-        // then -> 알림은 남고 사람만 탈퇴 형식이다
+        // then -> 알림은 남고 사람만 §0 탈퇴 유저 형식이다
         assertThat(result.items()).singleElement().extracting(GetUserNotificationsResult.Item::actor)
-                .isEqualTo(new GetUserNotificationsResult.Actor(CHULSU, null, null, true, null));
+                .isEqualTo(new GetUserNotificationsResult.Actor(CHULSU, "탈퇴한 사용자", null, true, null));
     }
 
     @Test

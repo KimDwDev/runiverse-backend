@@ -44,6 +44,7 @@ public class GetUserNotificationsHandler implements GetUserNotificationsUsecase 
     private final LoadRelationshipTypesPort loadRelationshipTypesPort;
     private final LoadInvitationSnapshotsPort loadInvitationSnapshotsPort;
     private final GenerateViewUrlPort generateViewUrlPort;
+    private static final String DELETED_NICKNAME = "탈퇴한 사용자";
     private final NotificationProperties notificationProperties;
 
     @Override
@@ -113,7 +114,7 @@ public class GetUserNotificationsHandler implements GetUserNotificationsUsecase 
                                                      Map<UUID, RelationshipType> relationships) {
         PlayerProfile profile = profiles.get(actorId);
         if (profile == null) {
-            return new GetUserNotificationsResult.Actor(actorId, null, null, true, null);
+            return new GetUserNotificationsResult.Actor(actorId, DELETED_NICKNAME, null, true, null);
         }
         String imageUrl = profile.profileImageKey() == null ? null :
                 generateViewUrlPort.generate(profile.profileImageKey());

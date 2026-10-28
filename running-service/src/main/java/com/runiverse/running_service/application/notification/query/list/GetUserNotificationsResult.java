@@ -22,10 +22,10 @@ public record GetUserNotificationsResult(List<Item> items, String nextCursor, lo
 
     }
 
-    // 알림을 일으킨 사람 — 탈퇴했으면 deleted이고 닉네임·사진·관계는 응답에서 탈퇴 유저 형식으로 채운다
+    // 알림을 일으킨 사람 — 탈퇴했으면 §0 탈퇴 유저 형식이고 관계는 싣지 않는다
     public record Actor(
             UUID userId,
-            String nickname,                    // 탈퇴했으면 null
+            String nickname,                    // 탈퇴했으면 "탈퇴한 사용자"
             String profileImageUrl,             // 사진이 없거나 탈퇴했으면 null
             boolean deleted,
             RelationshipType relationshipType   // 조회자 기준 지금 관계. 탈퇴했으면 null
