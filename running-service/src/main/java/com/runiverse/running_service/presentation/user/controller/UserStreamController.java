@@ -16,10 +16,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.UUID;
 
 @RestController
-// 앱이 켜져 있는 동안 내내 여는 개인 스트림 — 연결 직후 상태 스냅샷을 받는다
+// 앱이 켜져 있는 동안 내내 여는 개인 스트림 — 연결 직후 보내는 스냅샷은 없다
 @RequestMapping("users")
 @RequiredArgsConstructor
 public class UserStreamController {
@@ -29,7 +30,7 @@ public class UserStreamController {
     private final UserStreamProperties userStreamProperties;
 
     @GetMapping(path = "me/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@AuthenticationPrincipal Jwt jwt) {
+    public SseEmitter stream(@AuthenticationPrincipal Jwt jwt) throws IOException {
         UUID userId = UUID.fromString(jwt.getSubject());
         // 30초 컨테이너 기본값 대신 명시한다
         SseEmitter emitter = new SseEmitter(userStreamProperties.timeout().toMillis());
@@ -41,8 +42,9 @@ public class UserStreamController {
         // 타임아웃·에러·클라 종료가 전부 여기로 모인다 — 정리는 한 곳에서만 한다
         emitter.onCompletion(() -> closeUserStreamUsecase.handle(
                 new CloseUserStreamCommand(userId, connection)));
-        // 첫 이벤트(USER_STATUS)를 여기서 바로 보낸다 — 응답 헤더도 이때 나간다
         openUserStreamUsecase.handle(new OpenUserStreamCommand(userId, connection));
+        // 첫 바이트를 써야 응답 헤더가 나간다 — 보낼 스냅샷이 없어 주석 라인으로 연다
+        emitter.send(SseEmitter.event().comment("connected"));
         return emitter;
     }
 }

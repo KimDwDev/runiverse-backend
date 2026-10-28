@@ -1,12 +1,10 @@
 package com.runiverse.running_service.unit_test.user.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.running.query.status.GetUserStatusResult;
 import com.runiverse.running_service.application.user.command.stream.CloseUserStreamCommand;
 import com.runiverse.running_service.application.user.command.stream.OpenUserStreamCommand;
 import com.runiverse.running_service.application.user.port.in.CloseUserStreamUsecase;
 import com.runiverse.running_service.application.user.port.in.OpenUserStreamUsecase;
-import com.runiverse.running_service.application.user.port.out.UserStreamEvent;
 import com.runiverse.running_service.presentation.user.controller.UserStreamController;
 import com.runiverse.running_service.presentation.user.sse.SseUserStreamConnection;
 import com.runiverse.running_service.presentation.user.sse.UserStreamProperties;
@@ -32,9 +30,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -75,24 +71,15 @@ class UserStreamControllerTest {
     }
 
     @Test
-    @DisplayName("토큰의 사용자로 SSE 연결을 열고 첫 이벤트로 상태를 내려보낸다")
+    @DisplayName("토큰의 사용자로 SSE 연결을 열고 첫 바이트로 주석 라인을 보낸다")
     void opensStreamForTokenSubject() throws Exception {
-        // given -> 유스케이스가 연결로 보낸 스냅샷이 응답 본문에 그대로 실린다
-        willAnswer(invocation -> {
-            OpenUserStreamCommand command = invocation.getArgument(0);
-            command.connection().send(UserStreamEvent.status(GetUserStatusResult.idle(null)));
-            return null;
-        }).given(openUserStreamUsecase).handle(any(OpenUserStreamCommand.class));
-
         // when
         MvcResult result = mockMvc.perform(get("/users/me/stream")).andReturn();
 
-        // then
+        // then -> 보낼 스냅샷이 없어 주석 라인으로 응답 헤더를 연다
         assertThat(result.getRequest().isAsyncStarted()).isTrue();
         assertThat(result.getResponse().getContentType()).startsWith("text/event-stream");
-        assertThat(result.getResponse().getContentAsString(StandardCharsets.UTF_8))
-                .contains("event:USER_STATUS")
-                .contains("\"status\":\"IDLE\"");
+        assertThat(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).startsWith(":connected");
         ArgumentCaptor<OpenUserStreamCommand> opened = ArgumentCaptor.forClass(OpenUserStreamCommand.class);
         verify(openUserStreamUsecase).handle(opened.capture());
         assertThat(opened.getValue().userId()).isEqualTo(USER_ID);

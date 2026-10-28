@@ -22,8 +22,8 @@ class UserStreamE2eTest extends E2eTestSupport {
     private static final int DISTANCE = 5000;
 
     @Test
-    @DisplayName("활성 신청이 없어도 연결되고, 연결 직후 2-2와 같은 IDLE 상태를 받는다")
-    void idleUserReceivesStatusSnapshot() {
+    @DisplayName("활성 신청이 없어도 연결된다")
+    void idleUserCanConnect() {
         // given
         TestUser user = signUpAndOnboard();
 
@@ -31,15 +31,11 @@ class UserStreamE2eTest extends E2eTestSupport {
         try (SseStream stream = openUserStream(user.accessToken())) {
             // then -> 매칭 스트림과 달리 거절하지 않는다
             assertThat(stream.status()).isEqualTo(200);
-            Map<String, Object> snapshot = stream.await("USER_STATUS");
-            assertThat(snapshot.get("status")).isEqualTo("IDLE");
-            assertThat(snapshot.get("runningRoomId")).isNull();
         }
-        assertThat(get("/users/me/status", user.accessToken()).text("status")).isEqualTo("IDLE");
     }
 
     @Test
-    @DisplayName("매칭 대기 중이면 방 값을 실은 WAITING을 받고, 매칭 스트림과 함께 열려 있다")
+    @DisplayName("매칭 대기 중에도 매칭 스트림과 함께 열린다")
     void waitingUserKeepsBothStreams() {
         // given
         TestUser user = signUpAndOnboard();
@@ -52,15 +48,8 @@ class UserStreamE2eTest extends E2eTestSupport {
 
         try (SseStream userStream = openUserStream(user.accessToken());
              SseStream matchStream = openMatchStream(user.accessToken())) {
-            // when
-            Map<String, Object> snapshot = userStream.await("USER_STATUS");
-
-            // then -> 2-2와 같은 판정이다
-            assertThat(snapshot.get("status")).isEqualTo("WAITING");
-            assertThat(snapshot.get("type")).isEqualTo("MATCH");
-            assertThat(((Number) snapshot.get("runningRoomId")).intValue()).isEqualTo(runningRoomId);
-            assertThat(snapshot.get("targetDistanceMeters")).isEqualTo(DISTANCE);
-            // 레지스트리가 따로라 한쪽 연결이 다른 쪽을 밀어내지 않는다
+            // then -> 레지스트리가 따로라 한쪽 연결이 다른 쪽을 밀어내지 않는다
+            assertThat(userStream.status()).isEqualTo(200);
             assertThat(((Number) matchStream.await("MATCH_ROOM_UPDATED").get("runningRoomId")).intValue())
                     .isEqualTo(runningRoomId);
         } finally {
@@ -75,12 +64,12 @@ class UserStreamE2eTest extends E2eTestSupport {
         TestUser user = signUpAndOnboard();
 
         try (SseStream first = openUserStream(user.accessToken())) {
-            first.await("USER_STATUS");
+            assertThat(first.status()).isEqualTo(200);
 
             // when
             try (SseStream second = openUserStream(user.accessToken())) {
-                // then -> 새 연결은 스냅샷을 받고, 옛 연결은 끊긴다
-                assertThat(second.await("USER_STATUS").get("status")).isEqualTo("IDLE");
+                // then
+                assertThat(second.status()).isEqualTo(200);
                 first.awaitClosed();
             }
         }
