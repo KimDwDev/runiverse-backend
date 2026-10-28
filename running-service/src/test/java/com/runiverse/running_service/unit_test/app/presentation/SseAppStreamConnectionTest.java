@@ -7,7 +7,7 @@ import com.runiverse.running_service.domain.notification.vo.UserNotificationType
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.presentation.app.sse.SseAppStreamConnection;
-import com.runiverse.running_service.presentation.notification.response.UserNotificationsResponse;
+import com.runiverse.running_service.presentation.notification.response.NotificationEventResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -85,7 +85,7 @@ class SseAppStreamConnectionTest {
     }
 
     @Test
-    @DisplayName("새 알림은 NOTIFICATION_CREATED 이름으로 2-4 목록 항목과 같은 JSON을 싣는다")
+    @DisplayName("새 알림은 알림 종류를 이벤트 이름으로, 2-4 목록 항목에서 type만 뺀 JSON을 싣는다")
     void notificationCreatedUsesListItemShape() throws Exception {
         // given
         UUID chulsu = UuidCreator.getTimeOrderedEpoch();
@@ -96,7 +96,7 @@ class SseAppStreamConnectionTest {
                         LocalDateTime.of(2026, 10, 28, 19, 30), 7_000));
 
         // when
-        connection.send(AppStreamEvent.notificationCreated(item));
+        connection.send(AppStreamEvent.notification(item));
 
         // then -> 클라가 받은 그대로 목록 맨 위에 붙인다
         ArgumentCaptor<SseEmitter.SseEventBuilder> sent = ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
@@ -111,9 +111,10 @@ class SseAppStreamConnectionTest {
                 .map(ResponseBodyEmitter.DataWithMediaType::getData)
                 .findFirst()
                 .orElseThrow();
-        assertThat(frame).contains("event:NOTIFICATION_CREATED");
-        assertThat(body).isEqualTo(UserNotificationsResponse.ItemResponse.from(item));
+        assertThat(frame).contains("event:RUNNING_INVITED");
+        assertThat(body).isEqualTo(NotificationEventResponse.from(item));
         JsonNode json = JsonMapper.builder().build().valueToTree(body);
+        assertThat(json.has("type")).isFalse();   // 종류는 event 이름이 말한다
         assertThat(json.get("isRead").asBoolean()).isFalse();
         assertThat(json.get("actor").get("relationshipType").asString()).isEqualTo("FRIEND");
         assertThat(json.get("invitation").get("status").asString()).isEqualTo("PENDING");

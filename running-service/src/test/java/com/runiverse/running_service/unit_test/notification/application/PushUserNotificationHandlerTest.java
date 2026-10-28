@@ -83,7 +83,7 @@ class PushUserNotificationHandlerTest {
     }
 
     @Test
-    @DisplayName("붙어 있으면 목록 항목 모양으로 읽어 NOTIFICATION_CREATED로 보낸다")
+    @DisplayName("붙어 있으면 목록 항목 모양으로 읽어 알림 종류 이름의 이벤트로 보낸다")
     void sendsNotificationCreated() {
         // given
         given(appStreamPort.find(new UserId(ME))).willReturn(Optional.of(connection));
@@ -94,7 +94,8 @@ class PushUserNotificationHandlerTest {
         handler.handle(new PushUserNotificationCommand(ME, 912L));
 
         // then
-        verify(connection).send(AppStreamEvent.notificationCreated(ITEM));
+        verify(connection).send(AppStreamEvent.notification(ITEM));
+        assertThat(AppStreamEvent.notification(ITEM).type().name()).isEqualTo("FRIEND_REQUESTED");
         assertThat(log.messages(Level.INFO)).containsExactly("[알림] 푸시 성공 - notificationId=912, connectionId=conn-1");
     }
 

@@ -2,7 +2,7 @@ package com.runiverse.running_service.presentation.app.sse;
 
 import com.runiverse.running_service.application.app.port.out.AppStreamConnection;
 import com.runiverse.running_service.application.app.port.out.AppStreamEvent;
-import com.runiverse.running_service.presentation.notification.response.UserNotificationsResponse;
+import com.runiverse.running_service.presentation.notification.response.NotificationEventResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -47,10 +47,11 @@ public class SseAppStreamConnection implements AppStreamConnection {
                 .data(bodyOf(event), MediaType.APPLICATION_JSON));
     }
 
-    // 알림은 목록(2-4) 항목과 같은 변환을 쓴다 — 클라가 받은 그대로 목록 맨 위에 붙인다
+    // 알림은 목록(2-4) 항목에서 type만 뺀 모양이다 — 종류는 event 이름이 말한다
     private Object bodyOf(AppStreamEvent event) {
         return switch (event.type()) {
-            case NOTIFICATION_CREATED -> UserNotificationsResponse.ItemResponse.from(event.notification());
+            case FRIEND_REQUESTED, FRIEND_ACCEPTED, RUNNING_INVITED ->
+                    NotificationEventResponse.from(event.notification());
         };
     }
 

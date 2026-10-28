@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -255,7 +256,7 @@ class UserNotificationE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("친구 요청을 받으면 앱 스트림으로 목록 항목과 같은 모양의 NOTIFICATION_CREATED가 온다")
+    @DisplayName("친구 요청을 받으면 앱 스트림으로 FRIEND_REQUESTED 이벤트가 오고, data는 목록 항목에서 type만 뺀 모양이다")
     void pushesNotificationToRecipientStream() {
         // given -> 받는 사람만 앱 스트림을 열어 둔다
         TestUser requester = signUpAndOnboard();
@@ -269,18 +270,19 @@ class UserNotificationE2eTest extends E2eTestSupport {
             assertThat(post(friendRequestPath(target), null, requester.accessToken()).status()).isEqualTo(201);
 
             // then
-            Map<String, Object> pushed = targetStream.await("NOTIFICATION_CREATED");
-            Map<String, Object> listed = get("/users/me/notifications", target.accessToken()).objects("items").getFirst();
-            assertThat(pushed).isEqualTo(listed);
-            assertThat(pushed.get("type")).isEqualTo("FRIEND_REQUESTED");
+            Map<String, Object> pushed = targetStream.await("FRIEND_REQUESTED");
+            Map<String, Object> listed = new HashMap<>(get("/users/me/notifications", target.accessToken()).objects("items").getFirst());
+            // 종류는 event 이름이 말해 data에는 type이 없다 — 나머지는 목록 항목과 같다
+            assertThat(listed.remove("type")).isEqualTo("FRIEND_REQUESTED");
+            assertThat(pushed).doesNotContainKey("type").isEqualTo(listed);
             assertThat(actorOf(pushed))
                     .containsEntry("userId", requester.userId())
                     .containsEntry("relationshipType", "FRIEND_REQUEST_RECEIVED");
 
             // 수락하면 요청했던 사람에게 수락 알림이 간다
             assertThat(put(friendRequestPath(requester), target.accessToken()).status()).isEqualTo(200);
-            Map<String, Object> accepted = requesterStream.await("NOTIFICATION_CREATED");
-            assertThat(accepted.get("type")).isEqualTo("FRIEND_ACCEPTED");
+            Map<String, Object> accepted = requesterStream.await("FRIEND_ACCEPTED");
+            assertThat(accepted).doesNotContainKey("type");
             assertThat(actorOf(accepted))
                     .containsEntry("userId", target.userId())
                     .containsEntry("relationshipType", "FRIEND");
@@ -303,7 +305,7 @@ class UserNotificationE2eTest extends E2eTestSupport {
             assertThat(post(friendRequestPath(target), null, other.accessToken()).status()).isEqualTo(201);
 
             // then
-            assertThat(actorOf(targetStream.await("NOTIFICATION_CREATED"))).containsEntry("userId", other.userId());
+            assertThat(actorOf(targetStream.await("FRIEND_REQUESTED"))).containsEntry("userId", other.userId());
         }
     }
 

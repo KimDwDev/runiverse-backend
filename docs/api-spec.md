@@ -175,7 +175,7 @@
 | 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 72개 + SSE 스트림 2개(매칭 이벤트 3종 · 앱 이벤트 1종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 72개 + SSE 스트림 2개(매칭 이벤트 3종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -1056,7 +1056,9 @@
 - **keep-alive**: 15초마다 주석 라인(`:ping`)을 보낸다 — 이벤트가 아니므로 클라 이벤트 핸들러에 잡히지 않는다
 - **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면 닫는다(새 연결은 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다). 클라는 다시 연결한다 — 끊겨 있던 사이의 알림은 2-4로 다시 받는다
   - 탈퇴 시 닫기는 아직 없다 — 탈퇴 개편 때 매칭 스트림과 같은 방식으로 붙인다. 그전까지 탈퇴한 사람의 스트림은 30분 만료로 정리된다
-- **이벤트 `NOTIFICATION_CREATED`** — 새 인앱 알림 하나. `data`는 2-4 `items[]` 원소와 **같은 모양**이다(같은 조립 코드로 만든다). 클라는 받은 그대로 목록 맨 위에 붙이고 배지를 하나 올린다
+- **이벤트 3종 — 알림 종류가 곧 이벤트 이름이다**(매칭 스트림처럼 SSE `event`로 가른다): `FRIEND_REQUESTED`(친구 요청 받음) · `FRIEND_ACCEPTED`(내 요청이 수락됨) · `RUNNING_INVITED`(러닝 초대 받음, 다시 초대 포함)
+  - `data`는 셋 다 2-4 `items[]` 원소에서 **`type`만 뺀 모양**이다(같은 조립 코드로 만든다). 종류는 이벤트 이름이 말한다. 클라는 이벤트 이름을 `type`으로 붙여 목록 맨 위에 넣고 배지를 하나 올린다
+  - 모르는 `event`는 무시한다 — 종류가 늘 수 있다
   - **받는 사람에게만 간다** — 알림을 만든 동작(친구 요청·수락·초대)이 커밋된 뒤에 보낸다. 실패해 롤백된 동작은 아무것도 보내지 않는다
   - **서버가 여러 대라 Redis를 거친다** — 커밋한 서버가 받는 사람과 알림 ID만 발행하고, 받는 사람이 붙은 서버만 알림을 읽어 조립해 보낸다
   - **놓칠 수 있다** — 앱이 꺼져 있었거나, 연결이 끊긴 사이이거나, Redis가 잠시 닿지 않으면 오지 않는다. 알림은 DB에 남아 다음 진입 때 2-4로 보인다
@@ -1065,8 +1067,8 @@
 ```
 :connected
 
-event:NOTIFICATION_CREATED
-data:{"notificationId":912,"type":"FRIEND_REQUESTED","isRead":false,"createdAt":"2026-10-28T12:03:00","actor":{"userId":"01a0f2d4-...","nickname":"철수","profileImageUrl":null,"isDeleted":false,"relationshipType":"FRIEND_REQUEST_RECEIVED"},"invitation":null}
+event:FRIEND_REQUESTED
+data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","actor":{"userId":"01a0f2d4-...","nickname":"철수","profileImageUrl":null,"isDeleted":false,"relationshipType":"FRIEND_REQUEST_RECEIVED"},"invitation":null}
 
 :ping
 ```

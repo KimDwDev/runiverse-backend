@@ -43,7 +43,7 @@ public class PushUserNotificationHandler implements PushUserNotificationUsecase 
         }
 
         // 3. 끊긴 단말이면 연결이 스스로 닫고 레지스트리에서 빠진다 — 알림은 다음 목록 조회로 보인다
-        connection.get().send(AppStreamEvent.notificationCreated(item.get()));
+        connection.get().send(AppStreamEvent.notification(item.get()));
         log.info("[알림] 푸시 성공 - notificationId={}, connectionId={}",
                 command.notificationId(), connection.get().id());
     }
