@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.user.query.profile;
 
+import com.runiverse.running_service.application.common.port.out.CountFriendsPort;
 import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.common.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.common.UserImageType;
@@ -22,13 +23,11 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class GetUserProfileHandler implements GetUserProfileUsecase {
 
-    // TODO: 친구 수 목데이터 — 실제 COUNT(user_relationships, type=FRIEND)로 교체한다
-    private static final long MOCK_FRIEND_COUNT = 42L;
-
     private final LoadUserByIdPort loadUserByIdPort;
     private final LoadNicknamePort loadNicknamePort;
     private final UserImageUrlResolver userImageUrlResolver;
     private final LoadRelationshipTypesPort loadRelationshipTypesPort;
+    private final CountFriendsPort countFriendsPort;
 
     @Override
     public GetUserProfileResult handle(GetUserProfileQuery query) {
@@ -54,7 +53,7 @@ public class GetUserProfileHandler implements GetUserProfileUsecase {
                 loadNicknamePort.loadNickname(targetUserId).map(Nickname::value).orElse(null),
                 profileImageUrl,
                 introduction.isEmpty() ? null : introduction,
-                MOCK_FRIEND_COUNT,
+                countFriendsPort.countFriends(targetUserId),
                 relationshipType
         );
     }

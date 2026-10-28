@@ -1,5 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.relationship;
 
+import com.runiverse.running_service.application.common.port.out.CountFriendsPort;
 import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
 import com.runiverse.running_service.application.relationship.port.out.EnsureUserRelationshipPairPort;
@@ -31,7 +32,8 @@ import java.util.stream.Stream;
 @Component
 @RequiredArgsConstructor
 public class UserRelationshipPersistenceAdapter implements LoadUserRelationshipPort, SaveUserRelationshipPort,
-        EnsureUserRelationshipPairPort, LoadFriendsPort, CheckFriendPort, LoadRelationshipTypesPort {
+        EnsureUserRelationshipPairPort, LoadFriendsPort, CheckFriendPort, LoadRelationshipTypesPort,
+        CountFriendsPort {
 
     // JPQL에는 ON CONFLICT가 없어 네이티브로 쓴다. 이미 있는 행은 건드리지 않고, 다른 트랜잭션이 막 넣은 행이면
     // 그 커밋을 기다렸다 지나간다 — UNIQUE 위반이 나지 않는다
@@ -105,6 +107,21 @@ public class UserRelationshipPersistenceAdapter implements LoadUserRelationshipP
                 .setParameter("targetId", targetId.value())
                 .setParameter("type", RelationshipType.FRIEND)
                 .getSingleResult() > 0;
+    }
+
+    // 프로필 요약의 친구 수 — 친구는 대칭이라 이 사람이 주인인 행만 센다.
+    // idx_user_relationship_list(user_id, type, …)의 앞 두 컬럼으로 센다
+    @Override
+    public long countFriends(UserId userId) {
+        return entityManager.createQuery("""
+                        SELECT COUNT(r)
+                        FROM UserRelationshipJpaEntity r
+                        WHERE r.userId = :userId
+                          AND r.type = :type
+                        """, Long.class)
+                .setParameter("userId", userId.value())
+                .setParameter("type", RelationshipType.FRIEND)
+                .getSingleResult();
     }
 
     @Override

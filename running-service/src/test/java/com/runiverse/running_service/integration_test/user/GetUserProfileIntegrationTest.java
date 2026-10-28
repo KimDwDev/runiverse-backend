@@ -69,7 +69,8 @@ public class GetUserProfileIntegrationTest extends IntegrationTestSupport {
                 userStore,        // LoadUserByIdPort
                 onboardingStore,  // LoadNicknamePort
                 new UserImageUrlResolver(viewUrlGenerator),  // GenerateViewUrlPort
-                relationshipStore  // LoadRelationshipTypesPort
+                relationshipStore,  // LoadRelationshipTypesPort
+                relationshipStore   // CountFriendsPort
         );
     }
 
@@ -135,7 +136,25 @@ public class GetUserProfileIntegrationTest extends IntegrationTestSupport {
         assertThat(before.relationshipType()).isEqualTo(RelationshipType.NONE);
         assertThat(result.isMe()).isFalse();
         assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND_REQUEST_RECEIVED);
+        // 요청은 아직 친구가 아니라 세지 않는다
+        assertThat(result.friendCount()).isZero();
         assertThat(result.nickname()).isEqualTo(OTHER_NICKNAME);
+    }
+
+    @Test
+    @DisplayName("친구 수는 친구가 된 사람만 세고, 본인 프로필에도 담긴다")
+    void countsOnlyFriends() {
+        // given -> 친구 둘, 받은 요청 하나
+        UUID ownerId = onboardedUser(EMAIL, NICKNAME);
+        UUID viewerId = onboardedUser(OTHER_EMAIL, OTHER_NICKNAME);
+        relationshipStore.seedFriend(ownerId, viewerId);
+        relationshipStore.seedFriend(ownerId, UuidCreator.getTimeOrderedEpoch());
+        relationshipStore.seedRequest(UuidCreator.getTimeOrderedEpoch(), ownerId);
+
+        // when & then
+        assertThat(profileOf(viewerId, ownerId).friendCount()).isEqualTo(2L);
+        assertThat(profileOf(ownerId, ownerId).friendCount()).isEqualTo(2L);
+        assertThat(profileOf(ownerId, viewerId).friendCount()).isEqualTo(1L);
     }
 
     @Test

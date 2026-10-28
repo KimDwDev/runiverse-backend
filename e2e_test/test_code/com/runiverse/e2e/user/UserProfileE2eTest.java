@@ -53,6 +53,16 @@ class UserProfileE2eTest extends E2eTestSupport {
                 .isEqualTo("FRIEND_REQUEST_RECEIVED");
         assertThat(get("/users/" + viewer.userId(), other.accessToken()).text("relationshipType"))
                 .isEqualTo("FRIEND_REQUEST_SENT");
+
+        // 요청은 아직 친구가 아니라 세지 않는다
+        assertThat(get("/users/" + other.userId(), viewer.accessToken()).number("friendCount")).isZero();
+
+        // 수락하면 두 사람의 친구 수가 하나씩 오르고 관계는 FRIEND다
+        assertThat(put("/users/" + other.userId() + "/friend-request", viewer.accessToken()).status()).isEqualTo(200);
+        Response otherProfile = get("/users/" + other.userId(), viewer.accessToken());
+        assertThat(otherProfile.text("relationshipType")).isEqualTo("FRIEND");
+        assertThat(otherProfile.number("friendCount")).isEqualTo(1);
+        assertThat(get("/users/" + viewer.userId(), viewer.accessToken()).number("friendCount")).isEqualTo(1);
     }
 
     @Test

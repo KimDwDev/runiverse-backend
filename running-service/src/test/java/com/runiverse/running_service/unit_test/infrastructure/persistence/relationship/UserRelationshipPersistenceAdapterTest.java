@@ -318,6 +318,26 @@ public class UserRelationshipPersistenceAdapterTest {
         verify(relationshipQuery).setParameter("targetIds", List.of(targetId, other));
     }
 
+    @Test
+    @DisplayName("친구 수는 프로필 주인이 주인인 FRIEND 행을 센다")
+    void countFriendsCountsOwnFriendRows() {
+        // given
+        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(friendCountQuery);
+        when(friendCountQuery.setParameter(anyString(), any())).thenReturn(friendCountQuery);
+        when(friendCountQuery.getSingleResult()).thenReturn(3L);
+
+        // when
+        long count = adapter.countFriends(new UserId(userId));
+
+        // then -> 친구는 대칭이라 한쪽 행만 센다
+        assertThat(count).isEqualTo(3L);
+        ArgumentCaptor<String> jpql = ArgumentCaptor.forClass(String.class);
+        verify(entityManager).createQuery(jpql.capture(), eq(Long.class));
+        assertThat(jpql.getValue()).contains("r.userId = :userId").contains("r.type = :type").doesNotContain("targetId");
+        verify(friendCountQuery).setParameter("userId", userId);
+        verify(friendCountQuery).setParameter("type", RelationshipType.FRIEND);
+    }
+
     private void givenFriendCount(long count) {
         when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(friendCountQuery);
         when(friendCountQuery.setParameter(anyString(), any())).thenReturn(friendCountQuery);

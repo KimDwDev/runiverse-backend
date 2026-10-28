@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.user.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.CountFriendsPort;
 import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.common.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.common.UserImageUrlResolver;
@@ -56,6 +57,9 @@ public class GetUserProfileHandlerTest {
     @Mock
     private LoadRelationshipTypesPort loadRelationshipTypesPort;
 
+    @Mock
+    private CountFriendsPort countFriendsPort;
+
     private GetUserProfileHandler handler;
 
     // URL 변환은 공유 컴포넌트가 맡는다 — 실물을 끼워 서명 포트와의 상호작용까지 그대로 본다
@@ -63,7 +67,7 @@ public class GetUserProfileHandlerTest {
     void setUp() {
         handler = new GetUserProfileHandler(
                 loadUserByIdPort, loadNicknamePort, new UserImageUrlResolver(generateViewUrlPort),
-                loadRelationshipTypesPort);
+                loadRelationshipTypesPort, countFriendsPort);
     }
 
     private static User userWith(UUID userId, String profileImageKey, String introduction) {
@@ -100,6 +104,23 @@ public class GetUserProfileHandlerTest {
         assertThat(result.profileImageUrl()).isEqualTo(VIEW_URL);
         assertThat(result.introduction()).isEqualTo(INTRODUCTION);
         assertThat(result.relationshipType()).isEqualTo(RelationshipType.FRIEND_REQUEST_RECEIVED);
+    }
+
+    @Test
+    @DisplayName("친구 수는 프로필 주인의 친구를 실제로 센다")
+    void countsFriendsOfProfileOwner() {
+        // given -> 보는 사람이 아니라 프로필 주인의 친구 수다
+        UUID viewerId = UuidCreator.getTimeOrderedEpoch();
+        UUID targetUserId = UuidCreator.getTimeOrderedEpoch();
+        when(loadUserByIdPort.loadById(new UserId(targetUserId)))
+                .thenReturn(Optional.of(userWith(targetUserId, null, INTRODUCTION)));
+        when(countFriendsPort.countFriends(new UserId(targetUserId))).thenReturn(3L);
+
+        // when
+        GetUserProfileResult result = handler.handle(new GetUserProfileQuery(viewerId, targetUserId));
+
+        // then
+        assertThat(result.friendCount()).isEqualTo(3L);
     }
 
     @Test

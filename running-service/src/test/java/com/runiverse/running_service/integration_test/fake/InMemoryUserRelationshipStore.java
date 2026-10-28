@@ -1,5 +1,6 @@
 package com.runiverse.running_service.integration_test.fake;
 
+import com.runiverse.running_service.application.common.port.out.CountFriendsPort;
 import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
 import com.runiverse.running_service.application.relationship.port.out.EnsureUserRelationshipPairPort;
@@ -20,7 +21,7 @@ import java.util.UUID;
 
 // 페이크 조립은 한 스레드라 잠금을 흉내 내지 않는다 — 실제 잠금은 E2E에서만 확인된다
 public class InMemoryUserRelationshipStore implements LoadUserRelationshipPort, SaveUserRelationshipPort,
-        EnsureUserRelationshipPairPort, CheckFriendPort, LoadRelationshipTypesPort {
+        EnsureUserRelationshipPairPort, CheckFriendPort, LoadRelationshipTypesPort, CountFriendsPort {
 
     // user_relationships의 한 행 — 꺼낼 때마다 새 도메인 객체를 만들어 저장 전 변경이 새지 않게 한다
     public record Row(long id, UUID userId, UUID targetId, RelationshipType type, LocalDateTime updatedAt) {
@@ -101,6 +102,11 @@ public class InMemoryUserRelationshipStore implements LoadUserRelationshipPort, 
         theirs.accept();
         save(mine);
         save(theirs);
+    }
+
+    @Override
+    public long countFriends(UserId userId) {
+        return rowsOwnedBy(userId.value()).stream().filter(row -> row.type() == RelationshipType.FRIEND).count();
     }
 
     @Override
