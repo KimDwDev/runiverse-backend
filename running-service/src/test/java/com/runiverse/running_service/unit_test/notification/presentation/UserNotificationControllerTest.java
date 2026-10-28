@@ -1,8 +1,10 @@
 package com.runiverse.running_service.unit_test.notification.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.notification.command.read.ReadAllUserNotificationsCommand;
 import com.runiverse.running_service.application.notification.exception.InvalidNotificationCursorException;
 import com.runiverse.running_service.application.notification.port.in.GetUserNotificationsUsecase;
+import com.runiverse.running_service.application.notification.port.in.ReadAllUserNotificationsUsecase;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsQuery;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
@@ -38,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +54,9 @@ class UserNotificationControllerTest {
 
     @Mock
     private GetUserNotificationsUsecase getUserNotificationsUsecase;
+
+    @Mock
+    private ReadAllUserNotificationsUsecase readAllUserNotificationsUsecase;
 
     @InjectMocks
     private UserNotificationController controller;
@@ -185,5 +191,17 @@ class UserNotificationControllerTest {
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(json(result).get("code").asString()).isEqualTo("INVALID_REQUEST");
         assertThat(json(result).get("message").asString()).isEqualTo("입력값이 올바르지 않습니다.");
+    }
+
+    @Test
+    @DisplayName("모두 읽음은 토큰의 사용자로 처리하고 본문 없이 204다")
+    void readAllReturnsNoContent() throws Exception {
+        // when
+        MvcResult result = mockMvc.perform(post("/users/me/notifications/read")).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(204);
+        assertThat(result.getResponse().getContentAsByteArray()).isEmpty();
+        then(readAllUserNotificationsUsecase).should().handle(new ReadAllUserNotificationsCommand(ME));
     }
 }

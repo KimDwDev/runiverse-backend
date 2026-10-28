@@ -225,6 +225,35 @@ class UserNotificationE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("모두 읽음은 내 안 읽은 알림만 읽음으로 바꾸고 갱신 시각을 남기며, 다시 불러도 성공한다")
+    void readAllMarksOnlyMyUnread() {
+        // given -> 나는 요청 둘을 받았고, 요청한 사람은 수락 알림 하나를 받았다
+        TestUser me = signUpAndOnboard();
+        TestUser first = signUpAndOnboard();
+        TestUser second = signUpAndOnboard();
+        assertThat(post(friendRequestPath(me), null, first.accessToken()).status()).isEqualTo(201);
+        assertThat(post(friendRequestPath(me), null, second.accessToken()).status()).isEqualTo(201);
+        assertThat(put(friendRequestPath(first), me.accessToken()).status()).isEqualTo(200);
+
+        // when
+        assertThat(post("/users/me/notifications/read", null, me.accessToken()).status()).isEqualTo(204);
+
+        // then -> 목록 항목이 읽음으로 바뀌고 배지는 0이다. 남의 알림은 그대로다
+        Response listed = get("/users/me/notifications", me.accessToken());
+        assertThat(listed.number("unreadCount")).isZero();
+        assertThat(listed.objects("items")).extracting(item -> item.get("isRead")).containsOnly(true);
+        assertThat(get("/users/me/notifications", first.accessToken()).number("unreadCount")).isEqualTo(1);
+        // 벌크 갱신이 @UpdateTimestamp를 거치지 않아도 갱신 시각이 바뀌었다
+        assertThat(querySql("""
+                SELECT count(*) FROM user_notifications
+                WHERE user_id = '%s' AND updated_at <= created_at;
+                """.formatted(me.userId()))).containsExactly("0");
+
+        // 읽을 게 없어도 성공한다
+        assertThat(post("/users/me/notifications/read", null, me.accessToken()).status()).isEqualTo(204);
+    }
+
+    @Test
     @DisplayName("깨진 커서는 400 INVALID_REQUEST다")
     void brokenCursorIsBadRequest() {
         // given
