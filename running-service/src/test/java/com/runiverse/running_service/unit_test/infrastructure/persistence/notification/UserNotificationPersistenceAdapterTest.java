@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -68,6 +70,23 @@ class UserNotificationPersistenceAdapterTest {
             ArgumentCaptor<UserNotificationJpaEntity> captor = ArgumentCaptor.forClass(UserNotificationJpaEntity.class);
             verify(entityManager).persist(captor.capture());
             return captor.getValue();
+        }
+
+        @Test
+        @DisplayName("저장하면 DB가 만든 ID를 돌려준다 — 커밋 뒤 스트림으로 밀어 줄 때 쓴다")
+        void returnsGeneratedId() {
+            // given -> IDENTITY라 persist가 곧바로 INSERT해 ID를 채운다
+            doAnswer(invocation -> {
+                ReflectionTestUtils.setField((Object) invocation.getArgument(0), "userNotificationId", 912L);
+                return null;
+            }).when(entityManager).persist(any(UserNotificationJpaEntity.class));
+
+            // when
+            Long id = adapter.save(UserNotification.of(new UserId(RECIPIENT_ID),
+                    new FriendRequestedPayload(new UserId(ACTOR_ID))));
+
+            // then
+            assertThat(id).isEqualTo(912L);
         }
 
         @Test

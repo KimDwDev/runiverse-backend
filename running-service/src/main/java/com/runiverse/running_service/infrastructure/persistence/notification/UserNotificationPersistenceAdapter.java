@@ -57,12 +57,15 @@ public class UserNotificationPersistenceAdapter implements SaveUserNotificationP
     private final EntityManager entityManager;
 
     @Override
-    public void save(UserNotification notification) {
+    public Long save(UserNotification notification) {
         // 종류는 payload가 정한다 — 컬럼과 jsonb가 어긋날 수 없다
-        entityManager.persist(UserNotificationJpaEntity.create(
+        UserNotificationJpaEntity entity = UserNotificationJpaEntity.create(
                 notification.getUserId().value(),
                 notification.type(),
-                UserNotificationPayloadMapper.toJson(notification.getPayload())));
+                UserNotificationPayloadMapper.toJson(notification.getPayload()));
+        // IDENTITY라 persist가 곧바로 INSERT해 ID가 채워진다
+        entityManager.persist(entity);
+        return entity.getUserNotificationId();
     }
 
     @Override
@@ -96,7 +99,7 @@ public class UserNotificationPersistenceAdapter implements SaveUserNotificationP
                 .setParameter("since", since)
                 .getSingleResult();
     }
-    
+
     @Override
     public int markAllRead(UserId userId, LocalDateTime now) {
         return entityManager.createQuery(MARK_ALL_READ)
