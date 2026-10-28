@@ -3,7 +3,7 @@ package com.runiverse.running_service.unit_test.match.presentation;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.presentation.match.response.InviteRoomEntranceResponse;
@@ -29,7 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
-// 와이어 계약 — 이벤트 이름마다 data 형태가 다르다(api-spec 5-B). 무엇을 실어 보내는지만 본다
+// 와이어 계약 — 이벤트 이름마다 data 형태가 다르다. 무엇을 실어 보내는지만 본다
 @ExtendWith(MockitoExtension.class)
 @DisplayName("매칭 스트림 SSE 전송 단위 테스트")
 class SseMatchStreamConnectionTest {
@@ -70,7 +70,7 @@ class SseMatchStreamConnectionTest {
     void entranceCarriesStartsInMsFlat() throws Exception {
         // given
         RoomInfo room = roomOf(RunningRoomType.INVITE, List.of(new RoomInfo.RoomInvitee(
-                INVITEE, "영희", null, RunningRoomInvitationStatus.PENDING, false)));
+                INVITEE, "영희", null, RoomInvitationStatus.PENDING, false)));
 
         // when
         connection.send(MatchStreamEvent.snapshot(room, START.minusMinutes(20)));

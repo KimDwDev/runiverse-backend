@@ -11,10 +11,10 @@ import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -69,16 +69,16 @@ class OpenInviteRoomHandlerTest {
             Duration.ofMinutes(10), CLOSE_OFFSET, 1_000, 42_195, 5);
 
     @Mock
-    private ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
+    private ExistsActiveApplicationPort existsActiveApplicationPort;
 
     @Mock
     private LoadUserAvgPacePort loadUserAvgPacePort;
 
     @Mock
-    private CreateRunningPlayerPort createRunningPlayerPort;
+    private CreateMatchApplicationPort createMatchApplicationPort;
 
     @Mock
-    private CreateRunningRoomPort createRunningRoomPort;
+    private CreateMatchRoomPort createMatchRoomPort;
 
     @Mock
     private ScheduleJobPort scheduleJobPort;
@@ -94,8 +94,8 @@ class OpenInviteRoomHandlerTest {
         inviteStartPolicy = spy(new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES));
         handler = new OpenInviteRoomHandler(
                 inviteStartPolicy,
-                existsActiveRunningPlayerPort, loadUserAvgPacePort,
-                createRunningPlayerPort, createRunningRoomPort,
+                existsActiveApplicationPort, loadUserAvgPacePort,
+                createMatchApplicationPort, createMatchRoomPort,
                 scheduleJobPort, MATCH_PROPERTIES);
         userId = UuidCreator.getTimeOrderedEpoch();
     }
@@ -133,10 +133,10 @@ class OpenInviteRoomHandlerTest {
 
     private void givenOpenable(LocalDateTime startAt) {
         givenSelectable();
-        given(existsActiveRunningPlayerPort.existsActive(new UserId(userId))).willReturn(false);
+        given(existsActiveApplicationPort.existsActive(new UserId(userId))).willReturn(false);
         given(loadUserAvgPacePort.loadAvgPace(new UserId(userId))).willReturn(Optional.of(new Pace(AVG_PACE)));
-        given(createRunningPlayerPort.create(any())).willReturn(savedPlayer(userId, startAt));
-        given(createRunningRoomPort.create(any())).willReturn(savedRoom(startAt));
+        given(createMatchApplicationPort.create(any())).willReturn(savedPlayer(userId, startAt));
+        given(createMatchRoomPort.create(any())).willReturn(savedRoom(startAt));
     }
 
     @Test
@@ -165,7 +165,7 @@ class OpenInviteRoomHandlerTest {
 
         // then
         ArgumentCaptor<RunningPlayer> captor = ArgumentCaptor.forClass(RunningPlayer.class);
-        verify(createRunningPlayerPort).create(captor.capture());
+        verify(createMatchApplicationPort).create(captor.capture());
         RunningPlayer requested = captor.getValue();
 
         assertThat(requested.getUserId().value()).isEqualTo(userId);
@@ -187,7 +187,7 @@ class OpenInviteRoomHandlerTest {
 
         // then
         ArgumentCaptor<RunningRoom> captor = ArgumentCaptor.forClass(RunningRoom.class);
-        verify(createRunningRoomPort).create(captor.capture());
+        verify(createMatchRoomPort).create(captor.capture());
         RunningRoom opened = captor.getValue();
 
         assertThat(opened.getType()).isEqualTo(RunningRoomType.INVITE);
@@ -229,8 +229,8 @@ class OpenInviteRoomHandlerTest {
         assertThatThrownBy(() -> handler.handle(command))
                 .isInstanceOf(InvalidInviteOptionException.class);
 
-        verifyNoInteractions(existsActiveRunningPlayerPort, loadUserAvgPacePort,
-                createRunningPlayerPort, createRunningRoomPort, scheduleJobPort);
+        verifyNoInteractions(existsActiveApplicationPort, loadUserAvgPacePort,
+                createMatchApplicationPort, createMatchRoomPort, scheduleJobPort);
     }
 
     @Test
@@ -255,8 +255,8 @@ class OpenInviteRoomHandlerTest {
         assertThatThrownBy(() -> handler.handle(commandAt(userId, tomorrow)))
                 .isInstanceOf(InviteStartAtOutOfRangeException.class);
 
-        verifyNoInteractions(existsActiveRunningPlayerPort, loadUserAvgPacePort,
-                createRunningPlayerPort, createRunningRoomPort, scheduleJobPort);
+        verifyNoInteractions(existsActiveApplicationPort, loadUserAvgPacePort,
+                createMatchApplicationPort, createMatchRoomPort, scheduleJobPort);
     }
 
     @Test
@@ -264,13 +264,13 @@ class OpenInviteRoomHandlerTest {
     void rejectsWhenAlreadyRunning() {
         // given -> 매칭 대기·다른 초대 방·러닝 중 모두 여기 걸린다
         givenSelectable();
-        given(existsActiveRunningPlayerPort.existsActive(new UserId(userId))).willReturn(true);
+        given(existsActiveApplicationPort.existsActive(new UserId(userId))).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> handler.handle(commandAt(userId, START)))
                 .isInstanceOf(AlreadyRunningException.class);
 
-        verifyNoInteractions(loadUserAvgPacePort, createRunningPlayerPort, createRunningRoomPort, scheduleJobPort);
+        verifyNoInteractions(loadUserAvgPacePort, createMatchApplicationPort, createMatchRoomPort, scheduleJobPort);
     }
 
     @Test
@@ -278,7 +278,7 @@ class OpenInviteRoomHandlerTest {
     void rejectsWhenOnboardingNotCompleted() {
         // given
         givenSelectable();
-        given(existsActiveRunningPlayerPort.existsActive(new UserId(userId))).willReturn(false);
+        given(existsActiveApplicationPort.existsActive(new UserId(userId))).willReturn(false);
         given(loadUserAvgPacePort.loadAvgPace(new UserId(userId))).willReturn(Optional.empty());
 
         // when & then
@@ -286,6 +286,6 @@ class OpenInviteRoomHandlerTest {
                 .isInstanceOf(OnboardingNotCompletedException.class);
 
         // 신청만 남으면 활성 신청에 걸려 유저가 영영 다시 못 뛴다
-        verifyNoInteractions(createRunningPlayerPort, createRunningRoomPort, scheduleJobPort);
+        verifyNoInteractions(createMatchApplicationPort, createMatchRoomPort, scheduleJobPort);
     }
 }

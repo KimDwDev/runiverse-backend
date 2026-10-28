@@ -4,7 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationCommand;
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationHandler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
@@ -16,8 +16,8 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,7 +92,7 @@ class DeclineInvitationHandlerTest {
                 .build();
     }
 
-    private List<InvitationDraft> received(RunningRoomInvitationStatus status) {
+    private List<InvitationDraft> received(RoomInvitationStatus status) {
         return List.of(
                 new InvitationDraft(host, invitee, status, 1),
                 new InvitationDraft(newUser(), invitee, status, 3));
@@ -114,7 +114,7 @@ class DeclineInvitationHandlerTest {
         @DisplayName("거절하면 보낸 사람별 행이 모두 거절로 남고 저장한 뒤 갱신을 알린다")
         void declineInvitation() {
             // given
-            RunningRoom room = room(RunningRoomStatus.MATCHING, received(RunningRoomInvitationStatus.PENDING));
+            RunningRoom room = room(RunningRoomStatus.MATCHING, received(RoomInvitationStatus.PENDING));
             givenLocked(room);
             given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
                     ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, START, START.minusMinutes(1), 7_000, 330, List.of(), List.of()));
@@ -125,7 +125,7 @@ class DeclineInvitationHandlerTest {
             // then -> 행을 지우지 않는다(친구 요청 거절과 다르다)
             assertThat(room.getInvitations()).hasSize(2)
                     .extracting(RoomInvitation::getStatus)
-                    .containsOnly(RunningRoomInvitationStatus.DECLINED);
+                    .containsOnly(RoomInvitationStatus.DECLINED);
             assertThat(room.getPlayerCount().current()).isEqualTo(1);
             verify(updateMatchRoomPort).update(room);
             verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
@@ -135,7 +135,7 @@ class DeclineInvitationHandlerTest {
         @DisplayName("모집이 끝난 방이어도 대기 중인 초대는 거절할 수 있다")
         void declineAfterClose() {
             // given -> 거절은 자리를 잡지 않아 마감과 무관하다
-            RunningRoom room = room(RunningRoomStatus.MATCHED, received(RunningRoomInvitationStatus.PENDING));
+            RunningRoom room = room(RunningRoomStatus.MATCHED, received(RoomInvitationStatus.PENDING));
             givenLocked(room);
             given(roomInfoAssembler.assemble(any())).willReturn(new RoomInfo(
                     ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHED, START, START.minusMinutes(1), 7_000, 330, List.of(), List.of()));
@@ -144,7 +144,7 @@ class DeclineInvitationHandlerTest {
             decline();
 
             // then
-            assertThat(room.invitationStatusOf(invitee)).contains(RunningRoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(invitee)).contains(RoomInvitationStatus.DECLINED);
         }
     }
 
@@ -177,16 +177,16 @@ class DeclineInvitationHandlerTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
+        @EnumSource(value = RoomInvitationStatus.class, names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
         @DisplayName("대기 중이 아닌 초대는 거절할 수 없고 어느 행도 바뀌지 않는다")
-        void rejectsNonPending(RunningRoomInvitationStatus status) {
+        void rejectsNonPending(RoomInvitationStatus status) {
             // given
             RunningRoom room = room(RunningRoomStatus.MATCHING, received(status));
             givenLocked(room);
 
             // when & then
             assertThatThrownBy(DeclineInvitationHandlerTest.this::decline)
-                    .isInstanceOf(InvitationNotPendingException.class);
+                    .isInstanceOf(RunningInvitationNotPendingException.class);
             assertThat(room.getInvitations()).extracting(RoomInvitation::getStatus).containsOnly(status);
             verifyNoInteractions(updateMatchRoomPort, roomInfoAssembler, eventPublisher);
         }

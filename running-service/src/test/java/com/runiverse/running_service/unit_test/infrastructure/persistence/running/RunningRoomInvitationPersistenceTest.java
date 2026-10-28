@@ -7,8 +7,8 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.infrastructure.persistence.running.RunningPersistenceAdapter;
@@ -131,9 +131,9 @@ class RunningRoomInvitationPersistenceTest {
             givenLockedRoom(room);
             givenSessions(room);
             givenInvitations(List.of(
-                    RunningRoomInvitationJpaEntity.create(room, host, invitee, RunningRoomInvitationStatus.PENDING, 2),
+                    RunningRoomInvitationJpaEntity.create(room, host, invitee, RoomInvitationStatus.PENDING, 2),
                     RunningRoomInvitationJpaEntity.create(
-                            room, otherInviter, invitee, RunningRoomInvitationStatus.PENDING, 1)));
+                            room, otherInviter, invitee, RoomInvitationStatus.PENDING, 1)));
 
             // when
             RunningRoom restored = adapter.lockById(new RunningRoomId(ROOM_ID)).orElseThrow();
@@ -141,7 +141,7 @@ class RunningRoomInvitationPersistenceTest {
             // then -> 나가기(LEFT)·수락이 이 값을 보고 판정한다
             assertThat(restored.getInvitations()).hasSize(2);
             assertThat(restored.invitationStatusOf(new UserId(invitee)))
-                    .contains(RunningRoomInvitationStatus.PENDING);
+                    .contains(RoomInvitationStatus.PENDING);
             assertThat(restored.getInvitations())
                     .filteredOn(invitation -> invitation.isSentBy(new UserId(host)))
                     .singleElement()
@@ -175,13 +175,13 @@ class RunningRoomInvitationPersistenceTest {
             // given -> host의 행은 이미 있고 otherInviter의 행은 이번에 새로 생겼다
             RunningRoomJpaEntity room = roomEntity(RunningRoomType.INVITE);
             RunningRoomInvitationJpaEntity storedRow = RunningRoomInvitationJpaEntity.create(
-                    room, host, invitee, RunningRoomInvitationStatus.DECLINED, 2);
+                    room, host, invitee, RoomInvitationStatus.DECLINED, 2);
             when(entityManager.find(RunningRoomJpaEntity.class, ROOM_ID)).thenReturn(room);
             givenSessions(room);
             givenInvitations(List.of(storedRow));
 
             RunningRoom domain = domainRoom(List.of(new InvitationDraft(
-                    new UserId(host), new UserId(invitee), RunningRoomInvitationStatus.DECLINED, 2)));
+                    new UserId(host), new UserId(invitee), RoomInvitationStatus.DECLINED, 2)));
             domain.invite(new UserId(host), new UserId(invitee), 5);           // 되살림 + 3회
             domain.invite(new UserId(host), new UserId(otherInviter), 5);      // 다른 받는 사람에게 처음
 
@@ -189,14 +189,14 @@ class RunningRoomInvitationPersistenceTest {
             adapter.update(domain);
 
             // then
-            assertThat(storedRow.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(storedRow.getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
             assertThat(storedRow.getInviteCount()).isEqualTo(3);
             ArgumentCaptor<RunningRoomInvitationJpaEntity> created =
                     ArgumentCaptor.forClass(RunningRoomInvitationJpaEntity.class);
             verify(entityManager).persist(created.capture());
             assertThat(created.getValue().getInviterId()).isEqualTo(host);
             assertThat(created.getValue().getInviteeId()).isEqualTo(otherInviter);
-            assertThat(created.getValue().getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(created.getValue().getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
             assertThat(created.getValue().getInviteCount()).isEqualTo(1);
             assertThat(created.getValue().getRoom()).isSameAs(room);
         }
@@ -223,7 +223,7 @@ class RunningRoomInvitationPersistenceTest {
             // given
             RunningRoomJpaEntity room = roomEntity(RunningRoomType.INVITE);
             RunningRoomInvitationJpaEntity untouched = RunningRoomInvitationJpaEntity.create(
-                    room, otherInviter, invitee, RunningRoomInvitationStatus.PENDING, 1);
+                    room, otherInviter, invitee, RoomInvitationStatus.PENDING, 1);
             when(entityManager.find(RunningRoomJpaEntity.class, ROOM_ID)).thenReturn(room);
             givenSessions(room);
             givenInvitations(List.of(untouched));
@@ -235,7 +235,7 @@ class RunningRoomInvitationPersistenceTest {
 
             // then
             verify(entityManager, never()).remove(any());
-            assertThat(untouched.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(untouched.getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
         }
     }
 }

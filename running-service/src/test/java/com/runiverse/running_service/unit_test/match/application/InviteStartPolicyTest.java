@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-// 초대 방 개설이 이 판정으로 400·409를 가른다 — 문구는 api-spec.md 4-1 그대로 나가야 한다
+// 초대 방 개설이 이 판정으로 400·409를 가른다 — 문구가 응답 메시지로 그대로 나간다
 @DisplayName("초대 방 시작 시각·거리 정책 단위 테스트")
 class InviteStartPolicyTest {
 
@@ -34,7 +34,7 @@ class InviteStartPolicyTest {
     private static final Duration MIN_LEAD_TIME = Duration.ofMinutes(10);
     private static final Duration CLOSE_OFFSET = Duration.ofMinutes(1);
     private static final Duration READY_OFFSET = Duration.ofSeconds(10);
-    // api-spec.md 4-1 400 문구
+    // 400 응답 문구
     private static final String START_AT_MESSAGE = "시작 시각은 분 단위로만 선택할 수 있습니다.";
     private static final String DISTANCE_MESSAGE = "목표 거리는 1000m 이상 42195m 이하여야 합니다.";
 

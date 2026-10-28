@@ -8,9 +8,11 @@ import com.runiverse.running_service.application.match.command.inviteaccept.Acce
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
@@ -20,8 +22,6 @@ import com.runiverse.running_service.application.match.port.out.LoadMatchPlayers
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -32,8 +32,8 @@ import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,13 +85,13 @@ class AcceptInvitationHandlerTest {
     private UpdateMatchRoomPort updateMatchRoomPort;
 
     @Mock
-    private ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
+    private ExistsActiveApplicationPort existsActiveApplicationPort;
 
     @Mock
     private LoadUserAvgPacePort loadUserAvgPacePort;
 
     @Mock
-    private CreateRunningPlayerPort createRunningPlayerPort;
+    private CreateMatchApplicationPort createMatchApplicationPort;
 
     @Mock
     private LoadMatchPlayersPort loadMatchPlayersPort;
@@ -113,7 +113,7 @@ class AcceptInvitationHandlerTest {
         handler = new AcceptInvitationHandler(
                 lockMatchRoomPort, updateMatchRoomPort,
                 new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES),
-                existsActiveRunningPlayerPort, loadUserAvgPacePort, createRunningPlayerPort,
+                existsActiveApplicationPort, loadUserAvgPacePort, createMatchApplicationPort,
                 loadMatchPlayersPort, roomInfoAssembler, eventPublisher);
         host = newUser();
         otherInviter = newUser();
@@ -127,7 +127,7 @@ class AcceptInvitationHandlerTest {
     }
 
     private RunningRoom room(RunningRoomStatus status, LocalDateTime startAt, int members,
-                             RunningRoomInvitationStatus invitationStatus) {
+                             RoomInvitationStatus invitationStatus) {
         List<SessionDraft> sessions = new ArrayList<>();
         sessions.add(new SessionDraft(host, new RunningPlayerId(1L), 0, true));
         for (int i = 1; i < members; i++) {
@@ -151,7 +151,7 @@ class AcceptInvitationHandlerTest {
     }
 
     private RunningRoom pendingRoom(int members) {
-        return room(RunningRoomStatus.MATCHING, startAt, members, RunningRoomInvitationStatus.PENDING);
+        return room(RunningRoomStatus.MATCHING, startAt, members, RoomInvitationStatus.PENDING);
     }
 
     private void givenLocked(RunningRoom room) {
@@ -159,9 +159,9 @@ class AcceptInvitationHandlerTest {
     }
 
     private void givenJoinable() {
-        given(existsActiveRunningPlayerPort.existsActive(invitee)).willReturn(false);
+        given(existsActiveApplicationPort.existsActive(invitee)).willReturn(false);
         given(loadUserAvgPacePort.loadAvgPace(invitee)).willReturn(Optional.of(new Pace(INVITEE_PACE)));
-        given(createRunningPlayerPort.create(any())).willReturn(RunningPlayer.builder()
+        given(createMatchApplicationPort.create(any())).willReturn(RunningPlayer.builder()
                 .runningPlayerId(NEW_PLAYER_ID)
                 .userId(invitee.value())
                 .avgPace(INVITEE_PACE)
@@ -197,7 +197,7 @@ class AcceptInvitationHandlerTest {
             // then
             assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
             ArgumentCaptor<RunningPlayer> created = ArgumentCaptor.forClass(RunningPlayer.class);
-            verify(createRunningPlayerPort).create(created.capture());
+            verify(createMatchApplicationPort).create(created.capture());
             assertThat(created.getValue().getUserId().value()).isEqualTo(invitee.value());
             assertThat(created.getValue().getStatus()).isEqualTo(RunningPlayerStatus.JOINED);
             assertThat(created.getValue().getStartAt()).isEqualTo(startAt);
@@ -209,7 +209,7 @@ class AcceptInvitationHandlerTest {
             });
             // 누가 보냈든 받는 사람 기준이다
             assertThat(room.getInvitations()).extracting(RoomInvitation::getStatus)
-                    .containsOnly(RunningRoomInvitationStatus.ACCEPTED);
+                    .containsOnly(RoomInvitationStatus.ACCEPTED);
             verify(updateMatchRoomPort).update(room);
             verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
         }
@@ -244,7 +244,7 @@ class AcceptInvitationHandlerTest {
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(InvitationNotFoundException.class);
-            verifyNoInteractions(createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
@@ -256,19 +256,19 @@ class AcceptInvitationHandlerTest {
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(InvitationNotFoundException.class);
-            verifyNoInteractions(createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
         @DisplayName("만료된 초대는 닫힌 것으로 거절한다")
         void rejectsExpired() {
             // given -> 만료는 응답이 아니라 방이 닫힌 것이다
-            givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, RunningRoomInvitationStatus.EXPIRED));
+            givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, RoomInvitationStatus.EXPIRED));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(RunningInvitationClosedException.class);
-            verifyNoInteractions(existsActiveRunningPlayerPort, createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(existsActiveApplicationPort, createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @ParameterizedTest(name = "{0}")
@@ -276,12 +276,12 @@ class AcceptInvitationHandlerTest {
         @DisplayName("모집 중이 아닌 방은 대기 중 초대라도 닫힌 것으로 거절한다")
         void rejectsNotRecruiting(RunningRoomStatus status) {
             // given
-            givenLocked(room(status, startAt, 1, RunningRoomInvitationStatus.PENDING));
+            givenLocked(room(status, startAt, 1, RoomInvitationStatus.PENDING));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(RunningInvitationClosedException.class);
-            verifyNoInteractions(createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
@@ -289,25 +289,25 @@ class AcceptInvitationHandlerTest {
         void rejectsPastCloseAt() {
             // given -> 시작 30초 전이면 마감(1분 전)이 이미 지났다
             givenLocked(room(RunningRoomStatus.MATCHING, LocalDateTime.now().plusSeconds(30), 1,
-                    RunningRoomInvitationStatus.PENDING));
+                    RoomInvitationStatus.PENDING));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(RunningInvitationClosedException.class);
-            verifyNoInteractions(createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT"})
         @DisplayName("이미 응답한 초대는 거절한다")
-        void rejectsAnswered(RunningRoomInvitationStatus status) {
+        void rejectsAnswered(RoomInvitationStatus status) {
             // given -> 거절 뒤 들어가려면 다시 초대받아야 한다
             givenLocked(room(RunningRoomStatus.MATCHING, startAt, 1, status));
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
-                    .isInstanceOf(InvitationNotPendingException.class);
-            verifyNoInteractions(existsActiveRunningPlayerPort, createRunningPlayerPort, updateMatchRoomPort);
+                    .isInstanceOf(RunningInvitationNotPendingException.class);
+            verifyNoInteractions(existsActiveApplicationPort, createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
@@ -320,8 +320,8 @@ class AcceptInvitationHandlerTest {
             // when & then -> 신청 행을 만들기 전에 끝난다
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(RunningRoomFullException.class);
-            assertThat(room.invitationStatusOf(invitee)).contains(RunningRoomInvitationStatus.PENDING);
-            verifyNoInteractions(existsActiveRunningPlayerPort, createRunningPlayerPort, updateMatchRoomPort);
+            assertThat(room.invitationStatusOf(invitee)).contains(RoomInvitationStatus.PENDING);
+            verifyNoInteractions(existsActiveApplicationPort, createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
@@ -329,12 +329,12 @@ class AcceptInvitationHandlerTest {
         void rejectsActiveApplication() {
             // given -> 초대받은 사이 매칭을 시작했다
             givenLocked(pendingRoom(1));
-            given(existsActiveRunningPlayerPort.existsActive(invitee)).willReturn(true);
+            given(existsActiveApplicationPort.existsActive(invitee)).willReturn(true);
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(AlreadyRunningException.class);
-            verifyNoInteractions(loadUserAvgPacePort, createRunningPlayerPort, updateMatchRoomPort);
+            verifyNoInteractions(loadUserAvgPacePort, createMatchApplicationPort, updateMatchRoomPort);
         }
 
         @Test
@@ -342,13 +342,13 @@ class AcceptInvitationHandlerTest {
         void rejectsWithoutOnboarding() {
             // given
             givenLocked(pendingRoom(1));
-            given(existsActiveRunningPlayerPort.existsActive(invitee)).willReturn(false);
+            given(existsActiveApplicationPort.existsActive(invitee)).willReturn(false);
             given(loadUserAvgPacePort.loadAvgPace(invitee)).willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(AcceptInvitationHandlerTest.this::accept)
                     .isInstanceOf(OnboardingNotCompletedException.class);
-            verifyNoInteractions(createRunningPlayerPort, updateMatchRoomPort, eventPublisher);
+            verifyNoInteractions(createMatchApplicationPort, updateMatchRoomPort, eventPublisher);
         }
     }
 }

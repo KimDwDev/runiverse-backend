@@ -3,7 +3,7 @@ package com.runiverse.running_service.domain.running.room;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.exception.SelfInvitationException;
 import com.runiverse.running_service.domain.running.room.vo.InviteCount;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import lombok.Getter;
 
 @Getter
@@ -13,11 +13,11 @@ public class RoomInvitation {
     private final UserId inviterId;
     private final UserId inviteeId;
     // 받는 사람 기준의 상태 — 같은 받는 사람의 다른 행과 늘 같게 방이 맞춘다
-    private RunningRoomInvitationStatus status;
+    private RoomInvitationStatus status;
     private InviteCount inviteCount;
 
     private RoomInvitation(UserId inviterId, UserId inviteeId,
-                           RunningRoomInvitationStatus status, InviteCount inviteCount) {
+                           RoomInvitationStatus status, InviteCount inviteCount) {
         // DB CHECK(inviter_id <> invitee_id)와 같은 규칙 — 저장 전에 잡는다
         if (inviterId.equals(inviteeId)) {
             throw new SelfInvitationException();
@@ -31,7 +31,7 @@ public class RoomInvitation {
     // 이 보낸 사람이 처음 보냄 — 상태는 방이 받는 사람을 대기로 맞춘 뒤라 늘 PENDING이다
     static RoomInvitation open(UserId inviterId, UserId inviteeId) {
         return new RoomInvitation(inviterId, inviteeId,
-                RunningRoomInvitationStatus.PENDING, InviteCount.first());
+                RoomInvitationStatus.PENDING, InviteCount.first());
     }
 
     // DB 복원 — 방을 거쳐야만 들어온다
@@ -45,7 +45,7 @@ public class RoomInvitation {
         this.inviteCount = inviteCount.increase();
     }
 
-    void changeStatus(RunningRoomInvitationStatus next) {
+    void changeStatus(RoomInvitationStatus next) {
         this.status = status.transitionTo(next);
     }
 
@@ -58,6 +58,6 @@ public class RoomInvitation {
     }
 
     public boolean isPending() {
-        return status == RunningRoomInvitationStatus.PENDING;
+        return status == RoomInvitationStatus.PENDING;
     }
 }

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
 import jakarta.persistence.Column;
@@ -31,18 +31,14 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "running_room_invitations",
-        indexes = {
-                // 받는 사람 단위로 행을 모아 본다 — PK가 (방, 보낸 사람) 순이라 이 조회를 덮지 못한다
-                @Index(name = "idx_room_invitation_room_invitee", columnList = "running_room_id, invitee_id"),
-                // 받은 초대 목록 — 받는 사람이 탈퇴할 때 CASCADE 삭제도 이 인덱스를 탄다
-                @Index(name = "idx_room_invitation_invitee", columnList = "invitee_id")
-        }
+        // 받은 초대 목록 — 받는 사람이 탈퇴할 때 CASCADE 삭제도 이 인덱스를 탄다
+        indexes = @Index(name = "idx_room_invitation_invitee", columnList = "invitee_id")
 )
 @IdClass(RunningRoomInvitationJpaEntity.Pk.class)
-@Check(name = "ck_running_room_invitation_status",
+@Check(name = "ck_room_invitation_status",
         constraints = "status in ('PENDING', 'ACCEPTED', 'DECLINED', 'LEFT', 'EXPIRED')")
-@Check(name = "ck_running_room_invitation_invite_count", constraints = "invite_count >= 1")
-@Check(name = "ck_running_room_invitation_users", constraints = "inviter_id <> invitee_id")
+@Check(name = "ck_room_invitation_invite_count", constraints = "invite_count >= 1")
+@Check(name = "ck_room_invitation_users", constraints = "inviter_id <> invitee_id")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
 
@@ -62,7 +58,7 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     // 받는 사람 기준의 상태 — 같은 방의 같은 받는 사람 행은 늘 같은 값이다(애그리거트가 지킨다)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private RunningRoomInvitationStatus status;
+    private RoomInvitationStatus status;
     // 이 보낸 사람이 이 받는 사람에게 보낸 횟수 — 거절·나감 뒤에도 이어서 센다
     @Column(name = "invite_count", nullable = false)
     private int inviteCount;
@@ -79,7 +75,7 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     private UserJpaEntity invitee;
 
     private RunningRoomInvitationJpaEntity(RunningRoomJpaEntity room, UUID inviterId, UUID inviteeId,
-                                           RunningRoomInvitationStatus status, int inviteCount) {
+                                           RoomInvitationStatus status, int inviteCount) {
         this.room = room;
         this.inviterId = inviterId;
         this.inviteeId = inviteeId;
@@ -88,12 +84,12 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     }
 
     public static RunningRoomInvitationJpaEntity create(RunningRoomJpaEntity room, UUID inviterId,
-                                                        UUID inviteeId, RunningRoomInvitationStatus status,
+                                                        UUID inviteeId, RoomInvitationStatus status,
                                                         int inviteCount) {
         return new RunningRoomInvitationJpaEntity(room, inviterId, inviteeId, status, inviteCount);
     }
 
-    public void changeStatus(RunningRoomInvitationStatus status) {
+    public void changeStatus(RoomInvitationStatus status) {
         this.status = status;
     }
 

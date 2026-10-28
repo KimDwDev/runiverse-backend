@@ -14,8 +14,8 @@ import com.runiverse.running_service.application.match.command.invitedecline.Dec
 import com.runiverse.running_service.application.match.command.invitedecline.DeclineInvitationHandler;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomCommand;
 import com.runiverse.running_service.application.match.command.inviteopen.OpenInviteRoomHandler;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsCommand;
-import com.runiverse.running_service.application.match.command.invitesend.InviteFriendsHandler;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationCommand;
+import com.runiverse.running_service.application.match.command.invitesend.SendInvitationHandler;
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
@@ -23,12 +23,12 @@ import com.runiverse.running_service.application.match.common.MatchRoomChangedEv
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
-import com.runiverse.running_service.application.match.exception.InvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.InviteCountExceededException;
 import com.runiverse.running_service.application.match.exception.InviteeAlreadyInRoomException;
 import com.runiverse.running_service.application.match.exception.InviteeInMatchingException;
 import com.runiverse.running_service.application.match.exception.NotFriendException;
 import com.runiverse.running_service.application.match.exception.RunningInvitationClosedException;
+import com.runiverse.running_service.application.match.exception.RunningInvitationNotPendingException;
 import com.runiverse.running_service.application.match.exception.RunningRoomFullException;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
@@ -42,7 +42,7 @@ import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RoomInvitation;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.infrastructure.sse.MatchRoomMemberRegistry;
 import com.runiverse.running_service.infrastructure.sse.MatchStreamRegistryAdapter;
@@ -94,7 +94,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     private MatchRoomMemberRegistry matchRoomMemberRegistry;
     private MatchStreamRegistryAdapter matchStreamRegistry;
     private OpenInviteRoomHandler openHandler;
-    private InviteFriendsHandler inviteHandler;
+    private SendInvitationHandler inviteHandler;
     private AcceptInvitationHandler acceptHandler;
     private DeclineInvitationHandler declineHandler;
     private CancelMatchHandler cancelHandler;
@@ -138,7 +138,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 inviteStartPolicy, runningStore, onboardingStore, runningStore, runningStore,
                 new ScheduleJobHandler(new InMemoryScheduledJobStore(), event -> {
                 }), MATCH_PROPERTIES);
-        inviteHandler = new InviteFriendsHandler(
+        inviteHandler = new SendInvitationHandler(
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
                 relationshipStore,   // CheckFriendPort
@@ -148,14 +148,14 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
                 inviteStartPolicy,
-                runningStore,        // ExistsActiveRunningPlayerPort
+                runningStore,        // ExistsActiveApplicationPort
                 onboardingStore,     // LoadUserAvgPacePort
-                runningStore,        // CreateRunningPlayerPort
+                runningStore,        // CreateMatchApplicationPort
                 matchStore,          // LoadMatchPlayersPort
                 roomInfoAssembler, eventPublisher);
         declineHandler = new DeclineInvitationHandler(
                 runningStore, runningStore, roomInfoAssembler, eventPublisher);
-        // 나가기는 매칭 방과 같은 DELETE /running-matches다
+        // 나가기는 매칭 방과 같은 POST /match-rooms/leave다
         cancelHandler = new CancelMatchHandler(
                 runningStore, matchStore, runningStore, matchStore, runningStore, runningStore,
                 new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, eventPublisher);
@@ -180,7 +180,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         RoomInfo shown = lastInviteRoomOf(hostStream);
         assertThat(shown.invitations()).singleElement().satisfies(invitee -> {
             assertThat(invitee.userId()).isEqualTo(friend);
-            assertThat(invitee.status()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(invitee.status()).isEqualTo(RoomInvitationStatus.PENDING);
         });
         // 초대는 신청이 아니다 — 받는 사람의 running_players 행이 없다
         assertThat(runningStore.existsActive(new UserId(friend))).isFalse();
@@ -207,7 +207,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // then
         RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
         assertThat(room.getPlayerCount().current()).isEqualTo(3);
-        assertThat(statusesOf(room, friend)).hasSize(2).containsOnly(RunningRoomInvitationStatus.ACCEPTED);
+        assertThat(statusesOf(room, friend)).hasSize(2).containsOnly(RoomInvitationStatus.ACCEPTED);
         RunningPlayer player = runningStore.loadActive(new UserId(friend)).orElseThrow();
         assertThat(player.getStatus()).isEqualTo(RunningPlayerStatus.JOINED);
         assertThat(player.getStartAt()).isEqualTo(startAt);
@@ -232,7 +232,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // then -> 현황은 응답 전인 초대만 담는다. 행은 지우지 않는다
         assertThat(lastInviteRoomOf(hostStream).invitations()).isEmpty();
         assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(friend)))
-                .contains(RunningRoomInvitationStatus.DECLINED);
+                .contains(RoomInvitationStatus.DECLINED);
 
         // when -> 같은 사람이 다시 부른다
         invite(host, roomId, friend);
@@ -241,7 +241,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         assertThat(inviteCountOf(roomId, host, friend)).isEqualTo(2);
         assertThat(lastInviteRoomOf(hostStream).invitations())
                 .extracting(RoomInfo.RoomInvitee::status)
-                .containsExactly(RunningRoomInvitationStatus.PENDING);
+                .containsExactly(RoomInvitationStatus.PENDING);
     }
 
     @Test
@@ -255,7 +255,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         declineHandler.handle(new DeclineInvitationCommand(friend, roomId));
 
         // when & then
-        assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(InvitationNotPendingException.class);
+        assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(RunningInvitationNotPendingException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().getPlayerCount().current()).isEqualTo(1);
     }
 
@@ -275,7 +275,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
 
         // then -> 초대 방은 언제 나가도 제재가 없다
         RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
-        assertThat(statusesOf(room, friend)).containsOnly(RunningRoomInvitationStatus.LEFT);
+        assertThat(statusesOf(room, friend)).containsOnly(RoomInvitationStatus.LEFT);
         assertThat(room.getPlayerCount().current()).isEqualTo(1);
         RoomInfo shown = lastInviteRoomOf(hostStream);
         assertThat(shown.players()).extracting(RoomInfo.RoomPlayer::userId).containsExactly(host);
@@ -378,7 +378,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // when & then
         assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(AlreadyRunningException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(friend)))
-                .contains(RunningRoomInvitationStatus.PENDING);
+                .contains(RoomInvitationStatus.PENDING);
 
         // when -> 자기 방을 나가 활성 신청이 사라졌다
         cancelHandler.handle(new CancelMatchCommand(friend));
@@ -386,7 +386,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(friend)))
-                .contains(RunningRoomInvitationStatus.ACCEPTED);
+                .contains(RoomInvitationStatus.ACCEPTED);
     }
 
     @Test
@@ -406,7 +406,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // when & then
         assertThatThrownBy(() -> accept(waiting, roomId)).isInstanceOf(RunningRoomFullException.class);
         assertThat(runningStore.findRoom(roomId).orElseThrow().invitationStatusOf(new UserId(waiting)))
-                .contains(RunningRoomInvitationStatus.PENDING);
+                .contains(RoomInvitationStatus.PENDING);
 
         // when -> 한 명이 나갔다
         cancelHandler.handle(new CancelMatchCommand(members.getFirst()));
@@ -434,8 +434,8 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // then -> 저장된 행: 대기만 만료, 거절은 기록으로 남는다
         RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
         assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
-        assertThat(room.invitationStatusOf(new UserId(pending))).contains(RunningRoomInvitationStatus.EXPIRED);
-        assertThat(room.invitationStatusOf(new UserId(declined))).contains(RunningRoomInvitationStatus.DECLINED);
+        assertThat(room.invitationStatusOf(new UserId(pending))).contains(RoomInvitationStatus.EXPIRED);
+        assertThat(room.invitationStatusOf(new UserId(declined))).contains(RoomInvitationStatus.DECLINED);
         // 마감은 확정 연출 없이 빈 현황으로만 알린다
         RoomInfo shown = lastInviteRoomOf(hostStream);
         assertThat(shown.status()).isEqualTo(RunningRoomStatus.MATCHED);
@@ -443,7 +443,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // 만료는 방이 닫힌 것이라 수락은 CLOSED, 거절은 응답할 대기 초대가 없어 NOT_PENDING이다
         assertThatThrownBy(() -> accept(pending, roomId)).isInstanceOf(RunningInvitationClosedException.class);
         assertThatThrownBy(() -> declineHandler.handle(new DeclineInvitationCommand(pending, roomId)))
-                .isInstanceOf(InvitationNotPendingException.class);
+                .isInstanceOf(RunningInvitationNotPendingException.class);
     }
 
     @Test
@@ -461,7 +461,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // then
         RunningRoom room = runningStore.findRoom(roomId).orElseThrow();
         assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
-        assertThat(room.invitationStatusOf(new UserId(friend))).contains(RunningRoomInvitationStatus.EXPIRED);
+        assertThat(room.invitationStatusOf(new UserId(friend))).contains(RoomInvitationStatus.EXPIRED);
         assertThatThrownBy(() -> accept(friend, roomId)).isInstanceOf(RunningInvitationClosedException.class);
     }
 
@@ -472,7 +472,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
     // 한 번에 한 명이다 — 여러 명은 사람마다 부른다
     private void invite(UUID inviter, Long roomId, UUID... invitees) {
         for (UUID invitee : invitees) {
-            inviteHandler.handle(new InviteFriendsCommand(inviter, roomId, invitee));
+            inviteHandler.handle(new SendInvitationCommand(inviter, roomId, invitee));
         }
     }
 
@@ -512,7 +512,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         return connection;
     }
 
-    private static List<RunningRoomInvitationStatus> statusesOf(RunningRoom room, UUID invitee) {
+    private static List<RoomInvitationStatus> statusesOf(RunningRoom room, UUID invitee) {
         return room.getInvitations().stream()
                 .filter(invitation -> invitation.isFor(new UserId(invitee)))
                 .map(RoomInvitation::getStatus)

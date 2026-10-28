@@ -67,7 +67,7 @@ class OpenMatchStreamHandlerTest {
     @Test
     @DisplayName("방 채널을 구독하고 스냅샷을 보낸다")
     void subscribesAndSendsSnapshot() {
-        // given -> 재연결이 곧 스냅샷 재수신이다(feature-spec)
+        // given -> 재연결이 곧 스냅샷 재수신이다
         givenActiveMatch();
         given(matchStreamPort.register(new UserId(USER_ID), newConnection))
                 .willReturn(Optional.empty());
@@ -138,7 +138,7 @@ class OpenMatchStreamHandlerTest {
     @DisplayName("활성 신청이 없으면 연결을 거절한다")
     void rejectsWhenNoActiveApplication() {
         // given -> 열어주면 붙을 방이 없어 어느 채널도 구독하지 못하고,
-        //          그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다(api-spec 5-A)
+        //          그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다
         given(roomInfoAssembler.assembleFor(new UserId(USER_ID))).willReturn(Optional.empty());
 
         // when & then

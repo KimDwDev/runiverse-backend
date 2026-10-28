@@ -16,7 +16,7 @@ import com.runiverse.running_service.domain.running.room.exception.NotRoomPlayer
 import com.runiverse.running_service.domain.running.room.exception.RoomNotInvitableException;
 import com.runiverse.running_service.domain.running.room.exception.RoomNotJoinableException;
 import com.runiverse.running_service.domain.running.room.exception.SelfInvitationException;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
@@ -85,11 +85,11 @@ public class RunningRoomInvitationTest {
     }
 
     private static InvitationDraft sent(UserId inviter, UserId invitee,
-                                        RunningRoomInvitationStatus status, int count) {
+                                        RoomInvitationStatus status, int count) {
         return new InvitationDraft(inviter, invitee, status, count);
     }
 
-    private static List<RunningRoomInvitationStatus> statusesOf(RunningRoom room, UserId invitee) {
+    private static List<RoomInvitationStatus> statusesOf(RunningRoom room, UserId invitee) {
         return room.getInvitations().stream()
                 .filter(invitation -> invitation.isFor(invitee))
                 .map(RoomInvitation::getStatus)
@@ -112,13 +112,13 @@ public class RunningRoomInvitationTest {
         void restoresRows() {
             // when
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.DECLINED, 2),
-                    sent(MEMBER, INVITEE, RunningRoomInvitationStatus.DECLINED, 1)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.DECLINED, 2),
+                    sent(MEMBER, INVITEE, RoomInvitationStatus.DECLINED, 1)));
 
             // then
             assertThat(room.getInvitations()).hasSize(2);
             assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(2);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.DECLINED);
         }
 
         @Test
@@ -137,7 +137,7 @@ public class RunningRoomInvitationTest {
         void rejectsSelfRow() {
             // when & then -> DB CHECK와 같은 규칙
             assertThatThrownBy(() -> recruiting(List.of(
-                    sent(INVITEE, INVITEE, RunningRoomInvitationStatus.PENDING, 1))))
+                    sent(INVITEE, INVITEE, RoomInvitationStatus.PENDING, 1))))
                     .isInstanceOf(SelfInvitationException.class);
         }
 
@@ -146,7 +146,7 @@ public class RunningRoomInvitationTest {
         void rejectsZeroCount() {
             // when & then
             assertThatThrownBy(() -> recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 0))))
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 0))))
                     .isInstanceOf(InvalidInviteCountException.class);
         }
 
@@ -179,7 +179,7 @@ public class RunningRoomInvitationTest {
             RoomInvitation invitation = rowOf(room, HOST, INVITEE);
             assertThat(invitation.getInviterId()).isEqualTo(HOST);
             assertThat(invitation.getInviteeId()).isEqualTo(INVITEE);
-            assertThat(invitation.getStatus()).isEqualTo(RunningRoomInvitationStatus.PENDING);
+            assertThat(invitation.getStatus()).isEqualTo(RoomInvitationStatus.PENDING);
             assertThat(invitation.getInviteCount().value()).isEqualTo(1);
             assertThat(room.getInvitations()).hasSize(1);
         }
@@ -188,7 +188,7 @@ public class RunningRoomInvitationTest {
         @DisplayName("대기 중에 다시 보내면 행이 늘지 않고 횟수만 오른다")
         void resendWhilePendingIncreasesCount() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 2)));
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 2)));
 
             // when -> 독촉
             room.invite(HOST, INVITEE, MAX_INVITE_COUNT);
@@ -196,14 +196,14 @@ public class RunningRoomInvitationTest {
             // then
             assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(3);
             assertThat(room.getInvitations()).hasSize(1);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.PENDING);
         }
 
         @Test
         @DisplayName("다른 참가자가 보내면 그 사람의 행이 따로 생긴다")
         void otherInviterOpensOwnRow() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when -> 방장이 없어 누구나 부를 수 있다
             room.invite(MEMBER, INVITEE, MAX_INVITE_COUNT);
@@ -215,9 +215,9 @@ public class RunningRoomInvitationTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"DECLINED", "LEFT"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"DECLINED", "LEFT"})
         @DisplayName("거절했거나 나간 사람을 부르면 다른 사람의 행까지 함께 대기로 되살아나고 횟수는 이어서 센다")
-        void reinviteRevivesAllRows(RunningRoomInvitationStatus status) {
+        void reinviteRevivesAllRows(RoomInvitationStatus status) {
             // given
             RunningRoom room = recruiting(List.of(
                     sent(HOST, INVITEE, status, 2),
@@ -228,7 +228,7 @@ public class RunningRoomInvitationTest {
 
             // then
             assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(3);
-            assertThat(statusesOf(room, INVITEE)).containsOnly(RunningRoomInvitationStatus.PENDING);
+            assertThat(statusesOf(room, INVITEE)).containsOnly(RoomInvitationStatus.PENDING);
             assertThat(rowOf(room, MEMBER, INVITEE).getInviteCount().value()).isEqualTo(1);
         }
 
@@ -236,14 +236,14 @@ public class RunningRoomInvitationTest {
         @DisplayName("거절한 사람을 새 보낸 사람이 부르면 새 행도 대기로 생기고 기존 행도 되살아난다")
         void newInviterRevivesDeclined() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.DECLINED, 1)));
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RoomInvitationStatus.DECLINED, 1)));
 
             // when
             room.invite(MEMBER, INVITEE, MAX_INVITE_COUNT);
 
             // then -> 새 행은 지금 상태를 따른다
             assertThat(statusesOf(room, INVITEE)).hasSize(2)
-                    .containsOnly(RunningRoomInvitationStatus.PENDING);
+                    .containsOnly(RoomInvitationStatus.PENDING);
         }
 
         @Test
@@ -251,14 +251,14 @@ public class RunningRoomInvitationTest {
         void rejectsWhenCountReached() {
             // given
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.DECLINED, MAX_INVITE_COUNT)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.DECLINED, MAX_INVITE_COUNT)));
 
             // when & then -> 거절당한 뒤 계속 보내는 것을 막는 게 상한의 목적이다. 애플리케이션이 409로 먼저 거른다
             assertThat(room.hasReachedInviteLimit(HOST, INVITEE, MAX_INVITE_COUNT)).isTrue();
             assertThatThrownBy(() -> room.invite(HOST, INVITEE, MAX_INVITE_COUNT))
                     .isInstanceOf(InviteCountReachedException.class);
             assertThat(rowOf(room, HOST, INVITEE).getInviteCount().value()).isEqualTo(MAX_INVITE_COUNT);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.DECLINED);
         }
 
         @Test
@@ -266,7 +266,7 @@ public class RunningRoomInvitationTest {
         void countIsPerInviter() {
             // given
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, MAX_INVITE_COUNT)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, MAX_INVITE_COUNT)));
 
             // when
             room.invite(MEMBER, INVITEE, MAX_INVITE_COUNT);
@@ -375,14 +375,14 @@ public class RunningRoomInvitationTest {
         void acceptJoinsAndAcceptsAllRows() {
             // given
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1),
-                    sent(MEMBER, INVITEE, RunningRoomInvitationStatus.PENDING, 3)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1),
+                    sent(MEMBER, INVITEE, RoomInvitationStatus.PENDING, 3)));
 
             // when
             room.acceptInvitation(INVITEE, INVITEE_PLAYER);
 
             // then
-            assertThat(statusesOf(room, INVITEE)).containsOnly(RunningRoomInvitationStatus.ACCEPTED);
+            assertThat(statusesOf(room, INVITEE)).containsOnly(RoomInvitationStatus.ACCEPTED);
             assertThat(room.getPlayerCount().current()).isEqualTo(3);
             assertThat(room.getSessions()).anySatisfy(session -> {
                 assertThat(session.isSameUser(INVITEE)).isTrue();
@@ -397,14 +397,14 @@ public class RunningRoomInvitationTest {
             // given
             UserId another = newUser();
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1),
-                    sent(HOST, another, RunningRoomInvitationStatus.PENDING, 1)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1),
+                    sent(HOST, another, RoomInvitationStatus.PENDING, 1)));
 
             // when
             room.acceptInvitation(INVITEE, INVITEE_PLAYER);
 
             // then
-            assertThat(room.invitationStatusOf(another)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(another)).contains(RoomInvitationStatus.PENDING);
         }
 
         @Test
@@ -420,9 +420,9 @@ public class RunningRoomInvitationTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"DECLINED", "LEFT", "EXPIRED"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"DECLINED", "LEFT", "EXPIRED"})
         @DisplayName("대기 중이 아닌 초대는 수락할 수 없고 자리도 잡지 않는다")
-        void rejectsNonPending(RunningRoomInvitationStatus status) {
+        void rejectsNonPending(RoomInvitationStatus status) {
             // given -> 거절 뒤 들어가려면 다시 초대받아야 한다
             RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, status, 1)));
 
@@ -442,12 +442,12 @@ public class RunningRoomInvitationTest {
                     connected(MEMBER, MEMBER_PLAYER),
                     connected(newUser(), new RunningPlayerId(4L)),
                     connected(newUser(), new RunningPlayerId(5L))),
-                    List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+                    List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when & then -> 누가 나가면 다시 수락할 수 있다
             assertThatThrownBy(() -> room.acceptInvitation(INVITEE, INVITEE_PLAYER))
                     .isInstanceOf(RoomNotJoinableException.class);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.PENDING);
         }
 
         @Test
@@ -455,12 +455,12 @@ public class RunningRoomInvitationTest {
         void closedRoomKeepsPending() {
             // given
             RunningRoom room = restored(RunningRoomStatus.MATCHED, List.of(connected(HOST, HOST_PLAYER)),
-                    List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+                    List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when & then
             assertThatThrownBy(() -> room.acceptInvitation(INVITEE, INVITEE_PLAYER))
                     .isInstanceOf(RoomNotJoinableException.class);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.PENDING);
         }
 
         @Test
@@ -470,7 +470,7 @@ public class RunningRoomInvitationTest {
             RunningPlayerId newPlayer = new RunningPlayerId(9L);
             RunningRoom room = restored(RunningRoomStatus.MATCHING, List.of(
                     connected(HOST, HOST_PLAYER), new SessionDraft(INVITEE, INVITEE_PLAYER, 1, false)),
-                    List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 2)));
+                    List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 2)));
 
             // when
             room.acceptInvitation(INVITEE, newPlayer);
@@ -482,7 +482,7 @@ public class RunningRoomInvitationTest {
                         assertThat(session.isSamePlayer(newPlayer)).isTrue();
                         assertThat(session.isConnected()).isTrue();
                     });
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.ACCEPTED);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.ACCEPTED);
         }
     }
 
@@ -495,15 +495,15 @@ public class RunningRoomInvitationTest {
         void declineAllRows() {
             // given
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1),
-                    sent(MEMBER, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1),
+                    sent(MEMBER, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when
             room.declineInvitation(INVITEE);
 
             // then -> 방 화면이 "거절"을 보여야 한다
             assertThat(statusesOf(room, INVITEE)).hasSize(2)
-                    .containsOnly(RunningRoomInvitationStatus.DECLINED);
+                    .containsOnly(RoomInvitationStatus.DECLINED);
             assertThat(room.getPlayerCount().current()).isEqualTo(2);
         }
 
@@ -519,9 +519,9 @@ public class RunningRoomInvitationTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = RunningRoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT", "EXPIRED"})
+        @EnumSource(value = RoomInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "LEFT", "EXPIRED"})
         @DisplayName("대기 중이 아닌 초대는 거절할 수 없고 어느 행도 바뀌지 않는다")
-        void rejectsNonPending(RunningRoomInvitationStatus status) {
+        void rejectsNonPending(RoomInvitationStatus status) {
             // given
             RunningRoom room = recruiting(List.of(
                     sent(HOST, INVITEE, status, 1),
@@ -543,21 +543,21 @@ public class RunningRoomInvitationTest {
         void acceptedBecomesLeft() {
             // given
             RunningRoom room = recruiting(List.of(
-                    sent(HOST, MEMBER, RunningRoomInvitationStatus.ACCEPTED, 1),
-                    sent(newUser(), MEMBER, RunningRoomInvitationStatus.ACCEPTED, 1)));
+                    sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1),
+                    sent(newUser(), MEMBER, RoomInvitationStatus.ACCEPTED, 1)));
 
             // when
             room.leave(MEMBER, LEFT_AT);
 
             // then -> ACCEPTED는 "지금 방에 있음"만 뜻한다
-            assertThat(statusesOf(room, MEMBER)).containsOnly(RunningRoomInvitationStatus.LEFT);
+            assertThat(statusesOf(room, MEMBER)).containsOnly(RoomInvitationStatus.LEFT);
         }
 
         @Test
         @DisplayName("나간 사람은 다시 초대받을 수 있다")
         void leftCanBeReinvited() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, MEMBER, RunningRoomInvitationStatus.ACCEPTED, 1)));
+            RunningRoom room = recruiting(List.of(sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1)));
             room.leave(MEMBER, LEFT_AT);
 
             // when
@@ -565,20 +565,20 @@ public class RunningRoomInvitationTest {
 
             // then
             assertThat(rowOf(room, HOST, MEMBER).getInviteCount().value()).isEqualTo(2);
-            assertThat(room.invitationStatusOf(MEMBER)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.PENDING);
         }
 
         @Test
         @DisplayName("초대 없이 들어온 사람이 나가도 다른 사람의 초대는 그대로다")
         void hostLeaveKeepsInvitations() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when
             room.leave(HOST, LEFT_AT);
 
             // then
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.PENDING);
             assertThat(room.invitationStatusOf(HOST)).isEmpty();
         }
     }
@@ -593,11 +593,11 @@ public class RunningRoomInvitationTest {
         // 대기 중 2행(보낸 사람 둘)·거절·나감·수락해 방에 있음이 섞인 방
         private RunningRoom mixedRoom() {
             return recruiting(List.of(
-                    sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1),
-                    sent(MEMBER, INVITEE, RunningRoomInvitationStatus.PENDING, 2),
-                    sent(HOST, declined, RunningRoomInvitationStatus.DECLINED, 1),
-                    sent(HOST, left, RunningRoomInvitationStatus.LEFT, 1),
-                    sent(HOST, MEMBER, RunningRoomInvitationStatus.ACCEPTED, 1)));
+                    sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1),
+                    sent(MEMBER, INVITEE, RoomInvitationStatus.PENDING, 2),
+                    sent(HOST, declined, RoomInvitationStatus.DECLINED, 1),
+                    sent(HOST, left, RoomInvitationStatus.LEFT, 1),
+                    sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1)));
         }
 
         @Test
@@ -610,10 +610,10 @@ public class RunningRoomInvitationTest {
             room.closeMatching();
 
             // then -> 거절·나감은 방 화면 기록이라 그대로 남고, 방에 있는 사람도 그대로다
-            assertThat(statusesOf(room, INVITEE)).hasSize(2).containsOnly(RunningRoomInvitationStatus.EXPIRED);
-            assertThat(room.invitationStatusOf(declined)).contains(RunningRoomInvitationStatus.DECLINED);
-            assertThat(room.invitationStatusOf(left)).contains(RunningRoomInvitationStatus.LEFT);
-            assertThat(room.invitationStatusOf(MEMBER)).contains(RunningRoomInvitationStatus.ACCEPTED);
+            assertThat(statusesOf(room, INVITEE)).hasSize(2).containsOnly(RoomInvitationStatus.EXPIRED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.ACCEPTED);
         }
 
         @Test
@@ -621,28 +621,61 @@ public class RunningRoomInvitationTest {
         void lastLeaveExpiresPending() {
             // given -> 만든 사람 혼자인 방
             RunningRoom room = restored(RunningRoomStatus.MATCHING, List.of(connected(HOST, HOST_PLAYER)),
-                    List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+                    List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when
             room.leave(HOST, LEFT_AT);
 
             // then
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.EXPIRED);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.EXPIRED);
+        }
+
+        @Test
+        @DisplayName("초대로 들어온 마지막 사람이 나가면 방이 취소되고 본인은 나감, 남은 대기 초대는 만료된다")
+        void lastInviteeLeaveExpiresOthers() {
+            // given -> 만든 사람은 먼저 나갔고 초대로 들어온 사람만 남았다
+            RunningRoom room = restored(RunningRoomStatus.MATCHING,
+                    List.of(new SessionDraft(HOST, HOST_PLAYER, 1, false), connected(MEMBER, MEMBER_PLAYER)),
+                    List.of(sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1),
+                            sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
+
+            // when
+            room.leave(MEMBER, LEFT_AT);
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.EXPIRED);
         }
 
         @Test
         @DisplayName("사람이 남아 있으면 나가도 대기 중인 초대는 그대로다")
         void leaveWithOthersKeepsPending() {
             // given
-            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RunningRoomInvitationStatus.PENDING, 1)));
+            RunningRoom room = recruiting(List.of(sent(HOST, INVITEE, RoomInvitationStatus.PENDING, 1)));
 
             // when
             room.leave(MEMBER, LEFT_AT);
 
             // then -> 모집은 계속된다
             assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.MATCHING);
-            assertThat(room.invitationStatusOf(INVITEE)).contains(RunningRoomInvitationStatus.PENDING);
+            assertThat(room.invitationStatusOf(INVITEE)).contains(RoomInvitationStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("사람이 남아 있으면 다른 사람이 나가도 수락·거절·나감은 그대로다")
+        void leaveWithOthersKeepsAnswered() {
+            // given
+            RunningRoom room = mixedRoom();
+
+            // when -> 초대 없이 들어온 사람이 나간다
+            room.leave(HOST, LEFT_AT);
+
+            // then
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.ACCEPTED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RoomInvitationStatus.LEFT);
         }
 
         @Test
@@ -655,8 +688,31 @@ public class RunningRoomInvitationTest {
             room.cancel(LEFT_AT);
 
             // then
-            assertThat(statusesOf(room, INVITEE)).containsOnly(RunningRoomInvitationStatus.EXPIRED);
-            assertThat(room.invitationStatusOf(declined)).contains(RunningRoomInvitationStatus.DECLINED);
+            assertThat(statusesOf(room, INVITEE)).containsOnly(RoomInvitationStatus.EXPIRED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+        }
+
+        @Test
+        @DisplayName("시작한 방을 취소해도 수락·거절·나감·만료는 그대로다")
+        void cancelStartedRoomKeepsAnswered() {
+            // given -> 시작한 방이라 대기 중이던 초대는 마감 때 이미 만료됐다
+            UserId expired = newUser();
+            RunningRoom room = restored(RunningRoomStatus.STARTED,
+                    List.of(connected(HOST, HOST_PLAYER), connected(MEMBER, MEMBER_PLAYER)),
+                    List.of(sent(HOST, MEMBER, RoomInvitationStatus.ACCEPTED, 1),
+                            sent(HOST, declined, RoomInvitationStatus.DECLINED, 1),
+                            sent(HOST, left, RoomInvitationStatus.LEFT, 1),
+                            sent(HOST, expired, RoomInvitationStatus.EXPIRED, 1)));
+
+            // when
+            room.cancel(START.plusMinutes(30));
+
+            // then
+            assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+            assertThat(room.invitationStatusOf(MEMBER)).contains(RoomInvitationStatus.ACCEPTED);
+            assertThat(room.invitationStatusOf(declined)).contains(RoomInvitationStatus.DECLINED);
+            assertThat(room.invitationStatusOf(left)).contains(RoomInvitationStatus.LEFT);
+            assertThat(room.invitationStatusOf(expired)).contains(RoomInvitationStatus.EXPIRED);
         }
 
         @Test

@@ -86,7 +86,7 @@ class CloseMatchingHandlerTest {
     @Test
     @DisplayName("확정된 순간에는 MATCH_STARTED로 알린다")
     void publishesStartedOnClose() {
-        // given -> 재연결 스냅샷(UPDATED)과 갈라야 확정 연출이 반복되지 않는다(api-spec 5-B)
+        // given -> 재연결 스냅샷(UPDATED)과 갈라야 확정 연출이 반복되지 않는다
         givenRoom(room(RunningRoomStatus.MATCHING, 3));
         given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
 
@@ -101,7 +101,7 @@ class CloseMatchingHandlerTest {
     @Test
     @DisplayName("초대 방 마감은 확정 연출 없이 INVITE_ROOM_UPDATED로만 알린다")
     void publishesUpdatedOnInviteRoomClose() {
-        // given -> 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니다(api-spec 4번)
+        // given -> 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니다
         RoomInfo inviteRoomInfo = new RoomInfo(
                 ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(1),
                 LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
@@ -121,7 +121,7 @@ class CloseMatchingHandlerTest {
     @Test
     @DisplayName("1인 방도 인원과 무관하게 확정한다")
     void closesEvenWithSinglePlayer() {
-        // given -> 인원 부족으로 인한 자동 취소는 없다. 혼자 뛴다(feature-spec)
+        // given -> 인원 부족으로 인한 자동 취소는 없다. 혼자 뛴다
         givenRoom(room(RunningRoomStatus.MATCHING, 1));
         given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
 

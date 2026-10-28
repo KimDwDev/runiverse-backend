@@ -6,10 +6,10 @@ import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
+import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
+import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
-import com.runiverse.running_service.application.running.port.out.CreateRunningPlayerPort;
-import com.runiverse.running_service.application.running.port.out.CreateRunningRoomPort;
-import com.runiverse.running_service.application.running.port.out.ExistsActiveRunningPlayerPort;
 import com.runiverse.running_service.application.user.exception.OnboardingNotCompletedException;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.vo.Pace;
@@ -28,10 +28,10 @@ import java.time.LocalDateTime;
 public class OpenInviteRoomHandler implements OpenInviteRoomUsecase {
 
     private final InviteStartPolicy inviteStartPolicy;
-    private final ExistsActiveRunningPlayerPort existsActiveRunningPlayerPort;
+    private final ExistsActiveApplicationPort existsActiveApplicationPort;
     private final LoadUserAvgPacePort loadUserAvgPacePort;
-    private final CreateRunningPlayerPort createRunningPlayerPort;
-    private final CreateRunningRoomPort createRunningRoomPort;
+    private final CreateMatchApplicationPort createMatchApplicationPort;
+    private final CreateMatchRoomPort createMatchRoomPort;
     private final ScheduleJobPort scheduleJobPort;
     private final MatchProperties matchProperties;
 
@@ -48,16 +48,16 @@ public class OpenInviteRoomHandler implements OpenInviteRoomUsecase {
         UserId userId = new UserId(command.userId());
         // 2. 활성 신청은 매칭과 합쳐 하나다 — 매칭 대기·러닝 중이면 초대 방도 못 연다.
         //    쿨다운은 보지 않는다 — 매칭 신청만 막는다
-        if (existsActiveRunningPlayerPort.existsActive(userId)) {
+        if (existsActiveApplicationPort.existsActive(userId)) {
             throw new AlreadyRunningException();
         }
         // 3. 페이스는 입력받지 않고 온보딩 값을 쓴다(매칭과 같다)
         Pace pace = loadUserAvgPacePort.loadAvgPace(userId)
                 .orElseThrow(OnboardingNotCompletedException::new);
         // 4. 신청을 먼저 만들어 ID를 확보한다 — 방의 세션이 이 ID로 참조한다
-        RunningPlayer player = createRunningPlayerPort.create(RunningPlayer.request(
+        RunningPlayer player = createMatchApplicationPort.create(RunningPlayer.request(
                 command.userId(), pace.secondsPerKm(), command.targetDistanceMeters(), startAt));
-        RunningRoom room = createRunningRoomPort.create(RunningRoom.openInvite(
+        RunningRoom room = createMatchRoomPort.create(RunningRoom.openInvite(
                 userId, player.getRunningPlayerId().orElseThrow(), pace.secondsPerKm(),
                 command.targetDistanceMeters(), startAt));
         // 5. 예약은 매칭 방과 같은 네 가지다 — 마감만 초대 오프셋이고 나머지는 매칭 설정을 쓴다.

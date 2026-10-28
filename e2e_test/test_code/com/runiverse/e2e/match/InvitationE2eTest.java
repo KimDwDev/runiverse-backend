@@ -1,4 +1,4 @@
-package com.runiverse.e2e.invite;
+package com.runiverse.e2e.match;
 
 import com.runiverse.e2e.E2eTestSupport;
 import com.runiverse.e2e.MatchStream;
@@ -15,7 +15,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// 초대 행 조회·저장(running_room_invitations)과 친구·활성 신청 일괄 조회 JPQL을 실제 DB에서 탄다
+// 초대 행 조회·저장(running_room_invitations)과 친구 확인·받는 사람 상태 조회 JPQL을 실제 DB에서 탄다
 @DisplayName("배포 이미지 대상 러닝 초대·수락·거절 E2E 테스트")
 class InvitationE2eTest extends E2eTestSupport {
 
@@ -284,6 +284,51 @@ class InvitationE2eTest extends E2eTestSupport {
         for (TestUser stayer : List.of(host, members.get(1), members.get(2), waiting)) {
             assertThat(post("/match-rooms/leave", null, stayer.accessToken()).status()).isEqualTo(204);
         }
+    }
+
+    @Test
+    @DisplayName("두 사람이 같은 친구를 초대하면 행은 따로 저장되고, 수락·나가기·다시 초대는 두 행에 함께 반영된다")
+    void twoInvitersShareOneInvitee() {
+        // given -> 방 참가자 둘이 같은 친구를 각자 초대한다 — 초대 행은 보낸 사람마다 하나다
+        TestUser host = signUpAndOnboard();
+        TestUser member = signUpAndOnboard();
+        TestUser friend = signUpAndOnboard();
+        befriend(host, member);
+        befriend(host, friend);
+        befriend(member, friend);
+        int roomId = openRoom(host);
+        assertThat(invite(host, roomId, member).status()).isEqualTo(204);
+        assertThat(accept(member, roomId).status()).isEqualTo(201);
+
+        try (MatchStream hostStream = openMatchStream(host.accessToken())) {
+            hostStream.await("INVITE_ROOM_ENTRANCE");
+
+            // when - 1. 둘 다 보낸다 — 현황은 받는 사람 기준이라 한 줄이다
+            assertThat(invite(host, roomId, friend).status()).isEqualTo(204);
+            assertThat(invite(member, roomId, friend).status()).isEqualTo(204);
+            hostStream.await("INVITE_ROOM_UPDATED");
+            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "invitations"))
+                    .extracting(invitee -> invitee.get("userId")).containsExactly(friend.userId());
+
+            // 2. 수락하고 나간다
+            assertThat(accept(friend, roomId).status()).isEqualTo(201);
+            hostStream.await("INVITE_ROOM_UPDATED");
+            assertThat(post("/match-rooms/leave", null, friend.accessToken()).status()).isEqualTo(204);
+            hostStream.await("INVITE_ROOM_UPDATED");
+
+            // 3. 한 사람만 다시 불러도 두 행이 함께 대기로 되살아나 다시 수락할 수 있다
+            assertThat(invite(member, roomId, friend).status()).isEqualTo(204);
+            hostStream.await("INVITE_ROOM_UPDATED");
+            assertThat(accept(friend, roomId).status()).isEqualTo(201);
+
+            // then -> 재수락 때의 이벤트다
+            assertThat(listOf(hostStream.await("INVITE_ROOM_UPDATED"), "players"))
+                    .extracting(player -> player.get("userId"))
+                    .containsExactlyInAnyOrder(host.userId(), member.userId(), friend.userId());
+        }
+        assertThat(post("/match-rooms/leave", null, friend.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, member.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     @Test

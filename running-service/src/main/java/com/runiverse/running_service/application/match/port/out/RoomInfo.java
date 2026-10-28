@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.match.port.out;
 
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 
@@ -43,7 +43,7 @@ public record RoomInfo(
             String nickname,
             String profileImageUrl,
             // 응답 전인 초대만 실려 지금은 늘 PENDING이다 — 응답 모양을 유지하려고 필드를 남긴다
-            RunningRoomInvitationStatus status,
+            RoomInvitationStatus status,
             boolean isDeleted
     ) {
 
