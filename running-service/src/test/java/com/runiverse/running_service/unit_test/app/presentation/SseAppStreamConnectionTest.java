@@ -1,6 +1,13 @@
 package com.runiverse.running_service.unit_test.app.presentation;
 
+import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.app.port.out.AppStreamEvent;
+import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
+import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.presentation.app.sse.SseAppStreamConnection;
+import com.runiverse.running_service.presentation.notification.response.UserNotificationsResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,9 +16,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -69,5 +82,40 @@ class SseAppStreamConnectionTest {
 
         // then
         verify(emitter).complete();
+    }
+
+    @Test
+    @DisplayName("새 알림은 NOTIFICATION_CREATED 이름으로 2-4 목록 항목과 같은 JSON을 싣는다")
+    void notificationCreatedUsesListItemShape() throws Exception {
+        // given
+        UUID chulsu = UuidCreator.getTimeOrderedEpoch();
+        GetUserNotificationsResult.Item item = new GetUserNotificationsResult.Item(
+                913L, UserNotificationType.RUNNING_INVITED, false, LocalDateTime.of(2026, 10, 28, 12, 3),
+                new GetUserNotificationsResult.Actor(chulsu, "철수", null, false, RelationshipType.FRIEND),
+                new GetUserNotificationsResult.Invitation(130L, RoomInvitationStatus.PENDING,
+                        LocalDateTime.of(2026, 10, 28, 19, 30), 7_000));
+
+        // when
+        connection.send(AppStreamEvent.notificationCreated(item));
+
+        // then -> 클라가 받은 그대로 목록 맨 위에 붙인다
+        ArgumentCaptor<SseEmitter.SseEventBuilder> sent = ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
+        verify(emitter).send(sent.capture());
+        Set<ResponseBodyEmitter.DataWithMediaType> parts = sent.getValue().build();
+        String frame = parts.stream()
+                .filter(part -> !MediaType.APPLICATION_JSON.equals(part.getMediaType()))
+                .map(part -> String.valueOf(part.getData()))
+                .reduce("", String::concat);
+        Object body = parts.stream()
+                .filter(part -> MediaType.APPLICATION_JSON.equals(part.getMediaType()))
+                .map(ResponseBodyEmitter.DataWithMediaType::getData)
+                .findFirst()
+                .orElseThrow();
+        assertThat(frame).contains("event:NOTIFICATION_CREATED");
+        assertThat(body).isEqualTo(UserNotificationsResponse.ItemResponse.from(item));
+        JsonNode json = JsonMapper.builder().build().valueToTree(body);
+        assertThat(json.get("isRead").asBoolean()).isFalse();
+        assertThat(json.get("actor").get("relationshipType").asString()).isEqualTo("FRIEND");
+        assertThat(json.get("invitation").get("status").asString()).isEqualTo("PENDING");
     }
 }
