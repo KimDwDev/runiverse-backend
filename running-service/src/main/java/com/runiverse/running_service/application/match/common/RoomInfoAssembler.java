@@ -59,11 +59,7 @@ public class RoomInfoAssembler {
                 room.getTargetDistance().map(Distance::meters).orElse(null),
                 room.getAvgPace().map(Pace::secondsPerKm).orElse(null),
                 players.stream().map(player -> toPlayer(player, profiles)).toList(),
-                invitees.stream()
-                        // 받는 사람이 탈퇴해도 초대 행은 남는다 — 수락할 사람이 없으니 현황에서 뺀다
-                        .filter(invitee -> profiles.containsKey(invitee.getInviteeId().value()))
-                        .map(invitee -> toInvitee(invitee, profiles))
-                        .toList());
+                invitees.stream().map(invitee -> toInvitee(invitee, profiles)).toList());
     }
 
     // 응답 전인(PENDING) 초대만 받는 사람마다 한 건 — 보낸 사람별 행은 상태가 같아 첫 행만 쓴다.
@@ -99,7 +95,7 @@ public class RoomInfoAssembler {
                 deleted);
     }
 
-    // 받는 사람이 탈퇴하면 assemble에서 걸러져 여기 오지 않는다 — 형식상 참가자와 같게 판정한다
+    // 받는 사람이 탈퇴하면 초대 행은 FK CASCADE로 지워져 여기 오지 않는다 — 형식상 참가자와 같게 판정한다
     private RoomInfo.RoomInvitee toInvitee(RoomInvitation invitation, Map<UUID, PlayerProfile> profiles) {
         UUID userId = invitation.getInviteeId().value();
         PlayerProfile profile = profiles.get(userId);

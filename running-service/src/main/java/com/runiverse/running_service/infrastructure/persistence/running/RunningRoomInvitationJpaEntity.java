@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
+import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -30,7 +31,7 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "running_room_invitations",
-        // 받은 초대 목록
+        // 받은 초대 목록 — 받는 사람이 탈퇴할 때 CASCADE 삭제도 이 인덱스를 탄다
         indexes = @Index(name = "idx_room_invitation_invitee", columnList = "invitee_id")
 )
 @IdClass(RunningRoomInvitationJpaEntity.Pk.class)
@@ -51,7 +52,6 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     @Id
     @Column(name = "inviter_id", nullable = false, updatable = false)
     private UUID inviterId;
-    // 받는 사람 — 논리 참조다. 받는 사람이 탈퇴해도 초대는 남는다(방에 있다 탈퇴하면 탈퇴 정리가 같은 트랜잭션에서 이 행을 `LEFT`로 고친다)
     @Id
     @Column(name = "invitee_id", nullable = false, updatable = false)
     private UUID inviteeId;
@@ -62,6 +62,17 @@ public class RunningRoomInvitationJpaEntity extends BaseTimeEntity {
     // 이 보낸 사람이 이 받는 사람에게 보낸 횟수 — 거절·나감 뒤에도 이어서 센다
     @Column(name = "invite_count", nullable = false)
     private int inviteCount;
+
+    // FK 제약 — 받는 사람이 탈퇴하면 받은 초대가 함께 지워진다
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "invitee_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_room_invitation_invitee")
+    )
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private UserJpaEntity invitee;
 
     private RunningRoomInvitationJpaEntity(RunningRoomJpaEntity room, UUID inviterId, UUID inviteeId,
                                            RoomInvitationStatus status, int inviteCount) {

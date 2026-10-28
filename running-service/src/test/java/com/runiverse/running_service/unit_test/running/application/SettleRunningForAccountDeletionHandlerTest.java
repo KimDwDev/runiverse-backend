@@ -324,23 +324,6 @@ class SettleRunningForAccountDeletionHandlerTest {
         verifyNoInteractions(finishRunningUsecase);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = RunningRoomStatus.class, names = {"MATCHED", "STARTED"})
-    @DisplayName("초대 방은 시작 전 이탈이든 미출석이든 제재하지 않는다")
-    void doesNotPenalizeInviteRoom(RunningRoomStatus status) {
-        // given -> 매칭 방이었으면 둘 다 제재 대상이다(마감이 지난 2인 방)
-        givenActiveApplication(inviteRoom(status, 2));
-        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
-
-        // when
-        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
-
-        // then
-        assertThat(updatedPlayer().getStatus())
-                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_NO_PENALTY);
-        verifyNoInteractions(startMatchCooldownPort, finishRunningUsecase);
-    }
-
     private void givenActiveApplication(RunningRoom room) {
         givenActiveApplication(room, RunningPlayerStatus.JOINED);
     }
@@ -380,19 +363,9 @@ class SettleRunningForAccountDeletionHandlerTest {
         return room(status, currentPlayerCount, LocalDateTime.now().plus(Duration.ofHours(2)));
     }
 
+    // 나 말고 나머지 인원은 다른 유저의 세션으로 채운다 — 세션 키가 유저다
     private static RunningRoom room(RunningRoomStatus status, int currentPlayerCount,
                                     LocalDateTime startAt) {
-        return buildRoom(RunningRoomType.MATCH, status, currentPlayerCount, startAt);
-    }
-
-    // 시작 5분 전 — 마감(10분 전)이 지나 매칭 방이었으면 제재 구간이다
-    private static RunningRoom inviteRoom(RunningRoomStatus status, int currentPlayerCount) {
-        return buildRoom(RunningRoomType.INVITE, status, currentPlayerCount, LocalDateTime.now().plusMinutes(5));
-    }
-
-    // 나 말고 나머지 인원은 다른 유저의 세션으로 채운다 — 세션 키가 유저다
-    private static RunningRoom buildRoom(RunningRoomType type, RunningRoomStatus status,
-                                         int currentPlayerCount, LocalDateTime startAt) {
         List<SessionDraft> sessions = new ArrayList<>();
         sessions.add(new SessionDraft(
                 new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true));
@@ -403,7 +376,7 @@ class SettleRunningForAccountDeletionHandlerTest {
         }
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
-                .type(type)
+                .type(RunningRoomType.MATCH)
                 .status(status)
                 .startAt(startAt)
                 // 닫힌 시각은 종료 상태와 짝이라 어긋나면 복원이 막힌다

@@ -1590,7 +1590,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
   - `PENDING`(대기중)만 나간다. 수락하면 `players`로 옮겨 가고(`ACCEPTED`는 지금 방에 있다는 뜻이다), 거절(`DECLINED`)·나감(`LEFT`)은 현황에서 빠지며, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다. 거절·나감한 친구도 다시 초대하면 `PENDING`으로 돌아온다
-  - 받는 사람이 탈퇴한 초대도 빠진다 — `isDeleted`는 §0 공통 형식이라 계약에 남지만 이 목록에서는 현재 항상 `false`다
   - `status` 필드는 응답 모양을 유지하려고 남긴다 — 지금은 늘 `PENDING`이다
   - 상태가 바뀔 때마다(초대·수락·거절) `INVITE_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
 
