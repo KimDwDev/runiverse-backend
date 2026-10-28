@@ -1,6 +1,7 @@
 package com.runiverse.e2e.notification;
 
 import com.runiverse.e2e.E2eTestSupport;
+import com.runiverse.e2e.SseStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -251,6 +252,59 @@ class UserNotificationE2eTest extends E2eTestSupport {
 
         // 읽을 게 없어도 성공한다
         assertThat(post("/users/me/notifications/read", null, me.accessToken()).status()).isEqualTo(204);
+    }
+
+    @Test
+    @DisplayName("친구 요청을 받으면 앱 스트림으로 목록 항목과 같은 모양의 NOTIFICATION_CREATED가 온다")
+    void pushesNotificationToRecipientStream() {
+        // given -> 받는 사람만 앱 스트림을 열어 둔다
+        TestUser requester = signUpAndOnboard();
+        TestUser target = signUpAndOnboard();
+
+        try (SseStream targetStream = openAppStream(target.accessToken());
+             SseStream requesterStream = openAppStream(requester.accessToken())) {
+            assertThat(targetStream.status()).isEqualTo(200);
+
+            // when -> 커밋 뒤 Redis를 거쳐 받는 사람이 붙은 인스턴스가 보낸다
+            assertThat(post(friendRequestPath(target), null, requester.accessToken()).status()).isEqualTo(201);
+
+            // then
+            Map<String, Object> pushed = targetStream.await("NOTIFICATION_CREATED");
+            Map<String, Object> listed = get("/users/me/notifications", target.accessToken()).objects("items").getFirst();
+            assertThat(pushed).isEqualTo(listed);
+            assertThat(pushed.get("type")).isEqualTo("FRIEND_REQUESTED");
+            assertThat(actorOf(pushed))
+                    .containsEntry("userId", requester.userId())
+                    .containsEntry("relationshipType", "FRIEND_REQUEST_RECEIVED");
+
+            // 수락하면 요청했던 사람에게 수락 알림이 간다
+            assertThat(put(friendRequestPath(requester), target.accessToken()).status()).isEqualTo(200);
+            Map<String, Object> accepted = requesterStream.await("NOTIFICATION_CREATED");
+            assertThat(accepted.get("type")).isEqualTo("FRIEND_ACCEPTED");
+            assertThat(actorOf(accepted))
+                    .containsEntry("userId", target.userId())
+                    .containsEntry("relationshipType", "FRIEND");
+        }
+    }
+
+    @Test
+    @DisplayName("요청이 실패하면 받는 사람의 스트림에 아무것도 오지 않는다")
+    void failedRequestPushesNothing() {
+        // given
+        TestUser requester = signUpAndOnboard();
+        TestUser target = signUpAndOnboard();
+        assertThat(post(friendRequestPath(target), null, requester.accessToken()).status()).isEqualTo(201);
+
+        try (SseStream targetStream = openAppStream(target.accessToken())) {
+            // when -> 이미 요청한 사이라 409로 롤백된다
+            assertThat(post(friendRequestPath(target), null, requester.accessToken()).status()).isEqualTo(409);
+            // 뒤이어 성공한 다른 요청의 알림이 첫 이벤트로 와야 실패한 요청이 아무것도 보내지 않은 것이다
+            TestUser other = signUpAndOnboard();
+            assertThat(post(friendRequestPath(target), null, other.accessToken()).status()).isEqualTo(201);
+
+            // then
+            assertThat(actorOf(targetStream.await("NOTIFICATION_CREATED"))).containsEntry("userId", other.userId());
+        }
     }
 
     @Test
