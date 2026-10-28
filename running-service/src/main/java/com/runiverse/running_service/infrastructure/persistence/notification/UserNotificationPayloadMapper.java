@@ -2,6 +2,7 @@ package com.runiverse.running_service.infrastructure.persistence.notification;
 
 import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
 import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
 import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
 
 import java.util.Map;
@@ -12,6 +13,7 @@ final class UserNotificationPayloadMapper {
 
     static final String REQUEST_USER_ID = "request_user_id";
     static final String ACCEPT_USER_ID = "accept_user_id";
+    static final String RUNNING_ROOM_ID = "running_room_id";
 
     private UserNotificationPayloadMapper() {
     }
@@ -21,6 +23,10 @@ final class UserNotificationPayloadMapper {
         return switch (payload) {
             case FriendRequestedPayload p -> Map.of(REQUEST_USER_ID, p.requestUserId().value().toString());
             case FriendAcceptedPayload p -> Map.of(ACCEPT_USER_ID, p.acceptUserId().value().toString());
+            // 방 ID는 숫자로 둔다 — 초대 상태를 찾는 running_room_invitations의 bigint와 같은 값이다
+            case RunningInvitedPayload p -> Map.of(
+                    REQUEST_USER_ID, p.requestUserId().value().toString(),
+                    RUNNING_ROOM_ID, p.runningRoomId().value());
         };
     }
 }

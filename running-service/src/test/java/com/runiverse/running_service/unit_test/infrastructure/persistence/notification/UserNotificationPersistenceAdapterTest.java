@@ -5,7 +5,9 @@ import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.notification.UserNotification;
 import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
 import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
 import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.infrastructure.persistence.notification.UserNotificationJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.notification.UserNotificationPersistenceAdapter;
 import jakarta.persistence.EntityManager;
@@ -67,5 +69,20 @@ class UserNotificationPersistenceAdapterTest {
         UserNotificationJpaEntity entity = persisted();
         assertThat(entity.getType()).isEqualTo(UserNotificationType.FRIEND_ACCEPTED);
         assertThat(entity.getPayload()).isEqualTo(Map.of("accept_user_id", ACTOR_ID.toString()));
+    }
+
+    @Test
+    @DisplayName("초대 알림은 request_user_id에 초대한 사람, running_room_id에 방 ID를 숫자로 담는다")
+    void savesRunningInvited() {
+        // when
+        adapter.save(UserNotification.of(new UserId(RECIPIENT_ID),
+                new RunningInvitedPayload(new UserId(ACTOR_ID), new RunningRoomId(130L))));
+
+        // then -> 방 ID는 running_room_invitations의 bigint와 맞춰 숫자다
+        UserNotificationJpaEntity entity = persisted();
+        assertThat(entity.getType()).isEqualTo(UserNotificationType.RUNNING_INVITED);
+        assertThat(entity.getPayload()).isEqualTo(Map.of(
+                "request_user_id", ACTOR_ID.toString(),
+                "running_room_id", 130L));
     }
 }
