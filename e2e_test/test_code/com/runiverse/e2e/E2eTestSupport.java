@@ -155,8 +155,13 @@ public abstract class E2eTestSupport {
         return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, headers);
     }
 
-    protected MatchStream openMatchStream(String accessToken) {
-        return MatchStream.open(HTTP_CLIENT, BASE_URL + "/match-rooms/stream", accessToken,
+    protected SseStream openMatchStream(String accessToken) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + "/match-rooms/stream", accessToken,
+                SUPPORTED_APP_VERSION);
+    }
+
+    protected SseStream openUserStream(String accessToken) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + "/users/me/stream", accessToken,
                 SUPPORTED_APP_VERSION);
     }
 
