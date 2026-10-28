@@ -28,7 +28,8 @@ public record UserNotificationsResponse(List<ItemResponse> items, String nextCur
             InvitationResponse invitation       // RUNNING_INVITED만 있고 그 밖에는 null
     ) {
 
-        static ItemResponse from(GetUserNotificationsResult.Item item) {
+        // 스트림 이벤트(NOTIFICATION_CREATED)도 이 변환을 쓴다 — 목록 항목과 이벤트의 JSON이 어긋나지 않는다
+        public static ItemResponse from(GetUserNotificationsResult.Item item) {
             return new ItemResponse(
                     item.notificationId(),
                     item.type(),
