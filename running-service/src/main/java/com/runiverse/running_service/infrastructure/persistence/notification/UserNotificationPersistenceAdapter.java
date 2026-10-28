@@ -91,6 +91,17 @@ public class UserNotificationPersistenceAdapter implements SaveUserNotificationP
                 .toList();
         return new UserNotificationPage(rows, nextBeforeId);
     }
+    
+    @Override
+    public Optional<UserNotificationRow> loadOne(UserId userId, Long userNotificationId) {
+        // PK로 찾는다. 받는 사람이 다르면 없는 것과 같다 — 남의 알림을 밀어 주지 않는다
+        UserNotificationJpaEntity entity = entityManager.find(UserNotificationJpaEntity.class, userNotificationId);
+        if (entity == null || !entity.getUserId().equals(userId.value())) {
+            return Optional.empty();
+        }
+        // 되살리지 못한 행은 목록과 같게 로그를 남기고 비운다
+        return toRow(entity);
+    }
 
     @Override
     public long countUnread(UserId userId, LocalDateTime since) {
