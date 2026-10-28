@@ -596,7 +596,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_relationships.(user_id, type, updated_at, target_id) | 친구 목록(10-7) — 묶음(`type`)마다 따로 읽어 `updated_at`·`target_id` 역순 정렬과 커서 조건을 인덱스가 처리한다. 묶음을 `CASE`로 한 번에 정렬하면 인덱스 순서를 쓰지 못해 묶음 단위로 나눠 읽는다. 역방향 스캔이라 컬럼에 `DESC`를 붙이지 않는다 |
 | user_relationships.target_id | 탈퇴 시 `target_id` 쪽 CASCADE 삭제 — 차단 여부 확인은 상대 행을 `(user_id, target_id)`로 찾아 이 인덱스가 필요 없다 |
 | user_notifications.(user_id, user_notification_id) | 알림함 최신순 조회(2-4) — ID가 생성 순서라 역방향 스캔으로 최신순·커서 조건을 인덱스가 처리한다. 보관 기간 조건(`created_at`)은 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
-| user_notifications.user_id WHERE is_read = false | 안 읽은 수(2-5)·모두 읽음(2-6) — 부분 인덱스라 안 읽은 행만 담아 작다 |
+| user_notifications.user_id WHERE is_read = false | 안 읽은 수(2-4 `unreadCount`)·모두 읽음(2-5) — 부분 인덱스라 안 읽은 행만 담아 작다 |
 | running_room_invitations.invitee_id | 받은 초대 목록 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | feeds.user_id | **[MVP 제외]** 프로필 피드 그리드·내 피드 |
