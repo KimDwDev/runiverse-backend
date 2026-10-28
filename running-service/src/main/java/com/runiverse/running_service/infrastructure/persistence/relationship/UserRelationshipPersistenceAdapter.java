@@ -1,7 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.relationship;
 
+import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.match.port.out.CheckFriendPort;
-import com.runiverse.running_service.application.notification.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.relationship.port.out.EnsureUserRelationshipPairPort;
 import com.runiverse.running_service.application.relationship.port.out.FriendKeyset;
 import com.runiverse.running_service.application.relationship.port.out.FriendRow;

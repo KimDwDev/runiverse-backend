@@ -1,10 +1,10 @@
 package com.runiverse.running_service.application.notification.common;
 
 import com.runiverse.running_service.application.common.port.out.LoadPlayerProfilesPort;
+import com.runiverse.running_service.application.common.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
 import com.runiverse.running_service.application.notification.port.out.InvitationSnapshot;
 import com.runiverse.running_service.application.notification.port.out.LoadInvitationSnapshotsPort;
-import com.runiverse.running_service.application.notification.port.out.LoadRelationshipTypesPort;
 import com.runiverse.running_service.application.notification.port.out.UserNotificationRow;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
