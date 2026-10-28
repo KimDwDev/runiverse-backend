@@ -1,11 +1,11 @@
-package com.runiverse.running_service.unit_test.user.application;
+package com.runiverse.running_service.unit_test.app.application;
 
 import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.user.command.stream.CloseUserStreamCommand;
-import com.runiverse.running_service.application.user.command.stream.CloseUserStreamHandler;
-import com.runiverse.running_service.application.user.port.out.UserStreamConnection;
-import com.runiverse.running_service.application.user.port.out.UserStreamPort;
+import com.runiverse.running_service.application.app.command.stream.CloseAppStreamCommand;
+import com.runiverse.running_service.application.app.command.stream.CloseAppStreamHandler;
+import com.runiverse.running_service.application.app.port.out.AppStreamConnection;
+import com.runiverse.running_service.application.app.port.out.AppStreamPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
@@ -23,24 +23,24 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("유저 스트림 종료 단위 테스트")
-class CloseUserStreamHandlerTest {
+@DisplayName("앱 스트림 종료 단위 테스트")
+class CloseAppStreamHandlerTest {
 
     private static final UUID USER_ID = UuidCreator.getTimeOrderedEpoch();
 
     @Mock
-    private UserStreamPort userStreamPort;
+    private AppStreamPort appStreamPort;
 
     @Mock
-    private UserStreamConnection connection;
+    private AppStreamConnection connection;
 
-    private CloseUserStreamHandler handler;
+    private CloseAppStreamHandler handler;
     private LogCapture log;
 
     @BeforeEach
     void setUp() {
-        handler = new CloseUserStreamHandler(userStreamPort);
-        log = LogCapture.of(CloseUserStreamHandler.class);
+        handler = new CloseAppStreamHandler(appStreamPort);
+        log = LogCapture.of(CloseAppStreamHandler.class);
     }
 
     @AfterEach
@@ -53,13 +53,13 @@ class CloseUserStreamHandlerTest {
     void removesClosedConnection() {
         // given
         given(connection.id()).willReturn("conn-1");
-        given(userStreamPort.remove(new UserId(USER_ID), connection)).willReturn(true);
+        given(appStreamPort.remove(new UserId(USER_ID), connection)).willReturn(true);
 
         // when
-        handler.handle(new CloseUserStreamCommand(USER_ID, connection));
+        handler.handle(new CloseAppStreamCommand(USER_ID, connection));
 
         // then -> 사람이 아니라 연결 기준으로 지운다. 같은 사람의 새 연결은 건드리지 않는다
-        verify(userStreamPort).remove(new UserId(USER_ID), connection);
+        verify(appStreamPort).remove(new UserId(USER_ID), connection);
     }
 
     @Test
@@ -67,13 +67,13 @@ class CloseUserStreamHandlerTest {
     void logsCloseWithParsableKeys() {
         // given -> 새 연결이 이미 자리를 가져간 경우라 지우지 않는다
         given(connection.id()).willReturn("conn-1");
-        given(userStreamPort.remove(new UserId(USER_ID), connection)).willReturn(false);
+        given(appStreamPort.remove(new UserId(USER_ID), connection)).willReturn(false);
 
         // when
-        handler.handle(new CloseUserStreamCommand(USER_ID, connection));
+        handler.handle(new CloseAppStreamCommand(USER_ID, connection));
 
         // then
         assertThat(log.messages(Level.INFO)).containsExactly(
-                "[회원] 스트림 종료 성공 - userId=" + USER_ID + ", connectionId=conn-1, removed=false");
+                "[앱] 스트림 종료 성공 - userId=" + USER_ID + ", connectionId=conn-1, removed=false");
     }
 }

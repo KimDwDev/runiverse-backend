@@ -1,4 +1,4 @@
-package com.runiverse.e2e.user;
+package com.runiverse.e2e.app;
 
 import com.runiverse.e2e.E2eTestSupport;
 import com.runiverse.e2e.SseStream;
@@ -13,8 +13,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("배포 이미지 대상 유저 스트림 E2E 테스트")
-class UserStreamE2eTest extends E2eTestSupport {
+@DisplayName("배포 이미지 대상 앱 스트림 E2E 테스트")
+class AppStreamE2eTest extends E2eTestSupport {
 
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");   // 호스트 시간대로 만들면 슬롯이 어긋난다
     // 다른 매칭 테스트와 한 방에 합쳐지지 않게 그쪽이 쓰지 않는 슬롯·거리를 쓴다
@@ -28,7 +28,7 @@ class UserStreamE2eTest extends E2eTestSupport {
         TestUser user = signUpAndOnboard();
 
         // when
-        try (SseStream stream = openUserStream(user.accessToken())) {
+        try (SseStream stream = openAppStream(user.accessToken())) {
             // then -> 매칭 스트림과 달리 거절하지 않는다
             assertThat(stream.status()).isEqualTo(200);
         }
@@ -46,10 +46,10 @@ class UserStreamE2eTest extends E2eTestSupport {
         assertThat(applied.status()).isEqualTo(201);
         int runningRoomId = applied.number("runningRoomId");
 
-        try (SseStream userStream = openUserStream(user.accessToken());
+        try (SseStream appStream = openAppStream(user.accessToken());
              SseStream matchStream = openMatchStream(user.accessToken())) {
             // then -> 레지스트리가 따로라 한쪽 연결이 다른 쪽을 밀어내지 않는다
-            assertThat(userStream.status()).isEqualTo(200);
+            assertThat(appStream.status()).isEqualTo(200);
             assertThat(((Number) matchStream.await("MATCH_ROOM_UPDATED").get("runningRoomId")).intValue())
                     .isEqualTo(runningRoomId);
         } finally {
@@ -63,11 +63,11 @@ class UserStreamE2eTest extends E2eTestSupport {
         // given -> 앱 재시작처럼 옛 연결이 끊긴 줄 모르고 남아 있다
         TestUser user = signUpAndOnboard();
 
-        try (SseStream first = openUserStream(user.accessToken())) {
+        try (SseStream first = openAppStream(user.accessToken())) {
             assertThat(first.status()).isEqualTo(200);
 
             // when
-            try (SseStream second = openUserStream(user.accessToken())) {
+            try (SseStream second = openAppStream(user.accessToken())) {
                 // then
                 assertThat(second.status()).isEqualTo(200);
                 first.awaitClosed();

@@ -1,6 +1,6 @@
-package com.runiverse.running_service.application.user.port.out;
+package com.runiverse.running_service.application.app.port.out;
 
-public interface UserStreamConnection {
+public interface AppStreamConnection {
 
     // 같은 유저의 다른 연결과 구분하는 식별자
     String id();

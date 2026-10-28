@@ -1,6 +1,6 @@
-package com.runiverse.running_service.unit_test.user.presentation;
+package com.runiverse.running_service.unit_test.app.presentation;
 
-import com.runiverse.running_service.presentation.user.sse.SseUserStreamConnection;
+import com.runiverse.running_service.presentation.app.sse.SseAppStreamConnection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,17 +19,17 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("유저 스트림 SSE 전송 단위 테스트")
-class SseUserStreamConnectionTest {
+@DisplayName("앱 스트림 SSE 전송 단위 테스트")
+class SseAppStreamConnectionTest {
 
     @Mock
     private SseEmitter emitter;
 
-    private SseUserStreamConnection connection;
+    private SseAppStreamConnection connection;
 
     @BeforeEach
     void setUp() {
-        connection = new SseUserStreamConnection("conn-1", emitter);
+        connection = new SseAppStreamConnection("conn-1", emitter);
     }
 
     @Test

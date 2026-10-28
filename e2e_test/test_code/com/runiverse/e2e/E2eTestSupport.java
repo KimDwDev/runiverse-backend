@@ -161,8 +161,8 @@ public abstract class E2eTestSupport {
                 SUPPORTED_APP_VERSION);
     }
 
-    protected SseStream openUserStream(String accessToken) {
-        return SseStream.open(HTTP_CLIENT, BASE_URL + "/users/me/stream", accessToken,
+    protected SseStream openAppStream(String accessToken) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + "/app/stream", accessToken,
                 SUPPORTED_APP_VERSION);
     }
 
