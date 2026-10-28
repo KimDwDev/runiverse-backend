@@ -284,6 +284,81 @@ class UserNotificationPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("한 건 읽기")
+    class LoadOne {
+
+        private LogCapture log;
+
+        @BeforeEach
+        void setUp() {
+            log = LogCapture.of(UserNotificationPersistenceAdapter.class);
+        }
+
+        @AfterEach
+        void tearDown() {
+            log.stop();
+        }
+
+        private UserNotificationJpaEntity stored(UUID owner, Map<String, Object> payload) {
+            UserNotificationJpaEntity entity = mock(UserNotificationJpaEntity.class);
+            lenient().when(entity.getUserNotificationId()).thenReturn(912L);
+            lenient().when(entity.getUserId()).thenReturn(owner);
+            lenient().when(entity.getType()).thenReturn(UserNotificationType.FRIEND_REQUESTED);
+            lenient().when(entity.getPayload()).thenReturn(payload);
+            lenient().when(entity.getCreatedAt()).thenReturn(CREATED_AT);
+            return entity;
+        }
+
+        @Test
+        @DisplayName("받는 사람의 알림이면 되살려 돌려준다")
+        void loadsOwnNotification() {
+            // given
+            UserNotificationJpaEntity entity = stored(RECIPIENT_ID, Map.of("request_user_id", ACTOR_ID.toString()));
+            when(entityManager.find(UserNotificationJpaEntity.class, 912L)).thenReturn(entity);
+
+            // when & then
+            assertThat(adapter.loadOne(new UserId(RECIPIENT_ID), 912L)).hasValueSatisfying(row -> {
+                assertThat(row.userNotificationId()).isEqualTo(912L);
+                assertThat(row.payload()).isEqualTo(new FriendRequestedPayload(new UserId(ACTOR_ID)));
+            });
+        }
+
+        @Test
+        @DisplayName("없는 알림이면 비어 있다")
+        void emptyWhenMissing() {
+            // given
+            when(entityManager.find(UserNotificationJpaEntity.class, 912L)).thenReturn(null);
+
+            // when & then
+            assertThat(adapter.loadOne(new UserId(RECIPIENT_ID), 912L)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("받는 사람이 다르면 없는 것과 같다")
+        void emptyWhenOwnedByOther() {
+            // given -> 남의 알림을 밀어 주지 않는다
+            UserNotificationJpaEntity entity = stored(ACTOR_ID, Map.of("request_user_id", RECIPIENT_ID.toString()));
+            when(entityManager.find(UserNotificationJpaEntity.class, 912L)).thenReturn(entity);
+
+            // when & then
+            assertThat(adapter.loadOne(new UserId(RECIPIENT_ID), 912L)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("되살리지 못한 행이면 비우고 목록과 같은 에러를 남긴다")
+        void emptyWhenBroken() {
+            // given
+            UserNotificationJpaEntity entity = stored(RECIPIENT_ID, Map.of("unknown", 1));
+            when(entityManager.find(UserNotificationJpaEntity.class, 912L)).thenReturn(entity);
+
+            // when & then
+            assertThat(adapter.loadOne(new UserId(RECIPIENT_ID), 912L)).isEmpty();
+            assertThat(log.messages(Level.ERROR)).containsExactly(
+                    "[알림] 목록 항목 건너뜀: payload 복원 실패 - notificationId=912, type=FRIEND_REQUESTED");
+        }
+    }
+
+    @Nested
     @DisplayName("안 읽은 수")
     class CountUnread {
 
