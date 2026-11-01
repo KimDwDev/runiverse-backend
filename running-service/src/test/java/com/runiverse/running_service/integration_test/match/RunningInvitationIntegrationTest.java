@@ -127,7 +127,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // 개설의 시각 범위만 고정한다 — 핸들러가 지금 시각을 읽어 23:49 이후에 돌면 고를 시각이 없다
         InviteStartPolicy inviteStartPolicy = spy(new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES));
         doReturn(true).when(inviteStartPolicy).isSelectable(any(), any());
-        // 푸시 요청은 위 발행기가 흘려보낸다 — 마감이 요청 때문에 깨지지 않는지만 본다
+        // 매칭 방 전용이라 초대 방 마감에선 불리지 않는다 — 생성자 인자로만 필요하다
         MatchPushRequester matchPushRequester = new MatchPushRequester(eventPublisher);
         RoomInfoAssembler roomInfoAssembler = new RoomInfoAssembler(
                 matchStore,                                                 // LoadMatchPlayersPort
