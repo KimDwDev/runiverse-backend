@@ -87,7 +87,7 @@ public class SendPushHandlerTest {
     @DisplayName("다른 종류를 꺼 둬도 이 종류는 그대로 보낸다")
     void sendsWhenOtherTypeDisabled() {
         // given
-        handler = handlerDisabling(Set.of(PushType.FRIEND_REQUEST_RECEIVED));
+        handler = handlerDisabling(Set.of(PushType.FRIEND_REQUESTED));
         givenTarget();
         givenUser(true);
         givenSession();
