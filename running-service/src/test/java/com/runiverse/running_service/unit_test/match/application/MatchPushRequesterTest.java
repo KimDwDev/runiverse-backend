@@ -5,13 +5,10 @@ import com.runiverse.running_service.application.device.command.push.PushRequest
 import com.runiverse.running_service.application.device.port.out.PushMessage;
 import com.runiverse.running_service.application.device.port.out.PushType;
 import com.runiverse.running_service.application.match.common.MatchPushRequester;
-import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
-import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
-import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,10 +27,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("매칭 확정·초대 수락 푸시 요청 단위 테스트")
+@DisplayName("매칭 확정 푸시 요청 단위 테스트")
 class MatchPushRequesterTest {
 
     private static final long ROOM_ID = 125L;
@@ -91,113 +87,6 @@ class MatchPushRequesterTest {
                 Map.of("runningRoomId", "125"), START_AT));
     }
 
-    @Test
-    @DisplayName("초대 수락은 그 사람을 초대했고 아직 방에 있는 사람에게만 보낸다")
-    void runningInvitationAcceptedToStayingInviters() {
-        // given -> 초대한 사람 둘 중 하나는 나갔고, 다른 사람이 초대한 손님은 따로 있다
-        UserId host = newUserId();
-        UserId leftInviter = newUserId();
-        UserId invitee = newUserId();
-        UserId otherInvitee = newUserId();
-        RunningRoom room = inviteRoom(
-                List.of(session(host, true), session(leftInviter, false), session(invitee, true)),
-                List.of(new InvitationDraft(host, invitee, RoomInvitationStatus.ACCEPTED, 1),
-                        new InvitationDraft(leftInviter, invitee, RoomInvitationStatus.ACCEPTED, 1),
-                        new InvitationDraft(host, otherInvitee, RoomInvitationStatus.PENDING, 1)));
-
-        // when
-        requester.runningInvitationAccepted(room, invitee, roomInfo(player(host, "철수"), player(invitee, "영희")));
-
-        // then
-        PushRequestedEvent event = publishedEvents(1).getFirst();
-        assertThat(event.userId()).isEqualTo(host.value());
-        assertThat(event.message()).isEqualTo(new PushMessage(PushType.RUNNING_INVITATION_ACCEPTED,
-                "초대를 수락했어요", "영희님이 21:30 러닝에 들어왔어요",
-                Map.of("actorId", invitee.value().toString(), "runningRoomId", "125"), START_AT));
-    }
-
-    @Test
-    @DisplayName("나갔다 다시 초대받아 수락하면 지금 방에 있는 초대한 사람 모두가 받는다")
-    void runningInvitationAcceptedAgain() {
-        // given -> 처음 초대한 사람과 다시 초대한 사람 둘 다 방에 있다
-        UserId host = newUserId();
-        UserId reInviter = newUserId();
-        UserId invitee = newUserId();
-        RunningRoom room = inviteRoom(
-                List.of(session(host, true), session(reInviter, true), session(invitee, true)),
-                List.of(new InvitationDraft(host, invitee, RoomInvitationStatus.ACCEPTED, 1),
-                        new InvitationDraft(reInviter, invitee, RoomInvitationStatus.ACCEPTED, 1)));
-
-        // when
-        requester.runningInvitationAccepted(room, invitee,
-                roomInfo(player(host, "철수"), player(reInviter, "민수"), player(invitee, "영희")));
-
-        // then
-        assertThat(publishedEvents(2)).extracting(PushRequestedEvent::userId)
-                .containsExactly(host.value(), reInviter.value());
-    }
-
-    @Test
-    @DisplayName("초대한 사람이 모두 나갔으면 보내지 않는다")
-    void runningInvitationAcceptedWithoutStayingInviter() {
-        // given
-        UserId leftInviter = newUserId();
-        UserId invitee = newUserId();
-        RunningRoom room = inviteRoom(
-                List.of(session(leftInviter, false), session(newUserId(), true), session(invitee, true)),
-                List.of(new InvitationDraft(leftInviter, invitee, RoomInvitationStatus.ACCEPTED, 1)));
-
-        // when
-        requester.runningInvitationAccepted(room, invitee, roomInfo(player(invitee, "영희")));
-
-        // then
-        verifyNoInteractions(eventPublisher);
-    }
-
-    @Test
-    @DisplayName("수락한 사람이 탈퇴로 그려졌으면 던지지 않고 보내지 않는다")
-    void runningInvitationAcceptedByDeletedInvitee() {
-        // given -> 닉네임 자리가 표시용 문구다. 던지면 수락까지 롤백된다
-        UserId host = newUserId();
-        UserId invitee = newUserId();
-        RunningRoom room = inviteRoom(
-                List.of(session(host, true), session(invitee, true)),
-                List.of(new InvitationDraft(host, invitee, RoomInvitationStatus.ACCEPTED, 1)));
-        RoomInfo.RoomPlayer deleted = new RoomInfo.RoomPlayer(invitee.value(), "탈퇴한 사용자", null, null, 360, true);
-
-        // when
-        requester.runningInvitationAccepted(room, invitee, roomInfo(player(host, "철수"), deleted));
-
-        // then
-        verifyNoInteractions(eventPublisher);
-    }
-
-    @Test
-    @DisplayName("방 정보에 수락한 사람이 없으면 던지지 않고 보내지 않는다")
-    void runningInvitationAcceptedWithoutInviteeInRoomInfo() {
-        // given -> 던지면 수락까지 롤백된다
-        UserId host = newUserId();
-        UserId invitee = newUserId();
-        RunningRoom room = inviteRoom(
-                List.of(session(host, true), session(invitee, true)),
-                List.of(new InvitationDraft(host, invitee, RoomInvitationStatus.ACCEPTED, 1)));
-
-        // when
-        requester.runningInvitationAccepted(room, invitee, roomInfo(player(host, "철수")));
-
-        // then
-        verifyNoInteractions(eventPublisher);
-    }
-
-    private static RoomInfo roomInfo(RoomInfo.RoomPlayer... players) {
-        return new RoomInfo(ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHING, START_AT,
-                START_AT.minusMinutes(1), 5_000, 360, List.of(players), List.of());
-    }
-
-    private static RoomInfo.RoomPlayer player(UserId userId, String nickname) {
-        return new RoomInfo.RoomPlayer(userId.value(), nickname, null, null, 360, false);
-    }
-
     private List<PushRequestedEvent> publishedEvents(int count) {
         ArgumentCaptor<PushRequestedEvent> captor = ArgumentCaptor.forClass(PushRequestedEvent.class);
         verify(eventPublisher, times(count)).publishEvent(captor.capture());
@@ -213,27 +102,18 @@ class MatchPushRequesterTest {
     }
 
     private static RunningRoom matchRoom(List<SessionDraft> sessions) {
-        return room(RunningRoomType.MATCH, RunningRoomStatus.MATCHED, sessions, List.of());
-    }
-
-    private static RunningRoom inviteRoom(List<SessionDraft> sessions, List<InvitationDraft> invitations) {
-        return room(RunningRoomType.INVITE, RunningRoomStatus.MATCHING, sessions, invitations);
-    }
-
-    private static RunningRoom room(RunningRoomType type, RunningRoomStatus status,
-                                    List<SessionDraft> sessions, List<InvitationDraft> invitations) {
         int connectedCount = (int) sessions.stream().filter(SessionDraft::connected).count();
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
-                .type(type)
-                .status(status)
+                .type(RunningRoomType.MATCH)
+                .status(RunningRoomStatus.MATCHED)
                 .startAt(START_AT)
                 .targetDistance(5_000)
                 .avgPace(360)
                 .currentPlayerCount(connectedCount)
                 .maxPlayerCount(4)
                 .sessions(sessions)
-                .invitations(invitations)
+                .invitations(List.of())
                 .build();
     }
 }

@@ -127,12 +127,11 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // 개설의 시각 범위만 고정한다 — 핸들러가 지금 시각을 읽어 23:49 이후에 돌면 고를 시각이 없다
         InviteStartPolicy inviteStartPolicy = spy(new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES));
         doReturn(true).when(inviteStartPolicy).isSelectable(any(), any());
-        InMemoryPlayerProfileStore profileStore = new InMemoryPlayerProfileStore(userStore, onboardingStore);
-        // 푸시 요청은 위 발행기가 흘려보낸다 — 수락·마감이 요청 때문에 깨지지 않는지만 본다
+        // 푸시 요청은 위 발행기가 흘려보낸다 — 마감이 요청 때문에 깨지지 않는지만 본다
         MatchPushRequester matchPushRequester = new MatchPushRequester(eventPublisher);
         RoomInfoAssembler roomInfoAssembler = new RoomInfoAssembler(
                 matchStore,                                                 // LoadMatchPlayersPort
-                profileStore,                                               // LoadPlayerProfilesPort
+                new InMemoryPlayerProfileStore(userStore, onboardingStore), // LoadPlayerProfilesPort
                 new FakeViewUrlGenerator(),                                 // GenerateViewUrlPort
                 new RecruitmentClosePolicy(MATCH_PROPERTIES, inviteStartPolicy),
                 runningStore,                                               // LoadActiveApplicationPort
@@ -159,7 +158,7 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,     // LoadUserAvgPacePort
                 runningStore,        // CreateMatchApplicationPort
                 matchStore,          // LoadMatchPlayersPort
-                roomInfoAssembler, matchPushRequester, eventPublisher);
+                roomInfoAssembler, eventPublisher);
         declineHandler = new DeclineInvitationHandler(
                 runningStore, runningStore, roomInfoAssembler, eventPublisher);
         // 나가기는 매칭 방과 같은 POST /match-rooms/leave다
