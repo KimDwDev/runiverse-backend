@@ -259,6 +259,26 @@ def check_layers(root: Path, scope: Path = None):
     return hits
 
 
+LEGACY_REF_RE = re.compile(rf"\b{re.escape(BASE_PKG)}\.legacy\b")
+
+
+def check_legacy_isolation(root: Path, scope: Path = None):
+    """legacy 밖에서 legacy를 참조하면 위반. 구버전 호환 계층은 최소 버전을 올릴 때
+    폴더째 지운다 — 밖에서 하나라도 참조하면 삭제가 컴파일 오류가 된다.
+    legacy가 다른 레이어를 쓰는 것은 허용한다(한 방향만 막는다).
+    import와 완전한 이름 참조를 모두 본다."""
+    hits = []
+    for f in java_files(root, scope):
+        if layer_of(f, root) == "legacy":
+            continue
+        text = without_comments(f.read_text(encoding="utf-8"))
+        refs = sorted(set(m.group(0) for m in re.finditer(
+            rf"{LEGACY_REF_RE.pattern}[\w.]*", text)))
+        for ref in refs:
+            hits.append((rel(f, root), ref))
+    return hits
+
+
 def parse_enum_constants(path: Path):
     """enum 상수명만 뽑는다 (CONSTANT("code", "msg") 형태)."""
     if not path.exists():
@@ -769,6 +789,15 @@ def main():
         confirmed += len(layers)
         for path, imported, why in layers:
             print(f"  - {path}\n      {imported}  ({why})")
+    else:
+        print("  위반 없음")
+
+    print("\n### legacy 격리 (legacy 밖에서 legacy 참조 금지)")
+    legacy_refs = check_legacy_isolation(root, scope)
+    if legacy_refs:
+        confirmed += len(legacy_refs)
+        for path, ref in legacy_refs:
+            print(f"  - {path}\n      {ref}  (legacy는 폴더째 지운다 — 밖에서 참조하면 삭제가 깨진다)")
     else:
         print("  위반 없음")
 

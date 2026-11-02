@@ -75,9 +75,9 @@ class ApplyMatchHandlerTest {
     private static final Duration COOLDOWN = Duration.ofMinutes(20);
     // 조립 결과는 이 테스트의 주제가 아니다 — 발행 여부만 본다
     private static final RoomInfo ROOM_INFO = new RoomInfo(
-            ROOM_ID, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHING, LocalDateTime.now().plusHours(2),
             LocalDateTime.now().plusHours(2).minus(CLOSE_OFFSET),
-            TARGET_DISTANCE, AVG_PACE, List.of());
+            TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
 
     @Mock
     private MatchCooldownPort matchCooldownPort;
@@ -109,8 +109,8 @@ class ApplyMatchHandlerTest {
 
     @BeforeEach
     void setUp() {
-        matchSlotPolicy = spy(new MatchSlotPolicy(new MatchProperties(CLOSE_OFFSET, READY_OFFSET, FORCE_FINISH_OFFSET,
-                PACE_TIE_TOLERANCE, COOLDOWN,
+        matchSlotPolicy = spy(new MatchSlotPolicy(new MatchProperties(CLOSE_OFFSET, Duration.ofMinutes(5), READY_OFFSET,
+                FORCE_FINISH_OFFSET, PACE_TIE_TOLERANCE, COOLDOWN,
                 LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000))));
         // 선택지 위반을 일부러 던지는 테스트는 이 스텁을 덮어써 쓰지 않으므로 lenient다
         lenient().doNothing().when(matchSlotPolicy).validate(any(), anyInt());
@@ -136,7 +136,7 @@ class ApplyMatchHandlerTest {
     @Test
     @DisplayName("페이스는 입력받지 않고 온보딩 값을 복사한다")
     void copiesAvgPaceFromOnboarding() {
-        // given -> 매칭 조건에 페이스 항목이 없다(api-spec 5-A)
+        // given -> 매칭 조건에 페이스 항목이 없다
         givenApplicable();
         LocalDateTime startAt = slotAfter(Duration.ofHours(2));
 
@@ -227,7 +227,7 @@ class ApplyMatchHandlerTest {
     @Test
     @DisplayName("마감 시각 정각도 이미 마감으로 본다")
     void rejectsExactlyAtCloseTime() {
-        // given -> 그 시점에 인원과 무관하게 확정이 일어난다(feature-spec 확정 판정)
+        // given -> 그 시점에 인원과 무관하게 확정이 일어난다
         LocalDateTime startAt = LocalDateTime.now().plus(CLOSE_OFFSET);
 
         // when & then

@@ -4,16 +4,18 @@ import com.runiverse.running_service.application.auth.port.out.CheckEmailDuplica
 import com.runiverse.running_service.application.auth.port.out.LoadUserByEmailPort;
 import com.runiverse.running_service.application.auth.port.out.LoadUserByProviderPort;
 import com.runiverse.running_service.application.auth.port.out.SaveUserPort;
+import com.runiverse.running_service.application.common.port.out.ExistsUserPort;
+import com.runiverse.running_service.application.common.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.exception.UserNotFoundException;
 import com.runiverse.running_service.application.user.port.out.ClearBackgroundImagePort;
 import com.runiverse.running_service.application.user.port.out.ClearProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.LoadOauthProviderPort;
-import com.runiverse.running_service.application.user.port.out.LoadUserByIdPort;
 import com.runiverse.running_service.application.user.port.out.UpdateBackgroundImagePort;
 import com.runiverse.running_service.application.user.port.out.UpdateIntroductionPort;
 import com.runiverse.running_service.application.user.port.out.UpdatePasswordPort;
 import com.runiverse.running_service.application.user.port.out.UpdateProfileImagePort;
 import com.runiverse.running_service.application.user.port.out.UpdateSettingsPort;
+import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.user.User;
 import com.runiverse.running_service.domain.user.vo.BackgroundImageKey;
 import com.runiverse.running_service.domain.user.vo.Introduction;
@@ -21,7 +23,6 @@ import com.runiverse.running_service.domain.user.vo.PasswordHash;
 import com.runiverse.running_service.domain.user.vo.ProfileImageKey;
 import com.runiverse.running_service.domain.user.vo.ProfileVisibility;
 import com.runiverse.running_service.domain.user.vo.Provider;
-import com.runiverse.running_service.domain.common.vo.UserId;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,7 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort, LoadUserByEmailPort,
-        LoadUserByProviderPort, LoadUserByIdPort, UpdatePasswordPort, UpdateIntroductionPort,
+        LoadUserByProviderPort, LoadUserByIdPort, ExistsUserPort, UpdatePasswordPort, UpdateIntroductionPort,
         UpdateSettingsPort, LoadOauthProviderPort, UpdateProfileImagePort, ClearProfileImagePort,
         UpdateBackgroundImagePort, ClearBackgroundImagePort {
 
@@ -67,6 +68,11 @@ public class InMemoryUserStore implements SaveUserPort, CheckEmailDuplicatePort,
     @Override
     public Optional<User> loadById(UserId userId) {
         return Optional.ofNullable(users.get(userId.value()));
+    }
+
+    @Override
+    public boolean existsById(UserId userId) {
+        return users.containsKey(userId.value());
     }
 
     // 여기서는 애그리거트에서 읽는다 — 실제 어댑터는 oauth_users를 직접 조회한다.

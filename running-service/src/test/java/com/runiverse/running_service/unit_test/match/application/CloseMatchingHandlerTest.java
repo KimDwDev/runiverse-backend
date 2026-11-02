@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.match.application;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.command.close.CloseMatchingCommand;
 import com.runiverse.running_service.application.match.command.close.CloseMatchingHandler;
+import com.runiverse.running_service.application.match.common.MatchPushRequester;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
@@ -47,8 +48,8 @@ class CloseMatchingHandlerTest {
     private static final int TARGET_DISTANCE = 5_000;
     // 조립 결과는 이 테스트의 주제가 아니다 — 어떤 이벤트로 나가는지만 본다
     private static final RoomInfo ROOM_INFO = new RoomInfo(
-            ROOM_ID, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(10),
-            LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of());
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(10),
+            LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
 
     @Mock
     private LockMatchRoomPort lockMatchRoomPort;
@@ -60,6 +61,9 @@ class CloseMatchingHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private MatchPushRequester matchPushRequester;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private CloseMatchingHandler closeMatchingHandler;
@@ -67,7 +71,7 @@ class CloseMatchingHandlerTest {
     @BeforeEach
     void setUp() {
         closeMatchingHandler = new CloseMatchingHandler(
-                lockMatchRoomPort, updateMatchRoomPort, roomInfoAssembler, eventPublisher);
+                lockMatchRoomPort, updateMatchRoomPort, roomInfoAssembler, matchPushRequester, eventPublisher);
     }
 
     @Test
@@ -84,9 +88,9 @@ class CloseMatchingHandlerTest {
     }
 
     @Test
-    @DisplayName("확정된 순간에는 MATCH_STARTED로 알린다")
-    void publishesStartedOnClose() {
-        // given -> 재연결 스냅샷(UPDATED)과 갈라야 확정 연출이 반복되지 않는다(api-spec 5-B)
+    @DisplayName("확정된 순간에는 MATCH_CONFIRMED로 알린다")
+    void publishesConfirmedOnClose() {
+        // given -> 재연결 스냅샷(UPDATED)과 갈라야 확정 연출이 반복되지 않는다
         givenRoom(room(RunningRoomStatus.MATCHING, 3));
         given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
 
@@ -95,13 +99,33 @@ class CloseMatchingHandlerTest {
 
         // then
         verify(eventPublisher).publishEvent(new MatchRoomChangedEvent(
-                MatchStreamEvent.started(ROOM_INFO)));
+                MatchStreamEvent.confirmed(ROOM_INFO)));
+    }
+
+    @Test
+    @DisplayName("초대 방 마감은 확정 연출 없이 INVITE_ROOM_UPDATED로만 알린다")
+    void publishesUpdatedOnInviteRoomClose() {
+        // given -> 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니다
+        RoomInfo inviteRoomInfo = new RoomInfo(
+                ROOM_ID, RunningRoomType.INVITE, RunningRoomStatus.MATCHED, LocalDateTime.now().plusMinutes(1),
+                LocalDateTime.now(), TARGET_DISTANCE, AVG_PACE, List.of(), List.of());
+        givenRoom(room(RunningRoomType.INVITE, RunningRoomStatus.MATCHING, 2));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(inviteRoomInfo);
+
+        // when
+        closeMatchingHandler.handle(new CloseMatchingCommand(ROOM_ID));
+
+        // then
+        assertThat(updatedRoom().getStatus()).isEqualTo(RunningRoomStatus.MATCHED);
+        ArgumentCaptor<MatchRoomChangedEvent> published = ArgumentCaptor.forClass(MatchRoomChangedEvent.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        assertThat(published.getValue().event().type()).isEqualTo(MatchEventType.INVITE_ROOM_UPDATED);
     }
 
     @Test
     @DisplayName("1인 방도 인원과 무관하게 확정한다")
     void closesEvenWithSinglePlayer() {
-        // given -> 인원 부족으로 인한 자동 취소는 없다. 혼자 뛴다(feature-spec)
+        // given -> 인원 부족으로 인한 자동 취소는 없다. 혼자 뛴다
         givenRoom(room(RunningRoomStatus.MATCHING, 1));
         given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
 
@@ -141,6 +165,46 @@ class CloseMatchingHandlerTest {
     }
 
     @Test
+    @DisplayName("매칭 방을 확정하면 남은 사람에게 확정 푸시를 요청한다")
+    void requestsMatchConfirmedPush() {
+        // given
+        RunningRoom room = room(RunningRoomStatus.MATCHING, 3);
+        givenRoom(room);
+
+        // when
+        closeMatchingHandler.handle(new CloseMatchingCommand(ROOM_ID));
+
+        // then
+        verify(matchPushRequester).matchConfirmed(room);
+    }
+
+    @Test
+    @DisplayName("초대 방 마감은 확정 푸시를 요청하지 않는다")
+    void skipsPushOnInviteRoomClose() {
+        // given -> 매칭 성사가 아니라 더 이상 초대받지 않을 뿐이다
+        givenRoom(room(RunningRoomType.INVITE, RunningRoomStatus.MATCHING, 2));
+
+        // when
+        closeMatchingHandler.handle(new CloseMatchingCommand(ROOM_ID));
+
+        // then
+        verifyNoInteractions(matchPushRequester);
+    }
+
+    @Test
+    @DisplayName("이미 확정된 방이 다시 깨도 확정 푸시를 다시 요청하지 않는다")
+    void skipsPushOnAlreadyClosedRoom() {
+        // given
+        givenRoom(room(RunningRoomStatus.MATCHED, 3));
+
+        // when
+        closeMatchingHandler.handle(new CloseMatchingCommand(ROOM_ID));
+
+        // then
+        verifyNoInteractions(matchPushRequester);
+    }
+
+    @Test
     @DisplayName("방이 없으면 아무것도 하지 않는다")
     void skipsWhenRoomIsGone() {
         // given -> 예약만 남고 방이 사라진 경우. 예약을 소비한 것으로 보고 끝낸다
@@ -168,6 +232,10 @@ class CloseMatchingHandlerTest {
 
     // 마감 시각은 예약이 이미 판단했다 — 핸들러는 시각을 다시 보지 않으므로 start_at은 아무 값이어도 된다
     private static RunningRoom room(RunningRoomStatus status, int currentPlayerCount) {
+        return room(RunningRoomType.MATCH, status, currentPlayerCount);
+    }
+
+    private static RunningRoom room(RunningRoomType type, RunningRoomStatus status, int currentPlayerCount) {
         List<SessionDraft> sessions = new ArrayList<>();
         for (int i = 0; i < currentPlayerCount; i++) {
             sessions.add(new SessionDraft(
@@ -176,7 +244,7 @@ class CloseMatchingHandlerTest {
         }
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
-                .type(RunningRoomType.MATCH)
+                .type(type)
                 .status(status)
                 .startAt(LocalDateTime.now().plusMinutes(10))
                 .targetDistance(TARGET_DISTANCE)

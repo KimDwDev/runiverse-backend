@@ -1,8 +1,8 @@
 package com.runiverse.e2e.match;
 
 import com.runiverse.e2e.E2eTestSupport;
-import com.runiverse.e2e.MatchStream;
 import com.runiverse.e2e.RunningWebSocket;
+import com.runiverse.e2e.SseStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +47,7 @@ class MatchE2eTest extends E2eTestSupport {
         assertThat(waiting.number("targetDistanceMeters")).isEqualTo(DISTANCE);
         assertThat(waiting.text("cooldownUntil")).isNull();
 
-        try (MatchStream stream = openMatchStream(host.accessToken())) {
+        try (SseStream stream = openMatchStream(host.accessToken())) {
             // when - 2. 연결 직후 스냅샷이 방 정보를 나른다
             assertThat(stream.status()).isEqualTo(200);
             Map<String, Object> snapshot = stream.await("MATCH_ROOM_UPDATED");
@@ -71,7 +71,7 @@ class MatchE2eTest extends E2eTestSupport {
                     .containsExactlyInAnyOrder(host.userId(), guest.userId());
 
             // 4. 마감 전 취소는 대기 취소다 — 남은 참가자에게 줄어든 인원이 간다
-            assertThat(delete("/running-matches", guest.accessToken()).status()).isEqualTo(204);
+            assertThat(post("/match-rooms/leave", null, guest.accessToken()).status()).isEqualTo(204);
             assertThat(userIdsOf(stream.await("MATCH_ROOM_UPDATED")))
                     .containsExactly(host.userId());
             assertThat(get("/users/me/status", guest.accessToken()).text("status")).isEqualTo("IDLE");
@@ -79,7 +79,7 @@ class MatchE2eTest extends E2eTestSupport {
         }
 
         // 5. 마지막 참가자가 나가면 활성 신청이 없어 IDLE이다
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
         Response idle = get("/users/me/status", host.accessToken());
         assertThat(idle.text("status")).isEqualTo("IDLE");
         assertThat(idle.number("runningRoomId")).isNull();
@@ -92,10 +92,10 @@ class MatchE2eTest extends E2eTestSupport {
         TestUser user = signUpAndOnboard();
 
         // when - then - 신청 전에는 붙을 방이 없어 스트림이 본문 없이 거절된다
-        try (MatchStream stream = openMatchStream(user.accessToken())) {
+        try (SseStream stream = openMatchStream(user.accessToken())) {
             assertThat(stream.status()).isEqualTo(404);
         }
-        Response cancelWithout = delete("/running-matches", user.accessToken());
+        Response cancelWithout = post("/match-rooms/leave", null, user.accessToken());
         assertThat(cancelWithout.status()).isEqualTo(404);
         assertThat(cancelWithout.text("code")).isEqualTo("NOT_FOUND");
 
@@ -104,9 +104,9 @@ class MatchE2eTest extends E2eTestSupport {
         assertThat(duplicated.status()).isEqualTo(409);
         assertThat(duplicated.text("code")).isEqualTo("MATCH_ALREADY_IN_PROGRESS");
 
-        assertThat(delete("/running-matches", user.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, user.accessToken()).status()).isEqualTo(204);
         assertThat(apply(user, GUARD_SLOT, DISTANCE).status()).isEqualTo(201);
-        assertThat(delete("/running-matches", user.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, user.accessToken()).status()).isEqualTo(204);
     }
 
     @Test
@@ -131,7 +131,7 @@ class MatchE2eTest extends E2eTestSupport {
         String accessToken = signUp(uniqueEmail(), "Password123!");
 
         // when
-        Response response = post("/running-matches", Map.of(
+        Response response = post("/match-rooms", Map.of(
                 "scheduledStartAt", GUARD_SLOT.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "targetDistanceMeters", DISTANCE
         ), accessToken);
@@ -153,7 +153,7 @@ class MatchE2eTest extends E2eTestSupport {
             socket.await("RUNNING_STARTED");
 
             // when
-            Response response = delete("/running-matches", user.accessToken());
+            Response response = post("/match-rooms/leave", null, user.accessToken());
 
             // then - 종료는 WS RUNNING_FINISH가 맡는다
             assertThat(response.status()).isEqualTo(409);
@@ -188,43 +188,59 @@ class MatchE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("슬롯 조회는 그날 모집 중인 대기 인원을 슬롯별로 세고, 선택지 밖 값은 400으로 걸린다")
+    @DisplayName("슬롯 조회는 그날 모집 중인 대기 인원을 거리·슬롯별로 세고, 잘못된 날짜는 400으로 걸린다")
     void slotsCountWaitingPlayers() {
-        // given - 다른 테스트의 내일 3000m 슬롯과 섞이지 않게 모레 10000m를 쓴다
+        // given - 다른 테스트의 내일 슬롯과 섞이지 않게 모레를 쓴다. 모레는 이 테스트만 신청한다
         LocalDate slotDate = TOMORROW.plusDays(1);
-        int slotDistance = 10000;
         TestUser first = signUpAndOnboard();
         TestUser second = signUpAndOnboard();
-        assertThat(apply(first, slotDate.atTime(20, 0), slotDistance).status()).isEqualTo(201);
-        assertThat(apply(second, slotDate.atTime(20, 0), slotDistance).status()).isEqualTo(201);
+        TestUser third = signUpAndOnboard();
+        assertThat(apply(first, slotDate.atTime(20, 0), 10000).status()).isEqualTo(201);
+        assertThat(apply(second, slotDate.atTime(20, 0), 10000).status()).isEqualTo(201);
+        assertThat(apply(third, slotDate.atTime(20, 0), 5000).status()).isEqualTo(201);
 
         // when
-        Response slots = get("/running-matches/slots?date=" + slotDate + "&targetDistanceMeters=" + slotDistance,
+        Response slots = get("/match-rooms/slots?date=" + slotDate, first.accessToken());
+        Response malformed = get("/match-rooms/slots?date=2026/07/25", first.accessToken());
+        Response pastDate = get("/match-rooms/slots?date=" + LocalDate.now(APP_ZONE).minusDays(1),
                 first.accessToken());
-        Response offDistance = get("/running-matches/slots?targetDistanceMeters=7000", first.accessToken());
-        Response malformed = get("/running-matches/slots?targetDistanceMeters=abc", first.accessToken());
-        Response pastDate = get("/running-matches/slots?date=" + LocalDate.now(APP_ZONE).minusDays(1)
-                + "&targetDistanceMeters=" + slotDistance, first.accessToken());
 
-        // then - 9개 슬롯이 오름차순이고 같은 방에 모인 두 명이 20:00에 잡힌다(JPQL 집계가 실제 DB에서 돈다)
+        // then - 거리 오름차순, 거리마다 9개 슬롯이 오름차순이고 같은 시각이어도 거리끼리 합산하지 않는다
+        //        (JPQL 집계가 실제 DB에서 돈다)
         assertThat(slots.status()).isEqualTo(200);
-        List<Map<String, Object>> slotList = slots.objects("slots");
-        assertThat(slotList).extracting(slot -> LocalDateTime.parse((String) slot.get("scheduledStartAt")))
+        assertThat(slots.body().keySet()).containsExactly("distances");
+        List<Map<String, Object>> distances = slots.objects("distances");
+        assertThat(distances).extracting(distance -> distance.get("targetDistanceMeters"))
+                .containsExactly(3000, 5000, 10000);
+        assertThat(slotsOf(distances, 3000)).extracting(slot -> LocalDateTime.parse((String) slot.get("scheduledStartAt")))
                 .containsExactly(
                         slotDate.atTime(18, 0), slotDate.atTime(18, 30), slotDate.atTime(19, 0),
                         slotDate.atTime(19, 30), slotDate.atTime(20, 0), slotDate.atTime(20, 30),
                         slotDate.atTime(21, 0), slotDate.atTime(21, 30), slotDate.atTime(22, 0));
-        assertThat(slotList).extracting(slot -> slot.get("waitingCount"))
+        assertThat(slotsOf(distances, 3000)).extracting(slot -> slot.get("waitingCount"))
+                .containsExactly(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(slotsOf(distances, 5000)).extracting(slot -> slot.get("waitingCount"))
+                .containsExactly(0, 0, 0, 0, 1, 0, 0, 0, 0);
+        assertThat(slotsOf(distances, 10000)).extracting(slot -> slot.get("waitingCount"))
                 .containsExactly(0, 0, 0, 0, 2, 0, 0, 0, 0);
-        assertThat(slotList).extracting(slot -> slot.get("selectable")).containsOnly(true);
+        for (int distanceMeters : List.of(3000, 5000, 10000)) {
+            assertThat(slotsOf(distances, distanceMeters)).extracting(slot -> slot.get("selectable")).containsOnly(true);
+        }
 
-        assertThat(offDistance.status()).isEqualTo(400);
-        assertThat(offDistance.text("code")).isEqualTo("INVALID_REQUEST");
-        assertThat(offDistance.text("message")).isEqualTo("목표 거리는 3000, 5000, 10000 중 하나여야 합니다.");
         assertThat(malformed.status()).isEqualTo(400);
+        assertThat(malformed.text("code")).isEqualTo("INVALID_REQUEST");
         assertThat(malformed.text("message")).isEqualTo("입력값이 올바르지 않습니다.");
         assertThat(pastDate.status()).isEqualTo(400);
         assertThat(pastDate.text("message")).isEqualTo("조회 날짜는 오늘 이전일 수 없습니다.");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> slotsOf(List<Map<String, Object>> distances, int distanceMeters) {
+        return distances.stream()
+                .filter(distance -> distance.get("targetDistanceMeters").equals(distanceMeters))
+                .findFirst()
+                .map(distance -> (List<Map<String, Object>>) distance.get("slots"))
+                .orElseThrow();
     }
 
     @Test
@@ -237,7 +253,7 @@ class MatchE2eTest extends E2eTestSupport {
         assertThat(apply(leaver, DELETION_SLOT, DISTANCE).number("runningRoomId"))
                 .isEqualTo(runningRoomId);
 
-        try (MatchStream stream = openMatchStream(host.accessToken())) {
+        try (SseStream stream = openMatchStream(host.accessToken())) {
             assertThat(userIdsOf(stream.await("MATCH_ROOM_UPDATED")))
                     .containsExactlyInAnyOrder(host.userId(), leaver.userId());
 
@@ -249,11 +265,11 @@ class MatchE2eTest extends E2eTestSupport {
                     .containsExactly(host.userId());
         }
         assertThat(get("/users/me/status", host.accessToken()).text("status")).isEqualTo("WAITING");
-        assertThat(delete("/running-matches", host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/leave", null, host.accessToken()).status()).isEqualTo(204);
     }
 
     private Response apply(TestUser user, LocalDateTime scheduledStartAt, int targetDistanceMeters) {
-        return post("/running-matches", Map.of(
+        return post("/match-rooms", Map.of(
                 "scheduledStartAt", scheduledStartAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "targetDistanceMeters", targetDistanceMeters
         ), user.accessToken());

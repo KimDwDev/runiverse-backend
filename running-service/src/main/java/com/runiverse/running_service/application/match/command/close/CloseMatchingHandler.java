@@ -1,14 +1,17 @@
 package com.runiverse.running_service.application.match.command.close;
 
+import com.runiverse.running_service.application.match.common.MatchPushRequester;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.in.CloseMatchingUsecase;
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
+import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,6 +32,7 @@ public class CloseMatchingHandler implements CloseMatchingUsecase {
     private final LockMatchRoomPort lockMatchRoomPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
     private final RoomInfoAssembler roomInfoAssembler;
+    private final MatchPushRequester matchPushRequester;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -51,13 +55,19 @@ public class CloseMatchingHandler implements CloseMatchingUsecase {
         }
         room.closeMatching();
         updateMatchRoomPort.update(room);
-        // 확정된 그 순간에만 STARTED를 쓴다 — 재연결 스냅샷은 UPDATED라
-        // 확정 연출이 반복되지 않는다.
         // 빈 방은 leave()가 이미 CANCELLED로 닫아 여기 오지 않지만,
         // 받을 사람이 없으면 쏘지 않는 규칙은 취소 핸들러와 맞춘다
         if (room.getPlayerCount().current() > 0) {
-            eventPublisher.publishEvent(new MatchRoomChangedEvent(
-                    MatchStreamEvent.started(roomInfoAssembler.assemble(room))));
+            RoomInfo roomInfo = roomInfoAssembler.assemble(room);
+            // 매칭 방은 확정된 그 순간에만 CONFIRMED를 쓴다 — 재연결 스냅샷은 UPDATED라 확정 연출이 반복되지 않는다.
+            // 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 갱신(MATCHED, 빈 현황)으로만 알린다
+            MatchStreamEvent event = room.getType() == RunningRoomType.INVITE
+                    ? MatchStreamEvent.updated(roomInfo)
+                    : MatchStreamEvent.confirmed(roomInfo);
+            eventPublisher.publishEvent(new MatchRoomChangedEvent(event));
+            if (room.getType() == RunningRoomType.MATCH) {
+                matchPushRequester.matchConfirmed(room);
+            }
         }
     }
 }

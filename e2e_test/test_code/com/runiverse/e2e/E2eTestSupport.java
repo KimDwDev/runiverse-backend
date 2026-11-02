@@ -13,6 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,10 +34,12 @@ public abstract class E2eTestSupport {
     // compose가 container_name 없이 붙이는 기본 이름이다 — compose.yml의 프로젝트명·서비스명과 같아야 한다
     private static final String S3_CONTAINER =
             System.getenv().getOrDefault("E2E_S3_CONTAINER", "runiverse-e2e-localstack-1");
+    private static final String POSTGRES_CONTAINER =
+            System.getenv().getOrDefault("E2E_POSTGRES_CONTAINER", "runiverse-e2e-postgres-1");
     // 핸들러가 등록된 경로(application.properties의 websocket.running-endpoint)를 컨텍스트 경로 뒤에 붙인다
     private static final String RUNNING_WEBSOCKET_URL =
             BASE_URL.replaceFirst("^http", "ws") + "/ws/running";
-    private static final String MAIL_LOG_MARKER = "[메일 발송 생략]";
+    private static final String MAIL_LOG_MARKER = "[인증] 인증 메일 발송 건너뜀: 로컬 프로필";
     private static final Pattern VERIFICATION_CODE = Pattern.compile("\\d{6}");
     private static final int CODE_LOOKUP_RETRIES = 10;
     private static final int MAIL_BODY_LINES = 5;
@@ -130,12 +133,27 @@ public abstract class E2eTestSupport {
         return exchange("POST", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
 
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 구버전 앱의 요청을 흉내 낼 때 쓴다. */
+    protected Response post(String path, Map<String, ?> request, String accessToken, Map<String, String> headers) {
+        return exchange("POST", path, request, accessToken, headers);
+    }
+
     protected Response patch(String path, Map<String, ?> request, String accessToken) {
         return exchange("PATCH", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
 
+    /** 친구 요청 수락처럼 본문 없이 리소스를 갈아끼우는 PUT이다. */
+    protected Response put(String path, String accessToken) {
+        return exchange("PUT", path, null, accessToken, SUPPORTED_APP_VERSION);
+    }
+
     protected Response delete(String path, String accessToken) {
         return exchange("DELETE", path, null, accessToken, SUPPORTED_APP_VERSION);
+    }
+
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 구버전 앱의 요청을 흉내 낼 때 쓴다. */
+    protected Response delete(String path, String accessToken, Map<String, String> headers) {
+        return exchange("DELETE", path, null, accessToken, headers);
     }
 
     /** 러닝 WebSocket에 붙는다. 토큰이 null이면 핸드셰이크가 401로 막히는지 확인하는 용도다. */
@@ -148,8 +166,18 @@ public abstract class E2eTestSupport {
         return RunningWebSocket.connect(HTTP_CLIENT, RUNNING_WEBSOCKET_URL, accessToken, headers);
     }
 
-    protected MatchStream openMatchStream(String accessToken) {
-        return MatchStream.open(HTTP_CLIENT, BASE_URL + "/running-matches/stream", accessToken,
+    protected SseStream openMatchStream(String accessToken) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + "/match-rooms/stream", accessToken,
+                SUPPORTED_APP_VERSION);
+    }
+
+    /** 경로와 앱 버전 헤더를 직접 고른다 — 구버전 앱이 쓰던 옛 스트림 경로를 열 때 쓴다. */
+    protected SseStream openSseStream(String path, String accessToken, Map<String, String> headers) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + path, accessToken, headers);
+    }
+
+    protected SseStream openAppStream(String accessToken) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + "/app/stream", accessToken,
                 SUPPORTED_APP_VERSION);
     }
 
@@ -169,6 +197,11 @@ public abstract class E2eTestSupport {
      * 러닝은 온보딩의 평균 페이스·몸무게가 없으면 시작조차 못 해 대부분의 흐름이 여기서 출발한다.
      */
     protected TestUser signUpAndOnboard() {
+        return signUpAndOnboard(330);
+    }
+
+    /** 평균 페이스를 정해 온보딩한다 — 페이스로 사람을 고르는 흐름이 다른 테스트의 사용자와 섞이지 않게 한다. */
+    protected TestUser signUpAndOnboard(int averagePaceSecondsPerKm) {
         String email = uniqueEmail();
         String password = "Password123!";
         String accessToken = signUp(email, password);
@@ -177,7 +210,7 @@ public abstract class E2eTestSupport {
                 "nickname", nickname,
                 "gender", "MALE",
                 "birthday", "1998-03-21",
-                "averagePaceSecondsPerKm", 330,
+                "averagePaceSecondsPerKm", averagePaceSecondsPerKm,
                 "weightKg", new BigDecimal("68.5"),
                 "heightCm", new BigDecimal("176.2")
         ), accessToken);
@@ -243,6 +276,48 @@ public abstract class E2eTestSupport {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("S3 업로드가 중단되었습니다", e);
+        }
+    }
+
+    /**
+     * API로 만들 수 없는 상태를 DB에 직접 심는다. 매칭 러닝은 예약 슬롯 시각이 돼야 시작돼 E2E 안에서 끝까지 돌 수 없다.
+     * 운영처럼 손으로 쓴 SQL이 실제 스키마의 제약을 통과하는지도 함께 확인된다.
+     */
+    protected void executeSql(String sql) {
+        runPsql(sql);
+    }
+
+    /**
+     * API로 볼 수 없는 저장 결과를 DB에서 직접 읽는다 — 행마다 한 줄, 열은 '|'로 잇는다.
+     * 응답에 그대로 드러나지 않는 저장값(인앱 알림 행의 payload·읽음·갱신 시각)을 확인할 때 쓴다.
+     */
+    protected List<String> querySql(String sql) {
+        String output = runPsql(sql, "--tuples-only", "--no-align");
+        return output.lines().filter(line -> !line.isBlank()).toList();
+    }
+
+    private String runPsql(String sql, String... options) {
+        List<String> command = new ArrayList<>(List.of("docker", "exec", "-i", POSTGRES_CONTAINER,
+                "psql", "--quiet", "--username=runiverse", "--dbname=runiverse_e2e",
+                "--set", "ON_ERROR_STOP=1"));
+        command.addAll(List.of(options));
+        command.add("--file=-");
+        try {
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start();
+            process.getOutputStream().write(sql.getBytes(StandardCharsets.UTF_8));
+            process.getOutputStream().close();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (process.waitFor() != 0) {
+                throw new IllegalStateException("SQL 실행에 실패했습니다: " + output);
+            }
+            return output;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("SQL 실행이 중단되었습니다", e);
         }
     }
 

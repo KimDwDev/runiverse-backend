@@ -89,29 +89,30 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
     }
 
     @Override
-    public Map<LocalDateTime, Integer> countWaitingPlayers(LocalDate date, int targetDistanceMeters) {
+    public Map<Integer, Map<LocalDateTime, Integer>> countWaitingPlayers(LocalDate date) {
         List<Object[]> rows = entityManager.createQuery("""
-                        SELECT r.startAt, SUM(r.currentPlayerCount)
+                        SELECT r.targetDistance, r.startAt, SUM(r.currentPlayerCount)
                         FROM RunningRoomJpaEntity r
                         WHERE r.deletedAt IS NULL
                           AND r.type = :type
                           AND r.status = :status
                           AND r.startAt >= :startInclusive
                           AND r.startAt < :endExclusive
-                          AND r.targetDistance = :targetDistance
-                        GROUP BY r.startAt
+                        GROUP BY r.targetDistance, r.startAt
                         """, Object[].class)
                 // 확정된 방(MATCHED)은 들어갈 수 없는 자리라, 솔로 방은 모집 중인 자리가 아니라 뺀다
                 .setParameter("type", RunningRoomType.MATCH)
                 .setParameter("status", RunningRoomStatus.MATCHING)
                 .setParameter("startInclusive", date.atStartOfDay())
                 .setParameter("endExclusive", date.plusDays(1).atStartOfDay())
-                .setParameter("targetDistance", targetDistanceMeters)
                 .getResultList();
+        // 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다 — 거리 아래에 시각별 인원을 묶는다.
         // JPQL의 SUM(int)는 Long이다
-        return rows.stream().collect(Collectors.toMap(
-                row -> (LocalDateTime) row[0],
-                row -> ((Long) row[1]).intValue()));
+        return rows.stream().collect(Collectors.groupingBy(
+                row -> (Integer) row[0],
+                Collectors.toMap(
+                        row -> (LocalDateTime) row[1],
+                        row -> ((Long) row[2]).intValue())));
     }
 
 }

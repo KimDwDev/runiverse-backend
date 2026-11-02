@@ -80,7 +80,7 @@ run 16과 같은 시나리오(400명, 5분쯤 `systemctl kill -s KILL redis-serv
 
 ## 권장
 
-- 단기: EC2 Redis에 `appendonly yes` + `appendfsync everysec` — 손실을 1분에서 1초 이내로 줄이는 가장 싼 조치. **run 18로 검증 완료**(공백 러너 400 → 13, 남은 13은 재시작 순간 거절된 요청)
+- 단기: EC2 Redis에 `appendonly yes` + `appendfsync everysec` — 손실을 1분에서 1초 이내로 줄이는 가장 싼 조치. **run 18로 검증 완료**(공백 러너 400 → 13, 남은 13은 재시작 순간 거절된 요청). **2026-10-23 운영 Redis 적용 완료** — 실행 중 `CONFIG SET` 후 `CONFIG REWRITE`로 `/etc/redis/redis.conf`에 저장, `aof_enabled:1`·rewrite/write 상태 ok 확인
 - 단기: 종료 경로에서 S3 업로드·날씨 조회를 트랜잭션 밖으로 — 동시 종료 실패(run 14)의 원인 제거
 - 중기: 러닝 상태를 RDS로 옮기는 안은 1,000명까지는 성능상 가능하지만 커넥션 여유가 사라진다. 옮긴다면 커넥션 풀 확장(과 RDS 최대 커넥션·메모리), RDS CPU·IOPS를 함께 재고 1,000명 이상 단계를 다시 잰다
 - 지금 구조(Redis 상태 + AOF)를 유지하는 쪽이 여유·비용 면에서 낫다 — 남는 위험(조용한 손실)은 AOF로 대부분 막힌다

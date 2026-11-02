@@ -1,7 +1,9 @@
 package com.runiverse.running_service.presentation.common.exception;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
+import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
+import com.runiverse.running_service.application.common.exception.RelationshipErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
@@ -54,7 +56,20 @@ public final class ErrorExposurePolicy {
             MatchErrorCode.MATCH_ALREADY_IN_PROGRESS.getCode(),
             MatchErrorCode.MATCH_COOLDOWN.getCode(),
             MatchErrorCode.MATCH_SLOT_CLOSED.getCode(),
-            MatchErrorCode.MATCH_ALREADY_STARTED.getCode()
+            MatchErrorCode.MATCH_ALREADY_STARTED.getCode(),
+            // 이미 요청했거나 이미 친구다 — 409로 그대로 보내 앱이 버튼 상태를 다시 그리게 한다
+            RelationshipErrorCode.FRIEND_REQUEST_ALREADY_EXISTS.getCode(),
+            // 409를 그대로 보내 앱이 시각을 다시 고르게 한다
+            InviteErrorCode.INVITE_START_AT_OUT_OF_RANGE.getCode(),
+            // 초대·수락·거절 거부 — 가려지면 앱이 다시 고르게 할지·버튼을 다시 그릴지 가를 수 없다
+            InviteErrorCode.RUNNING_INVITATION_CLOSED.getCode(),
+            InviteErrorCode.NOT_FRIEND.getCode(),
+            InviteErrorCode.INVITEE_ALREADY_IN_ROOM.getCode(),
+            InviteErrorCode.INVITEE_IN_MATCHING.getCode(),
+            InviteErrorCode.INVITEE_RUNNING.getCode(),
+            InviteErrorCode.INVITE_COUNT_EXCEEDED.getCode(),
+            InviteErrorCode.RUNNING_INVITATION_NOT_PENDING.getCode(),
+            InviteErrorCode.RUNNING_ROOM_FULL.getCode()
     );
 
     private ErrorExposurePolicy() {

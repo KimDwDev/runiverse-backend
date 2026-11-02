@@ -6,7 +6,7 @@ import java.util.Map;
 
 public interface CountWaitingPlayersPort {
 
-    // 그날 그 거리에서 모집 중(type='MATCH' AND status='MATCHING')인 방의 인원을 시작 시각별로 합산한다.
-    // 대기자가 없는 시각은 키가 없다 — 0으로 채우는 건 슬롯을 만드는 쪽이 한다
-    Map<LocalDateTime, Integer> countWaitingPlayers(LocalDate date, int targetDistanceMeters);
+    // 그날 모집 중(type='MATCH' AND status='MATCHING')인 방의 인원을 거리별·시작 시각별로 합산한다 — 키는 목표 거리(m)다.
+    // 대기자가 없는 거리·시각은 키가 없다 — 0으로 채우는 건 슬롯을 만드는 쪽이 한다
+    Map<Integer, Map<LocalDateTime, Integer>> countWaitingPlayers(LocalDate date);
 }

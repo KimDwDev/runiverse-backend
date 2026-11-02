@@ -72,17 +72,17 @@ public class InMemoryMatchStore implements LoadMatchRoomPort, LoadMatchPlayersPo
                 .toList();
     }
 
-    // 실제 쿼리의 GROUP BY start_at + SUM(current_player_count)
+    // 실제 쿼리의 GROUP BY target_distance, start_at + SUM(current_player_count)
     @Override
-    public Map<LocalDateTime, Integer> countWaitingPlayers(LocalDate date, int targetDistanceMeters) {
+    public Map<Integer, Map<LocalDateTime, Integer>> countWaitingPlayers(LocalDate date) {
         return runningStore.findAllRooms().stream()
                 .filter(room -> room.getType() == RunningRoomType.MATCH
                         && room.getStatus() == RunningRoomStatus.MATCHING
                         && room.getStartAt().toLocalDate().equals(date)
-                        && room.getTargetDistance().map(Distance::meters)
-                        .filter(meters -> meters == targetDistanceMeters).isPresent())
-                .collect(Collectors.groupingBy(RunningRoom::getStartAt,
-                        Collectors.summingInt(room -> room.getPlayerCount().current())));
+                        && room.getTargetDistance().isPresent())
+                .collect(Collectors.groupingBy(room -> room.getTargetDistance().orElseThrow().meters(),
+                        Collectors.groupingBy(RunningRoom::getStartAt,
+                                Collectors.summingInt(room -> room.getPlayerCount().current()))));
     }
 
     private int myLeaveCount(RunningRoom room, UserId userId) {

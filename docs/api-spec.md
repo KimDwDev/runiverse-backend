@@ -27,11 +27,11 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 11 | POST | `/api/v1/devices` | 디바이스(푸시 토큰) 등록/갱신, `isActive=true` 전환 — 사용 화면: 로그인 직후 전역 |
+| 11 | POST | `/api/v1/users/me/devices` | 푸시 기기 등록/갱신 — 이 기기만 켜고 내 다른 기기는 끈다 — 사용 화면: 로그인 직후 전역 |
 | 12 | GET | `/api/v1/users/me/status` | 유저 현재 상태 — 앱 진입·포그라운드 복귀 시 어느 화면으로 갈지 결정 — 사용 화면: 전역 |
 | 13 | GET | `/api/v1/app/version` | 플랫폼별 최소·최신 앱 버전 — 업데이트 강제·안내 판정, 인증 불필요 — 사용 화면: 앱 진입(스플래시)·포그라운드 복귀 |
-| 14 | GET | `/api/v1/users/me/notifications` | 인앱 알림 목록 (최신순, 항목별 현재 상태 포함) — 사용 화면: 알림함 |
-| 15 | GET | `/api/v1/users/me/notifications/unread-count` | 안 읽은 알림 수 — 하단 탭 배지 — 사용 화면: 전역 |
+| 14 | GET | `/api/v1/app/stream` | 앱 스트림 (SSE) — 앱이 켜져 있는 동안 유지하는 개인 채널 — 사용 화면: 전역 |
+| 15 | GET | `/api/v1/users/me/notifications` | 인앱 알림 목록 (최신순, 항목별 현재 상태 포함) + 안 읽은 수 — 사용 화면: 앱 진입(배지)·알림함 |
 | 16 | POST | `/api/v1/users/me/notifications/read` | 알림 모두 읽음 — 알림함을 열 때 |
 
 ### 3. 홈 화면
@@ -41,15 +41,15 @@
 
 ### 4. 매칭완료 대기방 · 초대 러닝 (초대 페이지 / 초대 방)
 
-- 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번) — 초대 방도 같은 스트림을 쓰며 초대 현황이 `RoomInfo`에 실린다
-- 나가기: `DELETE /api/v1/running-matches` — 초대 방도 같다
+- 대기방 정보·참가자 목록: 매칭 SSE 스트림 (아래 5번) — 초대 방도 같은 스트림을 쓰되 이벤트는 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`이고, 초대 현황이 `RoomInfo`에 실린다
+- 나가기: `POST /api/v1/match-rooms/leave` — 초대 방도 같다
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 17 | POST | `/api/v1/running-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
-| 18 | POST | `/api/v1/running-rooms/{runningRoomId}/invitations` | 친구 초대 (여러 명) — 사용 화면: 초대 방 |
-| 19 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
-| 20 | POST | `/api/v1/running-room-invitations/{runningRoomInvitationId}/decline` | 초대 거절 — 사용 화면: 알림함 |
+| 17 | POST | `/api/v1/match-rooms/invite` | 초대 방 개설 (시각·거리 자유 입력) — 사용 화면: 초대 페이지 |
+| 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (한 명씩, 성공 204) — 사용 화면: 초대 방 |
+| 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
+| 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -57,20 +57,40 @@
 
 **매칭 HTTP**
 
+- 모집 단계(매칭 방·초대 방)의 API는 `/match-rooms` 아래 둔다. 시작 뒤의 방 단위 동작(솔로 개설·결과 조회)은 `/running-rooms`다
+  - 예전 경로 `/running-matches`(신청·취소·슬롯·스트림)는 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(아래 「1.1.x 호환 경로」). 1.2.0 앱은 쓰지 않는다. `/running-rooms/invite`·`/running-rooms/{runningRoomId}/invitations`는 배포된 적이 없어 없앴다. 취소는 `DELETE`가 아니라 `POST /match-rooms/leave`다
+
+**1.1.x 호환 경로 (1.2.0 심사 기간 한정)**
+
+1.2.0 앱이 스토어 심사를 받는 동안 이미 깔린 1.1.x 앱이 계속 쓸 수 있게, 1.2.0 서버가 1.1.1 서버의 계약을 그대로 함께 받는다. 동작은 1.2.0 유스케이스와 같고 경로·형식만 옛것이다(코드는 `legacy/v1_1`).
+
+- **언제까지**: 1.2.0이 두 스토어에 공개되면 운영이 `app_versions.minimum_version`을 IOS·ANDROID 모두 `1.2.0`으로 올린다 — 그 뒤 1.1.x 요청은 `403 APP_UPDATE_REQUIRED`라 아래 경로는 쓰이지 않고, 다음 배포에서 지운다.
+
+| 1.1.x 경로·필드 | 1.2.0 대응 | 다른 점 |
+|---|---|---|
+| `GET /running-matches/slots?date=&targetDistanceMeters=` | 23 `GET /match-rooms/slots?date=` | 거리 하나가 **필수**이고 응답이 그 거리의 `{ "slots": [...] }`다(항목은 같다). 선택지 밖 거리는 `400 INVALID_REQUEST` "목표 거리는 … 중 하나여야 합니다." |
+| `POST /running-matches` | 21 `POST /match-rooms` | 없음(요청·응답 같다) |
+| `DELETE /running-matches` | 22 `POST /match-rooms/leave` | 메서드·경로만 다르다 |
+| `GET /running-matches/stream` | 24 `GET /match-rooms/stream` | 확정 이벤트 이름이 `MATCH_STARTED`다(1.2.0은 `MATCH_CONFIRMED`). 방 data에 `type`·`invitations`가 없다. 초대 방 이벤트(`INVITE_ROOM_*`)는 `MATCH_ROOM_UPDATED`로 바꿔 보낸다 — 1.1.x는 초대 방에 들어갈 수 없어 실제로는 오지 않는다 |
+
+- 10-2의 예전 `friendStatus`는 1.1.x 앱이 읽지 않아 복원하지 않는다(프론트 확인)
+
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 21 | POST | `/api/v1/running-matches` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
-| 22 | DELETE | `/api/v1/running-matches` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
-| 23 | GET | `/api/v1/running-matches/slots` | 시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
-| 24 | GET | `/api/v1/running-matches/stream` | 매칭 이벤트 스트림 (SSE) |
+| 21 | POST | `/api/v1/match-rooms` | 매칭 신청 (시각+거리) — 409 `MATCH_SLOT_CLOSED`·`MATCH_COOLDOWN`·`MATCH_ALREADY_IN_PROGRESS`·`ONBOARDING_NOT_COMPLETED` |
+| 22 | POST | `/api/v1/match-rooms/leave` | 대기 취소 + 확정 후 나가기 겸용 (서버가 모집 마감 시각으로 분기) |
+| 23 | GET | `/api/v1/match-rooms/slots` | 거리·시간대별 대기 인원 — 매칭 입력 모달의 "3명 대기 중" 표시 |
+| 24 | GET | `/api/v1/match-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
 | 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
-**매칭 SSE** — 이벤트 3종. 연결 직후 현재 상태 스냅샷을 받는다.
+**매칭 SSE** — 이벤트 5종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다.
 
 | 이벤트 | 비고 |
 |--------|------|
-| `MATCH_STARTED` | 매칭 성사 통지 (`RoomInfo`) |
-| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동 |
+| `MATCH_CONFIRMED` | 매칭 성사 통지 (`RoomInfo`) — 매칭 방만 |
+| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동·연결 직후 스냅샷. 매칭 방만 |
+| `INVITE_ROOM_ENTRANCE` | 초대 방 연결 직후 스냅샷 (`RoomInfo` + `startsInMs`) — 초대 방만 |
+| `INVITE_ROOM_UPDATED` | 초대 방 상태 갱신 (`RoomInfo`) — 인원·초대 현황 변동. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
 
 **러닝 WebSocket** — `/api/v1/ws/running`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
@@ -129,7 +149,7 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 44 | GET | `/api/v1/users/me` | 내 기본 정보 — 이메일·로그인 수단 포함(설정 화면이 재사용) — 사용 화면: 전역 |
-| 45 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·친구 상태) |
+| 45 | GET | `/api/v1/users/{userId}` | 프로필 요약 (기본 정보·친구 수·관계) |
 | 46 | GET | `/api/v1/users/{userId}/feeds` | 피드 그리드 (경량: 썸네일+장수) **[MVP 제외]** |
 | 47 | POST | `/api/v1/users/{userId}/friend-request` | 친구 요청 — 사용 화면: 프로필, 사용자 검색 |
 | 48 | PUT | `/api/v1/users/{userId}/friend-request` | 친구 요청 수락 — 요청을 친구로 확정 |
@@ -170,7 +190,7 @@
 | 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 73개 + SSE 스트림 1개(이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 72개 + SSE 스트림 2개(매칭 이벤트 5종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -189,11 +209,12 @@
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
   - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
 - **친구 관계**: 토글이 아니다. **성립 전 요청은 `/users/{userId}/friend-request` 한 리소스를 메서드로 다룬다** — 요청 `POST`(10-4), 수락 `PUT`(10-5), 취소·거절 `DELETE`(10-6). 성립한 친구의 삭제만 `/users/{userId}/friend`(10-6)다.
-- **친구 상태 `friendStatus`**: `NONE` | `FRIEND_REQUEST_SENT` | `FRIEND_REQUEST_RECEIVED` | `FRIEND` — 언제나 **조회하는 사람 기준**이다. 대상이 본인이면 `null`이다(10-2·10-7·10-9·2-4가 같은 값을 쓴다).
-  - **값이 추가될 수 있다** — 차단(`feature-spec.md` 차단 절)이 붙으면 차단 관계를 나타내는 값이 생긴다. 클라는 모르는 값을 받으면 친구 버튼을 그리지 않는다.
+- **관계 `relationshipType`**: `NONE` | `FRIEND_REQUEST_SENT` | `FRIEND_REQUEST_RECEIVED` | `FRIEND` — 언제나 **조회하는 사람 기준**이다. 대상이 본인이면 `null`이다(10-2·10-4·10-5·10-7·10-9·2-4가 같은 값을 쓴다). `user_relationships.type`과 같은 값이다.
+  - **친구 상태가 아니라 관계라서 `relationshipType`이다** — 친구가 아닌 관계(차단)도 같은 필드에 싣는다.
+  - **값이 추가될 수 있다** — 차단(`feature-spec.md` 차단 절)이 붙으면 `BLOCKED`가 생긴다. 클라는 모르는 값을 받으면 친구 버튼을 그리지 않는다.
 - **이미지 업로드 공통(Presigned)**: ① 업로드 URL 발급 API → ② 클라가 S3에 직접 업로드 → ③ 반환받은 `key`(또는 완료 API)를 본 API에 전달
 - **탈퇴 유저 표시**: 작성자·러닝 참가자는 `{ "userId": "01a0f2d4-...", "nickname": "탈퇴한 사용자", "profileImageUrl": null, "isDeleted": true }`로 반환한다(`userId`는 유지).
-- **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`friendStatus` 등). 수정 응답(11-2·11-6·11-10·11-11)은 보낸 필드만 담는다 — 11-10에서 보내지 않은 필드는 키째 빠진다(11-2·11-11·11-6은 필드가 하나뿐이다).
+- **값이 없는 필드**: 조회 응답에서는 `null`이다(`profileImageUrl`·`introduction`·`relationshipType` 등). 수정 응답(11-2·11-6·11-10·11-11)은 보낸 필드만 담는다 — 11-10에서 보내지 않은 필드는 키째 빠진다(11-2·11-11·11-6은 필드가 하나뿐이다).
 - **수정 응답의 범위**: `PATCH`가 본문을 반환하면 저장 후의 리소스 전체 표현을 담는다(12-3). 반환할 표현이 없으면 `204 No Content`다. 위 네 API(11-2·11-6·11-10·11-11)는 예외로 보낸 필드만 담는다. 저장 위치가 여러 테이블로 나뉘는지는 기준이 아니다.
 - **`[MVP 제외]` 표기**: 지금 만들지 않는 엔드포인트. 정의는 그대로 두어 확장 시점에 재작성 없이 쓴다. 마커가 없으면 만드는 것이며, 차수(1차·2차)는 적지 않는다.
 - **앱 버전 헤더**: 앱은 서버로 가는 모든 요청(REST·SSE·WebSocket 연결)에 `X-App-Version`(버전 이름, 예: `1.1.0`)과 `X-App-Platform`(`IOS` | `ANDROID`)을 싣는다. 서버는 버전이 그 플랫폼의 최소 버전(2-3 `minimumVersion`)보다 낮으면 **요청을 처리하기 전에** `403 APP_UPDATE_REQUIRED`로 거절한다 — 호환을 깨는 배포 뒤에 구버전 요청이 기록·상태를 틀어지게 하지 않기 위해서다. 앱이 켤 때·돌아올 때 하는 확인(2-3)은 화면을 막을 뿐, 그 사이 이미 떠 있던 앱의 요청은 막지 못한다.
@@ -499,6 +520,7 @@
 ```
 
 - **이메일 대소문자**: 서버는 입력값을 그대로 조회한다 — 가입 시 소문자로 정규화해 저장하므로 **클라이언트가 소문자로 변환해 보낸다**. 대문자가 섞이면 `401 INVALID_CREDENTIALS`
+- **푸시 기기**: 로그인하면 그 유저의 기기를 전부 끈다 — 다른 기기의 세션이 이 로그인으로 끝나서다. 이 기기는 등록(2-1)하면 켜진다. 기존 회원의 소셜 로그인(1-5~1-7)도 같다
 
 - **Response `200 OK`**
 
@@ -791,7 +813,7 @@
 ### 1-9. `POST /api/v1/auth/logout` — 로그아웃
 
 - **Request**: 본문 없음 — 서버가 요청 토큰으로 본인 식별
-- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-8로 새 access 토큰을 받아 로그아웃이 무효가 된다
+- **동작**: ① **해당 access 토큰을 서버 차단(블랙리스트)** 처리해 만료 전이라도 무효화 (이후 그 토큰 요청은 `401 TOKEN_BLOCKED`) ② **저장된 리프레시 토큰을 삭제** — 남겨두면 1-8로 새 access 토큰을 받아 로그아웃이 무효가 된다 ③ **그 유저의 푸시 기기(2-1)를 전부 끈다** — 다시 로그인해 등록하면 켜진다
 - **로그인 세션은 계정당 하나**라 이 삭제가 그 계정의 모든 기기에 미친다. 기기별 세션은 `feature-spec.md` 설정 페이지 절 참고 (**[MVP 제외]**)
 - **Response**: `204 No Content`
 
@@ -937,24 +959,43 @@
 
 ## 2. 공통 — 디바이스/푸시 · 유저 상태 · 앱 버전
 
-### 2-1. `POST /api/v1/devices` — 디바이스 등록/갱신
+### 2-1. `POST /api/v1/users/me/devices` — 푸시 기기 등록/갱신
 
-- **화면**: 로그인 직후 전역 (푸시 수신 준비)
+- **화면**: 전역 — 앱이 아래 때마다 부른다. 실패해도 로그인과 화면 진행을 막지 않는다
+  - 스플래시에서 버전 확인(2-3) 뒤 로그인 상태일 때
+  - 로그인·가입·소셜 로그인(첫 가입 포함)에 성공했을 때
+  - 알림 권한을 허용해 토큰이 처음 생겼을 때, 토큰이 바뀌었을 때
+  - 포그라운드 복귀 때는 앞선 등록이 실패로 남아 있을 때만
+  - 다른 계정으로 바꾸면 다시 등록하고, 로그아웃하면 대기 중인 등록을 취소한다. `403 APP_UPDATE_REQUIRED`를 받으면 재시도하지 않는다
 - **Request**
 
 ```json
 {
-  "pushToken": "fcm-token-...",   // 필수
-  "platform": "IOS",              // 필수 — IOS | ANDROID
-  "deviceId": "device-uuid-...",  // 필수 — 기기 고유 식별자
-  "appVersion": "1.0.0"           // 선택
+  "deviceId": "3f1c2a9e-7b4d-4e8a-9c21-5d6f0b8e1a37",
+  "pushToken": "fcm-token-..."
 }
 ```
 
-- **동작**: `deviceId` 기준 upsert(없으면 생성)
-- **Response**: `204 No Content`
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `deviceId` | String | O | 앱이 설치 때 만들어 보관하는 기기 식별자(앱은 UUID를 쓴다). 100자 이하. 서버는 형식을 보지 않는다 |
+| `pushToken` | String | O | FCM 등록 토큰. 4096자 이하 |
 
+- **플랫폼·앱 버전은 본문에 싣지 않는다** — 모든 요청에 싣는 `X-App-Platform`·`X-App-Version` 헤더(0. 공통 규칙)에서 읽어 저장한다
+- **동작**: `deviceId` 기준 upsert — 없으면 만들고, 있으면 토큰·플랫폼·앱 버전·주인을 덮어쓰고 켠다. 같은 요청을 다시 보내도 행이 늘지 않는다
+  - **푸시는 유저당 마지막에 등록한 기기 하나로만 간다** — 등록하면 그 유저의 다른 기기는 꺼진다. 로그인 세션이 계정당 하나라서다(1-9)
+  - 다른 계정이 쓰던 `deviceId`면 행의 주인을 요청한 유저로 바꾼다 — 한 기기에서 계정을 바꿔 로그인한 경우다
+  - 로그인(1-4~1-7)·로그아웃(1-9)하면 그 유저의 기기가 전부 꺼지고, 탈퇴(12-4)하면 지워진다 — 로그인 뒤 등록에 실패해도 이전 기기로 푸시가 가지 않는다. 단 이전 기기가 남은 액세스 토큰으로 다시 등록하면 그 기기로 옮겨 간다
+- **Response**: `204 No Content`
 - **인증**: 필요
+- **에러 (400 Bad Request)**: 필드가 없거나 비었거나 길이를 넘으면 공통 문구로 나간다
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
+}
+```
 
 ### 2-2. `GET /api/v1/users/me/status` — 유저 현재 상태
 
@@ -1040,6 +1081,33 @@
 
 - **인증**: 불필요
 
+#### 앱 스트림 — `GET /api/v1/app/stream` (SSE)
+
+- **인증**: 필요 / **Content-Type**: `text/event-stream`
+- **앱이 켜져 있는 동안 연다** — 앱 진입·포그라운드 복귀 때 연결한다. 활성 신청과 무관하게 **로그인만 하면 언제나 열린다**(매칭 스트림 5-A와 다르다 — 거절하는 경우가 없다)
+- **연결 직후 보내는 스냅샷은 없다** — 첫 바이트는 주석 라인(`:connected`)이다. 상태는 2-2로, 알림 목록과 안 읽은 수는 2-4로 받는다
+- **앱과의 연결이라 `/app` 아래에 둔다** — 사용자 정보가 아니라 앱이 켜져 있는 동안 서버와 잇는 채널이다. 인증은 필요하다(인증 없이 열린 경로는 2-3 하나뿐이다)
+- **매칭 스트림과 별개다** — 매칭 중에는 둘 다 열려 있다. 한쪽 연결이 다른 쪽을 밀어내지 않는다
+- **keep-alive**: 15초마다 주석 라인(`:ping`)을 보낸다 — 이벤트가 아니므로 클라 이벤트 핸들러에 잡히지 않는다
+- **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면 닫는다(새 연결은 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다). 클라는 다시 연결한다 — 끊겨 있던 사이의 알림은 2-4로 다시 받는다
+  - 탈퇴 시 닫기는 아직 없다 — 탈퇴 개편 때 매칭 스트림과 같은 방식으로 붙인다. 그전까지 탈퇴한 사람의 스트림은 30분 만료로 정리된다
+- **이벤트 3종 — 알림 종류가 곧 이벤트 이름이다**(매칭 스트림처럼 SSE `event`로 가른다): `FRIEND_REQUESTED`(친구 요청 받음) · `FRIEND_ACCEPTED`(내 요청이 수락됨) · `RUNNING_INVITED`(러닝 초대 받음, 다시 초대 포함)
+  - `data`는 셋 다 2-4 `items[]` 원소에서 **`type`만 뺀 모양**이다(같은 조립 코드로 만든다). 종류는 이벤트 이름이 말한다. 클라는 이벤트 이름을 `type`으로 붙여 목록 맨 위에 넣고 배지를 하나 올린다
+  - 모르는 `event`는 무시한다 — 종류가 늘 수 있다
+  - **받는 사람에게만 간다** — 알림을 만든 동작(친구 요청·수락·초대)이 커밋된 뒤에 보낸다. 실패해 롤백된 동작은 아무것도 보내지 않는다
+  - **서버가 여러 대라 Redis를 거친다** — 커밋한 서버가 받는 사람과 알림 ID만 발행하고, 받는 사람이 붙은 서버만 알림을 읽어 조립해 보낸다
+  - **놓칠 수 있다** — 앱이 꺼져 있었거나, 연결이 끊긴 사이이거나, Redis가 잠시 닿지 않으면 오지 않는다. 알림은 DB에 남아 다음 진입 때 2-4로 보인다
+  - **`unreadCount`를 싣지 않는다** — 클라가 하나씩 올리고, 다음 진입 때 2-4 값으로 다시 맞춘다
+
+```
+:connected
+
+event:FRIEND_REQUESTED
+data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","actor":{"userId":"01a0f2d4-...","nickname":"철수","profileImageUrl":null,"isDeleted":false,"relationshipType":"FRIEND_REQUEST_RECEIVED"},"invitation":null}
+
+:ping
+```
+
 ### 2-4. `GET /api/v1/users/me/notifications` — 인앱 알림 목록
 
 - **화면**: 알림함
@@ -1058,47 +1126,44 @@
         "userId": "01a0f2d4-6180-7000-8000-446655440013",
         "nickname": "철수",
         "profileImageUrl": "https://...",
-        "isDeleted": false
+        "isDeleted": false,
+        "relationshipType": "FRIEND"        // 지금 나와 이 사람의 관계 — 모든 종류에 있다
       },
-      "friendStatus": null,                 // FRIEND_* 알림만 — 지금 actor와의 친구 상태
       "invitation": {                       // RUNNING_INVITED만
-        "runningRoomInvitationId": 31,
         "runningRoomId": 130,
-        "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | EXPIRED — 지금 상태
+        "status": "PENDING",                // PENDING | ACCEPTED | DECLINED | LEFT | EXPIRED — 지금 상태
         "scheduledStartAt": "2026-07-25T19:30:00",
         "targetDistanceMeters": 7000
       }
     }
   ],
-  "nextCursor": "..."
+  "nextCursor": "...",
+  "unreadCount": 3                          // 보관 기간 안의 안 읽은 알림 전체 수 — 페이지와 무관하다
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `type` | String | O | 알림 종류 — erd §6 `notifications.type` |
+| `type` | String | O | 알림 종류 — erd §6 `user_notifications.type` |
 | `isRead` | Boolean | O | 읽음 여부 |
 | `actor` | Object | O | 알림을 일으킨 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
-| `friendStatus` | String | X | `FRIEND_REQUESTED`·`FRIEND_ACCEPTED`일 때 **지금** actor와의 친구 상태(§0). `RUNNING_INVITED`면 `null` |
+| `actor.relationshipType` | String | X | **지금** 나와 이 사람의 관계(§0). 알림 종류와 무관하게 늘 싣는다. 탈퇴한 사람이면 `null` |
 | `invitation` | Object | X | `RUNNING_INVITED`일 때만 있고 그 밖에는 `null` |
 | `invitation.status` | String | O | 초대의 **지금** 상태 — `PENDING`이면 수락·거절 버튼을 그린다 |
 
-- **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `friendStatus`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
-  - 친구 요청 알림: `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6) 버튼, 그 밖이면 결과만 보여준다
+- **알림은 사건의 기록이고 버튼은 지금 상태로 그린다** — 요청이 취소됐거나 초대가 만료됐어도 알림은 남는다. 그래서 `actor.relationshipType`·`invitation.status`는 저장값이 아니라 조회 시점 값이다(근거는 `feature-spec.md` 인앱 알림 저장 절)
+  - 친구 요청 알림: `actor.relationshipType`이 `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6) 버튼, 그 밖이면 결과만 보여준다
+  - **관계를 `actor` 안에 둔다** — 사람에 딸린 값이라 사람 객체에 붙인다. 종류마다 있고 없고가 갈리지 않아 클라 분기가 줄고, 다른 목록(10-7·10-9)이 사람마다 관계를 싣는 것과 같은 결이다
   - 초대 알림: `PENDING`이면 수락(4-3)·거절(4-4) 버튼, `ACCEPTED`면 탭하면 초대 방으로 간다
-- **보관 기간(운영값)이 지난 알림은 나오지 않는다**
-- **이 조회는 읽음 처리를 하지 않는다** — 읽음은 2-6이 한다
+- **`unreadCount`로 하단 탭 배지를 그린다** — 앱 진입 때 첫 페이지와 함께 받는다. 이후 새 알림은 앱 스트림(2-3 아래) 이벤트로 받아 클라가 하나씩 올리고, 다음 진입 때 이 값으로 다시 맞춘다. 별도 안 읽은 수 API는 두지 않는다
+  - 행 기준으로 센다 — 목록에서 빠지는 어긋난 행(되살리지 못한 payload·사라진 초대)까지 세어, 아주 드물게 배지가 목록보다 클 수 있다. 알림함을 열면 2-5로 0이 된다
+- **보관 기간(운영값, 현재 30일)이 지난 알림은 나오지 않고 세지도 않는다**
+- **어긋난 행은 그 항목만 빼고 나머지를 돌려준다** — 알림 하나 때문에 알림함 전체가 열리지 않게 하지 않는다
+- **`cursor`가 깨졌으면 `400 INVALID_REQUEST`다**
+- **이 조회는 읽음 처리를 하지 않는다** — 읽음은 2-5가 한다. 알림함을 열 때 이 목록을 먼저 그린 뒤 2-5를 불러야 새 알림을 표시할 수 있다
 - **인증**: 필요
 
-### 2-5. `GET /api/v1/users/me/notifications/unread-count` — 안 읽은 알림 수
-
-- **화면**: 전역 — 하단 탭 배지
-- **Response `200 OK`**: `{ "unreadCount": 3 }`
-- **실시간으로 밀어 주지 않는다** — 앱 진입·포그라운드 복귀·탭 전환 때 클라가 다시 묻는다. 전원에게 스트림을 열지 않는다는 원칙(5-A 매칭 상태 복원)과 같은 이유다
-- 보관 기간이 지난 알림은 세지 않는다
-- **인증**: 필요
-
-### 2-6. `POST /api/v1/users/me/notifications/read` — 알림 모두 읽음
+### 2-5. `POST /api/v1/users/me/notifications/read` — 알림 모두 읽음
 
 - **화면**: 알림함 — 열 때 한 번 호출한다
 - 본인의 안 읽은 알림을 모두 읽음으로 바꾼다. 항목별 읽음 처리는 두지 않는다
@@ -1112,14 +1177,17 @@
 
 ## 4. 초대 러닝
 
-친구끼리 시각·거리를 정해 뛰는 방이다. **방이 생기는 방식(4-1)과 사람이 들어오는 방식(4-2~4-4)만 매칭과 다르고, 그 밖은 매칭 방과 같은 경로를 탄다** — 방 정보는 매칭 스트림의 `RoomInfo`(5-B)로 받고, 나가기는 `DELETE /running-matches`(5-A), 카운트다운·러닝은 5-C·5-D 그대로다. 생명주기 근거는 `feature-spec.md` 초대 러닝 생명주기 절.
+친구끼리 시각·거리를 정해 뛰는 방이다. **방이 생기는 방식(4-1)과 사람이 들어오는 방식(4-2~4-4), 그리고 모집 마감 시각과 제재 없음만 매칭과 다르고, 그 밖은 매칭 방과 같은 경로를 탄다** — 방 정보는 매칭 스트림의 `RoomInfo`(5-B)로 받고, 나가기는 `POST /match-rooms/leave`(5-A), 카운트다운·러닝은 5-C·5-D 그대로다. 생명주기 근거는 `feature-spec.md` 초대 러닝 생명주기 절.
 
 - 초대 방은 `running_rooms.type='INVITE'`로 만든다 — 랜덤 매칭 후보 스캔(`type='MATCH'`)과 슬롯별 대기 인원 집계에 잡히지 않는다.
-- 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다. 초대 수는 제한하지 않는다.
+- 방장은 없으며 현재 방 참가자 누구나 친구를 초대할 수 있다. 초대할 수 있는 친구 수는 제한하지 않고, 한 사람이 같은 친구에게 보내는 횟수(처음 포함)만 운영 설정(`invite.max-invite-count`, 현재 5)까지다.
 - 방은 최대 4명이며 먼저 수락한 순서대로 입장시키고, 자리가 차면 이후 수락은 막는다.
 - **매칭 방에서는 초대할 수 없다** — 4-2는 초대 방이 아니면 404다.
+- **모집 마감(`closeAt`)은 `start_at - 초대 마감 오프셋`(운영 설정 `invite.close-offset`, 현재 1분)이다** — 매칭의 마감 오프셋(10분)과 따로 둔다. 초대·수락은 그 전까지만 된다. 시작 통지(`RUNNING_READY`, 시작 10초 전)는 매칭 방과 같다.
+- **제재가 없다** — 언제 나가든(5-A), 조기 종료하든(5-D) `_NO_PENALTY`이고 쿨다운을 걸지 않는다.
+- **방 상태 이벤트가 따로 있다** — 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`, 그 뒤 갱신은 `INVITE_ROOM_UPDATED`다(5-B). 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_UPDATED`는 보내지 않는다 — 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 확정 연출을 두지 않는다. `RUNNING_READY`(5-C)는 매칭 방과 같다.
 
-### 4-1. `POST /api/v1/running-rooms/invite` — 초대 방 개설
+### 4-1. `POST /api/v1/match-rooms/invite` — 초대 방 개설
 
 - **화면**: 초대 페이지
 - **Request**
@@ -1134,15 +1202,18 @@
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `scheduledStartAt` | String | O | KST 시작 시각. **분 단위**(초는 `00`). 선택지가 아니라 자유 입력이다 |
-| `targetDistanceMeters` | Integer | O | 목표 거리(m). 운영 설정의 최소·최대 거리 사이 |
+| `targetDistanceMeters` | Integer | O | 목표 거리(m). 운영 설정의 최소·최대 거리 사이(현재 1,000~42,195) |
 
 - **시각·거리를 선택지로 좁히지 않는다** — 매칭(5-A)과 다른 점이다. 범위만 운영 설정으로 막는다
-  - 거리가 범위를 벗어나거나 시각이 분 단위가 아니면 `400 INVALID_REQUEST`
-  - 시작 시각은 "지금 + 모집 마감 오프셋 + 최소 모집 시간" 이후, "지금 + 최대 예약 기간" 이전이어야 한다 — 벗어나면 `409 INVITE_START_AT_OUT_OF_RANGE`. 지금 시각에 따라 갈리는 판정이라 요청 검증이 아니다(매칭의 `MATCH_SLOT_CLOSED`와 같다)
+  - 거리가 범위를 벗어나거나 시각이 분 단위가 아니면 `400 INVALID_REQUEST`. 둘 다 어긋나면 두 문장을 공백으로 이어 한 번에 보낸다(매칭 `INVALID_MATCH_OPTION`과 같다). 거리 문구의 숫자는 운영값으로 만든다
+    - "시작 시각은 분 단위로만 선택할 수 있습니다."
+    - "목표 거리는 1000m 이상 42195m 이하여야 합니다."
+  - 필드 누락은 Request DTO 검증이다 — "시작 시각은 필수입니다." / "목표 거리는 필수입니다."
+  - 시작 시각은 "지금 + 최소 준비 시간(운영 설정 `invite.min-lead-time`, 현재 10분)" 이후, **오늘(KST) 23:59** 이하여야 한다 — 벗어나면 `409 INVITE_START_AT_OUT_OF_RANGE`. 지금 시각에 따라 갈리는 판정이라 요청 검증이 아니다(매칭의 `MATCH_SLOT_CLOSED`와 같다)
 - **동작**: 방을 `type='INVITE'`, `status='MATCHING'`, `max_player_count=4`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다. 예약도 매칭 방과 같게 건다
 - 페이스는 온보딩 값을 쓴다(매칭과 같다)
 - **매칭 쿨다운 중에도 만들 수 있다** — 쿨다운은 매칭 신청만 막는다
-- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다 — 연결 직후 `RoomInfo` 스냅샷이 온다
+- 응답을 받으면 클라는 `GET /match-rooms/stream`을 연다 — 연결 직후 `INVITE_ROOM_ENTRANCE` 스냅샷이 온다
 - **Response `201 Created`**
 
 ```json
@@ -1165,66 +1236,53 @@
 
 - **인증**: 필요
 
-### 4-2. `POST /api/v1/running-rooms/{runningRoomId}/invitations` — 친구 초대
+### 4-2. `POST /api/v1/match-rooms/{runningRoomId}/invitations` — 친구 초대
 
-- **화면**: 초대 방 — 친구 초대 버튼에서 여러 명을 골라 한 번에 보낸다
+- **화면**: 초대 방 — 친구 초대 버튼. **한 번에 한 명씩 보낸다** — 여러 명을 고르는 화면이면 클라가 사람마다 한 번씩 부르고 결과를 사람마다 보여준다(방 정원이 4명이라 많아야 3번이다)
 - **Request**
 
 ```json
 {
-  "inviteeIds": [
-    "01a0f2d4-6180-7000-8000-446655440013",
-    "01a0f2d4-6180-7000-8000-446655440021"
-  ]
+  "inviteeId": "01a0f2d4-6180-7000-8000-446655440013"
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `inviteeIds` | String[] | O | 초대할 친구의 `userId`. 1~50명, 중복은 하나로 본다 |
+| `inviteeId` | String | O | 초대할 친구의 `userId` |
 
-- **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 모두 친구(`FRIEND`)여야 한다
-  - **이미 대기중이거나 이미 방에 들어와 있는 사람은 건너뛴다** — 오류가 아니다. 응답 `invitations`에서 빠진다
-  - **친구가 아닌 사람이 하나라도 섞이면 아무에게도 보내지 않는다**(`409 NOT_FRIEND`) — 화면에서 고른 목록이 친구 목록이라 섞였다면 그사이 관계가 바뀐 것이다. 다시 고르게 한다
-  - 거절했거나 수락 뒤 나간 친구는 같은 초대를 `PENDING`으로 되살린다
-- **부수 효과**: 초대받은 사람마다 인앱 알림(`RUNNING_INVITED`)을 쌓고, 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
-- **Response `201 Created`** — 이번 요청으로 `PENDING`이 된 초대만 담는다
-
-```json
-{
-  "invitations": [
-    { "runningRoomInvitationId": 31, "userId": "01a0f2d4-6180-7000-8000-446655440013", "status": "PENDING" }
-  ]
-}
-```
-
+- **요청 검증 (`400 INVALID_REQUEST`)** — Request DTO 검증이다
+  - 필드 누락: "초대할 친구는 필수입니다."
+  - `userId`가 UUID 형식이 아니면 검증 전에 본문 파싱이 실패한다 — `400 MALFORMED_REQUEST_BODY`("요청 본문을 읽을 수 없습니다.", §0 공통)
+- **조건**: 호출자가 이 방의 현재 참가자이고, 방이 `INVITE`·`MATCHING`이며 모집 마감 전이고, 대상이 친구(`FRIEND`)이며 지금 아무 활성 신청도 없어야 한다
+  - **못 보내면 건너뛰지 않고 이유를 에러로 돌려준다** — 아래 에러 표. 클라는 메시지를 그대로 보여주면 된다
+  - **대기 중인 친구에게도 다시 보낼 수 있다** — 초대 상태는 `PENDING` 그대로이고 호출자의 보낸 횟수만 오른다(독촉)
+  - 거절(`DECLINED`)했거나 수락 뒤 나간(`LEFT`) 친구는 같은 초대를 `PENDING`으로 되살린다. 보낸 횟수는 이어서 센다
+- **부수 효과**: 초대받은 사람에게 인앱 알림(`RUNNING_INVITED`)을 쌓고 푸시를 보내고, 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 초대 현황이 `RoomInfo.invitations`에 실린다
+- **Response `204 No Content`** — 본문이 없다. 초대 현황은 스트림의 `INVITE_ROOM_UPDATED`가 나른다
 - **에러 (404 Not Found)**: 방이 없거나, 초대 방이 아니거나, 호출자가 이 방의 현재 참가자가 아니다
-- **에러 (409 Conflict)**
-  - `RUNNING_INVITATION_CLOSED` — 모집 중인 방이 아니거나 모집 마감이 지났다
-  - `NOT_FRIEND` — 친구가 아닌 사람이 섞여 있다
+- **에러 (409 Conflict)** — 판정 순서대로
 
-```json
-{
-  "code": "RUNNING_INVITATION_CLOSED",
-  "message": "초대를 받을 수 없는 방입니다."
-}
+| 코드 | 메시지 | 경우 |
+|---|---|---|
+| `RUNNING_INVITATION_CLOSED` | 초대를 받을 수 없는 방입니다. | 모집 중인 방이 아니거나 모집 마감이 지났다 |
+| `NOT_FRIEND` | 친구가 아닙니다. | 친구가 아니다(자기 자신 포함) |
+| `INVITEE_ALREADY_IN_ROOM` | 이미 방에 들어와 있는 친구입니다. | 친구가 이미 이 방의 참가자다 |
+| `INVITEE_IN_MATCHING` | 지금 매칭 중인 친구입니다. | 친구가 다른 매칭 방·초대 방에서 대기 중이다(모집 중·확정 후 시작 전) |
+| `INVITEE_RUNNING` | 지금 러닝 중인 친구입니다. | 친구가 러닝 중이다 — 시작된 방에 있거나, 솔로 방을 열었다(솔로는 모집 단계가 없어 시작 전이어도 러닝으로 본다) |
+| `INVITE_COUNT_EXCEEDED` | 더 이상 이 친구에게 초대를 보낼 수 없습니다. | 호출자가 이 친구에게 보낸 횟수가 상한(운영 설정 `invite.max-invite-count`, 현재 5)에 닿았다 |
 
-{
-  "code": "NOT_FRIEND",
-  "message": "친구에게만 초대를 보낼 수 있습니다."
-}
-```
-
+- **친구의 지금 상태(매칭 중·러닝 중)를 초대한 사람에게 알려준다** — 친구 사이라 드러내도 된다고 본다
 - **인증**: 필요
 
-### 4-3. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/accept` — 초대 수락
+### 4-3. `POST /api/v1/match-rooms/{runningRoomId}/invitations/accept` — 초대 수락
 
 - **화면**: 알림함 (초대 알림의 수락 버튼)
-- **Request 본문이 없다**
-- **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 초대를 `ACCEPTED`로 바꾼다. 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다
+- **Request 본문이 없다** — 받는 사람은 토큰 주체다. 경로의 방에서 나에게 온 초대를 수락한다. 누가 보냈든 초대는 받는 사람 기준으로 하나라 보낸 사람을 고르지 않는다
+- **동작**: 방을 잠그고 다시 확인한 뒤 매칭 참가와 같게 `running_players(JOINED)`·배정 세션을 만들고, 인원·방 평균 페이스를 갱신하고, 나에게 온 초대 행을 모두 `ACCEPTED`로 바꾼다. 기존 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다. 수락한 사람은 응답을 받은 뒤 스트림을 열어 `INVITE_ROOM_ENTRANCE`를 받는다
   - **먼저 수락한 순서로 자리가 찬다** — 방 행 잠금이 순서를 정한다
   - 매칭 쿨다운 중에도 수락할 수 있다
-- 응답을 받으면 클라는 `GET /running-matches/stream`을 연다
+- 응답을 받으면 클라는 `GET /match-rooms/stream`을 연다
 - **Response `201 Created`**
 
 ```json
@@ -1233,7 +1291,7 @@
 }
 ```
 
-- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (404 Not Found)**: 방이 없거나, 이 방에서 나에게 온 초대가 없다
 - **에러 (409 Conflict)** — 판정 순서대로
   - `RUNNING_INVITATION_CLOSED` — 만료됐거나(모집 마감·방 취소) 방이 모집 중이 아니다
   - `RUNNING_INVITATION_NOT_PENDING` — 이미 수락했거나 거절한 초대다. 거절 뒤 다시 들어가려면 다시 초대받아야 한다
@@ -1255,13 +1313,13 @@
 
 - **인증**: 필요
 
-### 4-4. `POST /api/v1/running-room-invitations/{runningRoomInvitationId}/decline` — 초대 거절
+### 4-4. `POST /api/v1/match-rooms/{runningRoomId}/invitations/decline` — 초대 거절
 
 - **화면**: 알림함 (초대 알림의 거절 버튼)
-- **Request 본문이 없다**
-- 초대를 `DECLINED`로 바꾸고 방 참가자에게 `MATCH_ROOM_UPDATED`를 보낸다 — 방 화면에 "거절"이 보인다. **행을 지우지 않는다**(친구 요청 거절과 다르다)
+- **Request 본문이 없다** — 받는 사람은 토큰 주체다
+- 이 방에서 나에게 온 초대 행을 모두 `DECLINED`로 바꾸고 방 참가자에게 `INVITE_ROOM_UPDATED`를 보낸다 — 거절한 사람은 현황(`RoomInfo.invitations`)에서 빠진다. **행은 지우지 않는다**(친구 요청 거절과 다르다) — 다시 초대할 때 보낸 횟수를 이어서 센다
 - **Response `204 No Content`**
-- **에러 (404 Not Found)**: 초대가 없거나 본인이 받은 초대가 아니다
+- **에러 (404 Not Found)**: 방이 없거나, 이 방에서 나에게 온 초대가 없다
 - **에러 (409 Conflict)**: `RUNNING_INVITATION_NOT_PENDING` — 대기중인 초대가 아니다(이미 응답했거나 만료됐다)
 - **인증**: 필요
 
@@ -1271,14 +1329,14 @@
 
 | 구간 | 방식 | 이유 |
 |---|---|---|
-| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/running-matches/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
+| 매칭 신청 ~ 대기방 (5-A·5-B) | **REST + SSE** `/api/v1/match-rooms/stream` | 클라가 보내는 건 신청·취소 둘뿐이고 나머지는 전부 서버 푸시다 — 양방향 채널을 쓸 이유가 없다 |
 | 러닝 구간 (5-C·5-D) | **WebSocket** `/api/v1/ws/running` | 위치를 주기 발신하는 고빈도 양방향 구간 |
 
 **솔로 러닝도 같은 WebSocket을 쓴다.** 매칭을 거치지 않을 뿐 좌표 수집·저장 경로는 동일하다. 시작할 때 `POST /running-rooms/solo`로 방을 만들어 `runningRoomId`를 받은 뒤 WS에 연결한다(5-C의 카운트다운은 건너뛴다 — 맞출 상대가 없다).
 
 ### `POST /api/v1/running-rooms/solo` — 솔로 러닝 개시
 
-- **클라가 만드는 방은 솔로(이 API)와 초대 방(4-1 `POST /running-rooms/invite`)이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 방 종류는 `type`을 본문으로 받지 않고 경로(`/solo`·`/invite`)로 가른다
+- **클라가 만드는 방은 솔로(이 API)와 초대 방(4-1 `POST /match-rooms/invite`)이다.** 매칭 방은 신청 시 서버가 만들므로 요청 대상이 아니다. 방 종류는 `type`을 본문으로 받지 않고 경로(`/solo`·`/invite`)로 가른다
 - **Request 본문이 없다.** 목표 거리도 받지 않는다 — 솔로는 사용자가 끝내야 끝나므로 방의 `target_distance`는 null이다. 페이스는 온보딩 값을 쓴다
 - **Response `201 Created`**
 
@@ -1290,8 +1348,8 @@
 
 - **동작**: `running_rooms` 행을 `type='SOLO'`, `status='MATCHED'`, `max_player_count=1`, `current_player_count=1`로 만들고 본인 `running_players(status='JOINED')`와 배정 세션을 함께 만든다
   - **`STARTED`·`RUNNING`은 이 API가 만들지 않는다.** 모집을 건너뛴 확정 상태까지만 만들고, 시작 전이는 WS `RUNNING_START`가 일으킨다(5-C). 솔로에는 시작 예약을 걸지 않는다 — `start_at`이 개시 시각이라 `RUNNING_START`가 도착하는 순간 이미 지나 있다
-  - **강제 종료 예약도 걸지 않는다.** 앱이 방 번호를 잃었을 때의 복구는 `GET /users/me/status`의 `runningRoomId`로 한다 — `READY`면 이어 뛸 때 `RUNNING_START`, 그만둘 때 `DELETE /running-matches`이고, `RUNNING`이면 `RUNNING_START`로 다시 붙어 `RUNNING_FINISH`로 끝낸다
-- 이 방은 `GET /running-matches/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
+  - **강제 종료 예약도 걸지 않는다.** 앱이 방 번호를 잃었을 때의 복구는 `GET /users/me/status`의 `runningRoomId`로 한다 — `READY`면 이어 뛸 때 `RUNNING_START`, 그만둘 때 `POST /match-rooms/leave`이고, `RUNNING`이면 `RUNNING_START`로 다시 붙어 `RUNNING_FINISH`로 끝낸다
+- 이 방은 `GET /match-rooms/slots`의 대기 인원 집계에 포함되지 않는다(`type='SOLO'`로 제외). 모집 중인 자리가 아니다
 - **에러 (409 Conflict)**
   - `RUNNING_ALREADY_IN_PROGRESS` — 진행 중인 러닝이나 활성 매칭 신청이 있다
   - `ONBOARDING_NOT_COMPLETED` — 온보딩 전이라 쓸 페이스가 없다
@@ -1306,14 +1364,16 @@
 
 ### 5-A. 매칭 중 (홈 → 매칭 대기 화면)
 
-#### `GET /api/v1/running-matches/stream` — 매칭 이벤트 스트림 (SSE)
+#### `GET /api/v1/match-rooms/stream` — 방 상태 이벤트 스트림 (SSE)
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
+- **매칭 방·초대 방이 같은 스트림을 쓴다** — 활성 신청이 사람당 하나라 스트림도 하나면 된다. 방 종류는 이벤트 이름(`MATCH_*`·`INVITE_ROOM_*`)과 `RoomInfo.type`이 가른다
+  - 예전 경로 `/running-matches/stream`은 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(5번 머리말 「1.1.x 호환 경로」)
 - **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.
-  - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.**
-- **종료 시점**: `RUNNING_STARTED` ack 뒤, 또는 매칭 취소(`DELETE /running-matches`)의 204를 받은 뒤 클라이언트가 닫는다.
+  - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.** 스냅샷 이벤트는 매칭 방이 `MATCH_ROOM_UPDATED`, 초대 방이 `INVITE_ROOM_ENTRANCE`다.
+- **종료 시점**: `RUNNING_STARTED` ack 뒤, 또는 매칭 취소(`POST /match-rooms/leave`)의 204를 받은 뒤 클라이언트가 닫는다.
 - **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면, 탈퇴하면 닫는다(새 연결·탈퇴는 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다 — 다른 인스턴스의 옛 스트림은 30분 만료나 전송 실패로 정리된다). 활성 신청이 남아 있으면 클라는 다시 연결하고 연결 직후 스냅샷으로 상태를 복원한다.
 - **연결을 화면 생명주기에 묶지 않는다.** 홈을 벗어나도 스트림은 살아 있어야 한다(근거는 `feature-spec.md` 매칭·러닝 설계 절)
 - **이벤트 형식** — 타입은 SSE `event` 필드로, 본문은 `data`에 JSON으로 싣는다
@@ -1325,35 +1385,52 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 이벤트 | 시점 |
 |---|---|
-| `MATCH_STARTED` | 매칭 확정 — `data` = `RoomInfo` |
-| `MATCH_ROOM_UPDATED` | 인원 변동·초대 현황 변동(초대 방)·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다 |
+| `MATCH_CONFIRMED` | 매칭 확정 — `data` = `RoomInfo`. 매칭 방만 |
+| `MATCH_ROOM_UPDATED` | 인원 변동·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다. 매칭 방만 |
+| `INVITE_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo` + `startsInMs`. 초대 방만 |
+| `INVITE_ROOM_UPDATED` | 인원 변동·초대 현황 변동·모집 마감(초대 만료) — `data` = `RoomInfo`. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 각 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다.
 - **keep-alive**: 주기적으로 주석 라인(`:ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
 - 스트림은 수신 전용이라 요청 실패라는 개념이 없다 — 오류는 신청·취소 REST 응답으로 전달된다.
 
-#### `GET /api/v1/running-matches/slots` — 시간대별 대기 인원
+#### `GET /api/v1/match-rooms/slots` — 시간대별 대기 인원
 
 - **화면**: 매칭 정보 입력 모달 — 시간 선택 박스에 "19:00 · 3명 대기 중"처럼 표시한다
-- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`), `targetDistanceMeters`(필수 — `3000`·`5000`·`10000` 중 하나, 해당 거리 조건만 집계한다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다)
+- **Query**: `date`(YYYY-MM-DD, 생략 시 오늘 — 오늘 이전 날짜는 `400`). 거리는 받지 않는다 — 고를 수 있는 모든 거리를 한 번에 내려 주므로, 모달에서 거리를 바꿔도 다시 요청하지 않는다
 - **Response `200 OK`**
 
 ```json
 {
-  "slots": [
-    { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-    { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
-    { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+  "distances": [
+    {
+      "targetDistanceMeters": 3000,
+      "slots": [
+        { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
+        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 2, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 0, "selectable": true }
+      ]
+    },
+    {
+      "targetDistanceMeters": 5000,
+      "slots": [
+        { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
+        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+      ]
+    }
   ]
 }
 ```
 
-- `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- `distances`는 신청 가능한 거리(현재 운영값 3000·5000·10000) 전부를 **`targetDistanceMeters` 오름차순**으로 담는다. 대기자가 하나도 없는 거리도 빠지지 않는다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 인원을 합산하지 않는다
+- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- 응답에 조회 날짜를 따로 싣지 않는다 — `scheduledStartAt`이 날짜를 담는다
 - `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
-- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감)
+- `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감). 마감은 시각으로만 갈리므로 같은 시각이면 거리가 달라도 값이 같다
 - **인증**: 필요
-- **에러 (400 Bad Request)**: 날짜·거리가 형식에 맞지 않거나, 거리가 없거나, 오늘 이전 날짜면 요청 검증 단계에서 걸린다. 거리가 선택지 밖이면 유스케이스가 걸러 낸다 — 어느 쪽이든 `code`는 `INVALID_REQUEST`다
+- **에러 (400 Bad Request)**: 날짜가 형식에 맞지 않거나 오늘 이전이면 요청 검증 단계에서 걸린다 — `code`는 `INVALID_REQUEST`다
 
 ```json
 {
@@ -1363,24 +1440,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "목표 거리는 필수입니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
   "message": "조회 날짜는 오늘 이전일 수 없습니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "목표 거리는 3000, 5000, 10000 중 하나여야 합니다."
 }
 ```
 
-- 형식 오류(`date=2026/07/25`, `targetDistanceMeters=abc`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
-- 선택지 밖 거리 문구는 매칭 신청과 같은 문장이다 — 거리 목록이 설정에서 오므로 설정이 바뀌면 문구도 바뀐다
+- 형식 오류(`date=2026/07/25`)는 공통 문구 하나로 나가고, 날짜 형식이 틀리면 "오늘 이전" 문구는 함께 나가지 않는다
 
-#### `POST /api/v1/running-matches` — 매칭 신청
+#### `POST /api/v1/match-rooms` — 매칭 신청
 
 - **화면**: 홈 (매칭 버튼)
 - **Request**
@@ -1397,7 +1463,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
 | `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
-- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /running-matches/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
+- **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /match-rooms/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
 - **활성 신청은 1개** — 이미 있으면 `409 MATCH_ALREADY_IN_PROGRESS`. 확정된 신청도 활성이므로 재신청은 막힌다. 혼자 확정된 경우에는 페널티 없이 나갈 수 있고(5-B) 나가면 곧바로 다시 신청할 수 있다. 이 API로 만드는 방은 전부 공개 랜덤 매칭이라 공개 범위를 받지 않는다
 - 페이스 조건은 입력받지 않음 — 서버가 보관한 사용자 평균 페이스 자동 사용. 그 값이 없으면(온보딩 미완료) `409 ONBOARDING_NOT_COMPLETED`
 - **모집 인원도 입력받지 않음** — 서버가 최대 4명까지 모으고, 마감 때 1명이면 1인으로 확정한다 (`desiredPlayerCount` 필드 없음)
@@ -1452,7 +1518,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - 마감 시각 **정각도 마감으로 본다** — 그 시점에 확정 판정이 돌기 때문이다
-- 클라는 `GET /running-matches/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
+- 클라는 `GET /match-rooms/slots`의 `selectable`로 1차 차단한다. 이 에러는 **모달을 열어둔 사이 마감이 지나가는 경합에서만** 나오므로, 받으면 슬롯 목록을 다시 받는다
   - **`slots`로 1차 차단하지 않는 동안에는** 경합이 아니라 마감된 슬롯을 그냥 고른 경우에도 이 에러가 나온다. 슬롯 목록을 다시 받을 곳이 없으므로 해당 슬롯만 목록에서 지우고 다시 고르게 한다
 
 - **`MATCH_COOLDOWN`** — 제재 대상 이탈로 신청이 제한된 상태다. **이 에러만 `cooldownUntil`(신청 제한 해제 시각)을 더 담는다**(api-convention: 오류별 추가 필드 허용). 해제 시각은 Redis 키의 남은 TTL로 계산하며, 근거가 되는 이탈 자체는 `running_players.status`에 남는다
@@ -1490,16 +1556,17 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - 페이스를 입력받지 않고 온보딩 값을 쓰기 때문에, 값이 없으면 매칭 조건을 만들 수 없어 신청을 받지 않는다
 - **인증**: 필요
 
-#### `DELETE /api/v1/running-matches` — 매칭 취소·방 나가기 (겸용)
+#### `POST /api/v1/match-rooms/leave` — 매칭 취소·방 나가기 (겸용)
 
-- **토큰 주체의 활성 신청 하나를 취소한다** — 경로가 복수형이지만 컬렉션 전체를 지우는 것이 아니다. 신청은 유저당 하나뿐이라 경로에 식별자를 두지 않으며, `POST /running-matches`로 만든 것을 같은 경로에서 지운다
+- **토큰 주체의 활성 신청 하나를 끝낸다** — 신청은 유저당 하나뿐이라 경로에 식별자를 두지 않는다. `DELETE /match-rooms`가 아니라 동작 경로(`/leave`)인 이유는 **방을 지우는 게 아니라 내가 빠지는 것**이라서다 — 혼자 나가도 방은 남은 사람과 함께 그대로 있다
+- 예전 경로 `DELETE /running-matches`는 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(5번 머리말 「1.1.x 호환 경로」)
 - **솔로 방의 시작 전 신청도 이 경로로 닫는다** — 솔로를 열고 WS에 붙기 전에 그만둘 때 쓴다. 방은 `CANCELLED`, 신청은 `MATCHED_LEFT_NO_PENALTY`이며 제재는 없다. 이미 뛰는 중(`RUNNING`)이면 아래와 같이 409다
 - **서버가 모집 마감 시각으로 분기**
   - 대기 중(마감 전) = 대기 취소(`status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
   - **분기는 방의 `status`가 아니라 모집 마감 시각으로 한다** — 마감이 지났는데 스케줄러가 아직 `MATCHING`을 안 닫은 틈에 나가면 제재를 피할 수 있기 때문이다
   - **러닝이 시작된 뒤(`status='RUNNING'`)에는 이 API를 쓸 수 없다** — `409 MATCH_ALREADY_STARTED`. 종료는 WS `RUNNING_FINISH`가 맡으며, 여기서 끊으면 GPS 트랙과 기록이 저장되지 않는다
-  - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 모집 마감(`start_at - 오프셋`)과 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 마감이 지났어도 면제다. 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
-  - 남은 인원에게는 `MATCH_ROOM_UPDATED`를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
+  - 확정 후(`MATCHED`) = 이탈(`status=MATCHED_LEFT_PENALTY` 또는 `MATCHED_LEFT_NO_PENALTY`, `deleted_at` 기록). 제재 대상 여부는 **이 시점에 모집 마감(`start_at - 오프셋`)과 `current_player_count`로 판정해 값에 굳힌다** — 혼자 남은 방(`1`)에서 나가면 마감이 지났어도 면제다. **초대 방(`type='INVITE'`)은 언제나 `MATCHED_LEFT_NO_PENALTY`다.** 쿨다운이 걸리는 경우에만 클라는 나가기 전에 그 사실을 안내한다
+  - 남은 인원에게는 `MATCH_ROOM_UPDATED`(초대 방은 `INVITE_ROOM_UPDATED`)를 스트림으로 발신한다. **혼자 남아도 방은 취소하지 않는다**
 - **시각으로 취소를 차단하지 않는다.** 시작 직전까지 호출할 수 있고 늦은 이탈은 쿨다운으로 다룬다
 - **Response `204 No Content`** — 이후 클라는 SSE 스트림을 닫는다
 - **에러 (404 Not Found)**: 활성 신청이 없다
@@ -1526,8 +1593,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 매칭 상태만 따로 묻는 엔드포인트는 두지 않는다. 앱 진입·포그라운드 복귀 시 **유저 상태 API(2-2)**가 `IDLE`·`WAITING`·`READY`를 돌려주고, 클라이언트는 그 값으로 스트림 연결 여부를 정한다.
 
-- **전원에게 스트림을 열지 않는 이유**: 매칭을 걸지 않은 사용자가 대다수인데 모두에게 연결을 유지하는 것은 서버 커넥션과 단말 배터리 양쪽에 부담이다. 그래서 상태를 먼저 묻고 활성 신청이 있을 때만 연결한다
-- **방 정보는 스트림이 나른다** — 2-2는 `runningRoomId`까지만 주고, 참가자 목록·마감 시각은 연결 직후의 `RoomInfo` 스냅샷이 채운다. 신청 직후에는 `POST /running-matches`가 준 `runningRoomId`로 바로 스트림을 연다
+- **매칭 스트림은 활성 신청이 있을 때만 연다** — 방 단위 이벤트라 붙을 방이 없으면 보낼 것이 없다. 앱이 켜져 있는 동안의 개인 채널은 앱 스트림(2-3 아래)이 맡는다 — 앱을 켠 사용자마다 연결 하나를 유지하는 비용을 받아들이고 실시간 알림을 이 채널로 모았다. 상태는 지금처럼 2-2로 묻는다
+- **방 정보는 스트림이 나른다** — 2-2는 `runningRoomId`까지만 주고, 참가자 목록·마감 시각은 연결 직후의 `RoomInfo` 스냅샷이 채운다. 신청 직후에는 `POST /match-rooms`가 준 `runningRoomId`로 바로 스트림을 연다
 - **매칭이 저절로 실패하는 상태는 없다** — 마감은 인원과 무관하게 항상 확정으로 끝나므로 `FAILED`에 해당하는 값이 없다. 취소는 사용자가 직접 한 행동이라 그 즉시 `IDLE`로 돌아간다
 - **1인 확정도 `READY`다.** 클라이언트는 `RoomInfo.players`가 1건인 경우를 혼자 확정된 상태로 그리며, 이때 나가기는 페널티가 없다(5-B)
 
@@ -1535,7 +1602,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### 공통 객체 `RoomInfo` — 매칭방 전체 정보
 
-두 SSE 이벤트가 아래 **같은 구조를 싣는다** — `data`가 완전히 동일하고 이벤트 이름만 다르다. **초대 방(4번)도 같은 객체다** — 이벤트 이름의 `MATCH`는 매칭 단계를 뜻하며 방 종류는 `type`이 가른다.
+방 상태 SSE 이벤트가 아래 **같은 구조를 싣는다** — 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_UPDATED`, 초대 방(4번)의 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`. **`INVITE_ROOM_ENTRANCE`만 `startsInMs`를 하나 더 싣는다**(아래 해당 절).
 
 ```json
 {
@@ -1543,7 +1610,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "type": "MATCH",                   // MATCH | INVITE
   "status": "MATCHED",               // running_rooms.status: MATCHING|MATCHED|STARTED|FINISHED|CANCELLED — CANCELLED는 현재 내려오지 않는다(받으면 홈으로)
   "scheduledStartAt": "2026-07-25T19:00:00",
-  "closeAt": "2026-07-25T18:50:00",  // 모집 마감 시각 — start_at - 오프셋(운영값, 현재 10분) 계산값
+  "closeAt": "2026-07-25T18:50:00",  // 모집 마감 시각 — 매칭 방은 start_at - 마감 오프셋(현재 10분), 초대 방은 start_at - 초대 마감 오프셋(현재 1분) 계산값
   "targetDistanceMeters": 5000,
   "teamAveragePaceSecondsPerKm": 375,
   "players": [
@@ -1568,28 +1635,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`invitations`** — 초대 방에서 아직 참가자가 아닌 초대만 담는다
+- **`invitations`** — 초대 방에서 **아직 응답하지 않은(`PENDING`) 초대만** 담는다
 
 ```json
 "invitations": [
   {
-    "runningRoomInvitationId": 31,
     "userId": "01a0f2d4-6180-7000-8000-446655440021",
     "nickname": "영희",
     "profileImageUrl": "https://...",
-    "status": "PENDING",             // PENDING | DECLINED
+    "status": "PENDING",             // 항상 PENDING — 응답 전인 초대만 담는다
     "isDeleted": false
   }
 ]
 ```
 
-  - `PENDING`(대기중)·`DECLINED`(거절)만 나간다. 수락하면 `players`로 옮겨 가고, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다
-  - 상태가 바뀔 때마다(초대·수락·거절) `MATCH_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
+  - `PENDING`(대기중)만 나간다. 수락하면 `players`로 옮겨 가고(`ACCEPTED`는 지금 방에 있다는 뜻이다), 거절(`DECLINED`)·나감(`LEFT`)은 현황에서 빠지며, 만료(`EXPIRED`)는 마감 뒤라 현황 자체를 그리지 않는다. 거절·나감한 친구도 다시 초대하면 `PENDING`으로 돌아온다
+  - `status` 필드는 응답 모양을 유지하려고 남긴다 — 지금은 늘 `PENDING`이다
+  - 상태가 바뀔 때마다(초대·수락·거절) `INVITE_ROOM_UPDATED`가 `RoomInfo` 전체를 다시 보낸다 — 클라는 받은 대로 다시 그린다
 
 - **참가자별 `status`는 내려보내지 않는다** — 이탈자는 배정 행이 `is_connected=false`가 되어 목록에서 빠지므로 남아 있는 참가자는 아직 끝나지 않은 참가자(`JOINED`·`RUNNING`)다. 방의 진행 단계는 위 `status`가 나른다
 - **탈퇴한 참가자는 목록에서 빠진다** — 시작 전 탈퇴는 일반 취소처럼 방에서 빠지며 인원도 줄고, 시작 후 탈퇴는 배정이 끊겨 목록에서 빠진다(접속 전이었으면 인원도 준다). `isDeleted`는 §0 공통 형식이라 계약에 남지만 이 목록에서는 현재 항상 `false`다
 
-#### `MATCH_STARTED` (SSE) — 매칭 성사 통지
+#### `MATCH_CONFIRMED` (SSE) — 매칭 성사 통지
 
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
 - **발화 시점은 모집 마감(`start_at - 오프셋`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_ROOM_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
@@ -1607,12 +1674,45 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `STARTED` | 이미 시작된 방이다(재연결 스냅샷 등) — 러닝 화면으로 이어가고 WS `RUNNING_START`를 보낸다 |
 | `CANCELLED` | 홈으로 — 현재 서버는 보내지 않는다(아래) |
 
-- **`MATCH_STARTED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_STARTED`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
+- **`MATCH_CONFIRMED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_CONFIRMED`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
 - 방 취소는 마지막 참가자가 나갈 때만 일어나 받을 사람이 없으므로 이벤트를 보내지 않는다. `CANCELLED`는 방어적으로만 처리한다
+
+#### `INVITE_ROOM_ENTRANCE` (SSE) — 초대 방 입장 스냅샷
+
+- **초대 방에서 스트림을 연 직후 한 번** 보낸다 — 방을 만든 직후(4-1), 초대를 수락한 직후(4-3), 재연결할 때. 매칭 방의 연결 직후 `MATCH_ROOM_UPDATED`에 해당한다
+- `data` = `RoomInfo` 전체(참가자 `players`·초대 현황 `invitations` 포함) + `startsInMs`
+
+```json
+{
+  "runningRoomId": 130,
+  "type": "INVITE",
+  "status": "MATCHING",
+  "scheduledStartAt": "2026-07-25T07:30:00",
+  "closeAt": "2026-07-25T07:29:00",
+  "targetDistanceMeters": 7000,
+  "teamAveragePaceSecondsPerKm": 375,
+  "players": [ ... ],
+  "invitations": [ ... ],
+  "startsInMs": 1185000
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `startsInMs` | Long | O | **이 이벤트를 보낸 시점 기준** 시작까지 남은 밀리초. 이미 지났으면 `0` |
+
+- **`startsInMs`는 남은 시간 표시용이다** — 클라는 기기 시각 대신 이 값으로 대기 화면의 남은 시간을 그린다. 발사 타이머는 여전히 `RUNNING_READY`의 `startsInMs`로 건다(5-C)
+- 수신 시 `status`별 처리는 `MATCH_ROOM_UPDATED` 표와 같다
+
+#### `INVITE_ROOM_UPDATED` (SSE) — 초대 방 정보 갱신
+
+- `data` = `RoomInfo` 전체 재전송(`startsInMs` 없음). 초대 보내기(4-2)·수락(4-3)·거절(4-4)·나가기(5-A)·모집 마감(남은 초대 만료로 `invitations`가 빈다) 때 방 참가자에게 보낸다
+- 클라는 받으면 무조건 `RoomInfo`로 화면을 다시 그린다 — `MATCH_ROOM_UPDATED`와 같다
+- **모집 마감 통지를 따로 두지 않는다** — 마감(시작 1분 전)은 이 갱신(`status: "MATCHED"`, 빈 `invitations`)으로만 알리고, 확정 연출 없이 대기 화면을 유지하다 `RUNNING_READY`(시작 10초 전)로 카운트다운에 들어간다
 
 #### 방 나가기 — 별도 이벤트 없음
 
-- 확정된 방에서 나가기도 **`DELETE /running-matches`** 사용 (5-A 참고 — 서버가 모집 마감 시각으로 분기)
+- 확정된 방에서 나가기도 **`POST /match-rooms/leave`** 사용 (5-A 참고 — 서버가 모집 마감 시각으로 분기)
 - 나간 사람만 `MATCHED_LEFT_*` 처리, 방은 유지되고 그대로 러닝을 진행한다
 - **확정 후 이탈에는 페널티가 붙는다** — 모집 마감(`start_at - 오프셋`) 이후에 나가면 일정 시간 매칭 신청이 제한된다(`409 MATCH_COOLDOWN`). 만료는 Redis 키의 TTL이 판정한다(`feature-spec.md` 쿨다운 저장 절)
 - **혼자 남은 방은 예외다** — 이탈 시점 `current_player_count`가 `1`이면 면제(`MATCHED_LEFT_NO_PENALTY`)다. 1인으로 확정된 방과 이탈로 혼자 남은 방 모두 해당하며, 나가면 활성 신청이 끝나 곧바로 재신청할 수 있다
@@ -1975,7 +2075,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **이 메시지는 사용자가 종료를 길게 눌렀을 때만 보낸다.** 화면 거리가 목표 이상이면 `forced=false`(다 뛰었다), 미만이면 `forced=true`(조기 종료를 선택했다)다
 - **`forced=false`인데 확정 거리가 목표에 못 미치면 확정하지 않는다.** `RUNNING_FINISHED` 대신 `RUNNING_GOAL_PENDING`(남은 거리)을 보내고 러닝은 계속된다 — 화면으로는 다 뛰었는데 서버가 오염 좌표를 빼 인정하지 않은 경우라, 그대로 확정하면 억울한 조기 종료가 된다. 사용자가 그래도 끝내려면 `forced=true`로 다시 보낸다
   - 확정하지 않으므로 상태·기록·트랙 버퍼 모두 그대로이고, 이 요청의 ack(`RUNNING_FINISHED`)도 나가지 않는다
-- `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다. 다만 미만이어도 방 인원(확정 인원에서 취소·탈퇴한 미출석자를 뺀 수)이 1이면 `_NO_PENALTY`다. 목표가 없는 솔로 방은 끝낸 것이 곧 완주라 `COMPLETED`다
+- `forced`는 사용자가 조기 종료를 선택했는지 나타낼 뿐 최종 상태를 결정하지 않는다. 서버가 확정한 거리가 목표 이상이면 `COMPLETED`, 미달이면 `totalDistanceMeters / targetDistanceMeters`를 운영 설정 비율과 비교해 이상은 `RUNNING_LEFT_NO_PENALTY`, 미만은 `RUNNING_LEFT_PENALTY`로 전환한다. 다만 미만이어도 방 인원(확정 인원에서 취소·탈퇴한 미출석자를 뺀 수)이 1이거나 초대 방이면 `_NO_PENALTY`다. 목표가 없는 솔로 방은 끝낸 것이 곧 완주라 `COMPLETED`다
 - 종료 시각을 `deleted_at`에 기록한다 — `COMPLETED`·`RUNNING_LEFT_*` 공통이다. 비우면 활성 신청으로 남아 다음 매칭을 신청할 수 없다
 - 종료 신호나 강제 종료에 마지막 수신 데이터로 거리·페이스·구간·칼로리·고도 지표를 계산한다. 계산 전에 트랙 필터가 일시정지 경계(`pauseSegment`가 바뀐 칸)·정지·GPS 튐·관측 안 된 칸을 거리·시간에서 뺀다([feature-spec.md](feature-spec.md) 트랙 필터) — 그래서 `totalDurationSeconds`는 움직인 시간이다. 칼로리는 확정 거리·시간과 사용자 체중으로, 고도는 노이즈를 필터링한 기기 GPS 고도로 계산한다
 - 유효 러닝 판정(거리·시간·경로 산출 가능 + 평균 페이스 허용 범위 + 최소 거리·최소 시간, 운영값)을 통과한 트랙이면 `running_records`·경로 조각(`running_segments`)·splits를 저장하고 GPS 트랙을 S3에 올린다. 통과하지 못하면 실제 거리를 0으로 판정하고 기록 없이 상태만 확정한다
@@ -2742,12 +2842,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // user_relationships에서 COUNT (type=FRIEND)
-  "friendStatus": "FRIEND"           // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
+  "relationshipType": "FRIEND"         // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
 }
 ```
 
+- **예전 `friendStatus`는 다시 내리지 않는다** — 1.1.1 서버가 목 값(`"ACCEPTED"`)으로 내리던 필드인데, 1.1.x 앱이 읽지 않아 빠져도 영향이 없다(프론트 확인)
 - **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
-- `friendStatus`로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
+- `relationshipType`으로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 - **배경 사진은 싣지 않는다** — 11-7이 따로 내린다(프로필 사진과 같은 이유로 presigned URL을 표시 시점에 받는다)
 - 친구 목록(10-7)·업적(10-10)은 각자의 API로 받는다
 
@@ -2788,12 +2889,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "friendStatus": "FRIEND_REQUEST_SENT"
+  "relationshipType": "FRIEND_REQUEST_SENT"
 }
 ```
 
 - `user_relationships`에 `(요청자→대상, FRIEND_REQUEST_SENT)`·`(대상→요청자, FRIEND_REQUEST_RECEIVED)` 두 행을 쓰고(이전 관계로 `NONE` 행이 남아 있으면 그 행을 갱신한다) 대상에게 "친구 요청 도착" 인앱 알림(`FRIEND_REQUESTED`, 2-4)을 쌓고 푸시를 보낸다
-- **이미 상대가 나에게 요청해 둔 상태면(내 행이 `FRIEND_REQUEST_RECEIVED`) 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 `ACCEPTED`이고, 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
+- **이미 상대가 나에게 요청해 둔 상태면(내 행이 `FRIEND_REQUEST_RECEIVED`) 새 요청을 만들지 않고 수락으로 처리한다.** 서로 요청을 주고받은 상황은 이미 합의된 것이라 한 번 더 수락을 요구할 이유가 없다. 이때 응답은 10-5 수락과 같은 `200 OK` `{ "relationshipType": "FRIEND" }`이고(요청을 새로 만들지 않으므로 `201`이 아니다), 역방향 요청자에게 `FRIEND_ACCEPTED` 알림을 쌓는다
+  - **동시에 서로 요청해도 같다** — 두 요청 중 뒤에 처리되는 쪽이 앞쪽이 만든 요청을 받은 상태로 보고 수락한다. 둘 다 `FRIEND_REQUEST_SENT`로 끝나는 일은 없다
 - **에러 (400 Bad Request)**: `CANNOT_FRIEND_SELF` — 자기 자신에게는 요청할 수 없다
 - **에러 (409 Conflict)**: `FRIEND_REQUEST_ALREADY_EXISTS` — 이미 요청했거나 이미 친구다
 - **에러 (404 Not Found)**: 대상이 없다
@@ -2817,7 +2919,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **Request 본문이 없다** — 수락 말고 바꿀 수 있는 값이 없다. `PATCH`로 상태 값을 받으면 `FRIEND_REQUEST_SENT` 같은 의미 없는 값까지 검증해야 한다
 - 요청자에게 "친구 요청 수락됨" 인앱 알림(`FRIEND_ACCEPTED`)을 쌓고 푸시를 보낸다
 - **멱등이다** — 이미 그 사람과 친구(`FRIEND`)면 아무것도 바꾸지 않고 같은 응답을 준다. 알림도 다시 쌓지 않는다. 응답을 못 받은 앱이 다시 보내도 에러가 나지 않는다
-- **Response `200 OK`**: `{ "friendStatus": "FRIEND" }`
+- **Response `200 OK`**: `{ "relationshipType": "FRIEND" }`
 - **에러 (404 Not Found)**: 그 사람이 나에게 보낸 요청이 없다 — 내가 보낸 요청을 내가 수락하려는 경우도 여기다
 - **인증**: 필요
 
@@ -2826,15 +2928,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **요청 취소·거절** (`DELETE .../friend-request`)
   - **호출자가 보낸 쪽이면 취소, 받은 쪽이면 거절이다.** 이름만 다를 뿐 하는 일은 같아서(양쪽 `FRIEND_REQUEST_*` 행을 `NONE`으로) 하나로 둔다
   - 행은 지우지 않는다. 취소인지 거절인지는 애플리케이션 로그로 남는다
+  - **이미 친구(`FRIEND`)여도 친구 삭제로 처리한다.** 요청을 보낸 뒤 상대가 수락하는 찰나에 취소를 누르면, 화면은 아직 "요청 취소"인데 관계는 이미 친구가 되어 있다. 취소하려던 뜻대로 관계를 `NONE`으로 되돌리고 `204`를 준다. 성립한 관계를 지우는 정식 경로는 여전히 `DELETE .../friend`다
   - **Response `204 No Content`**
-  - **에러 (404 Not Found)**: 둘 사이에 대기 중인 요청(`FRIEND_REQUEST_*`)이 없다
+  - **에러 (404 Not Found)**: 둘 사이에 대기 중인 요청(`FRIEND_REQUEST_*`)도 친구 관계도 없다
 - **친구 삭제** (`DELETE .../friend`): **양쪽 누구나 호출할 수 있다** — 성립한 뒤로는 방향에 의미가 없다. 두 행을 `NONE`으로 바꾼다
   - 성립 전 요청과 리소스를 나눈다 — 요청은 `friend-request`, 성립한 관계는 `friend`다
   - **Response `204 No Content`**
   - **에러 (404 Not Found)**: 친구가 아니다
 - **인증**: 필요
 
-> | `friendStatus` | 화면 버튼 | 호출 |
+> | `relationshipType` | 화면 버튼 | 호출 |
 > |---|---|---|
 > | `NONE` | 친구 요청 | `POST .../friend-request` |
 > | `FRIEND_REQUEST_SENT` | 요청 취소 | `DELETE .../friend-request` |
@@ -2854,12 +2957,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - `profile_visibility`로 가리지 않는다
 - **Query**: `q`(이름 필터), `cursor`/`limit`
-- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
-- **`friendStatus`는 조회하는 사람 기준이다**(§0)
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "relationshipType" } ], "nextCursor": "..." }`
+- **`relationshipType`은 조회하는 사람 기준이다**(§0)
   - 본인 목록: 항목의 상태 그대로 — `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6), `FRIEND_REQUEST_SENT`면 취소(10-6), `FRIEND`면 삭제(10-6)
   - 타인 목록: 나와 그 사람의 관계 — 타인의 목록에서 바로 친구 요청 버튼을 그린다. 목록에 조회자 본인이 있으면 그 항목은 `null`이다
-- **정렬**: 받은 요청 → 보낸 요청 → 확정 순으로 묶고, 묶음 안에서는 닉네임순이다. 커서는 묶음과 그 안의 위치를 함께 담는다 — 묶음 경계에서 페이지가 끊겨도 이어진다
-- `user_relationships`에서 `user_id`가 대상인 행이다(`NONE`·`BLOCKED`는 담지 않는다) — 본인이면 `type`이 `FRIEND`·`FRIEND_REQUEST_SENT`·`FRIEND_REQUEST_RECEIVED`, 타인이면 `FRIEND`만. 행의 `type`이 곧 본인 목록의 `friendStatus`다
+- **정렬**: 받은 요청 → 보낸 요청 → 확정 순으로 묶고, 묶음 안에서는 관계가 바뀐 시각(`updated_at`)의 최근순이다 — 친구는 최근에 맺은 순, 요청은 최근에 오간 순이다. 시각이 같으면 `userId` 역순이다. 닉네임은 바뀔 수 있어 정렬 키로 쓰지 않는다. 커서는 묶음과 그 안의 위치를 함께 담는다 — 묶음 경계에서 페이지가 끊겨도 이어진다
+  - 페이지 사이에 요청이 친구로 바뀐 항목은 친구 묶음에 한 번 더 내려올 수 있다 — 클라는 `userId`로 중복을 덮어쓴다(뒤에 온 항목이 최신 상태다)
+- `user_relationships`에서 `user_id`가 대상인 행이다(`NONE`·`BLOCKED`는 담지 않는다) — 본인이면 `type`이 `FRIEND`·`FRIEND_REQUEST_SENT`·`FRIEND_REQUEST_RECEIVED`, 타인이면 `FRIEND`만. 행의 `type`이 곧 본인 목록의 `relationshipType`이다
 - **10-2 `friendCount`는 확정만 센다** — 본인 목록의 항목 수와 다를 수 있다
 - **에러 (404 Not Found)**: 대상이 없다(탈퇴 포함)
 - **인증**: 필요
@@ -2917,9 +3021,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ### 10-9. `GET /api/v1/users/search` — 사용자 검색
 
 - **화면**: 사용자 검색 — **친구를 추가하려면 먼저 사람을 찾아야 하므로 친구 기능의 진입점이다**
-- **Query**: `q`(필수, 닉네임), `cursor`/`limit`
-- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "friendStatus" } ], "nextCursor": "..." }`
-- `friendStatus`는 10-2와 같은 값이며, 버튼을 무엇으로 그릴지가 이 값에 달렸다
+- **Query**: `q`(필수, 닉네임 — 앞뒤 공백은 걷는다, 최대 16자), `cursor`/`limit`
+- **Response `200 OK`**: `{ "items": [ { "userId", "nickname", "profileImageUrl", "relationshipType" } ], "nextCursor": "..." }`
+- **대상은 온보딩을 마친 전체 사용자다** — 친구 여부와 상관없이 찾는다. 10-7의 이름 필터는 내 관계 안에서만 거른다는 점이 다르다
+  - **조회자 본인은 담지 않는다** — 자기 자신에게는 친구 요청을 보낼 수 없어 그릴 버튼이 없다
+  - 온보딩 전인 사용자는 닉네임이 없어 걸리지 않는다. 탈퇴한 사용자는 행이 지워져 걸리지 않는다
+  - 차단 관계에서 어떻게 가릴지는 차단 구현 때 정한다
+- **닉네임 부분 일치다** — 검색어가 닉네임 어디에 있어도 걸린다. `%`·`_`는 와일드카드가 아니라 글자 그대로 찾는다
+- **`relationshipType`은 조회하는 사람 기준이며 10-2와 같은 값이다** — 버튼을 무엇으로 그릴지가 이 값에 달렸다. 본인이 빠지므로 `null`은 없다
+  - `NONE`이면 친구 요청(10-4), `FRIEND_REQUEST_SENT`면 취소(10-6), `FRIEND_REQUEST_RECEIVED`면 수락(10-5)·거절(10-6), `FRIEND`면 친구 표시
+  - 한 번도 관계를 맺지 않은 사람과, 거절·취소·삭제로 되돌아간 사람은 둘 다 `NONE`이다
+- **정렬**: 닉네임 오름차순이다. 닉네임이 UNIQUE라 커서는 마지막 항목의 닉네임 하나로 다음 위치가 정해진다. 정확히 일치하는 사람을 위로 올리지 않는다
+  - 페이지 사이에 닉네임을 바꾼 사람은 빠지거나 한 번 더 내려올 수 있다 — 클라는 `userId`로 중복을 덮어쓴다
+- **에러 (400 Bad Request)**: `INVALID_REQUEST` — `q`가 없거나 공백뿐이거나 16자를 넘는다, `limit`이 1보다 작다, 커서를 풀 수 없다(서버가 준 값을 그대로 돌려보내지 않았다)
 - **인증**: 필요
 
 ### 10-10. `GET /api/v1/users/{userId}/achievements` — 업적
@@ -2979,7 +3093,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **함께 뛴 사람(`RAN_TOGETHER`)을 먼저 채우고 남은 자리를 페이스가 비슷한 사람(`SIMILAR_PACE`)으로 채운다.** 판정·제외 규칙은 `feature-spec.md` 추천 친구 절
-- **결과는 모두 친구 요청을 보낼 수 있는 사람이다**(`friendStatus`가 늘 `NONE`이라 싣지 않는다) — 버튼은 친구 요청(10-4) 하나다
+- **결과는 모두 친구 요청을 보낼 수 있는 사람이다**(`relationshipType`이 늘 `NONE`이라 싣지 않는다) — 버튼은 친구 요청(10-4) 하나다
 - 상대의 페이스 값은 싣지 않는다
 - **페이지를 나누지 않는다** — 총 인원이 운영값으로 묶여 있다. 후보가 없으면 빈 배열이다
 - 온보딩 전이면 페이스 갈래는 비고 함께 뛴 사람만 나온다
@@ -3628,7 +3742,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 매칭 확정/실패, 러닝 시작 리마인더, 친구 요청 도착/수락을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
+- **`alertConsent` = 단일 토글** — 매칭 확정, 러닝 시작 리마인더, 친구 요청 도착/수락, 러닝 초대 도착을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility` 하나뿐이다. **피드 작성 기본값은 서버에 두지 않는다** — 매 피드마다 `feeds.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
@@ -3658,7 +3772,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **한 필드만 보내도 응답에는 두 필드가 모두 담긴다** — 클라이언트가 이 응답으로 설정 화면 상태를 그대로 갱신하며, 토글을 연달아 눌러도 마지막 응답이 화면을 정리한다
+- **한 필드만 보내도 응답에는 두 필드가 모두 담긴다** — 클라이언트가 이 응답으로 설정 화면 상태를 그대로 갱신한다. 요청을 겹쳐 보내면 처리·응답 순서가 보장되지 않으므로 한 번에 하나씩 보낸다
 - **필드를 생략하면 현재 값을 그대로 둔다.** 둘 다 생략한 `{}`는 아무것도 바꾸지 않고 현재 설정을 반환한다
 - **에러 (400 Bad Request)**
 

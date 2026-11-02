@@ -17,7 +17,10 @@ import com.runiverse.running_service.application.user.port.in.GetUserProfileUsec
 import com.runiverse.running_service.application.user.query.backgroundimage.GetBackgroundImageUrlQuery;
 import com.runiverse.running_service.application.user.query.backgroundimage.GetBackgroundImageUrlResult;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlQuery;
+import com.runiverse.running_service.application.user.query.profile.GetUserProfileQuery;
+import com.runiverse.running_service.application.user.query.profile.GetUserProfileResult;
 import com.runiverse.running_service.application.user.query.profileimage.GetProfileImageUrlResult;
+import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.user.controller.UserController;
 import org.junit.jupiter.api.AfterEach;
@@ -119,6 +122,40 @@ class UserControllerTest {
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         assertThat(body(result)).containsEntry("profileImageUrl", "https://cdn.example.com/profile.jpg");
+    }
+
+    @Test
+    @DisplayName("프로필 조회: 남의 프로필은 조회자 기준 관계를 싣고 예전 friendStatus는 싣지 않는다")
+    void 남의_프로필은_관계를_싣는다() throws Exception {
+        // given
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        given(getUserProfileUsecase.handle(new GetUserProfileQuery(VIEWER_ID, userId)))
+                .willReturn(new GetUserProfileResult(userId, false, "철수", null, null, 3L, RelationshipType.NONE));
+
+        // when
+        MvcResult result = mockMvc.perform(get("/users/" + userId)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        // then -> 1.1.x 앱도 friendStatus를 읽지 않아 다시 내리지 않는다
+        assertThat(body(result).keySet()).containsExactly(
+                "userId", "isMe", "nickname", "profileImageUrl", "introduction", "friendCount", "relationshipType");
+        assertThat(body(result)).containsEntry("relationshipType", "NONE");
+    }
+
+    @Test
+    @DisplayName("프로필 조회: 본인 프로필은 관계가 없어 relationshipType이 null이다")
+    void 본인_프로필은_관계가_null이다() throws Exception {
+        // given
+        given(getUserProfileUsecase.handle(new GetUserProfileQuery(VIEWER_ID, VIEWER_ID)))
+                .willReturn(new GetUserProfileResult(VIEWER_ID, true, "나", null, null, 0L, null));
+
+        // when
+        MvcResult result = mockMvc.perform(get("/users/" + VIEWER_ID)).andReturn();
+
+        // then -> NONE이 아니라 null이고, 키는 남는다
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(result)).containsEntry("relationshipType", null);
     }
 
     @Test

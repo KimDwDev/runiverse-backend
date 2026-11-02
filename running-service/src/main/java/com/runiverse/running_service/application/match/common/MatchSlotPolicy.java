@@ -58,13 +58,12 @@ public class MatchSlotPolicy {
         }
     }
 
-    // 슬롯 조회 검증 — 시각은 조회가 만들어 내려 주는 쪽이라 거리만 본다
-    public void validateDistance(int distanceMeters) {
-        if (!allowsDistance(distanceMeters)) {
-            // 사용자가 고른 값의 문제라 INFO다. userId는 MDC가 붙인다
-            log.info("[매칭] 슬롯 조회 실패: 선택지 밖 - distanceM={}", distanceMeters);
-            throw new InvalidMatchOptionException(distanceRule());
-        }
+    // 신청 가능한 거리, 오름차순 — 설정 목록의 순서·중복에 기대지 않는다
+    public List<Integer> distances() {
+        return matchProperties.allowedDistancesMeters().stream()
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     // 그날의 신청 가능 시각, 오름차순

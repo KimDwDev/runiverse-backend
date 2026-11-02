@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.running.command.accountdeletion;
 
+import com.runiverse.running_service.application.common.port.out.FlushPendingChangesPort;
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
@@ -45,6 +46,7 @@ public class SettleRunningForAccountDeletionHandler
     private final LockRunningRoomPort lockRunningRoomPort;
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final UpdateMatchRoomPort updateMatchRoomPort;
+    private final FlushPendingChangesPort flushPendingChangesPort;
     private final UpdateRunningPlayerPort updateRunningPlayerPort;
     private final StartMatchCooldownPort startMatchCooldownPort;
     private final FinishRunningUsecase finishRunningUsecase;
@@ -122,6 +124,9 @@ public class SettleRunningForAccountDeletionHandler
     private void leaveRoom(UserId userId, RunningRoom room, LocalDateTime now) {
         room.leave(userId, now);
         updateMatchRoomPort.update(room);
+        // 초대로 들어온 사람이면 초대가 LEFT로 바뀐다. 커밋까지 미루면 계정 삭제의 CASCADE가 그 행을 먼저 지워
+        // 갱신이 실패한다 — 지금 DB에 쓴다
+        flushPendingChangesPort.flushPendingChanges();
         // 남은 참가자에게 알린다. 인원이 0이면 받을 사람이 없다
         if (room.getPlayerCount().current() > 0) {
             eventPublisher.publishEvent(new MatchRoomChangedEvent(
