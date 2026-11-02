@@ -19,6 +19,7 @@ import com.runiverse.running_service.application.match.command.invitesend.SendIn
 import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.MatchPushRequester;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
@@ -126,6 +127,8 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
         // 개설의 시각 범위만 고정한다 — 핸들러가 지금 시각을 읽어 23:49 이후에 돌면 고를 시각이 없다
         InviteStartPolicy inviteStartPolicy = spy(new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES));
         doReturn(true).when(inviteStartPolicy).isSelectable(any(), any());
+        // 매칭 방 전용이라 초대 방 마감에선 불리지 않는다 — 생성자 인자로만 필요하다
+        MatchPushRequester matchPushRequester = new MatchPushRequester(eventPublisher);
         RoomInfoAssembler roomInfoAssembler = new RoomInfoAssembler(
                 matchStore,                                                 // LoadMatchPlayersPort
                 new InMemoryPlayerProfileStore(userStore, onboardingStore), // LoadPlayerProfilesPort
@@ -163,7 +166,8 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 runningStore, matchStore, runningStore, matchStore, runningStore, runningStore,
                 new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, eventPublisher);
         // 모집 마감 예약이 깨워 부르는 핸들러 — 테스트는 시각을 기다리지 않고 바로 부른다
-        closeHandler = new CloseMatchingHandler(runningStore, runningStore, roomInfoAssembler, eventPublisher);
+        closeHandler = new CloseMatchingHandler(
+                runningStore, runningStore, roomInfoAssembler, matchPushRequester, eventPublisher);
     }
 
     @Test
