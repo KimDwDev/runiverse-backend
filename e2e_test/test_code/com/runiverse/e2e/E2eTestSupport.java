@@ -133,6 +133,11 @@ public abstract class E2eTestSupport {
         return exchange("POST", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
 
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 구버전 앱의 요청을 흉내 낼 때 쓴다. */
+    protected Response post(String path, Map<String, ?> request, String accessToken, Map<String, String> headers) {
+        return exchange("POST", path, request, accessToken, headers);
+    }
+
     protected Response patch(String path, Map<String, ?> request, String accessToken) {
         return exchange("PATCH", path, request, accessToken, SUPPORTED_APP_VERSION);
     }
@@ -144,6 +149,11 @@ public abstract class E2eTestSupport {
 
     protected Response delete(String path, String accessToken) {
         return exchange("DELETE", path, null, accessToken, SUPPORTED_APP_VERSION);
+    }
+
+    /** 기본 앱 버전 헤더 대신 이 헤더만 싣는다 — 구버전 앱의 요청을 흉내 낼 때 쓴다. */
+    protected Response delete(String path, String accessToken, Map<String, String> headers) {
+        return exchange("DELETE", path, null, accessToken, headers);
     }
 
     /** 러닝 WebSocket에 붙는다. 토큰이 null이면 핸드셰이크가 401로 막히는지 확인하는 용도다. */
@@ -159,6 +169,11 @@ public abstract class E2eTestSupport {
     protected SseStream openMatchStream(String accessToken) {
         return SseStream.open(HTTP_CLIENT, BASE_URL + "/match-rooms/stream", accessToken,
                 SUPPORTED_APP_VERSION);
+    }
+
+    /** 경로와 앱 버전 헤더를 직접 고른다 — 구버전 앱이 쓰던 옛 스트림 경로를 열 때 쓴다. */
+    protected SseStream openSseStream(String path, String accessToken, Map<String, String> headers) {
+        return SseStream.open(HTTP_CLIENT, BASE_URL + path, accessToken, headers);
     }
 
     protected SseStream openAppStream(String accessToken) {
