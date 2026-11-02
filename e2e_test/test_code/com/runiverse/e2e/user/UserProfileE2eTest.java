@@ -32,8 +32,8 @@ class UserProfileE2eTest extends E2eTestSupport {
         assertThat(summary.status()).isEqualTo(200);
         assertThat(summary.bool("isMe")).isTrue();
         assertThat(summary.text("nickname")).isEqualTo(user.nickname());
-        // 본인에게는 관계가 없어 NONE이 아니라 null이다. 1.1.x용 friendStatus도 1.1.1 서버처럼 null이다
-        assertThat(summary.body()).containsEntry("relationshipType", null).containsEntry("friendStatus", null);
+        // 본인에게는 관계가 없어 NONE이 아니라 null이다
+        assertThat(summary.body()).containsEntry("relationshipType", null).doesNotContainKey("friendStatus");
     }
 
     @Test
@@ -43,8 +43,6 @@ class UserProfileE2eTest extends E2eTestSupport {
         TestUser viewer = signUpAndOnboard();
         TestUser other = signUpAndOnboard();
         assertThat(get("/users/" + other.userId(), viewer.accessToken()).text("relationshipType")).isEqualTo("NONE");
-        // 1.1.x용 friendStatus는 실제 관계와 무관하게 1.1.1 서버처럼 ACCEPTED다
-        assertThat(get("/users/" + other.userId(), viewer.accessToken()).text("friendStatus")).isEqualTo("ACCEPTED");
 
         // when -> 상대가 나에게 요청을 보냈다
         assertThat(post("/users/" + viewer.userId() + "/friend-request", null, other.accessToken()).status())

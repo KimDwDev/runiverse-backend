@@ -125,9 +125,9 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("프로필 조회: 남의 프로필은 관계와 함께 1.1.x용 friendStatus를 ACCEPTED로 싣는다")
-    void 남의_프로필은_friendStatus를_ACCEPTED로_싣는다() throws Exception {
-        // given -> 실제 관계가 친구가 아니어도 1.1.1 서버처럼 고정값이다
+    @DisplayName("프로필 조회: 남의 프로필은 조회자 기준 관계를 싣고 예전 friendStatus는 싣지 않는다")
+    void 남의_프로필은_관계를_싣는다() throws Exception {
+        // given
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         given(getUserProfileUsecase.handle(new GetUserProfileQuery(VIEWER_ID, userId)))
                 .willReturn(new GetUserProfileResult(userId, false, "철수", null, null, 3L, RelationshipType.NONE));
@@ -137,14 +137,15 @@ class UserControllerTest {
 
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(body(result))
-                .containsEntry("relationshipType", "NONE")
-                .containsEntry("friendStatus", "ACCEPTED");
+        // then -> 1.1.x 앱도 friendStatus를 읽지 않아 다시 내리지 않는다
+        assertThat(body(result).keySet()).containsExactly(
+                "userId", "isMe", "nickname", "profileImageUrl", "introduction", "friendCount", "relationshipType");
+        assertThat(body(result)).containsEntry("relationshipType", "NONE");
     }
 
     @Test
-    @DisplayName("프로필 조회: 본인 프로필은 relationshipType·friendStatus 모두 null이다")
-    void 본인_프로필은_friendStatus가_null이다() throws Exception {
+    @DisplayName("프로필 조회: 본인 프로필은 관계가 없어 relationshipType이 null이다")
+    void 본인_프로필은_관계가_null이다() throws Exception {
         // given
         given(getUserProfileUsecase.handle(new GetUserProfileQuery(VIEWER_ID, VIEWER_ID)))
                 .willReturn(new GetUserProfileResult(VIEWER_ID, true, "나", null, null, 0L, null));
@@ -152,11 +153,9 @@ class UserControllerTest {
         // when
         MvcResult result = mockMvc.perform(get("/users/" + VIEWER_ID)).andReturn();
 
-        // then -> 1.1.1 서버도 본인에게는 null을 내렸다. 키는 남는다
+        // then -> NONE이 아니라 null이고, 키는 남는다
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(body(result))
-                .containsEntry("relationshipType", null)
-                .containsEntry("friendStatus", null);
+        assertThat(body(result)).containsEntry("relationshipType", null);
     }
 
     @Test

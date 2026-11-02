@@ -110,8 +110,8 @@ class LegacyV11E2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("1.1.x가 보는 남의 프로필에는 1.1.1 서버처럼 friendStatus가 ACCEPTED로 실린다")
-    void profileCarriesLegacyFriendStatus() {
+    @DisplayName("1.1.x도 남의 프로필을 그대로 조회한다 — 예전 friendStatus는 1.1.x가 읽지 않아 싣지 않는다")
+    void profileWorksWithoutLegacyFriendStatus() {
         // given
         TestUser viewer = signUpAndOnboard();
         TestUser other = signUpAndOnboard();
@@ -119,10 +119,10 @@ class LegacyV11E2eTest extends E2eTestSupport {
         // when
         Response profile = get("/users/" + other.userId(), viewer.accessToken(), APP_1_1_1);
 
-        // then - 실제 관계(NONE)와 무관하다
+        // then - 1.1.x가 읽는 필드(닉네임·친구 수 등)는 1.1.1 서버와 같은 이름이다
         assertThat(profile.status()).isEqualTo(200);
-        assertThat(profile.text("friendStatus")).isEqualTo("ACCEPTED");
-        assertThat(profile.text("relationshipType")).isEqualTo("NONE");
+        assertThat(profile.text("nickname")).isEqualTo(other.nickname());
+        assertThat(profile.body()).containsKey("friendCount").doesNotContainKey("friendStatus");
     }
 
     @Test

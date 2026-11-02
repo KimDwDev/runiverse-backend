@@ -72,7 +72,8 @@
 | `POST /running-matches` | 21 `POST /match-rooms` | 없음(요청·응답 같다) |
 | `DELETE /running-matches` | 22 `POST /match-rooms/leave` | 메서드·경로만 다르다 |
 | `GET /running-matches/stream` | 24 `GET /match-rooms/stream` | 확정 이벤트 이름이 `MATCH_STARTED`다(1.2.0은 `MATCH_CONFIRMED`). 방 data에 `type`·`invitations`가 없다. 초대 방 이벤트(`INVITE_ROOM_*`)는 `MATCH_ROOM_UPDATED`로 바꿔 보낸다 — 1.1.x는 초대 방에 들어갈 수 없어 실제로는 오지 않는다 |
-| 10-2 `friendStatus` | 10-2 `relationshipType` | 같은 경로라 두 필드를 함께 내린다. 1.1.1 서버처럼 남의 프로필이면 `"ACCEPTED"` 고정, 본인이면 `null` — 1.2.0 앱은 읽지 않는다 |
+
+- 10-2의 예전 `friendStatus`는 1.1.x 앱이 읽지 않아 복원하지 않는다(프론트 확인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
@@ -2841,12 +2842,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // user_relationships에서 COUNT (type=FRIEND)
-  "relationshipType": "FRIEND",        // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
-  "friendStatus": "ACCEPTED"           // 1.1.x 호환용 — 1.2.0 앱은 읽지 않는다
+  "relationshipType": "FRIEND"         // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
 }
 ```
 
-- **`friendStatus`는 1.1.x 앱용으로 1.2.0 심사 기간에만 함께 내린다**(5번 머리말 「1.1.x 호환 경로」) — 1.1.1 서버처럼 남의 프로필이면 실제 관계와 무관하게 `"ACCEPTED"`, 본인이면 `null`이다. 1.2.0 앱은 `relationshipType`만 쓴다. 최소 버전을 1.2.0으로 올린 뒤 다음 배포에서 지운다
+- **예전 `friendStatus`는 다시 내리지 않는다** — 1.1.1 서버가 목 값(`"ACCEPTED"`)으로 내리던 필드인데, 1.1.x 앱이 읽지 않아 빠져도 영향이 없다(프론트 확인)
 - **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `relationshipType`으로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 - **배경 사진은 싣지 않는다** — 11-7이 따로 내린다(프로필 사진과 같은 이유로 presigned URL을 표시 시점에 받는다)
