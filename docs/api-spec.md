@@ -58,7 +58,22 @@
 **매칭 HTTP**
 
 - 모집 단계(매칭 방·초대 방)의 API는 `/match-rooms` 아래 둔다. 시작 뒤의 방 단위 동작(솔로 개설·결과 조회)은 `/running-rooms`다
-  - 예전 경로 `/running-matches`(신청·취소·슬롯·스트림)와 `/running-rooms/invite`·`/running-rooms/{runningRoomId}/invitations`는 없앴다 — 남겨 두지 않는다. 취소는 `DELETE`가 아니라 `POST /match-rooms/leave`다
+  - 예전 경로 `/running-matches`(신청·취소·슬롯·스트림)는 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(아래 「1.1.x 호환 경로」). 1.2.0 앱은 쓰지 않는다. `/running-rooms/invite`·`/running-rooms/{runningRoomId}/invitations`는 배포된 적이 없어 없앴다. 취소는 `DELETE`가 아니라 `POST /match-rooms/leave`다
+
+**1.1.x 호환 경로 (1.2.0 심사 기간 한정)**
+
+1.2.0 앱이 스토어 심사를 받는 동안 이미 깔린 1.1.x 앱이 계속 쓸 수 있게, 1.2.0 서버가 1.1.1 서버의 계약을 그대로 함께 받는다. 동작은 1.2.0 유스케이스와 같고 경로·형식만 옛것이다(코드는 `legacy/v1_1`).
+
+- **언제까지**: 1.2.0이 두 스토어에 공개되면 운영이 `app_versions.minimum_version`을 IOS·ANDROID 모두 `1.2.0`으로 올린다 — 그 뒤 1.1.x 요청은 `403 APP_UPDATE_REQUIRED`라 아래 경로는 쓰이지 않고, 다음 배포에서 지운다.
+
+| 1.1.x 경로·필드 | 1.2.0 대응 | 다른 점 |
+|---|---|---|
+| `GET /running-matches/slots?date=&targetDistanceMeters=` | 23 `GET /match-rooms/slots?date=` | 거리 하나가 **필수**이고 응답이 그 거리의 `{ "slots": [...] }`다(항목은 같다). 선택지 밖 거리는 `400 INVALID_REQUEST` "목표 거리는 … 중 하나여야 합니다." |
+| `POST /running-matches` | 21 `POST /match-rooms` | 없음(요청·응답 같다) |
+| `DELETE /running-matches` | 22 `POST /match-rooms/leave` | 메서드·경로만 다르다 |
+| `GET /running-matches/stream` | 24 `GET /match-rooms/stream` | 확정 이벤트 이름이 `MATCH_STARTED`다(1.2.0은 `MATCH_CONFIRMED`). 방 data에 `type`·`invitations`가 없다. 초대 방 이벤트(`INVITE_ROOM_*`)는 `MATCH_ROOM_UPDATED`로 바꿔 보낸다 — 1.1.x는 초대 방에 들어갈 수 없어 실제로는 오지 않는다 |
+
+- 10-2의 예전 `friendStatus`는 1.1.x 앱이 읽지 않아 복원하지 않는다(프론트 확인)
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
@@ -1353,7 +1368,7 @@ data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","act
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
 - **매칭 방·초대 방이 같은 스트림을 쓴다** — 활성 신청이 사람당 하나라 스트림도 하나면 된다. 방 종류는 이벤트 이름(`MATCH_*`·`INVITE_ROOM_*`)과 `RoomInfo.type`이 가른다
-  - 예전 경로 `/running-matches/stream`은 없앴다 — 남겨 두지 않는다
+  - 예전 경로 `/running-matches/stream`은 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(5번 머리말 「1.1.x 호환 경로」)
 - **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.
@@ -1544,7 +1559,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 #### `POST /api/v1/match-rooms/leave` — 매칭 취소·방 나가기 (겸용)
 
 - **토큰 주체의 활성 신청 하나를 끝낸다** — 신청은 유저당 하나뿐이라 경로에 식별자를 두지 않는다. `DELETE /match-rooms`가 아니라 동작 경로(`/leave`)인 이유는 **방을 지우는 게 아니라 내가 빠지는 것**이라서다 — 혼자 나가도 방은 남은 사람과 함께 그대로 있다
-- 예전 경로 `DELETE /running-matches`는 없앴다 — 남겨 두지 않는다
+- 예전 경로 `DELETE /running-matches`는 1.2.0 심사 기간에만 1.1.x 앱용으로 남겨 둔다(5번 머리말 「1.1.x 호환 경로」)
 - **솔로 방의 시작 전 신청도 이 경로로 닫는다** — 솔로를 열고 WS에 붙기 전에 그만둘 때 쓴다. 방은 `CANCELLED`, 신청은 `MATCHED_LEFT_NO_PENALTY`이며 제재는 없다. 이미 뛰는 중(`RUNNING`)이면 아래와 같이 409다
 - **서버가 모집 마감 시각으로 분기**
   - 대기 중(마감 전) = 대기 취소(`status=MATCHED_LEFT_NO_PENALTY` + `deleted_at` 기록). **본인이 마지막 참가자였으면 방도 `CANCELLED`**. 제재 없음
@@ -2831,6 +2846,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
+- **예전 `friendStatus`는 다시 내리지 않는다** — 1.1.1 서버가 목 값(`"ACCEPTED"`)으로 내리던 필드인데, 1.1.x 앱이 읽지 않아 빠져도 영향이 없다(프론트 확인)
 - **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `relationshipType`으로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 - **배경 사진은 싣지 않는다** — 11-7이 따로 내린다(프로필 사진과 같은 이유로 presigned URL을 표시 시점에 받는다)
