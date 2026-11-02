@@ -18,13 +18,11 @@ import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEnti
 import com.runiverse.running_service.infrastructure.persistence.user.UserOnboardingJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserPersistenceAdapter;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,7 +39,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,9 +69,6 @@ public class UserPersistenceAdapterTest {
 
     @Mock
     private TypedQuery<UserJpaEntity> userQuery;
-
-    @Mock
-    private Query deleteQuery;
 
     @InjectMocks
     private UserPersistenceAdapter userPersistenceAdapter;
@@ -849,23 +843,6 @@ public class UserPersistenceAdapterTest {
         assertThatThrownBy(() -> userPersistenceAdapter.updateSettings(
                 new UserId(userId), false, null))
                 .isInstanceOf(UserNotFoundException.class);
-    }
-
-    @Test
-    @DisplayName("계정을 지우기 전에 탈퇴 정리가 고친 행을 먼저 DB에 쓴다")
-    void deleteUserFlushesBeforeDeleting() {
-        // given
-        UUID userId = UuidCreator.getTimeOrderedEpoch();
-        when(entityManager.createQuery(anyString())).thenReturn(deleteQuery);
-        when(deleteQuery.setParameter("userId", userId)).thenReturn(deleteQuery);
-
-        // when
-        userPersistenceAdapter.deleteUser(new UserId(userId));
-
-        // then -> CASCADE가 행을 지우기 전에 고친 내용이 나가야 커밋 때 갱신이 실패하지 않는다
-        InOrder inOrder = inOrder(entityManager);
-        inOrder.verify(entityManager).flush();
-        inOrder.verify(entityManager, times(3)).createQuery(anyString());
     }
 
     private void givenUserQueryReturns(String email, Stream<UserJpaEntity> found) {

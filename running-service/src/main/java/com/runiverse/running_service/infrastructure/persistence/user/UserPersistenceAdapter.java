@@ -452,8 +452,6 @@ public class UserPersistenceAdapter implements CheckEmailDuplicatePort, SaveUser
     // 온보딩과 소셜 연동을 앱이 먼저 지운다
     @Override
     public void deleteUser(UserId userId) {
-        // 탈퇴 정리가 고친 행을 CASCADE가 먼저 지우면 커밋 때 갱신이 실패한다 — 고친 것을 먼저 DB에 쓴다
-        entityManager.flush();
         deleteByUserId("UserOnboardingJpaEntity", userId);
         deleteByUserId("OauthUserJpaEntity", userId);
         deleteByUserId("UserJpaEntity", userId);
