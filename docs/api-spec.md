@@ -2841,10 +2841,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "profileImageUrl": "https://...",
   "introduction": "즐겁게 달려요",
   "friendCount": 42,                   // user_relationships에서 COUNT (type=FRIEND)
-  "relationshipType": "FRIEND"         // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
+  "relationshipType": "FRIEND",        // NONE | FRIEND_REQUEST_SENT | FRIEND_REQUEST_RECEIVED | FRIEND
+  "friendStatus": "ACCEPTED"           // 1.1.x 호환용 — 1.2.0 앱은 읽지 않는다
 }
 ```
 
+- **`friendStatus`는 1.1.x 앱용으로 1.2.0 심사 기간에만 함께 내린다**(5번 머리말 「1.1.x 호환 경로」) — 1.1.1 서버처럼 남의 프로필이면 실제 관계와 무관하게 `"ACCEPTED"`, 본인이면 `null`이다. 1.2.0 앱은 `relationshipType`만 쓴다. 최소 버전을 1.2.0으로 올린 뒤 다음 배포에서 지운다
 - **러닝 통계(마일리지·최고 페이스·러닝 횟수)는 싣지 않는다** — FE와 합의해 프로필 화면에서 제외했다. 다시 필요해지면 유효 러닝 판정(`feature-spec.md`)을 거친 집계로 추가한다
 - `relationshipType`으로 버튼을 가른다(10-6 표). 본인 프로필(`isMe=true`)이면 `null`이다
 - **배경 사진은 싣지 않는다** — 11-7이 따로 내린다(프로필 사진과 같은 이유로 presigned URL을 표시 시점에 받는다)
