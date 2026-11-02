@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.common.port.out.FlushPendingChangesPort;
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
@@ -25,8 +26,10 @@ import com.runiverse.running_service.domain.running.metric.vo.Pace;
 import com.runiverse.running_service.domain.running.player.RunningPlayer;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
+import com.runiverse.running_service.domain.running.room.InvitationDraft;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.SessionDraft;
+import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
@@ -37,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -53,6 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -88,6 +93,8 @@ class SettleRunningForAccountDeletionHandlerTest {
     @Mock
     private UpdateMatchRoomPort updateMatchRoomPort;
     @Mock
+    private FlushPendingChangesPort flushPendingChangesPort;
+    @Mock
     private UpdateRunningPlayerPort updateRunningPlayerPort;
     @Mock
     private StartMatchCooldownPort startMatchCooldownPort;
@@ -104,7 +111,7 @@ class SettleRunningForAccountDeletionHandlerTest {
     void setUp() {
         handler = new SettleRunningForAccountDeletionHandler(
                 lockMatchApplicationPort, loadMatchRoomPort, lockRunningRoomPort,
-                loadMatchPlayersPort, updateMatchRoomPort, updateRunningPlayerPort,
+                loadMatchPlayersPort, updateMatchRoomPort, flushPendingChangesPort, updateRunningPlayerPort,
                 startMatchCooldownPort, finishRunningUsecase, roomInfoAssembler,
                 MATCH_PROPERTIES, eventPublisher);
     }
@@ -122,7 +129,8 @@ class SettleRunningForAccountDeletionHandlerTest {
         // then -> 연결은 커밋 뒤에 닫는다. 여기서 닫으면 롤백돼도 되살릴 수 없다
         verify(eventPublisher).publishEvent(new MatchStreamCloseRequestedEvent(new UserId(USER_ID)));
         verify(eventPublisher).publishEvent(new RunningConnectionCloseRequestedEvent(new UserId(USER_ID)));
-        verifyNoInteractions(loadMatchRoomPort, lockRunningRoomPort, finishRunningUsecase);
+        verifyNoInteractions(loadMatchRoomPort, lockRunningRoomPort, finishRunningUsecase,
+                flushPendingChangesPort);
     }
 
     @Test
@@ -188,6 +196,38 @@ class SettleRunningForAccountDeletionHandlerTest {
         RunningRoom updated = updatedRoom();
         assertThat(updated.getPlayerCount().current()).isZero();
         assertThat(updated.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("초대받아 들어온 방에 혼자 남아 나가면 초대를 LEFT로 바꾼 방을 저장하고 바로 DB에 쓴다")
+    void flushesLeftInvitationRightAfterSavingRoom() {
+        // given -> 만든 사람이 먼저 나가 초대받아 들어온 나만 남았다
+        RunningRoom room = RunningRoom.builder()
+                .runningRoomId(ROOM_ID)
+                .type(RunningRoomType.INVITE)
+                .status(RunningRoomStatus.MATCHING)
+                .startAt(LocalDateTime.now().plusHours(2))
+                .targetDistance(TARGET_DISTANCE)
+                .avgPace(AVG_PACE)
+                .currentPlayerCount(1)
+                .maxPlayerCount(4)
+                .sessions(List.of(new SessionDraft(
+                        new UserId(USER_ID), new RunningPlayerId(PLAYER_ID), 0, true)))
+                .invitations(List.of(new InvitationDraft(
+                        new UserId(UuidCreator.getTimeOrderedEpoch()), new UserId(USER_ID),
+                        RoomInvitationStatus.ACCEPTED, 1)))
+                .build();
+        givenActiveApplication(room);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then -> 커밋까지 미루면 계정 삭제의 CASCADE가 초대 행을 먼저 지워 갱신이 실패한다
+        assertThat(updatedRoom().invitationStatusOf(new UserId(USER_ID)))
+                .contains(RoomInvitationStatus.LEFT);
+        InOrder inOrder = inOrder(updateMatchRoomPort, flushPendingChangesPort);
+        inOrder.verify(updateMatchRoomPort).update(room);
+        inOrder.verify(flushPendingChangesPort).flushPendingChanges();
     }
 
     @Test
@@ -263,7 +303,7 @@ class SettleRunningForAccountDeletionHandlerTest {
         // then
         verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, USER_ID, true));
         verify(updateMatchRoomPort, never()).update(any());
-        verifyNoInteractions(updateRunningPlayerPort);
+        verifyNoInteractions(updateRunningPlayerPort, flushPendingChangesPort);
     }
 
     @Test
