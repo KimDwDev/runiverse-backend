@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +139,73 @@ class UserAccountE2eTest extends E2eTestSupport {
         assertThat(deleted.status()).isEqualTo(204);
         assertThat(post("/auth/login",
                 Map.of("email", user.email(), "password", user.password())).status()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("평균 페이스를 다시 낼 만큼 기록이 쌓인 사람이 러닝 중에 탈퇴해도 기록을 확정하고 탈퇴된다")
+    void accountIsDeletedWhileRunningWithEnoughRecords() {
+        // given - 지난 기록 4건이 있어 이번 기록으로 평균 페이스 표본(5건)이 찬다
+        TestUser user = signUpAndOnboard();
+        seedPastRecords(user, 4);
+        long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
+                .number("runningRoomId");
+        // 기록으로 남으려면 100m·60초 이상이어야 한다 — 5m씩 2초 간격 61점이면 300m·120초다
+        LocalDateTime trackStartAt = LocalDateTime.now(APP_ZONE).minusSeconds(122);
+        try (RunningWebSocket socket = connectRunningWebSocket(user.accessToken())) {
+            socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
+            socket.await("RUNNING_STARTED");
+            for (int from = 0; from < 61; from += 10) {
+                List<Map<String, Object>> batch = new ArrayList<>();
+                for (int sequence = from; sequence < Math.min(from + 10, 61); sequence++) {
+                    batch.add(trackPoint(trackStartAt, sequence));
+                }
+                socket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", batch));
+            }
+            socket.send("HEALTH_CHECK", Map.of());
+            socket.await("HEALTH_CHECKED");
+        }
+
+        // when - 종료가 기록을 만들고 평균 페이스를 고친 뒤 계정을 지운다
+        Response deleted = delete("/users/me", user.accessToken());
+
+        // then - 이번 러닝까지 기록 5건이 남았다 — 평균 페이스를 다시 낼 표본이 찬 채로 탈퇴가 끝났다
+        assertThat(deleted.status()).isEqualTo(204);
+        assertThat(querySql("SELECT COUNT(*) FROM running_records WHERE user_id = '"
+                + user.userId() + "'::uuid")).containsExactly("5");
+    }
+
+    // 지난 기록은 API로 쌓으려면 러닝을 건마다 끝까지 해야 해서 DB에 직접 넣는다. 날짜는 이번 러닝보다 앞선다
+    private void seedPastRecords(TestUser user, int count) {
+        executeSql(String.format("""
+                WITH rooms AS (
+                    INSERT INTO running_rooms (type, status, start_at, close_at, target_distance, avg_pace,
+                                               max_player_count, current_player_count, created_at, updated_at)
+                    SELECT 'SOLO', 'FINISHED', now() - make_interval(days => n),
+                           now() - make_interval(days => n) + interval '20 minutes', NULL, 400, 1, 1, now(), now()
+                    FROM generate_series(1, %d) AS n
+                    RETURNING running_room_id, start_at
+                )
+                INSERT INTO running_records (running_room_id, user_id, avg_pace, total_distance, total_duration,
+                                             total_calories, gps_track_key, weather_code, temperature,
+                                             start_at, end_at, created_at)
+                SELECT running_room_id, '%s'::uuid, 400, 3000, 1200, 200, 'e2e/seeded-track', 0, 15.0,
+                       start_at, start_at + interval '20 minutes', now()
+                FROM rooms;
+                """, count, user.userId()));
+    }
+
+    // 정북으로 5m씩 2초 간격으로 달리는 한 점
+    private static Map<String, Object> trackPoint(LocalDateTime trackStartAt, int sequence) {
+        Map<String, Object> point = new HashMap<>();
+        point.put("sequence", sequence);
+        point.put("latitude", 37.5665 + sequence * 5.0 / 111_320.0);
+        point.put("longitude", 126.9780);
+        point.put("accuracyMeters", 5.0);
+        point.put("cadenceSpm", 170);
+        point.put("pauseSegment", 0);
+        point.put("recordedAt", trackStartAt.plusSeconds(sequence * 2L)
+                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        return point;
     }
 
     private static Map<String, Object> point(int sequence) {
