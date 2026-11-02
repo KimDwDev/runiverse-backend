@@ -30,11 +30,11 @@ class UserAccountE2eTest extends E2eTestSupport {
         assertThat(initial.bool("alertConsent")).isTrue();
         assertThat(initial.text("profileVisibility")).isEqualTo("PUBLIC");
 
-        // when - 알림만 끈다
+        // when -> 알림만 끈다
         Response changed = patch("/users/me/settings",
                 Map.of("alertConsent", false), user.accessToken());
 
-        // then - 보내지 않은 공개 범위도 응답에 담긴다
+        // then -> 보내지 않은 공개 범위도 응답에 담긴다
         assertThat(changed.status()).isEqualTo(200);
         assertThat(changed.bool("alertConsent")).isFalse();
         assertThat(changed.text("profileVisibility")).isEqualTo("PUBLIC");
@@ -60,7 +60,7 @@ class UserAccountE2eTest extends E2eTestSupport {
                 "profileVisibility", "PRIVATE"
         ), user.accessToken());
 
-        // then - 함께 보낸 알림도 바뀌지 않는다
+        // then -> 함께 보낸 알림도 바뀌지 않는다
         assertThat(response.status()).isEqualTo(400);
         assertThat(response.text("code")).isEqualTo("INVALID_REQUEST");
         assertThat(get("/users/me/settings", user.accessToken()).bool("alertConsent")).isTrue();
@@ -69,7 +69,7 @@ class UserAccountE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("탈퇴하면 토큰이 즉시 막히고 다시 로그인할 수 없으며 남에게는 없는 사용자다")
     void accountIsDeleted() {
-        // given - 리프레시 토큰도 무효가 되는지 보려고 로그인으로 한 벌 더 받아 둔다
+        // given -> 리프레시 토큰도 무효가 되는지 보려고 로그인으로 한 벌 더 받아 둔다
         TestUser user = signUpAndOnboard();
         TestUser viewer = signUpAndOnboard();
         Response loggedIn = post("/auth/login",
@@ -101,7 +101,7 @@ class UserAccountE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("진행 중인 솔로 러닝이 있어도 탈퇴는 막히지 않는다")
     void accountIsDeletedDuringSoloRoom() {
-        // given - 방을 열어 활성 신청이 남아 있다
+        // given -> 방을 열어 활성 신청이 남아 있다
         TestUser user = signUpAndOnboard();
         assertThat(post("/running-rooms/solo", Map.of(), user.accessToken()).status())
                 .isEqualTo(201);
@@ -118,7 +118,7 @@ class UserAccountE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("러닝 중에 탈퇴해도 받은 좌표까지로 러닝을 정리하고 탈퇴된다")
     void accountIsDeletedWhileRunning() {
-        // given - 러닝을 시작하고 좌표를 보냈다
+        // given -> 러닝을 시작하고 좌표를 보냈다
         TestUser user = signUpAndOnboard();
         long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
                 .number("runningRoomId");
@@ -132,7 +132,7 @@ class UserAccountE2eTest extends E2eTestSupport {
         }
         // 연결을 끊어도 러닝은 끝나지 않는다 — 탈퇴가 연결을 닫으므로 먼저 닫아 둔다
 
-        // when - 종료 처리가 탈퇴보다 먼저 돈다
+        // when -> 종료 처리가 탈퇴보다 먼저 돈다
         Response deleted = delete("/users/me", user.accessToken());
 
         // then
@@ -144,7 +144,7 @@ class UserAccountE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("평균 페이스를 다시 낼 만큼 기록이 쌓인 사람이 러닝 중에 탈퇴해도 기록을 확정하고 탈퇴된다")
     void accountIsDeletedWhileRunningWithEnoughRecords() {
-        // given - 지난 기록 4건이 있어 이번 기록으로 평균 페이스 표본(5건)이 찬다
+        // given -> 지난 기록 4건이 있어 이번 기록으로 평균 페이스 표본(5건)이 찬다
         TestUser user = signUpAndOnboard();
         seedPastRecords(user, 4);
         long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
@@ -165,10 +165,10 @@ class UserAccountE2eTest extends E2eTestSupport {
             socket.await("HEALTH_CHECKED");
         }
 
-        // when - 종료가 기록을 만들고 평균 페이스를 고친 뒤 계정을 지운다
+        // when -> 종료가 기록을 만들고 평균 페이스를 고친 뒤 계정을 지운다
         Response deleted = delete("/users/me", user.accessToken());
 
-        // then - 이번 러닝까지 기록 5건이 남았다 — 평균 페이스를 다시 낼 표본이 찬 채로 탈퇴가 끝났다
+        // then -> 이번 러닝까지 기록 5건이 남았다 — 평균 페이스를 다시 낼 표본이 찬 채로 탈퇴가 끝났다
         assertThat(deleted.status()).isEqualTo(204);
         assertThat(querySql("SELECT COUNT(*) FROM running_records WHERE user_id = '"
                 + user.userId() + "'::uuid")).containsExactly("5");
