@@ -2448,6 +2448,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     {
       "recordCardImageId": 301,
       "imageUrl": "https://...",
+      "isThumbnail": true,
       "music": {
         "status": "PENDING",
         "musicUrl": null
@@ -2479,6 +2480,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(지도 장 다음부터). 사진이 없으면 빈 배열 |
 | `images[].recordCardImageId` | Integer | O | 사진 ID — 수정(9-3)에서 남길 사진을 가리킬 때 쓴다 |
 | `images[].imageUrl` | String | O | 사진 URL |
+| `images[].isThumbnail` | Boolean | O | 썸네일 사진 여부 — 사진이 있으면 정확히 한 장이 `true`다. 편집 화면에서 현재 썸네일을 표시할 때 쓴다 |
 | `images[].music` | Object | O | 이 사진의 음악 |
 | `*.status` | String | O | 음악 생성 상태 — `PENDING`(생성 중) · `READY`(재생 가능) · `FAILED`(생성 실패) |
 | `*.musicUrl` | String | X | 음악 URL. **`READY`일 때만 값이 있고** 나머지는 null |
@@ -2576,7 +2578,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "imageKeys": [
     "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg"
-  ]
+  ],
+  "thumbnailIndex": 0
 }
 ```
 
@@ -2586,10 +2589,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
 | `memo` | String | X | 500자 이하. 생략하거나 빈 문자열이면 메모 없음(null) |
 | `imageKeys` | String[] | X | 0개 이상 10개 이하. 9-1이 발급하고 업로드를 마친 key. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+대표곡만) |
+| `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `imageKeys` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
 
 - **Response `201 Created`**: 기록 카드 공통 객체 — 음악은 전부 `status = PENDING`, `musicUrl = null`이다
 - **동작**
-  - 카드와 사진 행을 한 트랜잭션에 저장한다. 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 대표곡은 `record_cards.main_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
+  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로, 옛 사진 행을 지우고 새 사진 행을 넣는다. 대표곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 대표곡은 `record_cards.main_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
+  - **순위는 그 사람의 살아 있는 카드 중 최댓값 + 1이다**(첫 카드면 1). 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
   - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(대표곡 1 + 사진 수, 9-5)
 - **검증 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409) → 사진 key(400)
   - 숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 없는 기록으로 본다 — 7-1에서 빠지는 것과 맞춘다
@@ -2622,6 +2627,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "code": "INVALID_REQUEST",
   "message": "같은 사진을 두 번 넣을 수 없습니다."
 }
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "썸네일 위치가 사진 범위를 벗어났습니다."
+}
 ```
 
 - **에러 (400 Bad Request — 본인 key가 아니거나, 올라간 파일이 10MB를 넘거나 `Content-Type`이 허용값이 아님)**
@@ -2651,7 +2661,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (409 Conflict — 이 기록에 이미 카드가 있음)**
+- **에러 (409 Conflict — 이 기록에 지우지 않은 카드가 이미 있음)**
 
 ```json
 {
@@ -2660,7 +2670,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **기록당 카드는 한 장이다** — 다시 만들고 싶으면 9-3으로 고치거나 9-4로 지운 뒤 만든다. 동시에 두 번 눌러도 DB 부분 UNIQUE(`erd.md` `record_cards`)가 하나만 남기고 나머지는 409다
+- **기록과 카드는 1:1이다** — 다시 만들고 싶으면 9-3으로 고치거나 9-4로 지운 뒤 만든다. 처음 만드는 요청이 동시에 두 번 오면 `running_record_id` UNIQUE가 하나만 남기고 나머지는 409다. 지운 카드를 되살리는 요청이 겹치면 카드 행을 잠그고 처리해, 뒤의 요청은 살아 있는 카드를 보고 409다
 - **인증**: 필요
 
 ### 9-3. `PATCH /api/v1/record-cards/{recordCardId}` — 기록 카드 수정
@@ -2675,7 +2685,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "images": [
     { "recordCardImageId": 301 },
     { "imageKey": "record-cards/01a0f2d4-.../images/2b7e9f1c-....jpg" }
-  ]
+  ],
+  "thumbnailIndex": 1
 }
 ```
 
@@ -2684,12 +2695,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `memo` | String | X | 500자 이하. **빈 문자열이면 메모를 지운다** |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
 | `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(남길 기존 사진)나 `imageKey`(새 사진) 중 **정확히 하나** |
+| `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
 
 - **필드를 생략하면 현재 값을 그대로 둔다** — `images`를 생략하면 사진은 그대로, 빈 배열이면 사진을 전부 뺀다
 - **사진 처리**
   - 남긴 사진(`recordCardImageId`)은 음악과 생성 상태를 그대로 두고 순서만 다시 매긴다
   - 새 사진(`imageKey`)은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
   - 목록에서 빠진 사진은 행을 지운다 — 그 사진의 음악도 함께 버린다. 생성 중이었다면 나중에 오는 완료 이벤트는 무시된다
+- **썸네일 처리**: `thumbnailIndex`를 보내면 그 사진으로 바꾼다. 생략하면 지금 썸네일을 유지하되, 그 사진이 빠졌으면 수정 뒤 첫 사진으로, 사진이 하나도 없으면 null로 바꾼다
 - **대표곡은 다시 만들지 않는다** — 메모·공개 범위·사진을 바꿔도 대표곡은 그대로다
 - **Response `200 OK`**: 수정된 기록 카드 공통 객체
 
@@ -2714,6 +2727,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "code": "INVALID_REQUEST",
   "message": "같은 사진을 두 번 넣을 수 없습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "썸네일 위치가 사진 범위를 벗어났습니다."
 }
 ```
 
@@ -2750,8 +2768,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 9-4. `DELETE /api/v1/record-cards/{recordCardId}` — 기록 카드 삭제
 
-- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3·7-1 `recordCardId`에서 빠진다. 사진 행과 S3 객체(사진·음악)는 그대로 둔다
-- **지운 뒤 같은 기록으로 다시 만들 수 있다** — UNIQUE가 살아 있는 카드에만 걸린다
+- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3·7-1 `recordCardId`에서 빠진다. **순위(`display_order`)는 -1이 되고, 남은 카드의 순위는 당기지 않는다.** 사진 행과 S3 객체(사진·음악)는 그대로 둔다
+- **지운 뒤 같은 기록으로 다시 만들 수 있다** — 9-2가 지운 행을 되살린다. 행이 남아 있어 기록과 카드는 1:1을 유지한다
 - 생성 중이던 음악의 완료 이벤트는 무시된다(9-5)
 - **Response**: `204 No Content`
 
@@ -2880,7 +2898,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **화면**: 프로필 하단 카드 그리드 (본인/타인 공통) — 탭하면 8-1로 상세
 - **Query**: `cursor`·`limit` (공통 커서 규칙 — 기본 20, 최대 50)
-- **정렬**: 최신 작성순(`record_card_id` 역순)
+- **정렬**: 카드 순위(`record_cards.display_order`) 역순 — 최신이 위다. 순위는 만든 순서대로 1부터 붙고, 지운 카드(-1)는 빠지며, 되살린 카드는 맨 뒤 순위라 맨 위에 보인다. 사용자가 순서를 바꾸는 기능은 아직 없다
 - **Response `200 OK`**
 
 ```json
@@ -2901,13 +2919,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `recordCardId` | Integer | O | 기록 카드 ID |
-| `thumbnailUrl` | String | X | 첫 사진 URL(presigned GET, 8-1과 같은 유효 시간). **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
+| `thumbnailUrl` | String | X | 썸네일 사진 URL(`record_cards.thumbnail_image_key`, presigned GET, 8-1과 같은 유효 시간) — 기본은 첫 사진, 작성자가 고르면 그 사진. **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
 | `imageCount` | Integer | O | 사진 장수(0~10) |
 | `startedAt` | String | O | 카드가 붙은 러닝의 시작 시각 |
 | `totalDistanceMeters` | Integer | O | 그 러닝의 총 이동 거리(m) |
 
 - **공개 범위**: 8-1과 같다 — 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+친구면 `FRIENDS`). 차단 관계면 빈 목록이 아니라 404다(프로필 자체가 보이지 않는다)
 - **경로·음악은 싣지 않는다** — 목록이 가벼워야 하고, 음악은 상세에서만 재생한다
+- `startedAt`·`totalDistanceMeters`는 `running_records`를 JOIN해 읽는다(카드에 복사해 두지 않는다)
 - **본인과 타인이 보는 범위가 다른 하나의 리소스라 `{userId}` 경로에 인가 규칙을 둔다**(`api-convention.md` 사용자 리소스 경로)
 
 - **에러 (404 Not Found — 대상 사용자 없음·탈퇴·차단 관계)**
