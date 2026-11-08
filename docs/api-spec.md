@@ -128,7 +128,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 29 | GET | `/api/v1/record-cards/{recordCardId}` | 기록 카드 상세 — 지도+대표곡, 사진별 음악 캐러셀. 사용 화면: 프로필 카드 탭, 기록 화면 |
+| 29 | GET | `/api/v1/record-cards/{recordCardId}` | 기록 카드 상세 — 지도+기본곡, 사진별 음악 캐러셀. 사용 화면: 프로필 카드 탭, 기록 화면 |
 
 > 피드 타임라인·좋아요·댓글(예전 30~39)은 설계에서 뺐다. 번호는 다시 매기지 않는다.
 
@@ -2413,7 +2413,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 8. 기록 카드 보기
 
-기록 카드는 러닝 기록 하나에 메모·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 대표곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서비스가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
+기록 카드는 러닝 기록 하나에 메모·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 기본곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서비스가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
 
 **기록 카드 공통 객체** (8-1·9-2·9-3 응답):
 
@@ -2440,7 +2440,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       [[37.52801, 126.93241], [37.52809, 126.93252]]
     ]
   },
-  "mainMusic": {
+  "baseMusic": {
     "status": "READY",
     "musicUrl": "https://..."
   },
@@ -2476,7 +2476,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `record.totalDurationSeconds` | Integer | O | 총 러닝 시간(초) — 움직인 시간(6-1과 같다) |
 | `record.averagePaceSecondsPerKm` | Integer | O | 평균 페이스(초/km) |
 | `record.routes` | Number[][][] | O | 경로 — **6-1 `routes`와 같은 형식**(조각 배열, 조각마다 `[[위도, 경도], …]`) |
-| `mainMusic` | Object | O | 대표곡 — 첫 장에서 재생 |
+| `baseMusic` | Object | O | 기본곡 — 첫 장에서 재생 |
 | `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(지도 장 다음부터). 사진이 없으면 빈 배열 |
 | `images[].recordCardImageId` | Integer | O | 사진 ID — 수정(9-3)에서 남길 사진을 가리킬 때 쓴다 |
 | `images[].imageUrl` | String | O | 사진 URL |
@@ -2517,7 +2517,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 9. 기록 카드 작성·편집
 
-**흐름**: 기록 화면(7-1)에서 지난 러닝을 고른다 → 사진을 고르면 9-1로 업로드 URL을 받아 S3에 올린다 → 메모를 쓴다 → 생성을 누르면 9-2. 서버는 카드를 저장하고 대표곡 1개와 사진마다 음악 1개의 생성을 AI에 요청한다(9-5).
+**흐름**: 기록 화면(7-1)에서 지난 러닝을 고른다 → 사진을 고르면 9-1로 업로드 URL을 받아 S3에 올린다 → 메모를 쓴다 → 생성을 누르면 9-2. 서버는 카드를 저장하고 기본곡 1개와 사진마다 음악 1개의 생성을 AI에 요청한다(9-5).
 
 ### 9-1. `POST /api/v1/record-cards/images/presigned-url` — 카드 사진 업로드 URL 발급 (여러 장)
 
@@ -2588,14 +2588,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `runningRecordId` | Integer | O | 카드를 붙일 내 러닝 기록 |
 | `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
 | `memo` | String | X | 500자 이하. 생략하거나 빈 문자열이면 메모 없음(null) |
-| `imageKeys` | String[] | X | 0개 이상 10개 이하. 9-1이 발급하고 업로드를 마친 key. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+대표곡만) |
+| `imageKeys` | String[] | X | 0개 이상 10개 이하. 9-1이 발급하고 업로드를 마친 key. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `imageKeys` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
 
 - **Response `201 Created`**: 기록 카드 공통 객체 — 음악은 전부 `status = PENDING`, `musicUrl = null`이다
 - **동작**
-  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로, 옛 사진 행을 지우고 새 사진 행을 넣는다. 대표곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 대표곡은 `record_cards.main_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
+  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로, 옛 사진 행을 지우고 새 사진 행을 넣는다. 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
   - **순위는 그 사람의 살아 있는 카드 중 최댓값 + 1이다**(첫 카드면 1). 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
-  - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(대표곡 1 + 사진 수, 9-5)
+  - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(기본곡 1 + 사진 수, 9-5)
 - **검증 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409) → 사진 key(400)
   - 숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 없는 기록으로 본다 — 7-1에서 빠지는 것과 맞춘다
   - 사진 key는 11-2와 같이 본인 프리픽스(`record-cards/{userId}/images/`)인지, S3에 올라왔는지, 크기·`Content-Type`이 허용값인지 본다
@@ -2703,7 +2703,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 새 사진(`imageKey`)은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
   - 목록에서 빠진 사진은 행을 지운다 — 그 사진의 음악도 함께 버린다. 생성 중이었다면 나중에 오는 완료 이벤트는 무시된다
 - **썸네일 처리**: `thumbnailIndex`를 보내면 그 사진으로 바꾼다. 생략하면 지금 썸네일을 유지하되, 그 사진이 빠졌으면 수정 뒤 첫 사진으로, 사진이 하나도 없으면 null로 바꾼다
-- **대표곡은 다시 만들지 않는다** — 메모·공개 범위·사진을 바꿔도 대표곡은 그대로다
+- **기본곡은 다시 만들지 않는다** — 메모·공개 범위·사진을 바꿔도 기본곡은 그대로다
 - **Response `200 OK`**: 수정된 기록 카드 공통 객체
 
 - **에러 (400 Bad Request — 요청 검증)**
@@ -2806,10 +2806,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `musicKey` | String | O | **AI가 음악을 올릴 S3 key** — 서버가 정한다. 완료 이벤트도 이 값으로 돌아온다 |
-| `kind` | String | O | `MAIN`(대표곡) · `IMAGE`(사진 음악) |
+| `kind` | String | O | `BASE`(기본곡) · `IMAGE`(사진 음악) |
 | `recordCardId` | Integer | O | 카드 ID |
 | `runningRecordId` | Integer | O | 카드가 붙은 기록 ID |
-| `imageKey` | String | X | `IMAGE`일 때 그 사진의 S3 key. `MAIN`이면 null |
+| `imageKey` | String | X | `IMAGE`일 때 그 사진의 S3 key. `BASE`이면 null |
 | `requestedAt` | String | O | 요청 시각 |
 
 **`record-card.music.generated`** (AI → running-service) — 음악 하나에 이벤트 하나
@@ -2828,7 +2828,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `status` | String | O | `READY`(그 key에 S3 객체를 올렸음) · `FAILED`(만들지 못함) |
 | `generatedAt` | String | O | 처리 시각 |
 
-- **받는 쪽 처리**: `musicKey`로 `record_cards.main_music_key`·`record_card_images.music_key`를 찾아 상태를 바꾼다. 둘 다 UNIQUE라 한 행만 나온다
+- **받는 쪽 처리**: `musicKey`로 `record_cards.base_music_key`·`record_card_images.music_key`를 찾아 상태를 바꾼다. 둘 다 UNIQUE라 한 행만 나온다
   - **`PENDING`인 행만 바꾼다** — Kafka는 같은 이벤트를 두 번 줄 수 있다. 이미 `READY`·`FAILED`면 무시한다
   - **행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다** — 오류로 보고 재시도하지 않는다
 - **요청 이벤트는 커밋한 뒤 보낸다** — 커밋 전에 보내면 롤백된 카드의 음악이 만들어진다. 커밋 뒤 발행이 실패하면 그 음악은 `PENDING`에 머문다. 아웃박스로 보장할지, 재발행 배치를 둘지는 구현 때 정한다
