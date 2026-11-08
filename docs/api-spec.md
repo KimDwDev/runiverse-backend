@@ -137,8 +137,8 @@
 | # | Method | Path | 설명 |
 |---|--------|------|------|
 | 40 | POST | `/api/v1/record-cards/images/presigned-url` | 카드 사진 업로드 URL 발급 (여러 장) |
-| 41 | POST | `/api/v1/record-cards` | 기록 카드 생성 — 기록 하나에 메모·사진(0~10장)·공개 범위. 음악 생성을 요청한다 |
-| 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (메모·공개 범위·사진) — 새로 넣은 사진만 음악을 만든다 |
+| 41 | POST | `/api/v1/record-cards` | 기록 카드 생성 — 기록 하나에 회고 글·활동유형·사진(0~10장)·공개 범위. 음악 생성을 요청한다 |
+| 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새로 넣은 사진만 음악을 만든다 |
 | 43 | DELETE | `/api/v1/record-cards/{recordCardId}` | 기록 카드 삭제 (소프트 삭제) |
 | — | Kafka | `record-card.music.requested` / `record-card.music.generated` | 음악 생성 요청·완료 이벤트 — AI 서비스와의 내부 계약(9-5) |
 
@@ -2413,7 +2413,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 8. 기록 카드 보기
 
-기록 카드는 러닝 기록 하나에 메모·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 기본곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서비스가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
+기록 카드는 러닝 기록 하나에 회고 글·활동유형·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 기본곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서비스가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
 
 **기록 카드 공통 객체** (8-1·9-2·9-3 응답):
 
@@ -2427,6 +2427,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   },
   "isMine": true,
   "visibility": "PUBLIC",
+  "activityType": "DAILY",
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "record": {
     "runningRecordId": 501,
@@ -2466,7 +2467,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `author` | Object | O | 작성자 — `userId`·`nickname`·`profileImageUrl`(사진이 없으면 null) |
 | `isMine` | Boolean | O | 내 카드 여부 — 수정·삭제 버튼을 가른다 |
 | `visibility` | String | O | `FRIENDS`(친구만) · `PUBLIC`(전체) · `PRIVATE`(나만) |
-| `memo` | String | X | 메모. 없으면 null |
+| `activityType` | String | O | `DAILY`(일상) · `TRAVEL`(여행) · `RACE`(대회) |
+| `memo` | String | O | 회고 글 |
 | `record` | Object | O | 카드가 붙은 러닝 기록 — 첫 장(지도)에 그린다 |
 | `record.runningRecordId` | Integer | O | 러닝 기록 ID |
 | `record.runningRoomId` | Integer | O | 방 ID — 6-1·6-2로 기록 상세를 열 때 쓴다 |
@@ -2517,7 +2519,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 9. 기록 카드 작성·편집
 
-**흐름**: 기록 화면(7-1)에서 지난 러닝을 고른다 → 사진을 고르면 9-1로 업로드 URL을 받아 S3에 올린다 → 메모를 쓴다 → 생성을 누르면 9-2. 서버는 카드를 저장하고 기본곡 1개와 사진마다 음악 1개의 생성을 AI에 요청한다(9-5).
+**흐름**: 기록 화면(7-1)에서 지난 러닝을 고른다 → 사진을 고르면 9-1로 업로드 URL을 받아 S3에 올린다 → 회고 글을 쓰고 활동유형을 고른다 → 생성을 누르면 9-2. 서버는 카드를 저장하고 기본곡 1개와 사진마다 음악 1개의 생성을 AI에 요청한다(9-5).
 
 ### 9-1. `POST /api/v1/record-cards/images/presigned-url` — 카드 사진 업로드 URL 발급 (여러 장)
 
@@ -2575,6 +2577,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "runningRecordId": 501,
   "visibility": "PUBLIC",
+  "activityType": "DAILY",
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "imageKeys": [
     "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg"
@@ -2587,13 +2590,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `runningRecordId` | Integer | O | 카드를 붙일 내 러닝 기록 |
 | `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
-| `memo` | String | X | 500자 이하. 생략하거나 빈 문자열이면 메모 없음(null) |
+| `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` |
+| `memo` | String | O | **회고 글**, 1~500자. 공백만 있으면 400 — AI가 기본곡을 만들 때 감정·여운을 읽는다 |
 | `imageKeys` | String[] | X | 0개 이상 10개 이하. 9-1이 발급하고 업로드를 마친 key. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `imageKeys` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
 
 - **Response `201 Created`**: 기록 카드 공통 객체 — 음악은 전부 `status = PENDING`, `musicUrl = null`이다
 - **동작**
-  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
+  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·활동유형·회고 글을 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
   - **순위는 그 사람의 살아 있는 카드 중 최댓값 + 1이다**(첫 카드면 1). 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
   - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(기본곡 1 + 사진 수, 9-5)
 - **검증 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409) → 사진 key(400)
@@ -2615,7 +2619,17 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "메모는 500자 이하여야 합니다."
+  "message": "활동 유형은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "회고 글은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "회고 글은 500자 이하여야 합니다."
 }
 
 {
@@ -2680,7 +2694,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "memo": "",
+  "memo": "바람이 좋았던 한강 러닝",
+  "activityType": "TRAVEL",
   "visibility": "FRIENDS",
   "images": [
     { "recordCardImageId": 301 },
@@ -2692,7 +2707,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `memo` | String | X | 500자 이하. **빈 문자열이면 메모를 지운다** |
+| `memo` | String | X | 회고 글, 1~500자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
+| `activityType` | String | X | `DAILY` · `TRAVEL` · `RACE` |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
 | `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(남길 기존 사진)나 `imageKey`(새 사진) 중 **정확히 하나** |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
@@ -2703,7 +2719,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 새 사진(`imageKey`)은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
   - 목록에서 빠진 사진은 행을 지운다 — 그 사진의 음악도 함께 버린다. 생성 중이었다면 나중에 오는 완료 이벤트는 무시된다
 - **썸네일 처리**: `thumbnailIndex`를 보내면 그 사진으로 바꾼다. 생략하면 지금 썸네일을 유지하되, 그 사진이 빠졌으면 수정 뒤 첫 사진으로, 사진이 하나도 없으면 null로 바꾼다
-- **기본곡은 다시 만들지 않는다** — 메모·공개 범위·사진을 바꿔도 기본곡은 그대로다
+- **기본곡은 다시 만들지 않는다** — 회고 글·활동유형·공개 범위·사진을 바꿔도 기본곡은 그대로다. 회고 글·활동유형을 바꿀 때 다시 만들지는 AI 쪽 정책이 정해지면 정한다
 - **Response `200 OK`**: 수정된 기록 카드 공통 객체
 
 - **에러 (400 Bad Request — 요청 검증)**
@@ -2711,7 +2727,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "메모는 500자 이하여야 합니다."
+  "message": "회고 글은 500자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "회고 글은 비어 있을 수 없습니다."
 }
 
 {

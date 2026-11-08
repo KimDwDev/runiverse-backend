@@ -420,7 +420,7 @@
 
 ### record_cards (기록 카드)
 
-러닝 기록 하나에 메모·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서비스가 만든다(feature-spec 기록 카드 음악 생성).
+러닝 기록 하나에 회고 글(메모)·활동유형·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서비스가 만든다(feature-spec 기록 카드 음악 생성).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -428,8 +428,9 @@
 | running_record_id | bigint | FK → running_records, NOT NULL, UNIQUE, ON DELETE CASCADE | 카드가 붙은 기록. **기록과 1:1** — 지운 카드도 행이 남아 기록당 행은 평생 하나다([§0](#0-공통-규칙)) |
 | user_id | UUID | → users, NOT NULL | 작성자. **기록 주인과 같다** — 생성 시 `running_records.user_id`와 대조한다 |
 | visibility | enum | NOT NULL | 카드별 공개 범위. 기본값을 서버에 두지 않는다 — 작성 화면 기본값은 클라가 `PUBLIC`으로 둔다 |
+| activity_type | enum | NOT NULL | 그날 러닝의 성격 — `DAILY`(일상) / `TRAVEL`(여행) / `RACE`(대회). 사용자가 고르고, AI가 기본곡·사진 음악의 맥락으로 쓴다 |
 | base_music_status | enum | NOT NULL, default `PENDING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
-| memo | text | nullable | 500자 이하. 비우면 null(빈 문자열로 저장하지 않는다) |
+| memo | text | NOT NULL | **회고 글**, 1~500자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
 | display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람의 살아 있는 카드 중 최댓값 + 1(없으면 1). **지우면 `-1`**이고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 되살리면 다시 최댓값 + 1(맨 뒤). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
 | base_music_key | varchar(255) | NOT NULL, UNIQUE | 기본곡 S3 key. **서버가 카드를 만들 때 정해 AI에 넘긴다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트가 이 key로 행을 찾는다 |
@@ -437,11 +438,12 @@
 | deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
 > UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 부분 인덱스가 아니다. 지운 카드의 행도 자리를 차지하므로 다시 만들 때는 새 행을 넣지 않고 그 행을 되살린다. 처음 만드는 요청이 동시에 두 번 오면 이 제약이 하나만 남긴다(api-spec 9-2의 409)
-> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
-> **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
+> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
+> **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`activity_type`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
 > CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
-> CHECK `ck_record_card_memo_length`: `memo is null or char_length(memo) between 1 and 500`
+> CHECK `ck_record_card_activity_type`: `activity_type in ('DAILY', 'TRAVEL', 'RACE')`
+> CHECK `ck_record_card_memo_length`: `char_length(memo) between 1 and 500`
 > CHECK `ck_record_card_display_order`: `(deleted_at is null and display_order >= 1) or (deleted_at is not null and display_order = -1)` — 살아 있으면 1 이상, 지웠으면 -1
 > UNIQUE `uk_record_card_user_display_order`: `(user_id, display_order) WHERE deleted_at IS NULL` — 살아 있는 카드끼리 순위가 겹치지 않는다. 지운 카드는 모두 -1이라 부분 인덱스로 뺀다. 같은 사람이 동시에 두 장을 만들어 최댓값을 같이 읽으면 하나가 이 제약에 걸린다 — 유스케이스가 순위를 다시 읽어 한 번 더 시도한다. 목록 조회(10-3) 인덱스를 겸한다
 > **썸네일은 앱이 맞춘다** — `thumbnail_image_key`가 이 카드 사진 중 하나라는 것, 사진이 있으면 null이 아니라는 것은 스키마가 강제하지 않는다. 썸네일 사진을 수정에서 빼면 남은 첫 사진(없으면 null)으로 바꾼다
@@ -544,6 +546,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | 컬럼 | 값 | 비고 |
 |---|---|---|
 | record_cards.visibility | FRIENDS / PUBLIC / PRIVATE | 카드별 개별 저장 — 친구만 / 전체 / 나만 |
+| record_cards.activity_type | DAILY / TRAVEL / RACE | 일상 / 여행 / 대회 — 카드 단위. AI 음악 생성 입력 |
 | record_cards.base_music_status · record_card_images.music_status | PENDING / READY / FAILED | 생성 중 / S3에 올라옴 / 생성 실패. 완료 이벤트로만 바뀐다 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
