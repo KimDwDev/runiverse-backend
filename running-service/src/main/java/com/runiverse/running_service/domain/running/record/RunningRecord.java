@@ -1,5 +1,6 @@
 package com.runiverse.running_service.domain.running.record;
 
+import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.metric.exception.CaloriesRequiredException;
 import com.runiverse.running_service.domain.running.metric.exception.WeatherCodeRequiredException;
@@ -25,7 +26,6 @@ import com.runiverse.running_service.domain.running.record.exception.SplitSegmen
 import com.runiverse.running_service.domain.running.record.exception.SplitsRequiredException;
 import com.runiverse.running_service.domain.running.record.vo.GpsTrackKey;
 import com.runiverse.running_service.domain.running.record.vo.RouteRange;
-import com.runiverse.running_service.domain.running.record.vo.RunningRecordId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import lombok.Builder;
 import lombok.Getter;
