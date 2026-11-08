@@ -32,7 +32,7 @@ public class RecordCardImage {
     }
 
     // 새로 넣는 사진 — 음악은 이제부터 만든다
-    static RecordCardImage add(RecordCardImageDraft draft, int sortOrder) {
+    static RecordCardImage add(RecordCard.ImageDraft draft, int sortOrder) {
         return new RecordCardImage(null, new RecordCardImageKey(draft.imageKey()), new MusicKey(draft.musicKey()),
                 MusicStatus.PENDING, sortOrder);
     }
