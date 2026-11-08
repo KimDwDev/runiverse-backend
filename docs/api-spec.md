@@ -2593,7 +2593,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 - **Response `201 Created`**: 기록 카드 공통 객체 — 음악은 전부 `status = PENDING`, `musicUrl = null`이다
 - **동작**
-  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로, 옛 사진 행을 지우고 새 사진 행을 넣는다. 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
+  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·메모를 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
   - **순위는 그 사람의 살아 있는 카드 중 최댓값 + 1이다**(첫 카드면 1). 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
   - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(기본곡 1 + 사진 수, 9-5)
 - **검증 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409) → 사진 key(400)
@@ -2768,7 +2768,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 9-4. `DELETE /api/v1/record-cards/{recordCardId}` — 기록 카드 삭제
 
-- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3·7-1 `recordCardId`에서 빠진다. **순위(`display_order`)는 -1이 되고, 남은 카드의 순위는 당기지 않는다.** 사진 행과 S3 객체(사진·음악)는 그대로 둔다
+- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3·7-1 `recordCardId`에서 빠진다. **순위(`display_order`)는 -1이 되고, 남은 카드의 순위는 당기지 않는다.** **사진 행은 지우고**(하드 삭제) 썸네일 key도 비운다. 카드 행과 S3 객체(사진·음악)는 그대로 둔다
 - **지운 뒤 같은 기록으로 다시 만들 수 있다** — 9-2가 지운 행을 되살린다. 행이 남아 있어 기록과 카드는 1:1을 유지한다
 - 생성 중이던 음악의 완료 이벤트는 무시된다(9-5)
 - **Response**: `204 No Content`

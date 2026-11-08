@@ -434,10 +434,11 @@
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
 | base_music_key | varchar(255) | NOT NULL, UNIQUE | 기본곡 S3 key. **서버가 카드를 만들 때 정해 AI에 넘긴다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트가 이 key로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | 소프트 삭제. 사진 행과 S3 객체는 그대로 둔다. **같은 기록으로 다시 만들면 이 행을 되살린다**(아래) |
+| deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
 > UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 부분 인덱스가 아니다. 지운 카드의 행도 자리를 차지하므로 다시 만들 때는 새 행을 넣지 않고 그 행을 되살린다. 처음 만드는 요청이 동시에 두 번 오면 이 제약이 하나만 남긴다(api-spec 9-2의 409)
-> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮는다. 옛 사진 행은 지우고 새 사진 행을 넣는다. **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
+> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
+> **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
 > CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
 > CHECK `ck_record_card_memo_length`: `memo is null or char_length(memo) between 1 and 500`
@@ -453,7 +454,7 @@
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | record_card_image_id | bigint | PK | |
-| record_card_id | bigint | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 소프트 삭제에는 반응하지 않는다 |
+| record_card_id | bigint | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 카드를 소프트 삭제할 때는 CASCADE가 아니라 앱이 사진 행을 지운다 |
 | music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
@@ -463,7 +464,7 @@
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
 > CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
 > **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
-> **수정에서 뺀 사진과 되살린 카드의 옛 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
+> **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
 > **`(record_card_id, sort_order)`에 UNIQUE를 두지 않는다** — 수정 때 순서를 다시 매기면 중간 상태에서 값이 겹친다. 같은 값이 생기지 않는 것은 수정 유스케이스가 보장한다.
 
 > **음악 생성 상태는 완료 이벤트로만 바뀐다** — `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. key로 찾은 행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
