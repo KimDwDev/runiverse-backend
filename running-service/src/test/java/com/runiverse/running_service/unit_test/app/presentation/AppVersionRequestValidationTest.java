@@ -46,6 +46,14 @@ public class AppVersionRequestValidationTest {
         assertThat(validate(platform)).isEmpty();
     }
 
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"WATCH_IOS", "WATCH_ANDROID", "watch_android"})
+    @DisplayName("워치 플랫폼도 받는다")
+    void allowsWatchPlatforms(String platform) {
+        // when & then -> 폰이 워치 앱의 최소 버전을 묻는다
+        assertThat(validate(platform)).isEmpty();
+    }
+
     @Test
     @DisplayName("플랫폼이 없으면 필수 메시지만 나온다")
     void rejectsMissingPlatform() {
