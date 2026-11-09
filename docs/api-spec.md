@@ -140,7 +140,7 @@
 | 41 | POST | `/api/v1/record-cards/drafts/{recordCardDraftId}/complete` | 업로드 확정 — 사진을 S3에서 확인한 뒤 카드 저장(작성)·반영(수정), 음악 생성 요청 |
 | 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새 사진이 있으면 업로드 URL을 받고 41로 확정 |
 | 43 | DELETE | `/api/v1/record-cards/{recordCardId}` | 기록 카드 삭제 (소프트 삭제) |
-| — | Kafka | `record-card.music.requested` / `record-card.music.generated` | 음악 생성 요청(카드 저장 후 발행)·완료(AI 서버 발행 → 구독해 상태 반영) — AI 서버와의 내부 계약(9-5) |
+| — | Kafka | `{env}.record-card.music.requested` / `{env}.record-card.music.generated` | 음악 생성 요청(카드 저장 후 발행)·완료(AI 서버 발행 → 구독해 상태 반영) — AI 서버와의 내부 계약(9-5) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
@@ -2871,14 +2871,63 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 토픽 | 방향 | 단위 | 파티션 키 |
 |---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 카드 저장 한 번(작성·수정·되살리기)에 이벤트 하나 | `recordCardId` |
-| `record-card.music.generated` | AI → running-service | 요청 이벤트 하나에 완료 이벤트 하나 | `recordCardId` |
+| `{env}.record-card.music.requested` | running-service → AI | 카드 저장 한 번(작성·수정·되살리기)에 이벤트 하나 | `recordCardId` |
+| `{env}.record-card.music.generated` | AI → running-service | 요청 이벤트 하나에 완료 이벤트 하나 | `recordCardId` |
 
 - **직렬화는 JSON**이다. 시각은 다른 API와 같이 `LocalDateTime` 문자열이다.
 - **파티션 키를 `recordCardId`로 둔다** — 한 카드의 요청·완료가 같은 파티션에 들어가 순서가 섞이지 않는다.
 - **완료 토픽은 running-service 전체가 컨슈머 그룹 하나로 구독한다** — ALB 뒤에 인스턴스가 여럿이어도 완료 이벤트 하나는 한 인스턴스만 처리한다. 상태 변경은 DB에만 쓰고 인스턴스 메모리에 두지 않으므로 어느 인스턴스가 받아도 같다.
 
-**`record-card.music.requested`** (running-service → AI)
+#### 환경 분리 — 이름 앞에 `{env}`
+
+개발 서버와 테스트 서버는 **Kafka 클러스터 하나를 같이 쓴다.** 그래서 토픽·컨슈머 그룹·계정 이름 앞에 환경 이름을 붙여 서로의 이벤트를 아예 보지 못하게 한다.
+
+- **`{env}` 값은 `dev` · `test` · `prod`** 중 하나다. 운영은 클러스터가 달라도 같은 규칙으로 `prod`를 붙인다 — 환경마다 이름 짓는 법이 달라지지 않게 한다.
+- **이벤트 안에 환경 필드를 넣어 걸러 내지 않는다** — 그러면 남의 환경 이벤트를 받은 뒤에야 버리게 되고, 거르는 코드를 빠뜨린 쪽은 남의 이벤트를 그대로 처리한다. 토픽이 다르면 애초에 받지 않는다.
+- **모든 이름은 `{env}.`로 시작한다** — 토픽·그룹·계정 모두 같다. **구분자는 `.`과 `-`만 쓴다** — Kafka는 메트릭 이름에서 `.`과 `_`를 같게 보므로 `_`는 쓰지 않는다.
+
+| 대상 | 이름 | 비고 |
+|---|---|---|
+| 요청 토픽 | `{env}.record-card.music.requested` | |
+| 완료 토픽 | `{env}.record-card.music.generated` | |
+| running-service 컨슈머 그룹 | `{env}.running-service.record-card-music` | 완료 토픽을 구독한다. 인스턴스가 여럿이어도 그룹은 하나다 |
+| AI 서버 컨슈머 그룹 | `{env}.runiverse-ai.record-card-music` | 요청 토픽을 구독한다. AI 서버가 쓰고, 권한만 여기서 정한다 |
+| running-service 계정 | `{env}.running-service` | SASL 사용자 이름 |
+| AI 서버 계정 | `{env}.runiverse-ai` | SASL 사용자 이름 |
+
+- **컨슈머 그룹은 받는 쪽마다 하나다** — running-service는 완료 토픽을, AI 서버는 요청 토픽을 받으므로 그룹이 두 개다. running-service 인스턴스끼리는 같은 그룹이라 이벤트를 나눠 받는다.
+- **계정도 환경마다 따로 둔다** — 계정이 환경 사이에 같으면 권한으로 막을 수 없어, 설정을 잘못 넣은 개발 서버가 테스트 토픽을 읽어도 클러스터가 허락한다. 계정을 나누면 잘못된 설정은 접속 단계에서 권한 오류로 끝난다.
+
+#### 접속 보안 — TLS + SASL + ACL
+
+- **전송은 TLS, 인증은 SASL/SCRAM-SHA-512** — `security.protocol=SASL_SSL`, `sasl.mechanism=SCRAM-SHA-512`. SCRAM은 비밀번호를 그대로 보내지 않는다.
+- **토픽은 관리자가 미리 만든다** — 클러스터의 `auto.create.topics.enable=false`, 두 서비스 계정에는 `CREATE` 권한을 주지 않는다. 이름을 잘못 쓴 토픽이 저절로 생기지 않게 한다. 파티션 수·복제 수·보관 기간은 운영값이다.
+- **ACL은 이름 하나씩(LITERAL) 준다** — 접두어(PREFIXED)로 묶지 않는다. 토픽이 두 개뿐이라 하나씩 줘도 번거롭지 않고, 나중에 같은 접두어로 생긴 토픽에 권한이 따라가지 않는다.
+
+| 계정 | 리소스 | 허용 동작 |
+|---|---|---|
+| `{env}.running-service` | 토픽 `{env}.record-card.music.requested` | `WRITE`, `DESCRIBE` |
+| `{env}.running-service` | 토픽 `{env}.record-card.music.generated` | `READ`, `DESCRIBE` |
+| `{env}.running-service` | 그룹 `{env}.running-service.record-card-music` | `READ` |
+| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.requested` | `READ`, `DESCRIBE` |
+| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.generated` | `WRITE`, `DESCRIBE` |
+| `{env}.runiverse-ai` | 그룹 `{env}.runiverse-ai.record-card-music` | `READ` |
+
+- 브로커가 Kafka 3.0 미만이면 멱등 프로듀서에 클러스터 `IDEMPOTENT_WRITE`가 더 필요하다.
+
+#### running-service 환경 변수
+
+| 변수 | 예 | 설명 |
+|---|---|---|
+| `KAFKA_ENV` | `dev` | `{env}` 값. **토픽 두 개와 컨슈머 그룹 이름을 이 값 하나로 만든다** — 이름마다 변수를 두면 하나만 바꾸다 환경이 섞인다. `dev`·`test`·`prod`가 아니면 기동하지 않는다 |
+| `KAFKA_BOOTSTRAP_SERVERS` | `b-1.xxx:9096,b-2.xxx:9096` | 쉼표로 구분 |
+| `KAFKA_SECURITY_PROTOCOL` | `SASL_SSL` | 배포 환경은 항상 `SASL_SSL`. 로컬 Docker Kafka만 `PLAINTEXT` |
+| `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | |
+| `KAFKA_SASL_USERNAME` | `dev.running-service` | `{env}.running-service` |
+| `KAFKA_SASL_PASSWORD` | | 시크릿 — 로그·출력에 남기지 않는다 |
+| `KAFKA_SSL_TRUSTSTORE_LOCATION` / `KAFKA_SSL_TRUSTSTORE_PASSWORD` | | 브로커 인증서가 사설 CA일 때만. 공인 CA(MSK 등)면 비운다 |
+
+**`{env}.record-card.music.requested`** (running-service → AI)
 
 ```json
 {
@@ -2929,7 +2978,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **음악 S3 key는 running-service가 정한다** — 카드·사진 행을 만들 때 key를 함께 저장하고, AI 서버는 받은 `musicKey`에 그대로 올린다. 행에는 처음부터 key가 있고 S3 객체는 완료 뒤에만 있다.
 - **`baseMusic`이 null이고 `images`가 비어 있으면 발행하지 않는다** — 사진을 늘리지 않은 수정은 만들 음악이 없다.
 
-**`record-card.music.generated`** (AI → running-service)
+**`{env}.record-card.music.generated`** (AI → running-service)
 
 ```json
 {
@@ -2960,7 +3009,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **요청 이벤트는 카드 저장을 커밋한 뒤 발행한다** — 커밋 전에 보내면 롤백된 카드의 음악이 만들어진다. 커밋 뒤 발행이 실패하면 그 음악은 `PENDING`에 머문다. 아웃박스로 보장할지, 오래 `PENDING`인 음악을 다시 발행할지는 구현 때 정한다
 - **`FAILED`를 다시 만드는 경로는 아직 없다** — AI 서버는 스스로 재시도하지 않는다. 사용자가 다시 요청하는 API나 자동 재시도가 필요해지면 이 절에 더한다(실패한 음악만 `baseMusic`·`images`에 실어 같은 요청 토픽으로 보낸다)
 
-> **아직 정하지 않은 것**: 컨슈머 그룹 이름, 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
+> **아직 정하지 않은 것**: 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
 
 ## 10. 프로필 페이지
 
