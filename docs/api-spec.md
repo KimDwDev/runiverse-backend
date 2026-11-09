@@ -2361,15 +2361,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
-      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
-      "recordCardId": 88              // 이 기록의 기록 카드. 없으면 null
+      "totalElevationGainMeters": 42  // 유효 표본이 부족하면 null
     }
   ]
 }
 ```
 
 - 기간에 기록이 없으면 `runningRecords`는 빈 배열이다
-- **`recordCardId`는 살아 있는 카드만 가리킨다** — 지운 카드(`deleted_at` 있음)는 null이다. null이면 기록 화면에 "카드 만들기"를, 값이 있으면 8-1로 가는 진입점을 띄운다. 기록당 카드는 한 장이라 단일 값이다. 필드를 더한 것이라 이 필드를 모르는 앱은 그대로 동작한다
 - **숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 빠진다** — 6-1·6-2가 그 방을 404로 보는 것과 맞춘다. 숨김은 [MVP 제외]라 지금은 해당하는 방이 없다
 - **페이지를 나누지 않는다** — 한 번에 받는 범위가 31일로 묶여 있어 커서를 두지 않는다
 - **`type`은 방 종류다** — `SOLO`는 솔로 러닝, `MATCH`는 매칭 러닝, `INVITE`는 초대 러닝이다
@@ -2496,7 +2494,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 8-1. `GET /api/v1/record-cards/{recordCardId}` — 기록 카드 상세
 
-- **화면**: 프로필 카드 목록(10-3)에서 탭, 기록 화면(7-1 `recordCardId`)에서 진입, 생성(9-2) 직후
+- **화면**: 프로필 카드 목록(10-3)에서 탭, 생성(9-2) 직후
 - **Request**: 본문 없음
 - **Response `200 OK`**: 기록 카드 공통 객체
 - **누가 볼 수 있나**
@@ -2610,7 +2608,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **검사 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409). **사진이 올라왔는지는 9-2에서 본다**
   - 숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 없는 기록으로 본다 — 7-1에서 빠지는 것과 맞춘다
   - 사진을 올리기 전에 기록·회고 글·중복을 걸러, 쓸모없는 업로드를 하지 않게 한다
-- **작성 내용은 Redis에만 둔다** — DB에는 아무것도 쓰지 않는다. 7-1의 `recordCardId`도 아직 null이다
+- **작성 내용은 Redis에만 둔다** — DB에는 아무것도 쓰지 않는다.
 - **같은 기록으로 다시 요청하면 새 `recordCardDraftId`가 나온다** — 이전 요청은 유효 시간까지 남지만, 먼저 확정한 쪽만 카드가 된다(다른 쪽 확정은 409)
 
 - **에러 (400 Bad Request — 요청 검증)**
@@ -2851,7 +2849,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 9-4. `DELETE /api/v1/record-cards/{recordCardId}` — 기록 카드 삭제
 
-- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3·7-1 `recordCardId`에서 빠진다. **순위(`display_order`)는 -1이 되고, 남은 카드의 순위는 당기지 않는다.** **사진 행은 지우고**(하드 삭제) 썸네일 key도 비운다. 카드 행과 S3 객체(사진·음악)는 그대로 둔다
+- **동작**: `record_cards.deleted_at` 소프트 삭제 — 8-1·10-3에서 빠진다. **순위(`display_order`)는 -1이 되고, 남은 카드의 순위는 당기지 않는다.** **사진 행은 지우고**(하드 삭제) 썸네일 key도 비운다. 카드 행과 S3 객체(사진·음악)는 그대로 둔다
 - **지운 뒤 같은 기록으로 다시 만들 수 있다** — 9-2가 지운 행을 되살린다. 행이 남아 있어 기록과 카드는 1:1을 유지한다
 - 생성 중이던 음악의 완료 이벤트는 무시된다(9-5)
 - **Response**: `204 No Content`
