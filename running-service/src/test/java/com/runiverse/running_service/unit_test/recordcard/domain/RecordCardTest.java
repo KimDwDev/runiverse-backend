@@ -10,14 +10,17 @@ import com.runiverse.running_service.domain.recordcard.exception.DuplicateRecord
 import com.runiverse.running_service.domain.recordcard.exception.InvalidDisplayOrderException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidMusicResultException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidThumbnailIndexException;
+import com.runiverse.running_service.domain.recordcard.exception.RecordCardActivityTypeRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardDeletedException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageNotInCardException;
+import com.runiverse.running_service.domain.recordcard.exception.RecordCardMemoRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardNotDeletedException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardVisibilityRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.ThumbnailNotInImagesException;
 import com.runiverse.running_service.domain.recordcard.exception.TooManyRecordCardImagesException;
 import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
@@ -42,6 +45,7 @@ class RecordCardTest {
     private static final UUID USER_ID = UUID.fromString("01a0f2d4-6180-7000-8000-446655440015");
     private static final Long RUNNING_RECORD_ID = 501L;
     private static final String BASE_MUSIC_KEY = "record-cards/u/music/base";
+    private static final String MEMO = "힘들었지만 끝까지 달려서 뿌듯했다";
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 8, 21, 0);
 
     @Nested
@@ -149,7 +153,7 @@ class RecordCardTest {
         void rejectDeletedOrder() {
             // when & then
             assertThatThrownBy(() -> RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
-                    null, DisplayOrder.DELETED, BASE_MUSIC_KEY, List.of(), null))
+                    RecordCardActivityType.DAILY, MEMO, DisplayOrder.DELETED, BASE_MUSIC_KEY, List.of(), null))
                     .isInstanceOf(InvalidDisplayOrderException.class);
         }
 
@@ -158,19 +162,41 @@ class RecordCardTest {
         void rejectMissingVisibility() {
             // when & then
             assertThatThrownBy(() -> RecordCard.create(RUNNING_RECORD_ID, USER_ID, null,
-                    null, DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null))
+                    RecordCardActivityType.DAILY, MEMO, DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null))
                     .isInstanceOf(RecordCardVisibilityRequiredException.class);
         }
 
         @Test
-        @DisplayName("빈 메모는 메모 없음이 된다")
-        void blankMemoBecomesEmpty() {
+        @DisplayName("활동유형이 없으면 거부한다")
+        void rejectMissingActivityType() {
+            // when & then
+            assertThatThrownBy(() -> RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
+                    null, MEMO, DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null))
+                    .isInstanceOf(RecordCardActivityTypeRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("회고 글이 없거나 공백뿐이면 거부한다")
+        void rejectMissingMemo() {
+            // when & then -> 음악 생성이 회고 글로 기본곡의 감정을 정한다
+            assertThatThrownBy(() -> RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
+                    RecordCardActivityType.DAILY, null, DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null))
+                    .isInstanceOf(RecordCardMemoRequiredException.class);
+            assertThatThrownBy(() -> RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
+                    RecordCardActivityType.DAILY, "   ", DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null))
+                    .isInstanceOf(RecordCardMemoRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("활동유형과 회고 글을 담는다")
+        void keepActivityTypeAndMemo() {
             // when
             RecordCard card = RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
-                    "   ", DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null);
+                    RecordCardActivityType.TRAVEL, MEMO, DisplayOrder.FIRST, BASE_MUSIC_KEY, List.of(), null);
 
             // then
-            assertThat(card.getMemo()).isEmpty();
+            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.TRAVEL);
+            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo(MEMO));
         }
     }
 
@@ -200,11 +226,13 @@ class RecordCardTest {
             // when & then
             assertThatThrownBy(() -> RecordCard.restore(88L)
                     .runningRecordId(RUNNING_RECORD_ID).userId(USER_ID).visibility(RecordCardVisibility.PUBLIC)
+                    .activityType(RecordCardActivityType.DAILY).memo(MEMO)
                     .baseMusicStatus(MusicStatus.READY).displayOrder(3).baseMusicKey(BASE_MUSIC_KEY)
                     .deletedAt(NOW).build())
                     .isInstanceOf(InvalidDisplayOrderException.class);
             assertThatThrownBy(() -> RecordCard.restore(88L)
                     .runningRecordId(RUNNING_RECORD_ID).userId(USER_ID).visibility(RecordCardVisibility.PUBLIC)
+                    .activityType(RecordCardActivityType.DAILY).memo(MEMO)
                     .baseMusicStatus(MusicStatus.READY).displayOrder(-1).baseMusicKey(BASE_MUSIC_KEY)
                     .build())
                     .isInstanceOf(InvalidDisplayOrderException.class);
@@ -363,32 +391,43 @@ class RecordCardTest {
     class Change {
 
         @Test
-        @DisplayName("빈 메모로 바꾸면 메모를 지운다")
-        void clearMemo() {
+        @DisplayName("회고 글은 지울 수 없고, 거부해도 이전 글이 남는다")
+        void rejectClearingMemo() {
             // given
             RecordCard card = restoredWithThreeImages();
-            card.changeMemo("한강");
 
-            // when
-            card.changeMemo("");
-
-            // then
-            assertThat(card.getMemo()).isEmpty();
+            // when & then
+            assertThatThrownBy(() -> card.changeMemo("")).isInstanceOf(RecordCardMemoRequiredException.class);
+            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo(MEMO));
         }
 
         @Test
-        @DisplayName("메모와 공개 범위를 바꾼다")
-        void changeMemoAndVisibility() {
+        @DisplayName("회고 글·활동유형·공개 범위를 바꾼다")
+        void changeMemoActivityTypeAndVisibility() {
             // given
             RecordCard card = restoredWithThreeImages();
 
             // when
             card.changeMemo("바람이 좋았다");
+            card.changeActivityType(RecordCardActivityType.RACE);
             card.changeVisibility(RecordCardVisibility.PRIVATE);
 
             // then
-            assertThat(card.getMemo()).contains(new RecordCardMemo("바람이 좋았다"));
+            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo("바람이 좋았다"));
+            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.RACE);
             assertThat(card.getVisibility()).isEqualTo(RecordCardVisibility.PRIVATE);
+        }
+
+        @Test
+        @DisplayName("활동유형을 비울 수 없다")
+        void rejectClearingActivityType() {
+            // given
+            RecordCard card = restoredWithThreeImages();
+
+            // when & then
+            assertThatThrownBy(() -> card.changeActivityType(null))
+                    .isInstanceOf(RecordCardActivityTypeRequiredException.class);
+            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.DAILY);
         }
 
         @Test
@@ -412,11 +451,10 @@ class RecordCardTest {
     class Delete {
 
         @Test
-        @DisplayName("지우면 순위는 -1, 사진과 썸네일은 비고, 메모·기본곡은 남는다")
+        @DisplayName("지우면 순위는 -1, 사진과 썸네일은 비고, 회고 글·활동유형·기본곡은 남는다")
         void delete() {
             // given
             RecordCard card = restoredWithThreeImages();
-            card.changeMemo("한강");
 
             // when
             card.delete(NOW);
@@ -427,7 +465,8 @@ class RecordCardTest {
             assertThat(card.getDisplayOrder()).isEqualTo(DisplayOrder.DELETED);
             assertThat(card.getImages()).isEmpty();
             assertThat(card.getThumbnailImageKey()).isEmpty();
-            assertThat(card.getMemo()).contains(new RecordCardMemo("한강"));
+            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo(MEMO));
+            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.DAILY);
             assertThat(card.getBaseMusicKey().value()).isEqualTo(BASE_MUSIC_KEY);
         }
 
@@ -441,6 +480,8 @@ class RecordCardTest {
             // when & then
             assertThatThrownBy(() -> card.delete(NOW)).isInstanceOf(RecordCardDeletedException.class);
             assertThatThrownBy(() -> card.changeMemo("x")).isInstanceOf(RecordCardDeletedException.class);
+            assertThatThrownBy(() -> card.changeActivityType(RecordCardActivityType.RACE))
+                    .isInstanceOf(RecordCardDeletedException.class);
             assertThatThrownBy(() -> card.changeVisibility(RecordCardVisibility.PUBLIC))
                     .isInstanceOf(RecordCardDeletedException.class);
             assertThatThrownBy(() -> card.rearrangeImages(List.of(), null))
@@ -472,14 +513,15 @@ class RecordCardTest {
             card.delete(NOW);
 
             // when
-            card.revive(RecordCardVisibility.FRIENDS, "다시 뛰었다", new DisplayOrder(7), "record-cards/u/music/new",
-                    List.of(draft("z")), null);
+            card.revive(RecordCardVisibility.FRIENDS, RecordCardActivityType.TRAVEL, "다시 뛰었다", new DisplayOrder(7),
+                    "record-cards/u/music/new", List.of(draft("z")), null);
 
             // then
             assertThat(card.isDeleted()).isFalse();
             assertThat(card.getRecordCardId()).contains(new RecordCardId(88L));
             assertThat(card.getVisibility()).isEqualTo(RecordCardVisibility.FRIENDS);
-            assertThat(card.getMemo()).contains(new RecordCardMemo("다시 뛰었다"));
+            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.TRAVEL);
+            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo("다시 뛰었다"));
             assertThat(card.getDisplayOrder()).isEqualTo(new DisplayOrder(7));
             assertThat(card.getBaseMusicKey().value()).isEqualTo("record-cards/u/music/new");
             assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.PENDING);
@@ -495,8 +537,8 @@ class RecordCardTest {
             RecordCard card = restoredWithThreeImages();
 
             // when & then
-            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, null, new DisplayOrder(7),
-                    "record-cards/u/music/new", List.of(), null))
+            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, MEMO,
+                    new DisplayOrder(7), "record-cards/u/music/new", List.of(), null))
                     .isInstanceOf(RecordCardNotDeletedException.class);
         }
 
@@ -508,9 +550,12 @@ class RecordCardTest {
             card.delete(NOW);
 
             // when & then
-            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, null, new DisplayOrder(7),
-                    "record-cards/u/music/new", List.of(draft("z")), 3))
+            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, MEMO,
+                    new DisplayOrder(7), "record-cards/u/music/new", List.of(draft("z")), 3))
                     .isInstanceOf(InvalidThumbnailIndexException.class);
+            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, "",
+                    new DisplayOrder(7), "record-cards/u/music/new", List.of(), null))
+                    .isInstanceOf(RecordCardMemoRequiredException.class);
             assertThat(card.isDeleted()).isTrue();
             assertThat(card.getDisplayOrder()).isEqualTo(DisplayOrder.DELETED);
         }
@@ -590,8 +635,8 @@ class RecordCardTest {
     }
 
     private static RecordCard create(List<ImageDraft> drafts, Integer thumbnailIndex) {
-        return RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC, null,
-                DisplayOrder.FIRST, BASE_MUSIC_KEY, drafts, thumbnailIndex);
+        return RecordCard.create(RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
+                RecordCardActivityType.DAILY, MEMO, DisplayOrder.FIRST, BASE_MUSIC_KEY, drafts, thumbnailIndex);
     }
 
     // a(READY)·b(FAILED)·c(PENDING), 썸네일은 a
@@ -608,6 +653,8 @@ class RecordCardTest {
                 .runningRecordId(RUNNING_RECORD_ID)
                 .userId(USER_ID)
                 .visibility(RecordCardVisibility.PUBLIC)
+                .activityType(RecordCardActivityType.DAILY)
+                .memo(MEMO)
                 .baseMusicStatus(MusicStatus.READY)
                 .displayOrder(3)
                 .thumbnailImageKey(thumbnailImageKey)

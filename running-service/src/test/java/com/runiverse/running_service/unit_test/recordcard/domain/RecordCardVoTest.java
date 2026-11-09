@@ -94,26 +94,16 @@ class RecordCardVoTest {
         @ValueSource(strings = {"   ", "\n\t"})
         @DisplayName("비어 있으면 값으로 만들 수 없다")
         void rejectBlank(String value) {
-            // when & then -> 메모 없음은 값이 아니라 부재로 표현한다
+            // when & then -> 음악 생성이 회고 글을 읽으므로 비어 있을 수 없다
             assertThatThrownBy(() -> new RecordCardMemo(value))
                     .isInstanceOf(RecordCardMemoRequiredException.class);
         }
 
-        @ParameterizedTest
-        @NullAndEmptySource
-        @ValueSource(strings = {"   ", "\n\t"})
-        @DisplayName("요청의 빈 메모는 메모 없음이 된다")
-        void blankRequestBecomesEmpty(String value) {
-            // when & then
-            assertThat(RecordCardMemo.fromNullable(value)).isEmpty();
-        }
-
         @Test
-        @DisplayName("요청의 메모는 앞뒤 공백을 지우지 않고 그대로 담는다")
-        void keepRequestAsIs() {
+        @DisplayName("앞뒤 공백을 지우지 않고 그대로 담는다")
+        void keepAsIs() {
             // when & then
-            assertThat(RecordCardMemo.fromNullable("  한강  "))
-                    .contains(new RecordCardMemo("  한강  "));
+            assertThat(new RecordCardMemo("  한강  ").value()).isEqualTo("  한강  ");
         }
     }
 

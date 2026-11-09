@@ -8,6 +8,7 @@ import com.runiverse.running_service.domain.recordcard.exception.DuplicateRecord
 import com.runiverse.running_service.domain.recordcard.exception.InvalidDisplayOrderException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidThumbnailIndexException;
 import com.runiverse.running_service.domain.recordcard.exception.MusicStatusRequiredException;
+import com.runiverse.running_service.domain.recordcard.exception.RecordCardActivityTypeRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardDeletedException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageNotInCardException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardNotDeletedException;
@@ -17,6 +18,7 @@ import com.runiverse.running_service.domain.recordcard.exception.TooManyRecordCa
 import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.MusicKey;
 import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
@@ -67,8 +69,9 @@ public class RecordCard {
     private final RunningRecordId runningRecordId;
     private final UserId userId;                      // 작성자 — 기록 주인과 같은지는 application이 대조한다
     private RecordCardVisibility visibility;
+    private RecordCardActivityType activityType;
     private MusicStatus baseMusicStatus;
-    private RecordCardMemo memo;                      // 메모가 없으면 null
+    private RecordCardMemo memo;                      // 회고 글 — 음악 생성이 감정·여운을 읽는다
     private DisplayOrder displayOrder;                // 지운 카드는 DELETED
     private RecordCardImageKey thumbnailImageKey;     // 사진이 없으면 null
     private MusicKey baseMusicKey;
@@ -77,17 +80,18 @@ public class RecordCard {
 
     @Builder
     private RecordCard(Long recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
-                       MusicStatus baseMusicStatus, String memo, int displayOrder, String thumbnailImageKey,
+                       RecordCardActivityType activityType, MusicStatus baseMusicStatus, String memo, int displayOrder, String thumbnailImageKey,
                        String baseMusicKey, List<RecordCardImage> images, LocalDateTime deletedAt) {
         this.recordCardId = recordCardId == null ? null : new RecordCardId(recordCardId);
         this.runningRecordId = new RunningRecordId(runningRecordId);
         this.userId = new UserId(userId);
         this.visibility = requireVisibility(visibility);
+        this.activityType = requireActivityType(activityType);
         if (baseMusicStatus == null) {
             throw new MusicStatusRequiredException();
         }
         this.baseMusicStatus = baseMusicStatus;
-        this.memo = RecordCardMemo.fromNullable(memo).orElse(null);
+        this.memo = new RecordCardMemo(memo);
         this.displayOrder = new DisplayOrder(displayOrder);
         this.baseMusicKey = new MusicKey(baseMusicKey);
         this.deletedAt = deletedAt;
@@ -107,7 +111,8 @@ public class RecordCard {
     }
 
     // 처음 만드는 카드 — 기본곡과 사진 음악은 모두 이제부터 만든다. 썸네일 위치를 주지 않으면 첫 사진이다
-    public static RecordCard create(Long runningRecordId, UUID userId, RecordCardVisibility visibility, String memo,
+    public static RecordCard create(Long runningRecordId, UUID userId, RecordCardVisibility visibility,
+                                    RecordCardActivityType activityType, String memo,
                                     DisplayOrder displayOrder, String baseMusicKey,
                                     List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
         requireLiveOrder(displayOrder);
@@ -116,6 +121,7 @@ public class RecordCard {
                 .runningRecordId(runningRecordId)
                 .userId(userId)
                 .visibility(visibility)
+                .activityType(activityType)
                 .baseMusicStatus(MusicStatus.PENDING)
                 .memo(memo)
                 .displayOrder(displayOrder.value())
@@ -132,7 +138,12 @@ public class RecordCard {
 
     public void changeMemo(String memo) {
         ensureNotDeleted();
-        this.memo = RecordCardMemo.fromNullable(memo).orElse(null);
+        this.memo = new RecordCardMemo(memo);
+    }
+
+    public void changeActivityType(RecordCardActivityType activityType) {
+        ensureNotDeleted();
+        this.activityType = requireActivityType(activityType);
     }
 
     public void changeVisibility(RecordCardVisibility visibility) {
@@ -203,20 +214,23 @@ public class RecordCard {
     }
 
     // 지운 카드를 새 내용으로 덮어 되살린다 — ID와 작성 시각은 그대로고, 기본곡도 다시 만든다
-    public void revive(RecordCardVisibility visibility, String memo, DisplayOrder displayOrder, String baseMusicKey,
-                       List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
+    public void revive(RecordCardVisibility visibility, RecordCardActivityType activityType, String memo,
+                       DisplayOrder displayOrder, String baseMusicKey, List<ImageDraft> imageDrafts,
+                       Integer thumbnailIndex) {
         if (!isDeleted()) {
             throw new RecordCardNotDeletedException();
         }
         requireLiveOrder(displayOrder);
         RecordCardVisibility nextVisibility = requireVisibility(visibility);
-        RecordCardMemo nextMemo = RecordCardMemo.fromNullable(memo).orElse(null);
+        RecordCardActivityType nextActivityType = requireActivityType(activityType);
+        RecordCardMemo nextMemo = new RecordCardMemo(memo);
         MusicKey nextBaseMusicKey = new MusicKey(baseMusicKey);
         List<RecordCardImage> nextImages = addAll(imageDrafts);
         validateImages(nextImages, nextBaseMusicKey);
         String nextThumbnail = thumbnailKeyAt(nextImages, thumbnailIndex);
 
         this.visibility = nextVisibility;
+        this.activityType = nextActivityType;
         this.memo = nextMemo;
         this.displayOrder = displayOrder;
         this.baseMusicKey = nextBaseMusicKey;
@@ -260,10 +274,6 @@ public class RecordCard {
         return Optional.ofNullable(recordCardId);
     }
 
-    public Optional<RecordCardMemo> getMemo() {
-        return Optional.ofNullable(memo);
-    }
-
     public Optional<RecordCardImageKey> getThumbnailImageKey() {
         return Optional.ofNullable(thumbnailImageKey);
     }
@@ -288,6 +298,13 @@ public class RecordCard {
             throw new RecordCardVisibilityRequiredException();
         }
         return visibility;
+    }
+
+    private static RecordCardActivityType requireActivityType(RecordCardActivityType activityType) {
+        if (activityType == null) {
+            throw new RecordCardActivityTypeRequiredException();
+        }
+        return activityType;
     }
 
     private static void requireLiveOrder(DisplayOrder displayOrder) {
