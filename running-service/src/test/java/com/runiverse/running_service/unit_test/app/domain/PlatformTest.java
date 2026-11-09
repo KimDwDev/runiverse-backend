@@ -53,6 +53,6 @@ public class PlatformTest {
         // when & then
         assertThatThrownBy(() -> Platform.from(value))
                 .isInstanceOf(UnsupportedPlatformException.class)
-                .hasMessage("플랫폼은 IOS 또는 ANDROID이어야 합니다.");
+                .hasMessage("플랫폼은 IOS, ANDROID, WATCH_IOS, WATCH_ANDROID 중 하나여야 합니다.");
     }
 }
