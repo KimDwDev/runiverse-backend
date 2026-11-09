@@ -420,7 +420,7 @@
 
 ### record_cards (기록 카드)
 
-러닝 기록 하나에 회고 글(메모)·활동유형·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서비스가 만든다(feature-spec 기록 카드 음악 생성).
+러닝 기록 하나에 회고 글(메모)·활동유형·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서버가 만든다 — 카드를 저장한 뒤 Kafka로 요청하고 완료 이벤트를 구독해 상태를 바꾼다(feature-spec 기록 카드 음악 생성).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -451,7 +451,7 @@
 
 ### record_card_images (기록 카드 사진)
 
-카드의 사진 한 장과 그 사진의 음악. **사진마다 음악이 반드시 하나 있다** — 사진을 넣는 순간 음악 생성을 요청한다.
+카드의 사진 한 장과 그 사진의 설명(캡션)·음악. **사진마다 음악이 반드시 하나 있다** — 사진을 넣는 순간 음악 생성을 요청한다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -460,16 +460,18 @@
 | music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
+| caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
 | music_key | varchar(255) | NOT NULL, UNIQUE | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정해 AI에 넘긴다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 생성 상태가 바뀔 때 갱신된다 |
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
 > CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
+> CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
 > **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
 > **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
 > **`(record_card_id, sort_order)`에 UNIQUE를 두지 않는다** — 수정 때 순서를 다시 매기면 중간 상태에서 값이 겹친다. 같은 값이 생기지 않는 것은 수정 유스케이스가 보장한다.
 
-> **음악 생성 상태는 완료 이벤트로만 바뀐다** — `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. key로 찾은 행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
+> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. key로 찾은 행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
 
 ---
 

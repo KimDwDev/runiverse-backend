@@ -140,7 +140,7 @@
 | 41 | POST | `/api/v1/record-cards/drafts/{recordCardDraftId}/complete` | 업로드 확정 — 사진을 S3에서 확인한 뒤 카드 저장(작성)·반영(수정), 음악 생성 요청 |
 | 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새 사진이 있으면 업로드 URL을 받고 41로 확정 |
 | 43 | DELETE | `/api/v1/record-cards/{recordCardId}` | 기록 카드 삭제 (소프트 삭제) |
-| — | Kafka | `record-card.music.requested` / `record-card.music.generated` | 음악 생성 요청·완료 이벤트 — AI 서비스와의 내부 계약(9-5) |
+| — | Kafka | `record-card.music.requested` / `record-card.music.generated` | 음악 생성 요청(카드 저장 후 발행)·완료(AI 서버 발행 → 구독해 상태 반영) — AI 서버와의 내부 계약(9-5) |
 
 ### 10. 프로필 페이지 (본인/타인)
 
@@ -2411,7 +2411,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 8. 기록 카드 보기
 
-기록 카드는 러닝 기록 하나에 회고 글·활동유형·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 기본곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서비스가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
+기록 카드는 러닝 기록 하나에 회고 글·활동유형·사진·음악을 붙인 카드다. 화면은 옆으로 넘기는 캐러셀이다 — **첫 장은 기록 지도와 기본곡**, 다음 장부터 **사진 한 장마다 그 사진의 음악**이 나온다. 음악은 AI 서버가 만들어 S3에 올리고, 서버는 key와 생성 상태만 갖는다(9-5).
 
 **기록 카드 공통 객체** (8-1·9-2·9-3 응답):
 
@@ -2524,7 +2524,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
                 서버: 검사 → 사진 key·업로드 URL 발급(10MB 넘는 사진은 조각 URL) → 작성 내용을 Redis에 초안으로 저장 → recordCardDraftId
 앱 → S3        업로드 URL로 사진 업로드 (병렬, 실패한 장·조각만 다시)
 9-2 확정        앱 → 서버: recordCardDraftId
-                서버: 사진이 S3에 있는지 확인(조각은 합친다) → DB에 카드·사진 저장 → 커밋 뒤 음악 생성 요청
+                서버: 사진이 S3에 있는지 확인(조각은 합친다) → DB에 카드·사진 저장 → 커밋 뒤 음악 생성 요청을 Kafka에 발행(9-5)
 ```
 
 - **DB에는 사진까지 확인된 카드만 들어간다** — 확정 전 내용은 Redis의 **초안**(draft)에만 있다. 확정하지 않고 떠나면 임시 정보는 유효 시간이 지나 사라지고, DB에는 아무것도 남지 않는다(feature-spec 기록 카드 임시 저장)
@@ -2867,55 +2867,100 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 9-5. 음악 생성 이벤트 (Kafka, 내부)
 
-> **보류 — 아래는 낡은 초안이다.** AI 서버는 SageMaker Async 엔드포인트(카드 1건 = 요청 1건, 입력은 S3, 완료는 SNS)로 정해졌고, 백엔드가 보내고 받는 방식은 서버 분리 계획과 함께 다시 설계한다. 다시 쓸 때까지 이 절을 구현 기준으로 쓰지 않는다.
+앱이 부르는 API가 아니다 — running-service와 AI 서버 사이의 계약이다. **running-service는 카드를 저장한 뒤 요청 이벤트를 Kafka에 발행하고, AI 서버가 음악을 다 만들면 완료 이벤트를 Kafka에 발행한다. running-service는 완료 토픽을 구독해 음악 생성 상태만 바꾼다.** 음악을 어떻게 만드는지(모델·추론 인프라)는 AI 서버가 맡는다 — running-service는 AI 서버를 직접 호출하지 않는다.
 
-앱이 부르는 API가 아니다 — running-service와 AI 서비스 사이의 계약이다. 서버는 **요청을 보내고 완료를 받아 상태만 바꾼다.** 음악을 어떻게 만드는지는 AI 서비스가 맡는다.
+| 토픽 | 방향 | 단위 | 파티션 키 |
+|---|---|---|---|
+| `record-card.music.requested` | running-service → AI | 카드 저장 한 번(작성·수정·되살리기)에 이벤트 하나 | `recordCardId` |
+| `record-card.music.generated` | AI → running-service | 요청 이벤트 하나에 완료 이벤트 하나 | `recordCardId` |
 
-> **아직 정하지 않은 것**: 토픽 이름·파티션 키·컨슈머 그룹·직렬화(아래는 초안), AI가 생성에 쓸 입력(아래 필드 외에 기록 수치·메모를 실을지), 음악 파일 형식. **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
+- **직렬화는 JSON**이다. 시각은 다른 API와 같이 `LocalDateTime` 문자열이다.
+- **파티션 키를 `recordCardId`로 둔다** — 한 카드의 요청·완료가 같은 파티션에 들어가 순서가 섞이지 않는다.
+- **완료 토픽은 running-service 전체가 컨슈머 그룹 하나로 구독한다** — ALB 뒤에 인스턴스가 여럿이어도 완료 이벤트 하나는 한 인스턴스만 처리한다. 상태 변경은 DB에만 쓰고 인스턴스 메모리에 두지 않으므로 어느 인스턴스가 받아도 같다.
 
-**`record-card.music.requested`** (running-service → AI) — 음악 하나에 이벤트 하나
+**`record-card.music.requested`** (running-service → AI)
 
 ```json
 {
-  "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-...",
-  "kind": "IMAGE",
+  "requestId": "01a0f2d4-6180-7000-8000-446655440099",
   "recordCardId": 88,
-  "runningRecordId": 501,
-  "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+  "memo": "비 그치고 한강을 달렸다. 생각보다 숨이 덜 찼다.",
+  "activityType": "DAILY",
+  "run": {
+    "averagePaceSecondsPerKm": 330,
+    "totalDistanceMeters": 5000,
+    "averageCadenceSpm": 172,
+    "weatherCode": 61
+  },
+  "baseMusic": {
+    "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-..."
+  },
+  "images": [
+    {
+      "recordCardImageId": 301,
+      "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+      "caption": "다리 밑에서 본 노을",
+      "musicKey": "record-cards/01a0f2d4-.../music/7d2e4f10-..."
+    }
+  ],
   "requestedAt": "2026-07-25T21:10:00"
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `musicKey` | String | O | **AI가 음악을 올릴 S3 key** — 서버가 정한다. 완료 이벤트도 이 값으로 돌아온다 |
-| `kind` | String | O | `BASE`(기본곡) · `IMAGE`(사진 음악) |
+| `requestId` | String | O | 요청 ID(UUID v7). 완료 이벤트가 그대로 돌려준다 — 로그·추적용이고, 상태를 찾는 데는 `musicKey`를 쓴다 |
 | `recordCardId` | Integer | O | 카드 ID |
-| `runningRecordId` | Integer | O | 카드가 붙은 기록 ID |
-| `imageKey` | String | X | `IMAGE`일 때 그 사진의 S3 key. `BASE`이면 null |
+| `memo` | String | O | 회고 글(1~500자). 기본곡의 감정·여운 재료 |
+| `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` — 카드 단위 |
+| `run` | Object | O | 카드가 붙은 러닝 기록의 수치. **발행할 때 `running_records`에서 읽어 싣는다** — AI 서버는 기록을 조회하지 않는다 |
+| `run.averagePaceSecondsPerKm` | Integer | O | 평균 페이스(초/km) |
+| `run.totalDistanceMeters` | Integer | O | 거리(미터) |
+| `run.averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록에 없으면 null |
+| `run.weatherCode` | Integer | O | WMO 4677 코드(0~99). **조회 실패 폴백(`0`)과 실제 맑음을 구분할 수 없다** — 기록 쪽 한계다(erd `running_records.weather_code`) |
+| `baseMusic` | Object | X | 기본곡을 만들어야 하면 `{musicKey}`. **수정 요청에서는 null이다** — 기본곡은 다시 만들지 않는다 |
+| `images` | Array | O | 음악을 만들 사진. **이번 저장에서 새로 넣은 사진만** 싣는다. 없으면 빈 배열 |
+| `images[].recordCardImageId` | Integer | O | 사진 ID |
+| `images[].imageKey` | String | O | 사진 S3 key — AI 서버가 S3에서 직접 읽는다 |
+| `images[].caption` | String | X | 사진 설명. 없으면 null |
+| `images[].musicKey` | String | O | 이 사진 음악을 올릴 S3 key |
 | `requestedAt` | String | O | 요청 시각 |
 
-**`record-card.music.generated`** (AI → running-service) — 음악 하나에 이벤트 하나
+- **음악 S3 key는 running-service가 정한다** — 카드·사진 행을 만들 때 key를 함께 저장하고, AI 서버는 받은 `musicKey`에 그대로 올린다. 행에는 처음부터 key가 있고 S3 객체는 완료 뒤에만 있다.
+- **`baseMusic`이 null이고 `images`가 비어 있으면 발행하지 않는다** — 사진을 늘리지 않은 수정은 만들 음악이 없다.
+
+**`record-card.music.generated`** (AI → running-service)
 
 ```json
 {
-  "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-...",
-  "status": "READY",
+  "requestId": "01a0f2d4-6180-7000-8000-446655440099",
+  "recordCardId": 88,
+  "results": [
+    { "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-...", "status": "READY" },
+    { "musicKey": "record-cards/01a0f2d4-.../music/7d2e4f10-...", "status": "FAILED" }
+  ],
   "generatedAt": "2026-07-25T21:11:30"
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `musicKey` | String | O | 요청 이벤트의 `musicKey` 그대로 |
-| `status` | String | O | `READY`(그 key에 S3 객체를 올렸음) · `FAILED`(만들지 못함) |
+| `requestId` | String | O | 요청 이벤트의 `requestId` 그대로 |
+| `recordCardId` | Integer | O | 요청 이벤트의 `recordCardId` 그대로 |
+| `results` | Array | O | 요청에 실은 음악마다 하나. 일부만 성공해도 한 이벤트에 함께 담는다 |
+| `results[].musicKey` | String | O | 요청 이벤트의 `musicKey` 그대로 |
+| `results[].status` | String | O | `READY`(그 key에 S3 객체를 올렸음) · `FAILED`(만들지 못함) |
 | `generatedAt` | String | O | 처리 시각 |
 
-- **받는 쪽 처리**: `musicKey`로 `record_cards.base_music_key`·`record_card_images.music_key`를 찾아 상태를 바꾼다. 둘 다 UNIQUE라 한 행만 나온다
-  - **`PENDING`인 행만 바꾼다** — Kafka는 같은 이벤트를 두 번 줄 수 있다. 이미 `READY`·`FAILED`면 무시한다
-  - **행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다** — 오류로 보고 재시도하지 않는다
-- **요청 이벤트는 커밋한 뒤 보낸다** — 커밋 전에 보내면 롤백된 카드의 음악이 만들어진다. 커밋 뒤 발행이 실패하면 그 음악은 `PENDING`에 머문다. 아웃박스로 보장할지, 재발행 배치를 둘지는 구현 때 정한다
-- **`FAILED`를 다시 만드는 경로는 아직 없다** — 사용자가 다시 요청하는 API나 자동 재시도가 필요해지면 이 절에 더한다
+- **받는 쪽 처리**: `results`의 `musicKey`마다 `record_cards.base_music_key`·`record_card_images.music_key`에서 행을 찾아 상태를 바꾼다. 둘 다 UNIQUE라 한 행만 나온다. 한 이벤트의 결과는 한 트랜잭션에서 바꾼다
+  - **`PENDING`인 행만 바꾼다** — Kafka는 같은 이벤트를 두 번 줄 수 있다(최소 한 번 전달). 이미 `READY`·`FAILED`면 그 결과만 건너뛴다
+  - **행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 그 결과만 건너뛰고 로그를 남긴다** — 오류로 보고 재시도하지 않는다
+  - **요청에 실었는데 `results`에 빠진 음악은 `PENDING`에 남는다** — 계약 위반이라 WARN 로그를 남긴다
+  - **DB 오류로 처리하지 못하면 오프셋을 커밋하지 않는다** — 다시 받아도 위 규칙으로 한 번만 바뀐다
+- **요청 이벤트는 카드 저장을 커밋한 뒤 발행한다** — 커밋 전에 보내면 롤백된 카드의 음악이 만들어진다. 커밋 뒤 발행이 실패하면 그 음악은 `PENDING`에 머문다. 아웃박스로 보장할지, 오래 `PENDING`인 음악을 다시 발행할지는 구현 때 정한다
+- **`FAILED`를 다시 만드는 경로는 아직 없다** — AI 서버는 스스로 재시도하지 않는다. 사용자가 다시 요청하는 API나 자동 재시도가 필요해지면 이 절에 더한다(실패한 음악만 `baseMusic`·`images`에 실어 같은 요청 토픽으로 보낸다)
+
+> **아직 정하지 않은 것**: 컨슈머 그룹 이름, 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
 
 ## 10. 프로필 페이지
 
