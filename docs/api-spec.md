@@ -136,9 +136,9 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 40 | POST | `/api/v1/record-cards/images/presigned-url` | 카드 사진 업로드 URL 발급 (여러 장) |
-| 41 | POST | `/api/v1/record-cards` | 기록 카드 생성 — 기록 하나에 회고 글·활동유형·사진(0~10장)·공개 범위. 음악 생성을 요청한다 |
-| 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새로 넣은 사진만 음악을 만든다 |
+| 40 | POST | `/api/v1/record-cards` | 기록 카드 작성 요청 — 검사 후 사진 업로드 URL 발급(10MB 초과는 조각 URL), 작성 내용은 Redis 초안에 저장 |
+| 41 | POST | `/api/v1/record-cards/drafts/{recordCardDraftId}/complete` | 업로드 확정 — 사진을 S3에서 확인한 뒤 카드 저장(작성)·반영(수정), 음악 생성 요청 |
+| 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새 사진이 있으면 업로드 URL을 받고 41로 확정 |
 | 43 | DELETE | `/api/v1/record-cards/{recordCardId}` | 기록 카드 삭제 (소프트 삭제) |
 | — | Kafka | `record-card.music.requested` / `record-card.music.generated` | 음악 생성 요청·완료 이벤트 — AI 서비스와의 내부 계약(9-5) |
 
@@ -2519,68 +2519,35 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ## 9. 기록 카드 작성·편집
 
-**흐름**: 기록 화면(7-1)에서 지난 러닝을 고른다 → 사진을 고르면 9-1로 업로드 URL을 받아 S3에 올린다 → 회고 글을 쓰고 활동유형을 고른다 → 생성을 누르면 9-2. 서버는 카드를 저장하고 기본곡 1개와 사진마다 음악 1개의 생성을 AI에 요청한다(9-5).
+**흐름 — 사진은 Redis를 거쳐 확정한다**
 
-### 9-1. `POST /api/v1/record-cards/images/presigned-url` — 카드 사진 업로드 URL 발급 (여러 장)
-
-- **Request**
-
-```json
-{
-  "files": [
-    {
-      "mimeType": "image/jpeg",
-      "fileSizeBytes": 204800
-    }
-  ]
-}
+```
+9-1 작성 요청   앱 → 서버: 기록·회고 글·활동유형·공개 범위·사진 정보(형식·크기)
+                서버: 검사 → 사진 key·업로드 URL 발급(10MB 넘는 사진은 조각 URL) → 작성 내용을 Redis에 초안으로 저장 → recordCardDraftId
+앱 → S3        업로드 URL로 사진 업로드 (병렬, 실패한 장·조각만 다시)
+9-2 확정        앱 → 서버: recordCardDraftId
+                서버: 사진이 S3에 있는지 확인(조각은 합친다) → DB에 카드·사진 저장 → 커밋 뒤 음악 생성 요청
 ```
 
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---|---|
-| `files` | Array | O | 1개 이상 10개 이하 |
-| `files[].mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) — 11-1과 같다 |
-| `files[].fileSizeBytes` | Integer | O | 1 이상 10,485,760(10MB) 이하 — 서명에 포함되므로 실제 업로드 크기와 같아야 한다 |
+- **DB에는 사진까지 확인된 카드만 들어간다** — 확정 전 내용은 Redis의 **초안**(draft)에만 있다. 확정하지 않고 떠나면 임시 정보는 유효 시간이 지나 사라지고, DB에는 아무것도 남지 않는다(feature-spec 기록 카드 임시 저장)
+- **사진이 0장이어도 같은 두 단계다** — 응답 모양을 하나로 맞추려는 것이다. 0장이면 9-1의 `uploads`가 비어 있고 바로 9-2를 부른다
+- **사진 크기에 따라 올리는 방식이 갈린다** — 10MB 이하는 URL 하나로 한 번에(`SINGLE`), 10MB를 넘으면(최대 100MB) S3 Multipart Upload로 조각을 나눠 올린다(`MULTIPART`). 방식은 서버가 9-1에서 받은 크기로 정한다
+- **수정(9-3)에서 새 사진을 넣을 때도 같은 확정(9-2)을 거친다** — 새 사진이 없으면 9-3이 바로 반영한다
 
-- **Response `200 OK`** — `files`와 같은 순서로 매핑
+### 9-1. `POST /api/v1/record-cards` — 기록 카드 작성 요청 (업로드 URL 발급)
 
-```json
-{
-  "uploads": [
-    {
-      "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
-      "uploadUrl": "https://..."
-    }
-  ]
-}
-```
-
-- `imageKey` 포맷은 `record-cards/{userId}/images/{imageId}.{확장자}`다 — 소유자 검증에 쓰이므로 클라가 임의로 만들지 않는다. 확장자·업로드 헤더(`Content-Type` 소문자 정규값)·`uploadUrl` 유효 시간(운영값, 현재 10분)은 11-1과 같다
-- **발급만으로는 카드에 붙지 않는다** — 9-2·9-3에 `imageKey`를 실어야 붙는다. 쓰지 않은 객체는 S3에 남는다
-
-- **에러 (400 Bad Request)**: 11-1의 형식·크기 문구에 아래가 더해진다
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "사진은 1장 이상 10장 이하로 요청해야 합니다."
-}
-```
-
-- **인증**: 필요
-
-### 9-2. `POST /api/v1/record-cards` — 기록 카드 생성
-
+- **화면**: 기록 카드 작성 — 생성 버튼
 - **Request**
 
 ```json
 {
   "runningRecordId": 501,
-  "visibility": "PUBLIC",
   "activityType": "DAILY",
   "memo": "한강 야간 러닝, 바람이 좋았다",
-  "imageKeys": [
-    "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg"
+  "visibility": "PUBLIC",
+  "images": [
+    { "mimeType": "image/jpeg", "fileSizeBytes": 204800 },
+    { "mimeType": "image/png", "fileSizeBytes": 512000 }
   ],
   "thumbnailIndex": 0
 }
@@ -2589,20 +2556,62 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `runningRecordId` | Integer | O | 카드를 붙일 내 러닝 기록 |
-| `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
 | `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` |
 | `memo` | String | O | **회고 글**, 1~500자. 공백만 있으면 400 — AI가 기본곡을 만들 때 감정·여운을 읽는다 |
-| `imageKeys` | String[] | X | 0개 이상 10개 이하. 9-1이 발급하고 업로드를 마친 key. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
-| `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `imageKeys` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
+| `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
+| `images` | Array | X | 올릴 사진 0~10장. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
+| `images[].mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) — 11-1과 같다 |
+| `images[].fileSizeBytes` | Integer | O | 1 이상 104,857,600(100MB) 이하. 실제 업로드 크기와 같아야 한다 — 한 번에 올리면 서명에 들어가고, 나눠 올리면 조각 수가 이 값으로 정해진다 |
+| `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `images` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
 
-- **Response `201 Created`**: 기록 카드 공통 객체 — 음악은 전부 `status = PENDING`, `musicUrl = null`이다
-- **동작**
-  - 카드와 사진 행을 한 트랜잭션에 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·활동유형·회고 글을 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 기본곡도 새 key로 다시 만든다. 순위(`display_order`)는 맨 뒤(최댓값 + 1)가 된다. `recordCardId`·`createdAt`은 예전 값 그대로다(`erd.md` `record_cards` 되살리기). 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다
-  - **순위는 그 사람의 살아 있는 카드 중 최댓값 + 1이다**(첫 카드면 1). 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
-  - **커밋한 뒤 음악마다 생성 요청 이벤트를 하나씩 보낸다**(기본곡 1 + 사진 수, 9-5)
-- **검증 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409) → 사진 key(400)
+- **Response `200 OK`** — 카드는 아직 없다. `uploads`는 `images`와 같은 순서다
+
+```json
+{
+  "recordCardDraftId": "3f2a9c1e-7b4d-4e0a-9c55-1d2e3f4a5b6c",
+  "expiresAt": "2026-07-25T21:40:00",
+  "uploads": [
+    {
+      "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+      "uploadType": "SINGLE",
+      "uploadUrl": "https://..."
+    },
+    {
+      "imageKey": "record-cards/01a0f2d4-.../images/2b7e9f1c-....png",
+      "uploadType": "MULTIPART",
+      "partSizeBytes": 10485760,
+      "parts": [
+        { "partNumber": 1, "uploadUrl": "https://..." },
+        { "partNumber": 2, "uploadUrl": "https://..." },
+        { "partNumber": 3, "uploadUrl": "https://..." }
+      ]
+    }
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 확정된 카드의 `recordCardId`(숫자)와 다르다 |
+| `expiresAt` | String | O | 이 시각까지 9-2로 확정해야 한다(운영값, 현재 발급 뒤 30분) |
+| `uploads` | Array | O | 사진마다 업로드할 곳. 사진이 없으면 빈 배열 |
+| `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/images/{imageId}.{확장자}`. 서버가 정한다 |
+| `uploads[].uploadType` | String | O | `SINGLE`(10MB 이하, 한 번에) · `MULTIPART`(10MB 초과, 조각으로) |
+| `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)·유효 시간(운영값, 현재 10분)은 11-1과 같다 |
+| `uploads[].partSizeBytes` | Integer | X | `MULTIPART`일 때만. 조각 크기(현재 10MB). 마지막 조각만 이보다 작다 |
+| `uploads[].parts` | Array | X | `MULTIPART`일 때만. 조각마다 `partNumber`(1부터)와 presigned PUT URL. 조각 수 = `fileSizeBytes ÷ partSizeBytes` 올림 |
+
+- **나눠 올리기(`MULTIPART`)**
+  - 서버가 사진마다 S3 Multipart Upload를 시작하고, **S3가 준 `UploadId`는 앱에 주지 않고 초안에만 둔다** — 앱은 조각 URL로 올리기만 한다
+  - 앱은 파일을 `partSizeBytes`씩 잘라 `partNumber`에 맞는 URL로 PUT한다. 병렬로 올려도 되고, 실패한 조각만 다시 올리면 된다
+  - 조각을 합치는 일(`CompleteMultipartUpload`)은 9-2에서 서버가 한다 — 앱이 조각별 ETag를 모아 보낼 필요가 없다(서버가 `ListParts`로 읽는다)
+  - 조각 URL의 유효 시간은 초안과 같다(현재 30분) — 큰 파일은 모바일에서 오래 걸릴 수 있어서다
+
+- **검사 순서**: 요청 형식(400) → 기록이 있고 내 것인지(404) → 이미 카드가 있는지(409). **사진이 올라왔는지는 9-2에서 본다**
   - 숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 없는 기록으로 본다 — 7-1에서 빠지는 것과 맞춘다
-  - 사진 key는 11-2와 같이 본인 프리픽스(`record-cards/{userId}/images/`)인지, S3에 올라왔는지, 크기·`Content-Type`이 허용값인지 본다
+  - 사진을 올리기 전에 기록·회고 글·중복을 걸러, 쓸모없는 업로드를 하지 않게 한다
+- **작성 내용은 Redis에만 둔다** — DB에는 아무것도 쓰지 않는다. 7-1의 `recordCardId`도 아직 null이다
+- **같은 기록으로 다시 요청하면 새 `recordCardDraftId`가 나온다** — 이전 요청은 유효 시간까지 남지만, 먼저 확정한 쪽만 카드가 된다(다른 쪽 확정은 409)
 
 - **에러 (400 Bad Request — 요청 검증)**
 
@@ -2610,11 +2619,6 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "code": "INVALID_REQUEST",
   "message": "러닝 기록 ID는 필수입니다."
-}
-
-{
-  "code": "INVALID_REQUEST",
-  "message": "공개 범위는 필수입니다."
 }
 
 {
@@ -2634,12 +2638,22 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
+  "message": "공개 범위는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "사진은 10장 이하만 넣을 수 있습니다."
 }
 
 {
   "code": "INVALID_REQUEST",
-  "message": "같은 사진을 두 번 넣을 수 없습니다."
+  "message": "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "이미지는 100MB 이하만 업로드할 수 있습니다."
 }
 
 {
@@ -2648,23 +2662,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (400 Bad Request — 본인 key가 아니거나, 올라간 파일이 10MB를 넘거나 `Content-Type`이 허용값이 아님)**
-
-```json
-{
-  "code": "INVALID_RECORD_CARD_IMAGE",
-  "message": "기록 카드 사진이 올바르지 않습니다."
-}
-```
-
-- **에러 (400 Bad Request — key에 해당하는 객체가 S3에 없음)**
-
-```json
-{
-  "code": "RECORD_CARD_IMAGE_NOT_UPLOADED",
-  "message": "업로드되지 않은 이미지입니다."
-}
-```
+- 이미지 형식·크기의 나머지 문구(필수·1바이트 이상)는 11-1과 같다
 
 - **에러 (404 Not Found — 기록이 없거나 내 기록이 아님)**
 
@@ -2684,8 +2682,77 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **기록과 카드는 1:1이다** — 다시 만들고 싶으면 9-3으로 고치거나 9-4로 지운 뒤 만든다. 처음 만드는 요청이 동시에 두 번 오면 `running_record_id` UNIQUE가 하나만 남기고 나머지는 409다. 지운 카드를 되살리는 요청이 겹치면 카드 행을 잠그고 처리해, 뒤의 요청은 살아 있는 카드를 보고 409다
 - **인증**: 필요
+
+### 9-2. `POST /api/v1/record-cards/drafts/{recordCardDraftId}/complete` — 업로드 확정
+
+- **화면**: 기록 카드 작성·편집 — 사진 업로드를 마친 직후(사진이 없으면 9-1 응답 직후)
+- **Request**: 본문 없음. `recordCardDraftId`는 9-1 또는 9-3이 준 값
+- **동작**
+  1. Redis에서 `recordCardDraftId`의 초안을 읽는다 — 없거나, 만료됐거나, 다른 사람의 것이면 404
+  2. 새 사진마다 S3를 확인한다
+     - `SINGLE`: 11-2와 같이 객체가 있는지(HEAD), 크기·`Content-Type`이 9-1(또는 9-3)에서 받은 값과 맞는지 본다
+     - `MULTIPART`: `ListParts`로 조각이 전부 올라왔는지(개수·크기) 보고, `CompleteMultipartUpload`로 합친 뒤 위와 같이 HEAD로 확인한다. 합친 사진은 초안에 "합침"으로 표시해 두어, 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
+  3. 확정 시점에 다시 검사한다 — 9-1 뒤에 다른 요청이 먼저 카드를 만들었으면 409, 9-3 뒤에 카드가 바뀌었으면 409 `RECORD_CARD_CHANGED`, 카드가 지워졌으면 404
+  4. DB에 한 트랜잭션으로 반영한다
+     - **작성(9-1에서 온 것)**: 카드·사진 행을 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·활동유형·회고 글을 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 순위(`display_order`)는 살아 있는 내 카드 중 최댓값 + 1이고, 되살려도 맨 뒤가 된다. 기본곡도 새로 만든다. `recordCardId`·`createdAt`은 되살릴 때 예전 값 그대로다(`erd.md` `record_cards` 되살리기)
+     - **수정(9-3에서 온 것)**: 9-3이 받은 변경을 한 번에 반영한다(아래 9-3 사진 처리)
+     - 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다. 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
+  5. 커밋한 뒤 임시 정보를 "확정됨"으로 바꾸고, 음악 생성을 요청한다 — 작성이면 기본곡 + 사진 전부, 수정이면 새 사진만(9-5)
+- **Response**
+  - 작성: `201 Created` — 기록 카드 공통 객체. 음악은 전부 `status = PENDING`, `musicUrl = null`이다
+  - 수정: `200 OK` — 수정된 기록 카드 공통 객체
+- **사진 확인에 실패하면 아무것도 저장하지 않고 임시 정보도 그대로 둔다** — 앱은 빠진 사진을 다시 올리고 다시 확정하면 된다. 업로드 URL이 만료됐으면 9-1(또는 9-3)부터 다시 한다
+- **같은 `recordCardDraftId`로 다시 부르면 처음 확정한 결과를 그대로 돌려준다** — 응답을 받지 못한 재시도가 두 번째 카드를 만들거나 409를 받지 않게 한다. "확정됨" 표시는 임시 정보의 유효 시간까지 남는다
+- **동시에 두 번 오면 하나만 처리한다** — `recordCardDraftId` 단위로 잠그고, 뒤의 요청은 앞의 결과를 기다려 같은 응답을 받는다
+
+- **에러 (400 Bad Request — 사진 key에 해당하는 객체가 S3에 없음, 나눠 올린 조각이 빠짐)**
+
+```json
+{
+  "code": "RECORD_CARD_IMAGE_NOT_UPLOADED",
+  "message": "업로드되지 않은 이미지입니다."
+}
+```
+
+- **에러 (400 Bad Request — 올라간 파일의 크기·`Content-Type`이 요청과 다름)**
+
+```json
+{
+  "code": "INVALID_RECORD_CARD_IMAGE",
+  "message": "기록 카드 사진이 올바르지 않습니다."
+}
+```
+
+- **에러 (404 Not Found — `recordCardDraftId`가 없거나 만료됐거나 내 것이 아님, 수정 대상 카드가 지워짐)**
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
+}
+```
+
+- **에러 (409 Conflict — 작성: 그사이 이 기록에 다른 카드가 확정됨)**
+
+```json
+{
+  "code": "RECORD_CARD_ALREADY_EXISTS",
+  "message": "이미 기록 카드가 있는 러닝입니다."
+}
+```
+
+- **에러 (409 Conflict — 수정: 9-3 뒤에 카드가 다른 수정으로 바뀜)**
+
+```json
+{
+  "code": "RECORD_CARD_CHANGED",
+  "message": "기록 카드가 그사이 바뀌었습니다. 다시 불러와 수정해 주세요."
+}
+```
+
+- **카드가 바뀌었는지는 9-3 때의 `record_cards.updated_at`과 비교한다** — 남길 사진 ID·순서가 9-3을 보낸 화면 기준이라, 그 뒤에 바뀐 카드에 덮으면 사진이 섞인다
+- **인증**: 필요 (초안을 만든 사람)
 
 ### 9-3. `PATCH /api/v1/record-cards/{recordCardId}` — 기록 카드 수정
 
@@ -2699,7 +2766,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "visibility": "FRIENDS",
   "images": [
     { "recordCardImageId": 301 },
-    { "imageKey": "record-cards/01a0f2d4-.../images/2b7e9f1c-....jpg" }
+    { "mimeType": "image/jpeg", "fileSizeBytes": 204800 }
   ],
   "thumbnailIndex": 1
 }
@@ -2710,17 +2777,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `memo` | String | X | 회고 글, 1~500자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
 | `activityType` | String | X | `DAILY` · `TRAVEL` · `RACE` |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
-| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(남길 기존 사진)나 `imageKey`(새 사진) 중 **정확히 하나** |
+| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(남길 기존 사진) **또는** `mimeType`·`fileSizeBytes`(새로 올릴 사진, 9-1과 같은 규칙) 중 **한 가지** |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
 
 - **필드를 생략하면 현재 값을 그대로 둔다** — `images`를 생략하면 사진은 그대로, 빈 배열이면 사진을 전부 뺀다
-- **사진 처리**
+- **새 사진이 없으면 바로 반영한다** — `Response 200 OK`: 수정된 기록 카드 공통 객체
+- **새 사진이 있으면 아직 반영하지 않는다** — 변경 전체를 Redis에 임시 저장하고 업로드 URL을 내준다. 앱이 사진을 올리고 9-2로 확정하면 그때 **회고 글·공개 범위 등 다른 변경까지 한 번에** 반영한다. 확정 전까지 카드는 그대로다
+  - `Response 202 Accepted`: 9-1 응답과 같은 모양(`recordCardDraftId`·`expiresAt`·`uploads`). `uploads`는 `images` 안의 새 사진만, 그 순서대로 담는다
+- **사진 처리**(바로 반영할 때와 9-2 확정 때 같다)
   - 남긴 사진(`recordCardImageId`)은 음악과 생성 상태를 그대로 두고 순서만 다시 매긴다
-  - 새 사진(`imageKey`)은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
+  - 새 사진은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
   - 목록에서 빠진 사진은 행을 지운다 — 그 사진의 음악도 함께 버린다. 생성 중이었다면 나중에 오는 완료 이벤트는 무시된다
 - **썸네일 처리**: `thumbnailIndex`를 보내면 그 사진으로 바꾼다. 생략하면 지금 썸네일을 유지하되, 그 사진이 빠졌으면 수정 뒤 첫 사진으로, 사진이 하나도 없으면 null로 바꾼다
 - **기본곡은 다시 만들지 않는다** — 회고 글·활동유형·공개 범위·사진을 바꿔도 기본곡은 그대로다. 회고 글·활동유형을 바꿀 때 다시 만들지는 AI 쪽 정책이 정해지면 정한다
-- **Response `200 OK`**: 수정된 기록 카드 공통 객체
 
 - **에러 (400 Bad Request — 요청 검증)**
 
@@ -2742,7 +2811,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "사진 항목에는 기존 사진 ID와 새 사진 키 중 하나만 넣어야 합니다."
+  "message": "사진 항목에는 기존 사진 ID와 새 사진 정보 중 하나만 넣어야 합니다."
 }
 
 {
@@ -2756,21 +2825,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **에러 (400 Bad Request — 새 사진 key가 올바르지 않거나, `recordCardImageId`가 이 카드의 사진이 아님)**
+- 새 사진의 형식·크기 문구는 9-1과 같다
+
+- **에러 (400 Bad Request — `recordCardImageId`가 이 카드의 사진이 아님)**
 
 ```json
 {
   "code": "INVALID_RECORD_CARD_IMAGE",
   "message": "기록 카드 사진이 올바르지 않습니다."
-}
-```
-
-- **에러 (400 Bad Request — 새 사진 key에 해당하는 객체가 S3에 없음)**
-
-```json
-{
-  "code": "RECORD_CARD_IMAGE_NOT_UPLOADED",
-  "message": "업로드되지 않은 이미지입니다."
 }
 ```
 
@@ -2784,7 +2846,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **내 카드가 아니어도 404다** — 8-1과 같이 남의 카드가 있는지 드러내지 않는다
-- **같은 카드에 대한 수정은 카드 행을 잠그고 처리한다** — 두 수정이 동시에 사진 순서를 다시 매기면 순서가 겹친다(`erd.md` `record_card_images`)
+- **같은 카드에 대한 반영은 카드 행을 잠그고 처리한다** — 두 수정이 동시에 사진 순서를 다시 매기면 순서가 겹친다(`erd.md` `record_card_images`). 9-2 확정도 같은 잠금을 쓴다
 - **인증**: 필요 (작성자)
 
 ### 9-4. `DELETE /api/v1/record-cards/{recordCardId}` — 기록 카드 삭제
@@ -2806,6 +2868,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **인증**: 필요 (작성자)
 
 ### 9-5. 음악 생성 이벤트 (Kafka, 내부)
+
+> **보류 — 아래는 낡은 초안이다.** AI 서버는 SageMaker Async 엔드포인트(카드 1건 = 요청 1건, 입력은 S3, 완료는 SNS)로 정해졌고, 백엔드가 보내고 받는 방식은 서버 분리 계획과 함께 다시 설계한다. 다시 쓸 때까지 이 절을 구현 기준으로 쓰지 않는다.
 
 앱이 부르는 API가 아니다 — running-service와 AI 서비스 사이의 계약이다. 서버는 **요청을 보내고 완료를 받아 상태만 바꾼다.** 음악을 어떻게 만드는지는 AI 서비스가 맡는다.
 
