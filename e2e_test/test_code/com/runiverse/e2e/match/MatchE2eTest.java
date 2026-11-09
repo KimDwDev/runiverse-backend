@@ -184,6 +184,7 @@ class MatchE2eTest extends E2eTestSupport {
         assertThat(offSlot.text("message")).isEqualTo("시작 시각은 18:00부터 22:00까지 60분 간격으로만 선택할 수 있습니다.");
         assertThat(offDistance.status()).isEqualTo(400);
         assertThat(offDistance.text("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(offDistance.text("message")).isEqualTo("목표 거리는 3000, 5000, 10000 중 하나여야 합니다.");
         assertThat(get("/users/me/status", user.accessToken()).text("status")).isEqualTo("IDLE");
     }
 

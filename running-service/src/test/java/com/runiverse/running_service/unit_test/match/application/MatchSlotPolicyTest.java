@@ -269,7 +269,7 @@ class MatchSlotPolicyTest {
         void operatingSettingsPass() {
             // when & then
             assertThat(validate(LocalTime.of(18, 0), LocalTime.of(22, 0),
-                    Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000))).isEmpty();
+                    Duration.ofMinutes(60), List.of(3_000, 5_000, 10_000))).isEmpty();
         }
 
         @Test

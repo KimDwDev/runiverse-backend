@@ -42,7 +42,7 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
     private static final MatchProperties MATCH_PROPERTIES = new MatchProperties(
             Duration.ofMinutes(10), Duration.ofMinutes(5), Duration.ofSeconds(10), Duration.ofHours(6),
             10, Duration.ofMinutes(20),
-            LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
+            LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(60), List.of(3_000, 5_000, 10_000));
 
     private GetMatchSlotsHandler handler;
 
@@ -65,9 +65,9 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
         // when
         GetMatchSlotsResult result = handler.handle(new GetMatchSlotsQuery(TOMORROW));
 
-        // then -> 9개 슬롯 중 19:00(index 2)·20:00(index 4)만 사람이 있다
+        // then -> 5개 슬롯 중 19:00(index 1)·20:00(index 2)만 사람이 있다
         assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
-                .containsExactly(0, 0, 3, 0, 4, 0, 0, 0, 0);
+                .containsExactly(0, 3, 4, 0, 0);
         assertThat(slotsOf(result, TARGET_DISTANCE)).allMatch(MatchSlot::selectable);
     }
 
@@ -86,9 +86,9 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
                 .containsExactly(3_000, 5_000, 10_000);
         assertThat(slotsOf(result, 3_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
         assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
-                .containsExactly(0, 0, 2, 0, 0, 0, 0, 0, 0);
+                .containsExactly(0, 2, 0, 0, 0);
         assertThat(slotsOf(result, 10_000)).extracting(MatchSlot::waitingCount)
-                .containsExactly(0, 0, 3, 0, 0, 0, 0, 0, 0);
+                .containsExactly(0, 3, 0, 0, 0);
     }
 
     @Test
@@ -108,7 +108,7 @@ public class GetMatchSlotsIntegrationTest extends IntegrationTestSupport {
         assertThat(result.distances()).extracting(DistanceSlots::targetDistanceMeters)
                 .containsExactly(3_000, 5_000, 10_000);
         assertThat(slotsOf(result, TARGET_DISTANCE)).extracting(MatchSlot::waitingCount)
-                .containsExactly(0, 0, 1, 0, 0, 0, 0, 0, 0);
+                .containsExactly(0, 1, 0, 0, 0);
         assertThat(slotsOf(result, 3_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
         assertThat(slotsOf(result, 10_000)).extracting(MatchSlot::waitingCount).containsOnly(0);
     }
