@@ -1407,16 +1407,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "targetDistanceMeters": 3000,
       "slots": [
         { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 2, "selectable": true },
-        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 0, "selectable": true }
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 2, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T20:00:00", "waitingCount": 0, "selectable": true }
       ]
     },
     {
       "targetDistanceMeters": 5000,
       "slots": [
         { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
-        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 3, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T20:00:00", "waitingCount": 1, "selectable": true }
       ]
     }
   ]
@@ -1424,7 +1424,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `distances`는 신청 가능한 거리(현재 운영값 3000·5000·10000) 전부를 **`targetDistanceMeters` 오름차순**으로 담는다. 대기자가 하나도 없는 거리도 빠지지 않는다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 인원을 합산하지 않는다
-- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 1시간 간격) 5개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
 - 응답에 조회 날짜를 따로 싣지 않는다 — `scheduledStartAt`이 날짜를 담는다
 - `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
 - `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감). 마감은 시각으로만 갈리므로 같은 시각이면 거리가 달라도 값이 같다
@@ -1459,7 +1459,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
+| `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **1시간 간격**(`18:00`, `19:00`, … `22:00`) |
 | `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
 - **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /match-rooms/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
@@ -1495,7 +1495,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "시작 시각은 18:00부터 22:00까지 30분 간격으로만 선택할 수 있습니다."
+  "message": "시작 시각은 18:00부터 22:00까지 60분 간격으로만 선택할 수 있습니다."
 }
 
 {
