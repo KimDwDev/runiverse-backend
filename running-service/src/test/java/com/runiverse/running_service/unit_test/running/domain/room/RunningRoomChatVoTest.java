@@ -1,10 +1,10 @@
-package com.runiverse.running_service.unit_test.chat.domain;
+package com.runiverse.running_service.unit_test.running.domain.room;
 
-import com.runiverse.running_service.domain.chat.exception.InvalidRunningRoomChatIdException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatContentRequiredException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatContentTooLongException;
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatContent;
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatId;
+import com.runiverse.running_service.domain.running.room.exception.InvalidRunningRoomChatIdException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatContentRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatContentTooLongException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

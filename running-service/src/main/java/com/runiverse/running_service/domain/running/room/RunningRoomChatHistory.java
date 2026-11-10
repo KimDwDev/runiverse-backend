@@ -1,7 +1,7 @@
-package com.runiverse.running_service.domain.chat;
+package com.runiverse.running_service.domain.running.room;
 
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatContent;
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatId;
 import lombok.Getter;
 
 // 채팅 하나를 고칠 때 남기는 고치기 직전 내용 — 운영(신고 대응) 전용이라 쓰기만 하고 되읽지 않는다.

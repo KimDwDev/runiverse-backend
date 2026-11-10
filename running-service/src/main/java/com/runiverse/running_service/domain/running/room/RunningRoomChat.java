@@ -1,13 +1,13 @@
-package com.runiverse.running_service.domain.chat;
+package com.runiverse.running_service.domain.running.room;
 
-import com.runiverse.running_service.domain.chat.exception.NotRunningRoomChatSenderException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatChangedAtRequiredException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatDeletedException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatNotSavedException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatRoomRequiredException;
-import com.runiverse.running_service.domain.chat.exception.RunningRoomChatSenderRequiredException;
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatContent;
-import com.runiverse.running_service.domain.chat.vo.RunningRoomChatId;
+import com.runiverse.running_service.domain.running.room.exception.NotRunningRoomChatSenderException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatChangedAtRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatDeletedException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatNotSavedException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatRoomRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatSenderRequiredException;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import lombok.Getter;
@@ -17,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 // 대기방에서 오간 채팅 한 건 — 보낸 본인만 고치고 지운다. 지우면 되돌리지 않고 그 뒤로는 고칠 수 없다.
+// 방과 같은 패키지지만 RunningRoom이 들고 있지 않은 별도 애그리거트다 — 방은 ID로만 가리킨다.
+// 방에 넣으면 채팅마다 방 행을 잠가 참가·이탈과 서로 기다린다(architecture.md 레이어별 규칙).
 // 방 안에 있는지(배정·JOINED·방 MATCHING/MATCHED)는 방과 신청을 봐야 해서 application이 판정한다.
 // 보낸 사람이 탈퇴해도 이 채팅은 그대로다 — 탈퇴는 users에 행이 없는 것으로 드러난다
 @Getter
