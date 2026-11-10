@@ -22,6 +22,7 @@ import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageCaption;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardMemo;
@@ -69,6 +70,22 @@ class RecordCardTest {
                             tuple(imageKey("a"), 0, MusicStatus.PENDING),
                             tuple(imageKey("b"), 1, MusicStatus.PENDING));
             assertThat(card.getThumbnailImageKey()).contains(new RecordCardImageKey(imageKey("a")));
+        }
+
+        @Test
+        @DisplayName("사진 설명을 함께 넣고, 비운 설명은 설명 없음으로 둔다")
+        void createWithCaption() {
+            // given
+            List<ImageDraft> drafts = List.of(
+                    new ImageDraft(imageKey("a"), musicKey("a"), "다리 밑 노을"),
+                    new ImageDraft(imageKey("b"), musicKey("b"), "  "));
+
+            // when
+            RecordCard card = create(drafts, null);
+
+            // then
+            assertThat(card.getImages().get(0).getCaption()).contains(new RecordCardImageCaption("다리 밑 노을"));
+            assertThat(card.getImages().get(1).getCaption()).isEmpty();
         }
 
         @Test
@@ -124,8 +141,8 @@ class RecordCardTest {
         void rejectDuplicateImage() {
             // given
             List<ImageDraft> drafts = List.of(
-                    new ImageDraft(imageKey("a"), musicKey("1")),
-                    new ImageDraft(imageKey("a"), musicKey("2")));
+                    new ImageDraft(imageKey("a"), musicKey("1"), null),
+                    new ImageDraft(imageKey("a"), musicKey("2"), null));
 
             // when & then
             assertThatThrownBy(() -> create(drafts, null))
@@ -137,9 +154,9 @@ class RecordCardTest {
         void rejectDuplicateMusicKey() {
             // given -> 음악 key가 겹치면 완료 알림이 어느 음악인지 가릴 수 없다
             List<ImageDraft> sameAsEachOther = List.of(
-                    new ImageDraft(imageKey("a"), musicKey("1")),
-                    new ImageDraft(imageKey("b"), musicKey("1")));
-            List<ImageDraft> sameAsBase = List.of(new ImageDraft(imageKey("a"), BASE_MUSIC_KEY));
+                    new ImageDraft(imageKey("a"), musicKey("1"), null),
+                    new ImageDraft(imageKey("b"), musicKey("1"), null));
+            List<ImageDraft> sameAsBase = List.of(new ImageDraft(imageKey("a"), BASE_MUSIC_KEY, null));
 
             // when & then
             assertThatThrownBy(() -> create(sameAsEachOther, null))
@@ -218,6 +235,22 @@ class RecordCardTest {
             assertThat(card.getImages())
                     .extracting(image -> image.getImageKey().value())
                     .containsExactly(imageKey("a"), imageKey("b"));
+        }
+
+        @Test
+        @DisplayName("저장된 사진 설명을 되살리고, 비어 있으면 설명 없음으로 둔다")
+        void restoreCaption() {
+            // given
+            List<RecordCardImage> images = List.of(
+                    RecordCardImage.restore(1L, imageKey("a"), "다리 밑 노을", musicKey("a"), MusicStatus.READY, 0),
+                    RecordCardImage.restore(2L, imageKey("b"), null, musicKey("b"), MusicStatus.READY, 1));
+
+            // when
+            RecordCard card = restored(images, imageKey("a"));
+
+            // then
+            assertThat(card.getImages().get(0).getCaption()).contains(new RecordCardImageCaption("다리 밑 노을"));
+            assertThat(card.getImages().get(1).getCaption()).isEmpty();
         }
 
         @Test
@@ -642,9 +675,9 @@ class RecordCardTest {
     // a(READY)·b(FAILED)·c(PENDING), 썸네일은 a
     private static RecordCard restoredWithThreeImages() {
         List<RecordCardImage> images = List.of(
-                RecordCardImage.restore(1L, imageKey("a"), musicKey("a"), MusicStatus.READY, 0),
-                RecordCardImage.restore(2L, imageKey("b"), musicKey("b"), MusicStatus.FAILED, 1),
-                RecordCardImage.restore(3L, imageKey("c"), musicKey("c"), MusicStatus.PENDING, 2));
+                RecordCardImage.restore(1L, imageKey("a"), null, musicKey("a"), MusicStatus.READY, 0),
+                RecordCardImage.restore(2L, imageKey("b"), null, musicKey("b"), MusicStatus.FAILED, 1),
+                RecordCardImage.restore(3L, imageKey("c"), null, musicKey("c"), MusicStatus.PENDING, 2));
         return restored(images, imageKey("a"));
     }
 
@@ -664,7 +697,7 @@ class RecordCardTest {
     }
 
     private static RecordCardImage storedImage(Long id, String name, int sortOrder) {
-        return RecordCardImage.restore(id, imageKey(name), musicKey(name), MusicStatus.READY, sortOrder);
+        return RecordCardImage.restore(id, imageKey(name), null, musicKey(name), MusicStatus.READY, sortOrder);
     }
 
     private static List<ImageDraft> drafts(int count) {
@@ -676,7 +709,7 @@ class RecordCardTest {
     }
 
     private static ImageDraft draft(String name) {
-        return new ImageDraft(imageKey(name), musicKey(name));
+        return new ImageDraft(imageKey(name), musicKey(name), null);
     }
 
     private static ImageSlot keep(Long recordCardImageId) {
