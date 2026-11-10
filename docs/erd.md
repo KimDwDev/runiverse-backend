@@ -221,7 +221,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| running_room_chat_id | bigint | PK | API `chatMessageId`(Long). 생성 순서대로 늘어나 정렬·커서·클라 중복 제거의 기준이다 |
+| running_room_chat_id | bigint | PK | API `chatId`(Long). 생성 순서대로 늘어나 정렬·커서·클라 중복 제거의 기준이다 |
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 메시지가 오간 방. `running_room_sessions`와 같은 정책 |
 | user_id | UUID | → users, NOT NULL | 보낸 사람. **논리 참조** — 탈퇴해도 메시지는 남고 "탈퇴 유저"로 보인다. 탈퇴는 이 행을 건드리지 않는다(`deleted_at`을 찍지 않는다 — 탈퇴 여부는 `users`에 행이 없다는 것으로 이미 드러난다) |
 | content | text | NOT NULL | **지금 보이는 내용**, 1~200자. 수정하면 새 값으로 덮고 직전 값은 `running_room_chat_histories`로 옮긴다. 공백만 있는 글은 도메인 VO가 거른다. **지워도 남긴다** — 신고 대응 근거이며, API로는 내려주지 않는다 |
@@ -248,7 +248,7 @@
 | created_at | timestamp | NOT NULL | 고친 시각. **write-once라 `created_at`만 둔다** |
 
 > **수정한 사람 컬럼이 없다** — 보낸 본인만 고칠 수 있어 언제나 메시지의 `user_id`다.
-> **수정 이력은 테이블, 이벤트 기록은 로그다** — 수정·삭제 성공마다 `[채팅]` INFO 로그에 `runningRoomId`·`chatMessageId`만 남기고 내용은 남기지 않는다(logging-convention 남기지 않는 것). 원문은 이 테이블이 갖는다.
+> **수정 이력은 테이블, 이벤트 기록은 로그다** — 수정·삭제 성공마다 `[채팅]` INFO 로그에 `runningRoomId`·`chatId`만 남기고 내용은 남기지 않는다(logging-convention 남기지 않는 것). 원문은 이 테이블이 갖는다.
 
 ### running_records
 

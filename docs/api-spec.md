@@ -50,12 +50,12 @@
 | 18 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations` | 친구 초대 (한 명씩, 성공 204) — 사용 화면: 초대 방 |
 | 19 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/accept` | 초대 수락 → 방 입장 — 사용 화면: 알림함 |
 | 20 | POST | `/api/v1/match-rooms/{runningRoomId}/invitations/decline` | 초대 거절 — 사용 화면: 알림함 |
-| 30 | GET | `/api/v1/match-rooms/{runningRoomId}/chat-messages` | 대기방 채팅 목록 (최신순, 커서) — 스트림 연결 뒤 호출. 사용 화면: 매칭 방·초대 방 |
-| 31 | POST | `/api/v1/match-rooms/{runningRoomId}/chat-messages` | 채팅 보내기 (1~200자) — 사용 화면: 매칭 방·초대 방 |
-| 32 | PATCH | `/api/v1/match-rooms/{runningRoomId}/chat-messages/{chatMessageId}` | 채팅 수정 (보낸 본인) |
-| 33 | DELETE | `/api/v1/match-rooms/{runningRoomId}/chat-messages/{chatMessageId}` | 채팅 삭제 (보낸 본인, 소프트 삭제·복구 불가) |
+| 30 | GET | `/api/v1/match-rooms/{runningRoomId}/chats` | 대기방 채팅 목록 (최신순, 커서) — 스트림 연결 뒤 호출. 사용 화면: 매칭 방·초대 방 |
+| 31 | POST | `/api/v1/match-rooms/{runningRoomId}/chats` | 채팅 보내기 (1~200자) — 사용 화면: 매칭 방·초대 방 |
+| 32 | PATCH | `/api/v1/match-rooms/{runningRoomId}/chats/{chatId}` | 채팅 수정 (보낸 본인) |
+| 33 | DELETE | `/api/v1/match-rooms/{runningRoomId}/chats/{chatId}` | 채팅 삭제 (보낸 본인, 소프트 삭제·복구 불가) |
 
-- 대기방 채팅: 지난 메시지는 위 목록 REST, 새 메시지·수정·삭제는 매칭 SSE의 `CHAT_MESSAGE_*`(보낸 사람 제외). 러닝이 시작되면 막힌다 — 상세 5-E
+- 대기방 채팅: 지난 메시지는 위 목록 REST, 새 메시지·수정·삭제는 매칭 SSE의 `CHAT_*`(보낸 사람 제외). 러닝이 시작되면 막힌다 — 상세 5-E
 
 ### 5. 매칭·러닝 실시간 통신
 
@@ -104,7 +104,7 @@
 | `INVITE_ROOM_ENTRANCE` | 초대 방 연결 직후 스냅샷 (`RoomInfo` + `startsInMs`) — 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 초대 방 상태 갱신 (`RoomInfo`) — 인원·초대 현황 변동. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
-| `CHAT_MESSAGE_SENT` · `CHAT_MESSAGE_EDITED` · `CHAT_MESSAGE_DELETED` | 대기방 채팅 보내기·수정·삭제 (`ChatMessage`) — 보낸 사람을 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
+| `CHAT_SENT` · `CHAT_EDITED` · `CHAT_DELETED` | 대기방 채팅 보내기·수정·삭제 (`Chat`) — 보낸 사람을 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
 
 **러닝 WebSocket** — `/api/v1/ws/running`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
@@ -1397,7 +1397,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `INVITE_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo` + `startsInMs`. 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 인원 변동·초대 현황 변동·모집 마감(초대 만료) — `data` = `RoomInfo`. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
-| `CHAT_MESSAGE_SENT` · `CHAT_MESSAGE_EDITED` · `CHAT_MESSAGE_DELETED` | 대기방 채팅 — `data` = `ChatMessage`. 보낸 사람 제외. 매칭·초대 방 공통 (5-E) |
+| `CHAT_SENT` · `CHAT_EDITED` · `CHAT_DELETED` | 대기방 채팅 — `data` = `Chat`. 보낸 사람 제외. 매칭·초대 방 공통 (5-E) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 방 상태 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다. **채팅 이벤트만 변경분이다** — 놓친 채팅은 다시 연결한 뒤 채팅 목록(5-E-1)으로 맞춘다.
 - **keep-alive**: 주기적으로 주석 라인(`:ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
@@ -2114,17 +2114,17 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **방에 들어가거나 다시 연결하면 스트림을 먼저 열고, 연결된 뒤에 목록을 부른다**
   1. 스트림을 연다(`GET /match-rooms/stream`) — 연결이 열리면 그 뒤의 채팅 이벤트는 놓치지 않는다. 서버가 방 채널 구독을 건 뒤에야 응답 헤더를 내보내기 때문이다(구독 전에 응답을 열지 않는다)
   2. 목록(5-E-1)을 `limit=50`으로 부른다
-  3. 1과 2 사이에 온 채팅 이벤트는 목록에도 들어 있을 수 있다 — **`chatMessageId`가 같으면 하나로 합친다**(나중에 받은 쪽으로 덮는다). 순서를 거꾸로 하면(목록 먼저) 그 사이에 생긴 메시지를 잃는다
+  3. 1과 2 사이에 온 채팅 이벤트는 목록에도 들어 있을 수 있다 — **`chatId`가 같으면 하나로 합친다**(나중에 받은 쪽으로 덮는다). 순서를 거꾸로 하면(목록 먼저) 그 사이에 생긴 메시지를 잃는다
   - 입장 이벤트(`MATCH_ROOM_ENTRANCE`·`INVITE_ROOM_ENTRANCE`)와는 무관하다 — 기다리지 않아도 된다
 - **채팅 이벤트는 보낸 사람에게 가지 않는다** — 본인 화면은 보내기·수정·삭제의 REST 응답으로 바꾼다
 - **자동 재전송하지 않는다** — 보내기 응답을 못 받으면 "다시 보내기"만 보여준다. 서버에는 이미 저장됐을 수 있고 재전송 중복을 가리는 키가 없어서, 자동으로 다시 보내면 같은 메시지가 두 번 남는다(`erd.md` `running_room_chats`). 저장됐는지는 다음 입장 때 목록이 알려준다
 - **수정·삭제는 보낸 본인만, 횟수 제한 없이 한다. 지운 메시지는 되살리거나 고칠 수 없다**
 
-**공통 객체 `ChatMessage`** (5-E 응답·채팅 이벤트 `data`):
+**공통 객체 `Chat`** (5-E 응답·채팅 이벤트 `data`):
 
 ```json
 {
-  "chatMessageId": 3021,
+  "chatId": 3021,
   "runningRoomId": 125,
   "sender": {
     "userId": "01a0f2d4-6180-7000-8000-446655440013",
@@ -2141,7 +2141,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `chatMessageId` | Integer | O | 메시지 ID. 생성 순서대로 커진다 — 클라는 이 값으로 정렬하고 중복을 합친다 |
+| `chatId` | Integer | O | 메시지 ID. 생성 순서대로 커진다 — 클라는 이 값으로 정렬하고 중복을 합친다 |
 | `runningRoomId` | Integer | O | 메시지가 오간 방 |
 | `sender` | Object | O | 보낸 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
 | `content` | String | X | 내용. **지운 메시지면 `null`** — 화면에는 "삭제된 메시지"로 그린다 |
@@ -2149,28 +2149,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `editedAt` | String | X | 마지막 수정 시각. 고친 적 없으면 `null` — 값이 있으면 "수정됨"을 붙인다 |
 | `createdAt` | String | O | 보낸 시각 |
 
-#### 채팅 이벤트 (SSE) — `CHAT_MESSAGE_SENT` · `CHAT_MESSAGE_EDITED` · `CHAT_MESSAGE_DELETED`
+#### 채팅 이벤트 (SSE) — `CHAT_SENT` · `CHAT_EDITED` · `CHAT_DELETED`
 
 - 매칭 스트림(`/match-rooms/stream`)으로 **방 참가자 중 보낸 사람을 뺀 전원에게** 보낸다. 매칭 방·초대 방이 같은 이름을 쓴다
-- `data` = `ChatMessage` 전체 — 세 이벤트 모두 같다. 클라는 `chatMessageId`로 찾아 **있으면 덮고 없으면 넣는다**
-  - `CHAT_MESSAGE_SENT`: 새 메시지
-  - `CHAT_MESSAGE_EDITED`: 고친 뒤의 메시지(`content` 새 값, `editedAt` 채워짐)
-  - `CHAT_MESSAGE_DELETED`: 지운 뒤의 메시지(`content = null`, `isDeleted = true`)
+- `data` = `Chat` 전체 — 세 이벤트 모두 같다. 클라는 `chatId`로 찾아 **있으면 덮고 없으면 넣는다**
+  - `CHAT_SENT`: 새 메시지
+  - `CHAT_EDITED`: 고친 뒤의 메시지(`content` 새 값, `editedAt` 채워짐)
+  - `CHAT_DELETED`: 지운 뒤의 메시지(`content = null`, `isDeleted = true`)
 - **방 상태 이벤트와 달리 변경분이다** — 놓친 이벤트는 다시 오지 않는다. 끊겼다 다시 연결하면 위 입장 순서대로 목록을 다시 받아 맞춘다
 - 저장이 커밋된 뒤에 Redis로 발행해 각 서버 인스턴스가 자기 연결에 보낸다(매칭 이벤트와 같은 경로)
 
-#### 5-E-1. `GET /api/v1/match-rooms/{runningRoomId}/chat-messages` — 채팅 목록
+#### 5-E-1. `GET /api/v1/match-rooms/{runningRoomId}/chats` — 채팅 목록
 
 - **화면**: 매칭 방·초대 방 대기 화면 — 입장 이벤트를 받은 직후, 위로 스크롤할 때
 - **Query**: `cursor`/`limit` — **최신순**(§0 페이지네이션). 클라는 첫 페이지를 `limit=50`으로 부르고, 화면에는 뒤집어 아래가 최신이 되게 그린다
-- **Response `200 OK`**: `{ "items": [ChatMessage, ...], "nextCursor": "..." }` — `nextCursor`가 `null`이면 방의 첫 메시지까지 다 받았다
+- **Response `200 OK`**: `{ "items": [Chat, ...], "nextCursor": "..." }` — `nextCursor`가 `null`이면 방의 첫 메시지까지 다 받았다
 - **지운 메시지도 자리를 지킨다** — 목록에서 빼지 않고 `content = null`, `isDeleted = true`로 내려간다
 - **`cursor`가 깨졌으면 `400 INVALID_REQUEST`다**
 - **에러 (404 Not Found)**: 방이 없거나, 솔로 방이거나, 호출자가 이 방에 배정돼 있지 않다(나갔거나 처음부터 아님)
 - **에러 (409 Conflict)**: `CHAT_CLOSED` — 러닝이 시작됐거나 방이 닫혔다(아래 표)
 - **인증**: 필요
 
-#### 5-E-2. `POST /api/v1/match-rooms/{runningRoomId}/chat-messages` — 메시지 보내기
+#### 5-E-2. `POST /api/v1/match-rooms/{runningRoomId}/chats` — 메시지 보내기
 
 - **화면**: 매칭 방·초대 방 대기 화면 — 전송 버튼
 - **Request**
@@ -2188,28 +2188,28 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **요청 검증 (`400 INVALID_REQUEST`)** — Request DTO 검증이다
   - 누락·빈 문자열·공백만: "메시지 내용은 필수입니다."
   - 200자 초과: "메시지는 200자 이하여야 합니다."
-- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_MESSAGE_SENT`
-- **Response `201 Created`**: `ChatMessage`
+- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_SENT`
+- **Response `201 Created`**: `Chat`
 - **에러 (404 Not Found)**·**에러 (409 Conflict)**: 5-E-1과 같다
 - **인증**: 필요
 
-#### 5-E-3. `PATCH /api/v1/match-rooms/{runningRoomId}/chat-messages/{chatMessageId}` — 메시지 수정
+#### 5-E-3. `PATCH /api/v1/match-rooms/{runningRoomId}/chats/{chatId}` — 메시지 수정
 
 - **화면**: 매칭 방·초대 방 대기 화면 — 내 메시지 길게 눌러 수정
 - **Request**: 5-E-2와 같은 `{ "content": "..." }`, 같은 요청 검증
 - **동작**: 메시지 행을 잠그고 고치기 직전 내용을 수정 이력(`running_room_chat_histories`)에 남긴 뒤 `content`·`editedAt`을 바꾼다 — 한 트랜잭션이다. 이력은 운영(신고 대응) 전용이라 API로 내보내지 않는다
   - **같은 내용으로 고쳐도 수정으로 친다** — 이력이 남고 `editedAt`이 바뀐다. 클라가 바뀐 게 없으면 부르지 않는다
-- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_MESSAGE_EDITED`
-- **Response `200 OK`**: 고친 뒤의 `ChatMessage`
+- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_EDITED`
+- **Response `200 OK`**: 고친 뒤의 `Chat`
 - **에러 (404 Not Found)**: 5-E-1의 경우 + 메시지가 이 방에 없거나, 이미 지웠거나, 내 메시지가 아니다 — **내 메시지가 아니어도 404다**(9-3 기록 카드 수정과 같다)
 - **에러 (409 Conflict)**: 5-E-1과 같다
 - **인증**: 필요 (보낸 사람)
 
-#### 5-E-4. `DELETE /api/v1/match-rooms/{runningRoomId}/chat-messages/{chatMessageId}` — 메시지 삭제
+#### 5-E-4. `DELETE /api/v1/match-rooms/{runningRoomId}/chats/{chatId}` — 메시지 삭제
 
 - **화면**: 매칭 방·초대 방 대기 화면 — 내 메시지 길게 눌러 삭제
 - **동작**: `deleted_at`을 찍는다(소프트 삭제). 내용은 행에 남지만 API로는 다시 내려가지 않는다. **되돌리는 API는 없다**
-- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_MESSAGE_DELETED`
+- **부수 효과**: 커밋 후 방의 다른 참가자에게 `CHAT_DELETED`
 - **Response `204 No Content`** — 본인 화면은 그 말풍선을 "삭제된 메시지"로 바꾼다
 - **에러 (404 Not Found)**: 5-E-3과 같다(이미 지운 메시지 포함)
 - **에러 (409 Conflict)**: 5-E-1과 같다
