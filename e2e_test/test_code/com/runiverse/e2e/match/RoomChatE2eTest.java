@@ -9,10 +9,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 // 대기방 채팅 보내기(5-E-2)와 ROOM_CHAT_SENT — 실제 DB(IDENTITY·created_at)·Redis 왕복·보안 필터를 함께 탄다
 @DisplayName("배포 이미지 대상 대기방 채팅 E2E 테스트")
@@ -78,6 +80,47 @@ class RoomChatE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("친구를 초대해 수락하면 초대 방에서도 서로의 채팅을 ROOM_CHAT_SENT로 받는다")
+    void inviteRoomChatFlowsBothWays() {
+        // given - 친구 요청·수락 → 초대 방 개설 → 초대 → 수락
+        TestUser host = signUpAndOnboard();
+        TestUser friend = signUpAndOnboard();
+        assertThat(post("/users/" + friend.userId() + "/friend-request", null, host.accessToken()).status())
+                .isBetween(200, 299);
+        assertThat(put("/users/" + host.userId() + "/friend-request", friend.accessToken()).status())
+                .isBetween(200, 299);
+        Response opened = post("/match-rooms/invite", Map.of(
+                "scheduledStartAt", inviteStartOrSkip().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                "targetDistanceMeters", 7_000), host.accessToken());
+        assertThat(opened.status()).isEqualTo(201);
+        int runningRoomId = opened.number("runningRoomId");
+        assertThat(post("/match-rooms/" + runningRoomId + "/invitations",
+                Map.of("inviteeId", friend.userId()), host.accessToken()).status()).isEqualTo(204);
+        assertThat(post("/match-rooms/" + runningRoomId + "/invitations/accept", null, friend.accessToken()).status())
+                .isEqualTo(201);
+
+        try (SseStream hostStream = openMatchStream(host.accessToken());
+             SseStream friendStream = openMatchStream(friend.accessToken())) {
+            // 초대 방은 입장 이벤트 이름이 다르지만 채팅 이벤트 이름은 같다
+            hostStream.await("INVITE_ROOM_ENTRANCE");
+            friendStream.await("INVITE_ROOM_ENTRANCE");
+
+            // when - 서로 한 번씩 보낸다
+            Response fromHost = post(chatsPath(runningRoomId), Map.of("content", "어디쯤이야?"), host.accessToken());
+            Response fromFriend = post(chatsPath(runningRoomId), Map.of("content", "거의 다 왔어"), friend.accessToken());
+
+            // then - 각자 상대의 채팅만 받는다(자기 것이 먼저 왔다면 첫 이벤트가 자기 chatId다)
+            assertThat(fromHost.status()).isEqualTo(201);
+            assertThat(fromFriend.status()).isEqualTo(201);
+            assertThat(friendStream.await("ROOM_CHAT_SENT")).isEqualTo(fromHost.body());
+            assertThat(hostStream.await("ROOM_CHAT_SENT")).isEqualTo(fromFriend.body());
+        } finally {
+            leave(host);
+            leave(friend);
+        }
+    }
+
+    @Test
     @DisplayName("방 밖이면 404, 빈 내용은 400, 토큰이 없으면 401이다")
     void rejectsOutsidersAndBadRequests() {
         // given
@@ -137,6 +180,15 @@ class RoomChatE2eTest extends E2eTestSupport {
         ), user.accessToken());
         assertThat(response.status()).isEqualTo(201);
         return response;
+    }
+
+    // 초대 방 시작 시각은 오늘(KST) 안이어야 한다 — 늦은 밤에는 고를 시각이 없어 건너뛴다
+    private static LocalDateTime inviteStartOrSkip() {
+        LocalDateTime now = LocalDateTime.now(APP_ZONE);
+        LocalDateTime start = now.plusMinutes(30).truncatedTo(ChronoUnit.MINUTES);
+        assumeTrue(!start.isAfter(now.toLocalDate().atTime(23, 59)),
+                "KST 23:29 이후에는 오늘 안에 고를 시작 시각이 부족하다");
+        return start;
     }
 
     private void leave(TestUser user) {
