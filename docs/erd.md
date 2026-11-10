@@ -495,9 +495,9 @@
 | music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
-| caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
+| caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). 수정(9-3)에서 바꿀 수 있고, 바꿔도 음악은 다시 만들지 않는다. AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
 | music_key | varchar(255) | NOT NULL, UNIQUE | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정해 AI에 넘긴다 |
-| created_at / updated_at | timestamp | NOT NULL | `updated_at`은 생성 상태가 바뀔 때 갱신된다 |
+| created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
 > CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
