@@ -60,13 +60,13 @@ class MatchStreamEventTest {
     class SnapshotTest {
 
         @Test
-        @DisplayName("매칭 방 스냅샷은 갱신과 같은 MATCH_ROOM_UPDATED다")
+        @DisplayName("매칭 방 스냅샷은 갱신과 나뉜 MATCH_ROOM_ENTRANCE이고 남은 시간을 싣지 않는다")
         void matchRoomSnapshot() {
             // when
             MatchStreamEvent event = MatchStreamEvent.snapshot(roomOf(RunningRoomType.MATCH), START.minusHours(1));
 
-            // then -> 매칭 방 계약은 그대로다
-            assertThat(event.type()).isEqualTo(MatchEventType.MATCH_ROOM_UPDATED);
+            // then -> 입장은 *_ENTRANCE, 갱신은 *_UPDATED — 남은 시간은 초대 방만 싣는다
+            assertThat(event.type()).isEqualTo(MatchEventType.MATCH_ROOM_ENTRANCE);
             assertThat(event.startsInMs()).isNull();
         }
 
