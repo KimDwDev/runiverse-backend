@@ -88,12 +88,13 @@
 | 24 | GET | `/api/v1/match-rooms/stream` | 방 상태 이벤트 스트림 (SSE) — 매칭 방·초대 방 공용 |
 | 25 | POST | `/api/v1/running-rooms/solo` | 솔로 러닝 개시 (매칭 방은 서버가 생성) |
 
-**매칭 SSE** — 이벤트 5종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다.
+**매칭 SSE** — 이벤트 6종. 연결 직후 현재 상태 스냅샷을 받는다. 방 상태 이벤트는 방 종류로 갈린다 — 매칭 방은 `MATCH_*`, 초대 방은 `INVITE_ROOM_*`만 받는다. 연결 직후 스냅샷은 `*_ENTRANCE`, 그 밖의 갱신은 `*_UPDATED`다.
 
 | 이벤트 | 비고 |
 |--------|------|
 | `MATCH_CONFIRMED` | 매칭 성사 통지 (`RoomInfo`) — 매칭 방만 |
-| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동·연결 직후 스냅샷. 매칭 방만 |
+| `MATCH_ROOM_ENTRANCE` | 매칭 방 연결 직후 스냅샷 (`RoomInfo`) — 매칭 방만 |
+| `MATCH_ROOM_UPDATED` | 방 상태 갱신 (`RoomInfo`) — 인원 변동. 매칭 방만 |
 | `INVITE_ROOM_ENTRANCE` | 초대 방 연결 직후 스냅샷 (`RoomInfo` + `startsInMs`) — 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 초대 방 상태 갱신 (`RoomInfo`) — 인원·초대 현황 변동. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
@@ -188,7 +189,7 @@
 | 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 72개 + SSE 스트림 2개(매칭 이벤트 5종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+**합계: REST 72개 + SSE 스트림 2개(매칭 이벤트 6종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -1183,7 +1184,7 @@ data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","act
 - **매칭 방에서는 초대할 수 없다** — 4-2는 초대 방이 아니면 404다.
 - **모집 마감(`closeAt`)은 `start_at - 초대 마감 오프셋`(운영 설정 `invite.close-offset`, 현재 1분)이다** — 매칭의 마감 오프셋(10분)과 따로 둔다. 초대·수락은 그 전까지만 된다. 시작 통지(`RUNNING_READY`, 시작 10초 전)는 매칭 방과 같다.
 - **제재가 없다** — 언제 나가든(5-A), 조기 종료하든(5-D) `_NO_PENALTY`이고 쿨다운을 걸지 않는다.
-- **방 상태 이벤트가 따로 있다** — 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`, 그 뒤 갱신은 `INVITE_ROOM_UPDATED`다(5-B). 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_UPDATED`는 보내지 않는다 — 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 확정 연출을 두지 않는다. `RUNNING_READY`(5-C)는 매칭 방과 같다.
+- **방 상태 이벤트가 따로 있다** — 연결 직후 스냅샷은 `INVITE_ROOM_ENTRANCE`, 그 뒤 갱신은 `INVITE_ROOM_UPDATED`다(5-B). 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_ENTRANCE`·`MATCH_ROOM_UPDATED`는 보내지 않는다 — 초대 방의 마감은 "더 이상 초대받지 않는다"일 뿐 매칭 성사가 아니라 확정 연출을 두지 않는다. `RUNNING_READY`(5-C)는 매칭 방과 같다.
 
 ### 4-1. `POST /api/v1/match-rooms/invite` — 초대 방 개설
 
@@ -1370,7 +1371,7 @@ data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","act
 - **연결 시점**: 매칭 신청·초대 방 개설(4-1)·초대 수락(4-3) 성공 직후. 활성 신청이 없으면 연결하지 않는다 — 서버가 보낼 것이 없다.
   - **어기면 서버가 `404 Not Found`로 거절한다(본문 없음).** 열어주면 붙을 방이 없어 아무 채널도 구독하지 못하고, 그 뒤에 신청해도 이벤트가 영영 오지 않는 연결이 된다 — 에러도 없이 조용히 망가지므로 연결 자체를 막는다.
   - **이 응답에만 본문이 없다.** 요청 `Accept`가 `text/event-stream`이라 다른 에러처럼 JSON 본문을 실을 수 없다. 클라는 상태 코드로 판단하고, 신청 응답을 받기 전에는 스트림을 열지 않는다.
-  - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.** 스냅샷 이벤트는 매칭 방이 `MATCH_ROOM_UPDATED`, 초대 방이 `INVITE_ROOM_ENTRANCE`다.
+  - 앱 재시작·포그라운드 복귀 시엔 스트림을 다시 열고, **연결 직후 내려오는 `RoomInfo` 스냅샷으로 상태를 복원한다.** 스냅샷 이벤트는 매칭 방이 `MATCH_ROOM_ENTRANCE`, 초대 방이 `INVITE_ROOM_ENTRANCE`다.
 - **종료 시점**: `RUNNING_STARTED` ack 뒤, 또는 매칭 취소(`POST /match-rooms/leave`)의 204를 받은 뒤 클라이언트가 닫는다.
 - **서버도 스트림을 닫는다** — 열린 지 운영값(현재 30분)이 지나면, 같은 사용자의 새 연결이 들어오면, 탈퇴하면 닫는다(새 연결·탈퇴는 그 요청을 처리한 서버 인스턴스에 붙은 스트림만 닫는다 — 다른 인스턴스의 옛 스트림은 30분 만료나 전송 실패로 정리된다). 활성 신청이 남아 있으면 클라는 다시 연결하고 연결 직후 스냅샷으로 상태를 복원한다.
 - **연결을 화면 생명주기에 묶지 않는다.** 홈을 벗어나도 스트림은 살아 있어야 한다(근거는 `feature-spec.md` 매칭·러닝 설계 절)
@@ -1384,7 +1385,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 이벤트 | 시점 |
 |---|---|
 | `MATCH_CONFIRMED` | 매칭 확정 — `data` = `RoomInfo`. 매칭 방만 |
-| `MATCH_ROOM_UPDATED` | 인원 변동·연결 직후 스냅샷 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다. 매칭 방만 |
+| `MATCH_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo`. 매칭 방만 |
+| `MATCH_ROOM_UPDATED` | 인원 변동 — `data` = `RoomInfo`. 러닝 시작은 이 이벤트로 알리지 않는다. 매칭 방만 |
 | `INVITE_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo` + `startsInMs`. 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 인원 변동·초대 현황 변동·모집 마감(초대 만료) — `data` = `RoomInfo`. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
@@ -1600,7 +1602,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 #### 공통 객체 `RoomInfo` — 매칭방 전체 정보
 
-방 상태 SSE 이벤트가 아래 **같은 구조를 싣는다** — 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_UPDATED`, 초대 방(4번)의 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`. **`INVITE_ROOM_ENTRANCE`만 `startsInMs`를 하나 더 싣는다**(아래 해당 절).
+방 상태 SSE 이벤트가 아래 **같은 구조를 싣는다** — 매칭 방의 `MATCH_CONFIRMED`·`MATCH_ROOM_ENTRANCE`·`MATCH_ROOM_UPDATED`, 초대 방(4번)의 `INVITE_ROOM_ENTRANCE`·`INVITE_ROOM_UPDATED`. **`INVITE_ROOM_ENTRANCE`만 `startsInMs`를 하나 더 싣는다**(아래 해당 절).
 
 ```json
 {
@@ -1659,10 +1661,18 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - `data` = `RoomInfo`. 수신 시 클라는 대기 화면 → 매칭방 화면으로 전환
 - **발화 시점은 모집 마감(`start_at - 오프셋`)이다** — 방이 `MATCHING`→`MATCHED`로 넘어가는 순간 한 번. **방 생성 시점이 아니다** — 방은 신청 즉시 생기지만 그건 모집 시작이고, 그 구간의 인원 변동은 `MATCH_ROOM_UPDATED`가 담당한다. 자리가 다 차도 앞당겨 쏘지 않는다(`feature-spec.md` 확정 판정)
 
+#### `MATCH_ROOM_ENTRANCE` (SSE) — 매칭 방 입장 스냅샷
+
+- **매칭 방에서 스트림을 연 직후 한 번** 보낸다 — 매칭 신청 직후, 재연결할 때. 초대 방의 `INVITE_ROOM_ENTRANCE`에 해당한다
+- `data` = `RoomInfo` 전체
+- **연결한 본인에게만 간다** — 방 참가자 전원에게 퍼지는 갱신이 아니다
+- 수신 시 `status`별 처리는 아래 `MATCH_ROOM_UPDATED` 표와 같다 — 재연결이면 `MATCHED`·`STARTED`로 올 수 있다
+- **`MATCH_ROOM_UPDATED`와 나뉘는 이유는 "입장"과 "갱신"의 차이다** — 입장 스냅샷에만 실을 정보(초대 방의 `startsInMs`처럼)를 갱신 이벤트에 섞지 않는다
+
 #### `MATCH_ROOM_UPDATED` (SSE) — 매칭방 정보 갱신
 
-- `data` = `RoomInfo` 전체 재전송. **인원 변동과 연결 직후 스냅샷이 이 이벤트로 나간다** — 모집 중 참가·이탈뿐 아니라 확정 후 이탈, 시작 후 미접속자(`JOINED`)의 취소·탈퇴로 인원이 줄 때도 나간다
-- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 `start_at` 정각의 시작 스케줄러가 일으킨다. 다만 그 뒤에 붙은 스냅샷에는 `status: "STARTED"`가 실려 온다
+- `data` = `RoomInfo` 전체 재전송. **인원 변동이 이 이벤트로 나간다**(연결 직후 스냅샷은 `MATCH_ROOM_ENTRANCE`) — 모집 중 참가·이탈뿐 아니라 확정 후 이탈, 시작 후 미접속자(`JOINED`)의 취소·탈퇴로 인원이 줄 때도 나간다
+- **`STARTED` 전환은 이 이벤트로 알리지 않는다** — 시작 통지는 `RUNNING_READY`가 맡고(5-C), 방의 `STARTED` 전환은 `start_at` 정각의 시작 스케줄러가 일으킨다. 다만 그 뒤에 붙은 입장 스냅샷(`MATCH_ROOM_ENTRANCE`)에는 `status: "STARTED"`가 실려 온다
 - 클라는 **받으면 무조건 `RoomInfo`로 화면을 다시 그린다.** 무슨 일이 있었는지는 `status`·`players`·`invitations`가 말해주므로 이벤트를 더 쪼개지 않는다
 
 | `status` | 클라가 할 일 |
@@ -1672,12 +1682,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `STARTED` | 이미 시작된 방이다(재연결 스냅샷 등) — 러닝 화면으로 이어가고 WS `RUNNING_START`를 보낸다 |
 | `CANCELLED` | 홈으로 — 현재 서버는 보내지 않는다(아래) |
 
-- **`MATCH_CONFIRMED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_CONFIRMED`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
+- **`MATCH_CONFIRMED`와 나뉘는 이유는 "전이"와 "상태"의 차이다.** `status=MATCHED`는 재연결 스냅샷으로도 오므로, 그것만 보면 확정 연출을 볼 때마다 반복하게 된다. 확정된 그 순간은 `MATCH_CONFIRMED`가, 연결 직후 스냅샷은 `MATCH_ROOM_ENTRANCE`가, 그 밖의 모든 갱신은 이 이벤트가 맡는다
 - 방 취소는 마지막 참가자가 나갈 때만 일어나 받을 사람이 없으므로 이벤트를 보내지 않는다. `CANCELLED`는 방어적으로만 처리한다
 
 #### `INVITE_ROOM_ENTRANCE` (SSE) — 초대 방 입장 스냅샷
 
-- **초대 방에서 스트림을 연 직후 한 번** 보낸다 — 방을 만든 직후(4-1), 초대를 수락한 직후(4-3), 재연결할 때. 매칭 방의 연결 직후 `MATCH_ROOM_UPDATED`에 해당한다
+- **초대 방에서 스트림을 연 직후 한 번** 보낸다 — 방을 만든 직후(4-1), 초대를 수락한 직후(4-3), 재연결할 때. 매칭 방의 `MATCH_ROOM_ENTRANCE`에 해당한다
 - `data` = `RoomInfo` 전체(참가자 `players`·초대 현황 `invitations` 포함) + `startsInMs`
 
 ```json
