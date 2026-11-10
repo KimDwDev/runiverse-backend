@@ -217,7 +217,7 @@
 
 ### running_room_chat_messages (방 채팅 메시지)
 
-매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. 보내기·수정·삭제는 REST, 받기는 매칭 SSE이고, 방에 들어가거나 다시 연결하면 입장 이벤트(`MATCH_ROOM_ENTRANCE`·`INVITE_ROOM_ENTRANCE`)가 메시지 묶음을 싣는다(api-spec 5-B).
+매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. **방 안에 있는 동안만**(배정됨 + 신청 `JOINED` + 방 `MATCHING`·`MATCHED`) 보내고 고치고 지운다 — 러닝이 시작되면 막힌다. 늦게 들어온 사람도 그 방의 메시지를 처음부터 본다. 지난 메시지는 REST 목록 조회(커서 페이지네이션)로 받고, SSE 입장 이벤트에는 싣지 않는다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -233,7 +233,7 @@
 
 > **수정은 이력을 먼저 남긴다** — 메시지 행을 잠그고(`FOR UPDATE`) 직전 `content`를 이력에 INSERT한 뒤 `content`·`edited_at`을 바꾼다. 한 트랜잭션이다. 잠그지 않으면 연달아 온 두 수정이 같은 직전 값을 읽어 이력 하나가 빠진다.
 > **삭제는 이력을 남기지 않는다** — 행에 마지막 내용이 그대로 남고 시각은 `deleted_at`이 말한다. 이력을 시간순으로 읽은 뒤 이 행의 `content`를 붙이면 처음 보낸 내용부터 마지막까지 복원된다.
-> **보내기·수정·삭제는 지금 방에 배정된 사람만 한다**(`running_room_sessions.is_connected = true`), 수정·삭제는 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
+> **보내기·수정·삭제는 방 안에 있는 사람만 한다**(`running_room_sessions.is_connected = true`, `running_players.status = 'JOINED'`, 방 `MATCHING`·`MATCHED`), 수정·삭제는 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
 > **재전송 중복을 막는 키를 두지 않는다** — 클라가 자동 재전송하지 않는 것으로 막는다(api-spec 채팅 절). 중복 제보가 생기면 `client_message_id` + UNIQUE를 더한다.
 
 ### running_room_chat_message_histories (방 채팅 메시지 수정 이력)
@@ -616,7 +616,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | user_notifications.(user_id, user_notification_id) | 알림함 최신순 조회(2-4) — ID가 생성 순서라 역방향 스캔으로 최신순·커서 조건을 인덱스가 처리한다. 보관 기간 조건(`created_at`)은 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | user_notifications.user_id WHERE is_read = false | 안 읽은 수(2-4 `unreadCount`)·모두 읽음(2-5) — 부분 인덱스라 안 읽은 행만 담아 작다 |
 | running_room_invitations.invitee_id | 받은 초대 목록 |
-| running_room_chat_messages.(running_room_id, running_room_chat_message_id) | 방 채팅 조회 — 입장 묶음(최근 N개)·이전 메시지를 역방향 스캔으로 최신순·커서 조건까지 처리한다. 방 FK 조회와 CASCADE도 덮는다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
+| running_room_chat_messages.(running_room_id, running_room_chat_message_id) | 방 채팅 목록 조회 — 역방향 스캔으로 최신순·커서 조건까지 처리한다. 방 FK 조회와 CASCADE도 덮는다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | running_room_chat_message_histories.running_room_chat_message_id | 메시지 하나의 수정 이력 조회(신고 대응)·메시지 삭제 시 CASCADE — FK 조회 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | record_cards.(user_id, display_order) WHERE deleted_at IS NULL | 프로필 카드 목록(10-3) — UNIQUE `uk_record_card_user_display_order`가 겸한다. 순위 역순(최신이 위)·커서 조건을 역방향 스캔으로 처리한다. 공개 범위는 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
