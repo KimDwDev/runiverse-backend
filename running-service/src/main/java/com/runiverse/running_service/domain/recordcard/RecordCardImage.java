@@ -16,7 +16,7 @@ public class RecordCardImage {
 
     private final RecordCardImageId recordCardImageId;   // 저장 전에는 null
     private final RecordCardImageKey imageKey;
-    private final RecordCardImageCaption caption;        // 선택 입력 — 없으면 null
+    private RecordCardImageCaption caption;              // 선택 입력 — 없으면 null. 남긴 사진도 수정에서 바뀐다
     private final MusicKey musicKey;
     private MusicStatus musicStatus;
     private int sortOrder;                               // 캐러셀 순서 — 카드가 매긴다
@@ -52,6 +52,11 @@ public class RecordCardImage {
 
     void reorder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    // 설명만 바꾼다 — 음악은 옛 설명으로 만든 그대로 둔다. null이면 설명을 지운다
+    void changeCaption(RecordCardImageCaption caption) {
+        this.caption = caption;
     }
 
     // 생성 완료 알림 — 이미 끝난 음악에 온 알림(중복 전달)은 무시하고 false를 돌려준다

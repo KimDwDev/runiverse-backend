@@ -20,6 +20,7 @@ import com.runiverse.running_service.domain.recordcard.vo.MusicKey;
 import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageCaption;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardMemo;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,8 +57,10 @@ public class RecordCard {
     // 수정 뒤 캐러셀의 한 자리 — 남길 기존 사진이거나 새로 넣을 사진이다. 목록 순서가 곧 사진 순서다
     public sealed interface ImageSlot {
 
-        // 이 카드에 이미 있는 사진을 남긴다 — 음악과 생성 상태는 그대로다
-        record Keep(Long recordCardImageId) implements ImageSlot {
+        // 이 카드에 이미 있는 사진을 남긴다 — 음악과 생성 상태는 그대로다.
+        // caption은 수정 뒤의 설명이다(목록이 수정 뒤 전체이듯) — null·공백이면 설명을 지운다.
+        // 설명을 바꿔도 음악은 다시 만들지 않는다
+        record Keep(Long recordCardImageId, String caption) implements ImageSlot {
 
         }
 
@@ -166,6 +170,8 @@ public class RecordCard {
 
         Set<RecordCardImageId> keptIds = new HashSet<>();
         List<RecordCardImage> next = new ArrayList<>();
+        // 남긴 사진의 새 설명 — 검사가 끝난 뒤 한꺼번에 바꾼다(없앤 설명은 null 값으로 담긴다)
+        Map<RecordCardImage, RecordCardImageCaption> nextCaptions = new IdentityHashMap<>();
         for (ImageSlot slot : slots) {
             switch (slot) {
                 case ImageSlot.Keep keep -> {
@@ -177,6 +183,7 @@ public class RecordCard {
                     if (image == null) {
                         throw new RecordCardImageNotInCardException();
                     }
+                    nextCaptions.put(image, RecordCardImageCaption.ofNullable(keep.caption()).orElse(null));
                     next.add(image);
                 }
                 case ImageSlot.Add add -> next.add(RecordCardImage.add(add.draft(), next.size()));
@@ -191,6 +198,7 @@ public class RecordCard {
         for (int i = 0; i < next.size(); i++) {
             next.get(i).reorder(i);
         }
+        nextCaptions.forEach(RecordCardImage::changeCaption);
         images.clear();
         images.addAll(next);
         this.thumbnailImageKey = nextThumbnail == null ? null : new RecordCardImageKey(nextThumbnail);

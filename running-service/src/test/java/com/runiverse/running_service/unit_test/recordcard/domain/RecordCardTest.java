@@ -713,7 +713,7 @@ class RecordCardTest {
     }
 
     private static ImageSlot keep(Long recordCardImageId) {
-        return new ImageSlot.Keep(recordCardImageId);
+        return new ImageSlot.Keep(recordCardImageId, null);
     }
 
     private static ImageSlot add(String name) {
