@@ -2618,7 +2618,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `record.routes` | Number[][][] | O | 경로 — **6-1 `routes`와 같은 형식**(조각 배열, 조각마다 `[[위도, 경도], …]`) |
 | `baseMusic` | Object | O | 기본곡 — 첫 장에서 재생 |
 | `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(지도 장 다음부터). 사진이 없으면 빈 배열 |
-| `images[].recordCardImageId` | Integer | O | 사진 ID — 수정(9-3)에서 남길 사진을 가리킬 때 쓴다 |
+| `images[].recordCardImageId` | Integer | O | 사진 ID — 수정(9-3)에서 이미 올린 사진을 가리킬 때 쓴다 |
 | `images[].imageUrl` | String | O | 사진 URL |
 | `images[].caption` | String | X | 사진 설명(한 줄, 1~100자). 작성자가 붙이지 않았으면 null |
 | `images[].isThumbnail` | Boolean | O | 썸네일 사진 여부 — 사진이 있으면 정확히 한 장이 `true`다. 편집 화면에서 현재 썸네일을 표시할 때 쓴다 |
@@ -2896,7 +2896,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **카드가 바뀌었는지는 9-3 때의 `record_cards.updated_at`과 비교한다** — 남길 사진 ID·순서가 9-3을 보낸 화면 기준이라, 그 뒤에 바뀐 카드에 덮으면 사진이 섞인다
+- **카드가 바뀌었는지는 9-3 때의 `record_cards.updated_at`과 비교한다** — 이미 올린 사진의 ID·순서가 9-3을 보낸 화면 기준이라, 그 뒤에 바뀐 카드에 덮으면 사진이 섞인다
 - **인증**: 필요 (초안을 만든 사람)
 
 ### 9-3. `PATCH /api/v1/record-cards/{recordCardId}` — 기록 카드 수정
@@ -2922,8 +2922,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `memo` | String | X | 회고 글, 1~500자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
 | `activityType` | String | X | `DAILY` · `TRAVEL` · `RACE` |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
-| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(남길 기존 사진) **또는** `mimeType`·`fileSizeBytes`(새로 올릴 사진, 9-1과 같은 규칙) 중 **한 가지**. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
-| `images[].caption` | String | X | **수정 뒤의 설명**이다 — 사진 목록이 수정 뒤 전체이듯 설명도 그렇다. **남길 사진도 지금 설명을 그대로 다시 보낸다** — 생략·빈 문자열·공백만이면 설명을 지운다. 새 사진은 9-1과 같다 |
+| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(카드에 계속 둘 이미 올린 사진) **또는** `mimeType`·`fileSizeBytes`(새로 올릴 사진, 9-1과 같은 규칙) 중 **한 가지**. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
+| `images[].caption` | String | X | **수정 뒤의 설명**이다 — 사진 목록이 수정 뒤 전체이듯 설명도 그렇다. **이미 올린 사진도 지금 설명을 그대로 다시 보낸다** — 생략·빈 문자열·공백만이면 설명을 지운다. 새 사진은 9-1과 같다 |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
 
 - **필드를 생략하면 현재 값을 그대로 둔다** — `images`를 생략하면 사진은 그대로, 빈 배열이면 사진을 전부 뺀다
@@ -2931,7 +2931,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **새 사진이 있으면 아직 반영하지 않는다** — 변경 전체를 Redis에 임시 저장하고 업로드 URL을 내준다. 앱이 사진을 올리고 9-2로 확정하면 그때 **회고 글·공개 범위 등 다른 변경까지 한 번에** 반영한다. 확정 전까지 카드는 그대로다
   - `Response 202 Accepted`: 9-1 응답과 같은 모양(`recordCardDraftId`·`expiresAt`·`uploads`). `uploads`는 `images` 안의 새 사진만, 그 순서대로 담는다
 - **사진 처리**(바로 반영할 때와 9-2 확정 때 같다)
-  - 남긴 사진(`recordCardImageId`)은 음악과 생성 상태를 그대로 두고 순서와 설명을 다시 매긴다 — **설명을 바꿔도 음악은 다시 만들지 않는다**(기본곡과 같다). 음악은 옛 설명으로 만든 그대로다
+  - 이미 올린 사진(`recordCardImageId`)은 음악과 생성 상태를 그대로 두고 순서와 설명을 다시 매긴다 — **설명을 바꿔도 음악은 다시 만들지 않는다**(기본곡과 같다). 음악은 옛 설명으로 만든 그대로다
   - **`images`를 생략하면 설명도 그대로다** — 설명만 바꾸려 해도 사진 목록 전체를 보낸다
   - 새 사진은 음악 key를 새로 정해 `PENDING`으로 넣고, **커밋한 뒤 그 사진들의 음악만 생성을 요청한다**(9-5)
   - 목록에서 빠진 사진은 행을 지운다 — 그 사진의 음악도 함께 버린다. 생성 중이었다면 나중에 오는 완료 이벤트는 무시된다
