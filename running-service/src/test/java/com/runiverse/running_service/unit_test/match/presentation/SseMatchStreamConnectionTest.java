@@ -88,6 +88,23 @@ class SseMatchStreamConnectionTest {
     }
 
     @Test
+    @DisplayName("매칭 방 입장은 MATCH_ROOM_ENTRANCE 이름으로 방 정보만 싣고 남은 시간 키가 없다")
+    void matchEntranceCarriesRoomInfoOnly() throws Exception {
+        // when
+        connection.send(MatchStreamEvent.snapshot(roomOf(RunningRoomType.MATCH, List.of()), START.minusMinutes(20)));
+
+        // then -> 이름으로 입장과 갱신을 가른다. 남은 시간은 초대 방 입장만 싣는다
+        ArgumentCaptor<SseEmitter.SseEventBuilder> sent = ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
+        verify(emitter).send(sent.capture());
+        assertThat(sent.getValue().build())
+                .anyMatch(part -> part.getData() instanceof String text
+                        && text.contains("event:MATCH_ROOM_ENTRANCE\n"));
+        Object body = sentBody();
+        assertThat(body).isInstanceOf(RoomInfoResponse.class);
+        assertThat(JSON.valueToTree(body).has("startsInMs")).isFalse();
+    }
+
+    @Test
     @DisplayName("초대 방 갱신은 방 정보만 싣고 남은 시간 키가 없다")
     void inviteUpdatedHasNoStartsInMs() throws Exception {
         // when
