@@ -2,7 +2,7 @@ package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
-import com.runiverse.running_service.application.common.exception.MatchRoomChatErrorCode;
+import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
 import com.runiverse.running_service.presentation.common.exception.CommonErrorCode;
@@ -116,7 +116,7 @@ public class ErrorExposurePolicyTest {
         // 가려지면 500으로 바뀌어, 클라가 채팅 입력을 닫을지 가를 수 없다
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.CONFLICT,
-                MatchRoomChatErrorCode.CHAT_CLOSED.getCode())).isTrue();
+                RoomChatErrorCode.ROOM_CHAT_CLOSED.getCode())).isTrue();
     }
 
     @Test

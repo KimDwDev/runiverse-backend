@@ -5,9 +5,9 @@ import com.runiverse.running_service.application.common.exception.ResourceErrorC
 
 // 채팅할 방이 없거나, 솔로 방이거나, 호출자가 이 방에 배정돼 있지 않다(나갔거나 처음부터 아님).
 // 셋을 가르지 않는다 — 남의 방이 있는지 없는지를 알려 주지 않는다
-public class MatchRoomChatRoomNotFoundException extends BusinessException {
+public class RoomChatRoomNotFoundException extends BusinessException {
 
-    public MatchRoomChatRoomNotFoundException() {
+    public RoomChatRoomNotFoundException() {
         super(ResourceErrorCode.NOT_FOUND);
     }
 }

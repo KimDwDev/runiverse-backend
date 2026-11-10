@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 // 방 상태 이벤트는 전원이 받아 null이다
 public record MatchStreamEvent(MatchEventType type, Long runningRoomId,
                                RoomInfo room, RunningReady ready, Long startsInMs,
-                               MatchRoomChat chat, UserId excludedUserId) {
+                               RoomChat chat, UserId excludedUserId) {
 
     // 갱신은 전부 이쪽이다 — 방 종류로 이벤트 이름이 갈린다.
     // 매칭 방은 확정된 그 순간만 confirmed()를 쓰고, 초대 방은 마감도 이 갱신으로 알린다

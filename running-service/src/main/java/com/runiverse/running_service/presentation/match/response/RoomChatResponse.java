@@ -1,13 +1,13 @@
 package com.runiverse.running_service.presentation.match.response;
 
-import com.runiverse.running_service.application.match.port.out.MatchRoomChat;
+import com.runiverse.running_service.application.match.port.out.RoomChat;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-// 명세의 공통 객체 Chat — 보내기·수정 응답과 CHAT_* 이벤트 data가 이 구조를 쓴다.
+// 명세의 공통 객체 Chat — 보내기·수정 응답과 ROOM_CHAT_* 이벤트 data가 이 구조를 쓴다.
 // 와이어 계약이라 presentation이 갖는다
-public record MatchRoomChatResponse(
+public record RoomChatResponse(
         Long chatId,
         Long runningRoomId,
         SenderResponse sender,
@@ -19,8 +19,8 @@ public record MatchRoomChatResponse(
         LocalDateTime createdAt
 ) {
 
-    public static MatchRoomChatResponse from(MatchRoomChat chat) {
-        return new MatchRoomChatResponse(
+    public static RoomChatResponse from(RoomChat chat) {
+        return new RoomChatResponse(
                 chat.chatId(),
                 chat.runningRoomId(),
                 SenderResponse.from(chat.sender()),
@@ -38,7 +38,7 @@ public record MatchRoomChatResponse(
             boolean isDeleted
     ) {
 
-        public static SenderResponse from(MatchRoomChat.Sender sender) {
+        public static SenderResponse from(RoomChat.Sender sender) {
             return new SenderResponse(
                     sender.userId(),
                     sender.nickname(),
