@@ -2925,7 +2925,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | |
 | `KAFKA_SASL_USERNAME` | `dev.running-service` | `{env}.running-service` |
 | `KAFKA_SASL_PASSWORD` | | 시크릿 — 로그·출력에 남기지 않는다 |
-| `KAFKA_SSL_TRUSTSTORE_LOCATION` / `KAFKA_SSL_TRUSTSTORE_PASSWORD` | | 브로커 인증서가 사설 CA일 때만. 공인 CA(MSK 등)면 비운다 |
+| `KAFKA_SSL_CA_LOCATION` | `/app/config/kafka-ca.crt` | 브로커를 검증할 CA 인증서(PEM) 경로 — `ssl.truststore.type=PEM`으로 읽어 비밀번호가 없다. 상대 경로는 실행 디렉터리 기준이라 배포에서는 절대 경로를 쓴다 |
+
+- **호스트 검증을 켠다** — `ssl.endpoint.identification.algorithm=https`(Kafka 클라이언트 기본값, 명시해 둔다). 접속 주소가 인증서에 든 주소와 같은지 확인하므로, IP로 접속하면 인증서 SAN에 그 IP가 있어야 한다. 끄지 않는다.
 
 **`{env}.record-card.music.requested`** (running-service → AI)
 
