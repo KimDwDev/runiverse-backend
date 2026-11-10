@@ -12,6 +12,7 @@ import com.runiverse.running_service.domain.recordcard.exception.InvalidMusicRes
 import com.runiverse.running_service.domain.recordcard.exception.InvalidThumbnailIndexException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardActivityTypeRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardDeletedException;
+import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageCaptionTooLongException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageNotInCardException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardMemoRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardNotDeletedException;
@@ -309,6 +310,68 @@ class RecordCardTest {
                             tuple(imageKey("d"), 1, MusicStatus.PENDING),
                             tuple(imageKey("a"), 2, MusicStatus.READY));
             assertThat(card.getImages().get(1).getRecordCardImageId()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("남긴 사진의 설명을 바꾸거나 지우고, 음악은 그대로 둔다")
+        void changeKeptCaption() {
+            // given
+            RecordCard card = restored(List.of(
+                    RecordCardImage.restore(1L, imageKey("a"), "옛 설명", musicKey("a"), MusicStatus.READY, 0),
+                    RecordCardImage.restore(2L, imageKey("b"), "지울 설명", musicKey("b"), MusicStatus.FAILED, 1),
+                    RecordCardImage.restore(3L, imageKey("c"), "그대로", musicKey("c"), MusicStatus.PENDING, 2)),
+                    imageKey("a"));
+
+            // when
+            card.rearrangeImages(List.of(
+                    new ImageSlot.Keep(1L, "새 설명"),
+                    new ImageSlot.Keep(2L, "  "),
+                    new ImageSlot.Keep(3L, "그대로")), null);
+
+            // then
+            assertThat(card.getImages())
+                    .extracting(image -> image.getCaption().map(RecordCardImageCaption::value).orElse(null),
+                            image -> image.getMusicKey().value(), RecordCardImage::getMusicStatus)
+                    .containsExactly(
+                            tuple("새 설명", musicKey("a"), MusicStatus.READY),
+                            tuple(null, musicKey("b"), MusicStatus.FAILED),
+                            tuple("그대로", musicKey("c"), MusicStatus.PENDING));
+        }
+
+        @Test
+        @DisplayName("남긴 사진의 설명이 100자를 넘으면 거부하고 순서·설명을 바꾸지 않는다")
+        void rejectTooLongKeptCaption() {
+            // given
+            RecordCard card = restored(List.of(
+                    RecordCardImage.restore(1L, imageKey("a"), "옛 설명", musicKey("a"), MusicStatus.READY, 0),
+                    RecordCardImage.restore(2L, imageKey("b"), null, musicKey("b"), MusicStatus.READY, 1)),
+                    imageKey("a"));
+
+            // when & then
+            assertThatThrownBy(() -> card.rearrangeImages(List.of(
+                    new ImageSlot.Keep(2L, null),
+                    new ImageSlot.Keep(1L, "가".repeat(101))), null))
+                    .isInstanceOf(RecordCardImageCaptionTooLongException.class);
+            assertThat(card.getImages())
+                    .extracting(image -> image.getImageKey().value(),
+                            image -> image.getCaption().map(RecordCardImageCaption::value).orElse(null))
+                    .containsExactly(tuple(imageKey("a"), "옛 설명"), tuple(imageKey("b"), null));
+        }
+
+        @Test
+        @DisplayName("다른 사진 검사에서 실패하면 남긴 사진의 설명도 바꾸지 않는다")
+        void keepCaptionWhenOtherCheckFails() {
+            // given
+            RecordCard card = restored(List.of(
+                    RecordCardImage.restore(1L, imageKey("a"), "옛 설명", musicKey("a"), MusicStatus.READY, 0)),
+                    imageKey("a"));
+
+            // when & then — 없는 사진 99를 가리킨다
+            assertThatThrownBy(() -> card.rearrangeImages(List.of(
+                    new ImageSlot.Keep(1L, "새 설명"),
+                    new ImageSlot.Keep(99L, null)), null))
+                    .isInstanceOf(RecordCardImageNotInCardException.class);
+            assertThat(card.getImages().get(0).getCaption()).contains(new RecordCardImageCaption("옛 설명"));
         }
 
         @Test
