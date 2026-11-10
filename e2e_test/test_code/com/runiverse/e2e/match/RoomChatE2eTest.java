@@ -21,8 +21,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class RoomChatE2eTest extends E2eTestSupport {
 
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");
-    // 다른 매칭 E2E와 한 방에 합쳐지지 않게 아무도 쓰지 않는 내일 슬롯·거리를 쓴다
-    private static final LocalDateTime CHAT_SLOT = LocalDate.now(APP_ZONE).plusDays(1).atTime(19, 30);
+    // 다른 매칭 E2E와 한 방에 합쳐지지 않게 아무도 쓰지 않는 내일 슬롯·거리를 쓴다.
+    // 매칭 시작 시각은 정시 간격이라(match.allowed-start-time-interval) 정시만 고른다
+    private static final LocalDateTime CHAT_SLOT = LocalDate.now(APP_ZONE).plusDays(1).atTime(22, 0);
     private static final int DISTANCE = 5000;
 
     @Test
