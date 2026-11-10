@@ -1041,7 +1041,7 @@
 ### 2-3. `GET /api/v1/app/version` — 앱 버전 확인
 
 - **화면**: 앱 진입(스플래시)·포그라운드 복귀 — 스플래시에서는 토큰 복원보다 먼저 부른다
-- **Query**: `platform`(필수, `IOS` | `ANDROID`, 대소문자 무시)
+- **Query**: `platform`(필수, `IOS` | `ANDROID` | `WATCH_IOS` | `WATCH_ANDROID`, 대소문자 무시)
 - **Response `200 OK`**
 
 ```json
@@ -1067,6 +1067,7 @@
 - **버전은 `MAJOR.MINOR.PATCH` 숫자 세 부분이고, 부분마다 9자리까지다.** 부분마다 정수로 비교한다 — 문자열로 비교하면 `1.10.0`이 `1.9.0`보다 낮게 나온다
 - **비교 대상은 빌드 번호가 아니라 버전 이름이다**(스토어에 표시되는 버전). 빌드 번호는 업로드 순번이라 기준으로 쓰지 않는다 — 대신 운영에 내보내는 빌드는 버전 이름을 반드시 올린다
 - **값은 플랫폼마다 따로 둔다** — 심사·공개 시점이 플랫폼마다 달라, 한쪽에만 나온 버전을 다른 쪽에 요구하지 않기 위해서다
+- **워치 앱 기준은 폰 앱이 묻는다** — 워치는 서버에 직접 붙지 않는다. 폰이 `WATCH_IOS`(애플워치)·`WATCH_ANDROID`(갤럭시워치 등 Wear OS)로 물어 낮은 워치와의 연결을 막는다. 서버의 구버전 요청 거절에는 쓰지 않는다
 - **스토어 주소는 내려주지 않는다** — 바뀌지 않는 값이라 앱이 가진다
 - **`Authorization` 헤더를 싣지 않는다** — 공개 API도 헤더가 있으면 토큰을 검증하므로, 만료된 토큰을 실으면 버전 확인이 401로 막힌다
 - 스플래시에서 서버에 닿지 못하면 다른 요청과 같이 재시도한다 — 판정 없이 진입시키지 않는다. 포그라운드 복귀 때 실패하면 쓰던 화면을 그대로 둔다
@@ -1081,7 +1082,7 @@
 
 {
   "code": "INVALID_REQUEST",
-  "message": "플랫폼은 IOS 또는 ANDROID이어야 합니다."
+  "message": "플랫폼은 IOS, ANDROID, WATCH_IOS, WATCH_ANDROID 중 하나여야 합니다."
 }
 ```
 
@@ -1416,16 +1417,16 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "targetDistanceMeters": 3000,
       "slots": [
         { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 2, "selectable": true },
-        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 0, "selectable": true }
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 2, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T20:00:00", "waitingCount": 0, "selectable": true }
       ]
     },
     {
       "targetDistanceMeters": 5000,
       "slots": [
         { "scheduledStartAt": "2026-07-25T18:00:00", "waitingCount": 0, "selectable": false },
-        { "scheduledStartAt": "2026-07-25T18:30:00", "waitingCount": 3, "selectable": true },
-        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 1, "selectable": true }
+        { "scheduledStartAt": "2026-07-25T19:00:00", "waitingCount": 3, "selectable": true },
+        { "scheduledStartAt": "2026-07-25T20:00:00", "waitingCount": 1, "selectable": true }
       ]
     }
   ]
@@ -1433,7 +1434,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - `distances`는 신청 가능한 거리(현재 운영값 3000·5000·10000) 전부를 **`targetDistanceMeters` 오름차순**으로 담는다. 대기자가 하나도 없는 거리도 빠지지 않는다. 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 인원을 합산하지 않는다
-- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 30분 간격) 9개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
+- 각 거리의 `slots`는 `date` 하루의 신청 가능 시각(현재 운영값 18:00~22:00, 1시간 간격) 5개를 **`scheduledStartAt` 오름차순**으로 담는다. 대기자가 없는 슬롯도 `waitingCount: 0`으로 빠짐없이 내려준다. 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이라, 매칭 신청이 받는 선택지와 이 목록은 항상 같다
 - 응답에 조회 날짜를 따로 싣지 않는다 — `scheduledStartAt`이 날짜를 담는다
 - `waitingCount`는 아직 확정되지 않은 대기자 수다 — `type='MATCH' AND status='MATCHING'`인 방의 참가자만 센다. 이미 `MATCHED`된 방(들어갈 수 없는 자리)과 솔로 방(`type='SOLO'`)은 제외. 같은 슬롯에 방이 여럿이면 인원을 합산한다
 - `selectable=false`는 마감이 지난 슬롯 — 목록에는 남기되 선택은 막는다. 경계는 매칭 신청의 `409 MATCH_SLOT_CLOSED`와 같다(마감 정각도 마감). 마감은 시각으로만 갈리므로 같은 시각이면 거리가 달라도 값이 같다
@@ -1468,7 +1469,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **30분 간격**(`18:00`, `18:30`, … `22:00`) |
+| `scheduledStartAt` | String | O | KST 시작 시각. **18:00~22:00**, **1시간 간격**(`18:00`, `19:00`, … `22:00`) |
 | `targetDistanceMeters` | Integer | O | 목표 거리(m). **3000 / 5000 / 10000** 셋 중 하나 |
 
 - **입력값은 정해진 선택지 안에서만 받는다** — 자유 입력이 아니다. 위 시각 범위·간격·거리 목록은 운영 설정값(`match.allowed-*`)이며, 설정이 바뀌면 선택지와 400 문구가 함께 바뀐다. 시각 선택지는 하드코딩하지 말고 `GET /match-rooms/slots`가 내려 주는 목록을 따른다. 거리 목록은 그 응답에 없다
@@ -1504,7 +1505,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "시작 시각은 18:00부터 22:00까지 30분 간격으로만 선택할 수 있습니다."
+  "message": "시작 시각은 18:00부터 22:00까지 60분 간격으로만 선택할 수 있습니다."
 }
 
 {
