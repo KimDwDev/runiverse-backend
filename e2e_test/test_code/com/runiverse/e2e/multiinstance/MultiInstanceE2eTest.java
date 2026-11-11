@@ -350,25 +350,8 @@ class MultiInstanceE2eTest extends E2eTestSupport {
             }
         }
 
-        @Test
-        @DisplayName("[다른 인스턴스] 다른 인스턴스로 다시 붙어도 상대에게 '끊김'이 보이지 않는다")
-        void crossInstanceReconnectIsNotSeenAsDisconnected() {
-            TestUser chulsu = signUpAndOnboard();
-            TestUser younghee = signUpAndOnboard();
-            long room = startedRoom(chulsu, younghee, TOMORROW.atTime(22, 0), 3000);
-
-            try (RunningWebSocket youngheeSocket = start(two(), younghee, room);
-                 RunningWebSocket oldSocket = start(one(), chulsu, room)) {
-                youngheeSocket.drainFor(Duration.ofSeconds(1));
-                try (RunningWebSocket newSocket = start(two(), chulsu, room)) {
-                    oldSocket.awaitClosed(CLOSE_TIMEOUT);
-
-                    // then - 철수는 새 연결로 붙어 있다. 상대 화면에 끊김이 뜨면 안 된다
-                    assertThat(statusesOf(youngheeSocket.drainFor(QUIET), chulsu)).doesNotContain("DISCONNECTED");
-                }
-            }
-        }
-
+        // 다른 인스턴스로 다시 붙으면 옛 인스턴스가 옛 연결을 닫으며 DISCONNECTED를 늦게 보낼 수 있다 —
+        // 막지 않고 둔다(api-spec 5-D 전이 규칙). 재연결만으로는 인정하지 않고 새 연결의 메시지가 바로잡는다
         @Test
         @DisplayName("[다른 인스턴스] 다른 인스턴스로 다시 붙은 뒤 새 연결로 좌표를 보내면 상대에게 다시 RUNNING으로 보인다")
         void crossInstanceReconnectRecoversOnNextCoordinates() {
