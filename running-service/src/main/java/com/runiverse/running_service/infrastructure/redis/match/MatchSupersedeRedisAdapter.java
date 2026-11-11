@@ -8,18 +8,17 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-// 러닝(redis.running.SupersedeRedisAdapter)과 클래스 이름이 같다 — 기본 빈 이름이 겹쳐 앱이 뜨지 않으므로 이름을 정해 준다
 @Slf4j
-@Component("matchSupersedeRedisAdapter")
+@Component
 @RequiredArgsConstructor
-public class SupersedeRedisAdapter implements PublishMatchStreamSupersedePort {
+public class MatchSupersedeRedisAdapter implements PublishMatchStreamSupersedePort {
 
     private final StringRedisTemplate redisTemplate;
     private final JsonMapper jsonMapper;
 
     @Override
     public void publish(UserId userId, String winnerConnectionId) {
-        SupersedeMessage message = new SupersedeMessage(userId.value(), winnerConnectionId);
+        MatchSupersedeMessage message = new MatchSupersedeMessage(userId.value(), winnerConnectionId);
         try {
             redisTemplate.convertAndSend(MatchChannel.SUPERSEDE, jsonMapper.writeValueAsString(message));
         } catch (RuntimeException e) {

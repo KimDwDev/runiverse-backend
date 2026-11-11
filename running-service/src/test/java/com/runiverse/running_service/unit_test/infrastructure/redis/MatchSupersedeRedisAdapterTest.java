@@ -4,8 +4,8 @@ import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.infrastructure.redis.match.MatchChannel;
-import com.runiverse.running_service.infrastructure.redis.match.SupersedeMessage;
-import com.runiverse.running_service.infrastructure.redis.match.SupersedeRedisAdapter;
+import com.runiverse.running_service.infrastructure.redis.match.MatchSupersedeMessage;
+import com.runiverse.running_service.infrastructure.redis.match.MatchSupersedeRedisAdapter;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +29,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
-// 클래스 이름이 러닝(redis.running.SupersedeRedisAdapter)과 같아 테스트 이름에 match를 붙인다
 @ExtendWith(MockitoExtension.class)
 @DisplayName("매칭 스트림 대체 알림 발행 어댑터 단위 테스트")
 class MatchSupersedeRedisAdapterTest {
@@ -41,13 +40,13 @@ class MatchSupersedeRedisAdapterTest {
     private StringRedisTemplate redisTemplate;
 
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
-    private SupersedeRedisAdapter adapter;
+    private MatchSupersedeRedisAdapter adapter;
     private LogCapture log;
 
     @BeforeEach
     void setUp() {
-        adapter = new SupersedeRedisAdapter(redisTemplate, jsonMapper);
-        log = LogCapture.of(SupersedeRedisAdapter.class);
+        adapter = new MatchSupersedeRedisAdapter(redisTemplate, jsonMapper);
+        log = LogCapture.of(MatchSupersedeRedisAdapter.class);
     }
 
     @AfterEach
@@ -64,8 +63,8 @@ class MatchSupersedeRedisAdapterTest {
         // then -> 방을 옮기면 옛 연결을 든 인스턴스는 새 방을 구독하지 않는다 — 모든 인스턴스가 듣는 채널이어야 한다
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(redisTemplate).convertAndSend(eq(MatchChannel.SUPERSEDE), body.capture());
-        assertThat(jsonMapper.readValue(body.getValue(), SupersedeMessage.class))
-                .isEqualTo(new SupersedeMessage(USER_ID, WINNER_CONNECTION));
+        assertThat(jsonMapper.readValue(body.getValue(), MatchSupersedeMessage.class))
+                .isEqualTo(new MatchSupersedeMessage(USER_ID, WINNER_CONNECTION));
     }
 
     @Test
