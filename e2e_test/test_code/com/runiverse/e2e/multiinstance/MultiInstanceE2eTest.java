@@ -304,6 +304,123 @@ class MultiInstanceE2eTest extends E2eTestSupport {
             }
         }
 
+        @Test
+        @DisplayName("[다른 인스턴스] 연달아 A(1)→B(2)→C(1)로 다시 붙어도 마지막 연결만 남고, 상대 진행 통지는 마지막 연결로 간다")
+        void pingPongReconnectKeepsOnlyLatest() {
+            TestUser chulsu = signUpAndOnboard();
+            TestUser younghee = signUpAndOnboard();
+            long room = startedRoom(chulsu, younghee, TOMORROW.atTime(20, 0), 3000);
+
+            try (RunningWebSocket youngheeSocket = start(two(), younghee, room);
+                 RunningWebSocket a = start(one(), chulsu, room);
+                 RunningWebSocket b = start(two(), chulsu, room)) {
+                a.awaitClosed(CLOSE_TIMEOUT);
+                try (RunningWebSocket c = start(one(), chulsu, room)) {
+                    // then - 인스턴스 2는 C의 대체 통지로 B를 닫는다. 인스턴스 1도 자기가 보낸 그 통지를 받지만
+                    //        통지에 이긴 연결 ID(C)가 실려 있어 C는 닫지 않는다
+                    b.awaitClosed(CLOSE_TIMEOUT);
+
+                    // when - 영희(인스턴스 2)가 좌표를 보낸다
+                    youngheeSocket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", track(10)));
+
+                    // then - 철수의 마지막 연결 C(인스턴스 1)가 영희의 진행을 받는다
+                    Map<String, Object> progress = c.await("RUNNING_PROGRESS_UPDATED", Duration.ofSeconds(15));
+                    assertThat(progress.toString()).contains(younghee.userId());
+                    assertThat(namesOf(c.drainFor(Duration.ofSeconds(1)))).doesNotContain(RunningWebSocket.CLOSED_EVENT);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("[같은 인스턴스] 같은 인스턴스로 다시 붙으면 상대에게 '끊김'이 보이지 않는다")
+        void sameInstanceReconnectIsNotSeenAsDisconnected() {
+            TestUser chulsu = signUpAndOnboard();
+            TestUser younghee = signUpAndOnboard();
+            long room = startedRoom(chulsu, younghee, TOMORROW.atTime(21, 0), 3000);
+
+            try (RunningWebSocket youngheeSocket = start(two(), younghee, room);
+                 RunningWebSocket oldSocket = start(one(), chulsu, room)) {
+                youngheeSocket.drainFor(Duration.ofSeconds(1));   // 시작 무렵의 상태 통지는 흘린다
+                try (RunningWebSocket newSocket = start(one(), chulsu, room)) {
+                    oldSocket.awaitClosed(CLOSE_TIMEOUT);
+
+                    // then - 옛 연결 정리는 가드에 걸려(연결표가 이미 새 연결) 끊김을 알리지 않는다
+                    assertThat(statusesOf(youngheeSocket.drainFor(QUIET), chulsu)).doesNotContain("DISCONNECTED");
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("[다른 인스턴스] 다른 인스턴스로 다시 붙어도 상대에게 '끊김'이 보이지 않는다")
+        void crossInstanceReconnectIsNotSeenAsDisconnected() {
+            TestUser chulsu = signUpAndOnboard();
+            TestUser younghee = signUpAndOnboard();
+            long room = startedRoom(chulsu, younghee, TOMORROW.atTime(22, 0), 3000);
+
+            try (RunningWebSocket youngheeSocket = start(two(), younghee, room);
+                 RunningWebSocket oldSocket = start(one(), chulsu, room)) {
+                youngheeSocket.drainFor(Duration.ofSeconds(1));
+                try (RunningWebSocket newSocket = start(two(), chulsu, room)) {
+                    oldSocket.awaitClosed(CLOSE_TIMEOUT);
+
+                    // then - 철수는 새 연결로 붙어 있다. 상대 화면에 끊김이 뜨면 안 된다
+                    assertThat(statusesOf(youngheeSocket.drainFor(QUIET), chulsu)).doesNotContain("DISCONNECTED");
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("[다른 인스턴스] 다른 인스턴스로 다시 붙은 뒤 새 연결로 좌표를 보내면 상대에게 다시 RUNNING으로 보인다")
+        void crossInstanceReconnectRecoversOnNextCoordinates() {
+            TestUser chulsu = signUpAndOnboard();
+            TestUser younghee = signUpAndOnboard();
+            long room = startedRoom(chulsu, younghee, TOMORROW.atTime(18, 0), 5000);
+
+            try (RunningWebSocket youngheeSocket = start(two(), younghee, room);
+                 RunningWebSocket oldSocket = start(one(), chulsu, room)) {
+                try (RunningWebSocket newSocket = start(two(), chulsu, room)) {
+                    oldSocket.awaitClosed(CLOSE_TIMEOUT);
+                    List<String> afterReconnect = statusesOf(youngheeSocket.drainFor(QUIET), chulsu);
+
+                    // when - 새 연결로 처음 보는 좌표를 보낸다
+                    newSocket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", track(10)));
+                    List<String> afterCoordinates = statusesOf(youngheeSocket.drainFor(QUIET), chulsu);
+
+                    // then - 끊김이 보였더라도 다음 좌표 배치가 RUNNING으로 되돌린다
+                    System.out.println("[관찰] 재연결 직후 영희가 본 철수 상태: " + afterReconnect
+                            + " / 새 좌표 뒤: " + afterCoordinates);
+                    assertThat(afterCoordinates).isNotEmpty();
+                    assertThat(afterCoordinates.getLast()).isEqualTo("RUNNING");
+                }
+            }
+        }
+
+        // 두 사람이 든 매칭 방을 "확정·시작 시각 경과"로 만든다 — RUNNING_START가 방을 STARTED로 올린다
+        private long startedRoom(TestUser first, TestUser second, LocalDateTime slot, int distance) {
+            int room = apply(one(), first, slot, distance).number("runningRoomId");
+            assertThat(apply(two(), second, slot, distance).number("runningRoomId")).isEqualTo(room);
+            executeSql("UPDATE running_rooms SET status = 'MATCHED', start_at = (now() AT TIME ZONE 'Asia/Seoul') "
+                    + "- interval '1 minute' WHERE running_room_id = " + room);
+            return room;
+        }
+
+        private RunningWebSocket start(String baseUrl, TestUser user, long room) {
+            RunningWebSocket socket = connectRunningWebSocketOn(baseUrl, user.accessToken());
+            socket.send("RUNNING_START", Map.of("runningRoomId", room));
+            socket.await("RUNNING_STARTED");
+            return socket;
+        }
+
+        @SuppressWarnings("unchecked")
+        private static List<String> statusesOf(List<Map<String, Object>> messages, TestUser user) {
+            return messages.stream()
+                    .filter(message -> "RUNNING_PROGRESS_UPDATED".equals(message.get("event")))
+                    .map(message -> (Map<String, Object>) message.get("data"))
+                    .filter(data -> user.userId().equals(data.get("userId")))
+                    .map(data -> (String) data.get("status"))
+                    .toList();
+        }
+
         // 정북으로 5m씩 2초 간격 — 시작은 지금보다 앞선 시각이라 서버 시각 필터를 넘는다
         private List<Map<String, Object>> track(int count) {
             LocalDateTime start = LocalDateTime.now(APP_ZONE).minusSeconds(count * 2L);
