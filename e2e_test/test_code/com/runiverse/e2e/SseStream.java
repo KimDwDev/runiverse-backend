@@ -90,6 +90,30 @@ public final class SseStream implements AutoCloseable {
         }
     }
 
+    /** 여러 이벤트 중 먼저 온 것의 data를 꺼낸다 — "자기 이벤트는 오지 않는다"를 뒤이은 이벤트로 확인할 때 쓴다. */
+    public Map<String, Object> awaitAny(String... events) {
+        List<String> names = List.of(events);
+        long deadline = System.nanoTime() + DEFAULT_TIMEOUT.toNanos();
+        while (true) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                throw new IllegalStateException("%s 중 하나를 %s 안에 받지 못했습니다".formatted(names, DEFAULT_TIMEOUT));
+            }
+            Map<String, Object> message = poll(remaining);
+            if (message == null) {
+                continue;
+            }
+            if (STREAM_ENDED.equals(message.get("event"))) {
+                received.add(message);
+                throw new IllegalStateException(
+                        "%s 를 기다리는 중 스트림이 끝났습니다 — %s".formatted(names, message.get("data")));
+            }
+            if (names.contains(message.get("event"))) {
+                return parse((String) message.get("data"));
+            }
+        }
+    }
+
     /** 서버가 스트림을 닫을 때까지 기다린다. 그 사이 온 이벤트는 흘려보낸다. */
     public void awaitClosed() {
         long deadline = System.nanoTime() + DEFAULT_TIMEOUT.toNanos();
