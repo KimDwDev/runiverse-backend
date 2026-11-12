@@ -3032,7 +3032,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `{env}.record-card.music.requested` | running-service → AI | 카드 저장 한 번(작성·수정·되살리기)에 이벤트 하나 | `recordCardId` |
 | `{env}.record-card.music.generated` | AI → running-service | 요청 이벤트 하나에 완료 이벤트 하나 | `recordCardId` |
 
-- **직렬화는 JSON**이다. 시각은 다른 API와 같이 `LocalDateTime` 문자열이다.
+- **직렬화는 JSON**이다. 필드 이름과 시각 형식은 토픽마다 아래에 적는다 — 앱 API 규칙과 다를 수 있다.
 - **파티션 키를 `recordCardId`로 둔다** — 한 카드의 요청·완료가 같은 파티션에 들어가 순서가 섞이지 않는다.
 - **완료 토픽은 running-service 전체가 컨슈머 그룹 하나로 구독한다** — ALB 뒤에 인스턴스가 여럿이어도 완료 이벤트 하나는 한 인스턴스만 처리한다. 상태 변경은 DB에만 쓰고 인스턴스 메모리에 두지 않으므로 어느 인스턴스가 받아도 같다.
 
@@ -3091,52 +3091,55 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "requestId": "01a0f2d4-6180-7000-8000-446655440099",
-  "recordCardId": 88,
-  "memo": "비 그치고 한강을 달렸다. 생각보다 숨이 덜 찼다.",
-  "activityType": "DAILY",
-  "run": {
-    "averagePaceSecondsPerKm": 330,
-    "totalDistanceMeters": 5000,
-    "averageCadenceSpm": 172,
-    "weatherCode": 61
+  "user_id": "01a0f2d4-6180-7000-8000-446655440000",
+  "record_card_id": 101,
+  "memo": "힘들었지만 끝까지 달려서 뿌듯했다",
+  "activity_type": "TRAVEL",
+  "running_summary": {
+    "total_distance": 5000,
+    "total_duration": 1800,
+    "avg_pace": 360,
+    "avg_cadence": 168,
+    "start_at": "2026-10-19T06:30:00+09:00",
+    "weather_code": 61,
+    "temperature": 15.0,
+    "total_elevation_gain": 22
   },
-  "baseMusic": {
-    "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-..."
-  },
-  "images": [
+  "photos": [
     {
-      "recordCardImageId": 301,
-      "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
-      "caption": "다리 밑에서 본 노을",
-      "musicKey": "record-cards/01a0f2d4-.../music/7d2e4f10-..."
+      "image_key": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+      "caption": "바닷가에서 찍은 사진"
     }
-  ],
-  "requestedAt": "2026-07-25T21:10:00"
+  ]
 }
 ```
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `requestId` | String | O | 요청 ID(UUID v7). 완료 이벤트가 그대로 돌려준다 — 로그·추적용이고, 상태를 찾는 데는 `musicKey`를 쓴다 |
-| `recordCardId` | Integer | O | 카드 ID |
+| `user_id` | String | O | 작성자 ID(UUID) |
+| `record_card_id` | Integer | O | 카드 ID |
 | `memo` | String | O | 회고 글(1~500자). 기본곡의 감정·여운 재료 |
-| `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` — 카드 단위 |
-| `run` | Object | O | 카드가 붙은 러닝 기록의 수치. **발행할 때 `running_records`에서 읽어 싣는다** — AI 서버는 기록을 조회하지 않는다 |
-| `run.averagePaceSecondsPerKm` | Integer | O | 평균 페이스(초/km) |
-| `run.totalDistanceMeters` | Integer | O | 거리(미터) |
-| `run.averageCadenceSpm` | Integer | X | 평균 케이던스(spm). 기록에 없으면 null |
-| `run.weatherCode` | Integer | O | WMO 4677 코드(0~99). **조회 실패 폴백(`0`)과 실제 맑음을 구분할 수 없다** — 기록 쪽 한계다(erd `running_records.weather_code`) |
-| `baseMusic` | Object | X | 기본곡을 만들어야 하면 `{musicKey}`. **수정 요청에서는 null이다** — 기본곡은 다시 만들지 않는다 |
-| `images` | Array | O | 음악을 만들 사진. **이번 저장에서 새로 넣은 사진만** 싣는다. 없으면 빈 배열 |
-| `images[].recordCardImageId` | Integer | O | 사진 ID |
-| `images[].imageKey` | String | O | 사진 S3 key — AI 서버가 S3에서 직접 읽는다 |
-| `images[].caption` | String | X | 사진 설명. 없으면 null |
-| `images[].musicKey` | String | O | 이 사진 음악을 올릴 S3 key |
-| `requestedAt` | String | O | 요청 시각 |
+| `activity_type` | String | O | `DAILY` · `TRAVEL` · `RACE` — 카드 단위 |
+| `running_summary` | Object | O | 카드가 붙은 러닝 기록의 수치. **발행할 때 `running_records`에서 읽어 싣는다** — AI 서버는 기록을 조회하지 않는다 |
+| `running_summary.total_distance` | Integer | O | 거리(미터) |
+| `running_summary.total_duration` | Integer | O | 움직인 시간(초). 일시정지·정지 구간은 빠진다(erd `running_records.total_duration`) |
+| `running_summary.avg_pace` | Integer | O | 평균 페이스(초/km) |
+| `running_summary.avg_cadence` | Integer | X | 평균 케이던스(spm). 기록에 없으면 null |
+| `running_summary.start_at` | String | O | 러닝 시작 시각. **이 토픽만 KST 오프셋(`+09:00`)을 붙인다** — `running_records.start_at`(시간대 없는 KST 값)에 오프셋을 붙여 보낸다 |
+| `running_summary.weather_code` | Integer | O | WMO 4677 코드(0~99). **조회 실패 폴백(`0`)과 실제 맑음을 구분할 수 없다** — 기록 쪽 한계다(erd `running_records.weather_code`) |
+| `running_summary.temperature` | Number | O | 기온(섭씨, 소수 한 자리). 조회 실패 폴백은 `15.0`이라 실제 15도와 구분할 수 없다 |
+| `running_summary.total_elevation_gain` | Integer | X | 누적 상승 고도(미터). 유효 표본이 부족해 기록에 없으면 null |
+| `photos` | Array | O | 음악을 만들 사진. **카드 순서(`sort_order`)대로** 싣는다. 사진이 없으면 빈 배열 |
+| `photos[].image_key` | String | O | 사진 S3 key — AI 서버가 S3에서 직접 읽는다 |
+| `photos[].caption` | String | X | 사진 설명. 없으면 null |
 
-- **음악 S3 key는 running-service가 정한다** — 카드·사진 행을 만들 때 key를 함께 저장하고, AI 서버는 받은 `musicKey`에 그대로 올린다. 행에는 처음부터 key가 있고 S3 객체는 완료 뒤에만 있다.
-- **`baseMusic`이 null이고 `images`가 비어 있으면 발행하지 않는다** — 사진을 늘리지 않은 수정은 만들 음악이 없다.
+- **이 토픽의 필드 이름은 `snake_case`다** — 앱 API(`camelCase`)와 다르다. AI 서버와의 내부 계약이라 AI 서버 쪽 이름을 따른다.
+
+> **아직 정하지 않은 것 — 요청 이벤트를 위 형태로 바꾸며 생겼다**: 이벤트에 음악 key·요청 ID·사진 ID가 없다. 완료 이벤트(아래)·`record_cards.base_music_key`·`record_card_images.music_key`는 아직 "서버가 음악 key를 정해 요청에 싣고, 완료도 그 key로 돌아온다"는 이전 설계 그대로다. 함께 정해야 한다:
+> 1. AI가 음악을 어느 S3 key에 올리는가
+> 2. 완료 이벤트로 어느 음악(기본곡·어느 사진)인지 어떻게 찾는가 — `image_key`로 찾을지
+> 3. 수정(9-3)으로 새 사진만 보낼 때 기본곡을 다시 만들지 말라는 것을 어떻게 알리는가
+> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가
 
 **`{env}.record-card.music.generated`** (AI → running-service)
 
@@ -3168,9 +3171,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - **DB 오류로 처리하지 못하면 오프셋을 커밋하지 않는다** — 다시 받아도 위 규칙으로 한 번만 바뀐다
 - **요청 이벤트는 아웃박스 + CDC로 발행한다** — 카드 저장과 같은 트랜잭션에서 요청 이벤트를 아웃박스 테이블에 쓰고, CDC가 커밋된 아웃박스 행을 읽어 요청 토픽에 발행한다
   - 커밋 전에 Kafka로 보내면 롤백된 카드의 음악이 만들어진다. 커밋한 뒤 앱이 직접 보내면, 그 사이 발행이 실패하거나 인스턴스가 죽었을 때 음악이 `PENDING`에 영영 머문다. 아웃박스는 카드와 이벤트를 함께 커밋해 이 두 경우를 모두 막는다
-  - CDC는 최소 한 번 발행이다 — 같은 요청 이벤트가 두 번 갈 수 있다. AI 서버는 `requestId`로 중복을 거른다(AI 서버 inbox)
+  - CDC는 최소 한 번 발행이다 — 같은 요청 이벤트가 두 번 갈 수 있다. AI 서버가 inbox로 중복을 거른다(무엇으로 거를지는 위 요청 이벤트의 "아직 정하지 않은 것" 4)
   - CDC 도구, 아웃박스 테이블 스키마(erd), 발행을 마친 행을 정리하는 방법은 아웃박스를 구현할 때 정한다
-- **완료 이벤트도 inbox로 받는다(이후)** — 처리한 완료 이벤트를 `requestId`로 기록해 같은 이벤트를 두 번 처리하지 않는다. 위의 "`PENDING`인 행만 바꾼다"는 그대로 둔다 — inbox는 이벤트 단위로 중복을 막고, 이 규칙은 음악 상태가 한 번만 바뀌게 한다. inbox 스키마는 완료 구독을 구현할 때 정한다
+- **완료 이벤트도 inbox로 받는다(이후)** — 처리한 완료 이벤트를 기록해 같은 이벤트를 두 번 처리하지 않는다. 위의 "`PENDING`인 행만 바꾼다"는 그대로 둔다 — inbox는 이벤트 단위로 중복을 막고, 이 규칙은 음악 상태가 한 번만 바뀌게 한다. inbox 스키마는 완료 구독을 구현할 때 정한다
 - **`FAILED`를 다시 만드는 경로는 아직 없다** — AI 서버는 스스로 재시도하지 않는다. 사용자가 다시 요청하는 API나 자동 재시도가 필요해지면 이 절에 더한다(실패한 음악만 `baseMusic`·`images`에 실어 같은 요청 토픽으로 보낸다)
 
 > **아직 정하지 않은 것**: 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
