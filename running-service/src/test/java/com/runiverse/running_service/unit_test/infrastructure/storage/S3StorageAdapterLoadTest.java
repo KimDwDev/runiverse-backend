@@ -1,6 +1,6 @@
 package com.runiverse.running_service.unit_test.infrastructure.storage;
 
-import com.runiverse.running_service.application.user.port.out.UploadedImage;
+import com.runiverse.running_service.application.common.port.out.UploadedImage;
 import com.runiverse.running_service.infrastructure.storage.S3Properties;
 import com.runiverse.running_service.infrastructure.storage.S3StorageAdapter;
 import org.junit.jupiter.api.BeforeEach;
