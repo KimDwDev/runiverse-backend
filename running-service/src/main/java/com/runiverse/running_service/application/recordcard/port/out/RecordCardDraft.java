@@ -9,6 +9,7 @@ import java.util.UUID;
 // 9-1이 받은 작성 내용 — 확정(9-2) 전까지 Redis에만 둔다. DB에는 사진까지 확인된 카드만 들어간다
 public record RecordCardDraft(
         UUID recordCardDraftId,
+        UUID recordCardId,              // 이때 정한 카드 ID — 확정 때 이 값으로 저장한다. 지운 카드가 있었으면 그 카드의 ID
         UUID userId,                    // 초안을 만든 사람 — 다른 사람이 확정하면 404
         Long runningRecordId,
         RecordCardActivityType activityType,
@@ -16,7 +17,7 @@ public record RecordCardDraft(
         RecordCardVisibility visibility,
         List<DraftImage> images,        // 캐러셀 순서대로
         Integer thumbnailIndex,         // 사진이 없으면 null
-        Long confirmedRecordCardId      // 확정 전에는 null — 확정 뒤 재시도에 같은 카드를 돌려준다
+        boolean confirmed               // 확정했는지 — 확정 뒤 재시도에 같은 카드를 돌려준다
 ) {
 
     public RecordCardDraft {
@@ -25,6 +26,7 @@ public record RecordCardDraft(
 
     // 올릴 사진 하나 — 확정 때 S3 실물을 여기 적힌 형식·크기와 대조한다
     public record DraftImage(
+            UUID recordCardImageId,     // 이때 정한 사진 ID — 사진 key의 사진 폴더이고, 확정 때 이 값으로 저장한다
             String imageKey,
             String contentType,         // 소문자 정규값 — 서명에 넣은 값과 같다
             long fileSizeBytes,

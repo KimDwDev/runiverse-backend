@@ -48,9 +48,9 @@ public class RecordCard {
 
     private static final int MAX_IMAGES = 10;
 
-    // 카드에 새로 넣을 사진 하나 — 사진 key는 업로드한 것, 음악 key는 서버가 정해 둔 것이다.
+    // 카드에 새로 넣을 사진 하나 — 사진 ID·사진 key는 업로드 URL을 줄 때 정한 것, 음악 key는 서버가 정해 둔 것이다.
     // 설명(caption)은 선택이라 null·공백이면 설명 없는 사진이 된다
-    public record ImageDraft(String imageKey, String musicKey, String caption) {
+    public record ImageDraft(UUID recordCardImageId, String imageKey, String musicKey, String caption) {
 
     }
 
@@ -60,7 +60,7 @@ public class RecordCard {
         // 이 카드에 이미 있는 사진을 남긴다 — 음악과 생성 상태는 그대로다.
         // caption은 수정 뒤의 설명이다(목록이 수정 뒤 전체이듯) — null·공백이면 설명을 지운다.
         // 설명을 바꿔도 음악은 다시 만들지 않는다
-        record Keep(Long recordCardImageId, String caption) implements ImageSlot {
+        record Keep(UUID recordCardImageId, String caption) implements ImageSlot {
 
         }
 
@@ -70,7 +70,7 @@ public class RecordCard {
         }
     }
 
-    private final RecordCardId recordCardId;          // 저장 전에는 null
+    private final RecordCardId recordCardId;          // 작성 요청(9-1)이 정한다 — 저장 전에도 있다
     private final RunningRecordId runningRecordId;
     private final UserId userId;                      // 작성자 — 기록 주인과 같은지는 application이 대조한다
     private RecordCardVisibility visibility;
@@ -84,10 +84,10 @@ public class RecordCard {
     private LocalDateTime deletedAt;                  // 지우지 않았으면 null
 
     @Builder
-    private RecordCard(Long recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
+    private RecordCard(UUID recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
                        RecordCardActivityType activityType, MusicStatus baseMusicStatus, String memo, int displayOrder, String thumbnailImageKey,
                        String baseMusicKey, List<RecordCardImage> images, LocalDateTime deletedAt) {
-        this.recordCardId = recordCardId == null ? null : new RecordCardId(recordCardId);
+        this.recordCardId = new RecordCardId(recordCardId);
         this.runningRecordId = new RunningRecordId(runningRecordId);
         this.userId = new UserId(userId);
         this.visibility = requireVisibility(visibility);
@@ -116,13 +116,14 @@ public class RecordCard {
     }
 
     // 처음 만드는 카드 — 기본곡과 사진 음악은 모두 이제부터 만든다. 썸네일 위치를 주지 않으면 첫 사진이다
-    public static RecordCard create(Long runningRecordId, UUID userId, RecordCardVisibility visibility,
+    public static RecordCard create(UUID recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
                                     RecordCardActivityType activityType, String memo,
                                     DisplayOrder displayOrder, String baseMusicKey,
                                     List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
         requireLiveOrder(displayOrder);
         List<RecordCardImage> images = addAll(imageDrafts);
         return builder()
+                .recordCardId(recordCardId)
                 .runningRecordId(runningRecordId)
                 .userId(userId)
                 .visibility(visibility)
@@ -137,7 +138,7 @@ public class RecordCard {
     }
 
     // DB에서 되살린다 — 사진은 RecordCardImage.restore로 만든 것을 넘긴다
-    public static RecordCardBuilder restore(Long recordCardId) {
+    public static RecordCardBuilder restore(UUID recordCardId) {
         return builder().recordCardId(recordCardId);
     }
 
@@ -166,7 +167,7 @@ public class RecordCard {
         }
 
         Map<RecordCardImageId, RecordCardImage> current = new HashMap<>();
-        images.forEach(image -> image.getRecordCardImageId().ifPresent(id -> current.put(id, image)));
+        images.forEach(image -> current.put(image.getRecordCardImageId(), image));
 
         Set<RecordCardImageId> keptIds = new HashSet<>();
         List<RecordCardImage> next = new ArrayList<>();
@@ -275,14 +276,6 @@ public class RecordCard {
         return deletedAt != null;
     }
 
-    public boolean isNew() {
-        return recordCardId == null;
-    }
-
-    public Optional<RecordCardId> getRecordCardId() {
-        return Optional.ofNullable(recordCardId);
-    }
-
     public Optional<RecordCardImageKey> getThumbnailImageKey() {
         return Optional.ofNullable(thumbnailImageKey);
     }
@@ -334,16 +327,17 @@ public class RecordCard {
         return images;
     }
 
-    // 사진 수·사진 중복·음악 key 중복 — 음악 key가 겹치면 완료 알림이 어느 음악인지 가릴 수 없다
+    // 사진 수·사진 중복·음악 key 중복 — 사진 ID·음악 key가 겹치면 완료 알림이 어느 음악인지 가릴 수 없다
     private static void validateImages(List<RecordCardImage> images, MusicKey baseMusicKey) {
         if (images.size() > MAX_IMAGES) {
             throw new TooManyRecordCardImagesException();
         }
+        Set<RecordCardImageId> imageIds = new HashSet<>();
         Set<RecordCardImageKey> imageKeys = new HashSet<>();
         Set<MusicKey> musicKeys = new HashSet<>();
         musicKeys.add(baseMusicKey);
         for (RecordCardImage image : images) {
-            if (!imageKeys.add(image.getImageKey())) {
+            if (!imageIds.add(image.getRecordCardImageId()) || !imageKeys.add(image.getImageKey())) {
                 throw new DuplicateRecordCardImageException();
             }
             if (!musicKeys.add(image.getMusicKey())) {

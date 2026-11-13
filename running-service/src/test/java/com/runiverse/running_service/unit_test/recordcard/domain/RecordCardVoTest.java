@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,21 +38,10 @@ class RecordCardVoTest {
     @DisplayName("식별자")
     class Ids {
 
-        @ParameterizedTest
-        @ValueSource(longs = {0L, -1L})
-        @DisplayName("카드·사진 ID는 1보다 작은 값을 거부한다")
-        void rejectNonPositive(long value) {
-            // when & then
-            assertThatThrownBy(() -> new RecordCardId(value))
-                    .isInstanceOf(InvalidRecordCardIdException.class);
-            assertThatThrownBy(() -> new RecordCardImageId(value))
-                    .isInstanceOf(InvalidRecordCardImageIdException.class);
-        }
-
         @Test
         @DisplayName("카드·사진 ID는 null을 거부한다")
         void rejectNull() {
-            // when & then -> 저장 전은 애그리거트 필드가 null로 표현한다
+            // when & then -> ID는 작성 요청이 정하므로 저장 전에도 있다
             assertThatThrownBy(() -> new RecordCardId(null))
                     .isInstanceOf(InvalidRecordCardIdException.class);
             assertThatThrownBy(() -> new RecordCardImageId(null))
@@ -59,11 +49,14 @@ class RecordCardVoTest {
         }
 
         @Test
-        @DisplayName("카드·사진 ID는 bigint 최대값까지 담는다")
-        void acceptBigintRange() {
+        @DisplayName("카드·사진 ID는 받은 UUID를 그대로 담는다")
+        void keepUuid() {
+            // given
+            UUID value = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+
             // when & then
-            assertThat(new RecordCardId(Long.MAX_VALUE).value()).isEqualTo(Long.MAX_VALUE);
-            assertThat(new RecordCardImageId(Long.MAX_VALUE).value()).isEqualTo(Long.MAX_VALUE);
+            assertThat(new RecordCardId(value).value()).isEqualTo(value);
+            assertThat(new RecordCardImageId(value).value()).isEqualTo(value);
         }
     }
 

@@ -9,12 +9,13 @@ import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
 import lombok.Getter;
 
 import java.util.Optional;
+import java.util.UUID;
 
 // 카드의 사진 한 장과 그 사진의 설명·음악 — 사진마다 음악이 반드시 하나 있다. 카드를 거쳐서만 바뀐다
 @Getter
 public class RecordCardImage {
 
-    private final RecordCardImageId recordCardImageId;   // 저장 전에는 null
+    private final RecordCardImageId recordCardImageId;   // 사진 key를 발급할 때 정한다 — 저장 전에도 있다
     private final RecordCardImageKey imageKey;
     private RecordCardImageCaption caption;              // 선택 입력 — 없으면 null. 남긴 사진도 수정에서 바뀐다
     private final MusicKey musicKey;
@@ -37,13 +38,14 @@ public class RecordCardImage {
 
     // 새로 넣는 사진 — 음악은 이제부터 만든다
     static RecordCardImage add(RecordCard.ImageDraft draft, int sortOrder) {
-        return new RecordCardImage(null, new RecordCardImageKey(draft.imageKey()),
+        return new RecordCardImage(new RecordCardImageId(draft.recordCardImageId()),
+                new RecordCardImageKey(draft.imageKey()),
                 RecordCardImageCaption.ofNullable(draft.caption()).orElse(null),
                 new MusicKey(draft.musicKey()), MusicStatus.PENDING, sortOrder);
     }
 
     // 저장된 사진을 되돌린다 — 순서가 맞는지는 카드가 본다
-    public static RecordCardImage restore(Long recordCardImageId, String imageKey, String caption, String musicKey,
+    public static RecordCardImage restore(UUID recordCardImageId, String imageKey, String caption, String musicKey,
                                           MusicStatus musicStatus, int sortOrder) {
         return new RecordCardImage(new RecordCardImageId(recordCardImageId), new RecordCardImageKey(imageKey),
                 RecordCardImageCaption.ofNullable(caption).orElse(null),
@@ -67,10 +69,6 @@ public class RecordCardImage {
         }
         this.musicStatus = checked;
         return true;
-    }
-
-    public Optional<RecordCardImageId> getRecordCardImageId() {
-        return Optional.ofNullable(recordCardImageId);
     }
 
     public Optional<RecordCardImageCaption> getCaption() {

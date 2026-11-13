@@ -2715,12 +2715,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "expiresAt": "2026-07-25T21:40:00",
   "uploads": [
     {
-      "imageKey": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/image.jpg",
       "uploadType": "SINGLE",
       "uploadUrl": "https://..."
     },
     {
-      "imageKey": "record-cards/01a0f2d4-.../images/2b7e9f1c-....png",
+      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...3e/image.png",
       "uploadType": "MULTIPART",
       "partSizeBytes": 10485760,
       "parts": [
@@ -2738,7 +2738,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 카드의 `recordCardId`와 다르다 — 같은 기록으로 초안을 여러 번 만들 수 있고, 수정(9-3)도 초안을 만든다 |
 | `expiresAt` | String | O | 이 시각까지 9-2로 확정해야 한다(운영값, 현재 발급 뒤 30분) |
 | `uploads` | Array | O | 사진마다 업로드할 곳. 사진이 없으면 빈 배열 |
-| `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/images/{imageId}.{확장자}`. 서버가 정한다 |
+| `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/{recordCardId}/{recordCardImageId}/image.{확장자}`. 서버가 정한다. 카드마다, 사진마다 폴더가 있다 — 카드 ID·사진 ID는 이때 정해 확정 때 그대로 저장한다 |
 | `uploads[].uploadType` | String | O | `SINGLE`(10MB 이하, 한 번에) · `MULTIPART`(10MB 초과, 조각으로) |
 | `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)·유효 시간(운영값, 현재 10분)은 11-1과 같다 |
 | `uploads[].partSizeBytes` | Integer | X | `MULTIPART`일 때만. 조각 크기(현재 10MB). 마지막 조각만 이보다 작다 |
@@ -3109,7 +3109,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "photos": [
     {
       "record_card_image_id": "01a0f2d4-6180-7000-8000-44665544012d",
-      "image_key": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
+      "image_key": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/image.jpg",
       "caption": "바닷가에서 찍은 사진"
     }
   ]
