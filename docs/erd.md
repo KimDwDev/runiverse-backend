@@ -468,12 +468,12 @@
 | memo | text | NOT NULL | **회고 글**, 1~500자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
 | display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람의 살아 있는 카드 중 최댓값 + 1(없으면 1). **지우면 `-1`**이고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 되살리면 다시 최댓값 + 1(맨 뒤). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
-| base_music_key | varchar(255) | NOT NULL | 기본곡 S3 key. **서버가 카드를 만들 때 정한다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾으므로 UNIQUE를 두지 않는다 |
+| base_music_key | varchar(255) | nullable | 기본곡 S3 key. **AI 서버가 정해 완료 이벤트로 알려 준다** — 카드 행은 key 없이(null) `PENDING`으로 생기고, `READY`가 되면서 이 값이 채워진다. `FAILED`면 null로 남는다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
 > UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 부분 인덱스가 아니다. 지운 카드의 행도 자리를 차지하므로 다시 만들 때는 새 행을 넣지 않고 그 행을 되살린다. 처음 만드는 요청이 동시에 두 번 오면 이 제약이 하나만 남긴다(api-spec 9-2의 409)
-> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
+> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 key 없이(null) `PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
 > **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`activity_type`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
 > CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
@@ -496,7 +496,7 @@
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
 | caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). 수정(9-3)에서 바꿀 수 있고, 바꿔도 음악은 다시 만들지 않는다. AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
-| music_key | varchar(255) | NOT NULL | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정한다. 완료 이벤트는 `record_card_image_id`로 행을 찾으므로 UNIQUE를 두지 않는다 |
+| music_key | varchar(255) | nullable | 이 사진 음악의 S3 key. 기본곡과 같이 AI 서버가 완료 이벤트로 알려 준 값을 `READY`가 될 때 저장한다(그 전·`FAILED`면 null). 완료 이벤트는 `record_card_image_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
