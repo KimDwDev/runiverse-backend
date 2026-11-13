@@ -12,6 +12,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -30,13 +31,14 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "record_cards",
-        // 기록과 1:1 — 지운 카드도 자리를 차지해 다시 만들면 그 행을 되살린다. 동시에 처음 만들면 하나만 남긴다
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_record_card_running_record", columnNames = "running_record_id"),
-                @UniqueConstraint(name = "uk_record_card_base_music_key", columnNames = "base_music_key")
-        }
-        // 작성자별 순위 UNIQUE (user_id, display_order) WHERE deleted_at IS NULL은 부분 인덱스라
-        // JPA로 표현하지 못해 운영 SQL에만 있다 — 목록(10-3) 인덱스를 겸한다
+        // 기록과 1:1 — 지운 카드도 자리를 차지해 다시 만들면 그 행을 되살린다.
+        // 카드 쓰기(작성·되살리기·수정·삭제)는 모두 running_records 행을 먼저 잠가 줄 세운다 — 처음 만들 때는
+        // 잠글 카드 행이 없고 초안마다 카드 ID가 달라서다. 이 제약은 잠금이 빠졌을 때의 마지막 안전장치다
+        uniqueConstraints = @UniqueConstraint(name = "uk_record_card_running_record", columnNames = "running_record_id"),
+        // 살아 있는 카드끼리 작성자별 순위가 겹치지 않는다 — 지운 카드는 모두 -1이라 부분 인덱스로 뺀다.
+        // 목록(10-3)의 순위 역순·커서 조회 인덱스를 겸한다. options는 DDL 끝에 그대로 붙는다(JPA 3.2)
+        indexes = @Index(name = "uk_record_card_user_display_order", columnList = "user_id, display_order",
+                unique = true, options = "where deleted_at is null")
 )
 @Check(name = "ck_record_card_visibility", constraints = "visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')")
 @Check(name = "ck_record_card_base_music_status", constraints = "base_music_status in ('PENDING', 'READY', 'FAILED')")

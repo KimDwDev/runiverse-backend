@@ -3167,7 +3167,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `results[].status` | String | O | `READY`(그 key에 S3 객체를 올렸음) · `FAILED`(만들지 못함) |
 | `generatedAt` | String | O | 처리 시각 |
 
-- **받는 쪽 처리**: `results`의 `musicKey`마다 `record_cards.base_music_key`·`record_card_images.music_key`에서 행을 찾아 상태를 바꾼다. 둘 다 UNIQUE라 한 행만 나온다. 한 이벤트의 결과는 한 트랜잭션에서 바꾼다
+- **받는 쪽 처리**: 결과마다 ID로 행을 찾아 상태를 바꾼다 — 기본곡은 `record_card_id`(카드당 하나), 사진 음악은 `record_card_image_id`. 음악 key로 찾지 않는다. 한 이벤트의 결과는 한 트랜잭션에서 바꾼다 (완료 이벤트 필드는 AI 서버와 정한다 — 위 "아직 정하지 않은 것")
   - **`PENDING`인 행만 바꾼다** — Kafka는 같은 이벤트를 두 번 줄 수 있다(최소 한 번 전달). 이미 `READY`·`FAILED`면 그 결과만 건너뛴다
   - **행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 그 결과만 건너뛰고 로그를 남긴다** — 오류로 보고 재시도하지 않는다
   - **요청에 실었는데 `results`에 빠진 음악은 `PENDING`에 남는다** — 계약 위반이라 WARN 로그를 남긴다

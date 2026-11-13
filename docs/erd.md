@@ -468,7 +468,7 @@
 | memo | text | NOT NULL | **회고 글**, 1~500자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
 | display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람의 살아 있는 카드 중 최댓값 + 1(없으면 1). **지우면 `-1`**이고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 되살리면 다시 최댓값 + 1(맨 뒤). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
-| base_music_key | varchar(255) | NOT NULL, UNIQUE | 기본곡 S3 key. **서버가 카드를 만들 때 정해 AI에 넘긴다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트가 이 key로 행을 찾는다 |
+| base_music_key | varchar(255) | NOT NULL | 기본곡 S3 key. **서버가 카드를 만들 때 정한다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾으므로 UNIQUE를 두지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
@@ -496,7 +496,7 @@
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
 | caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). 수정(9-3)에서 바꿀 수 있고, 바꿔도 음악은 다시 만들지 않는다. AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
-| music_key | varchar(255) | NOT NULL, UNIQUE | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정해 AI에 넘긴다 |
+| music_key | varchar(255) | NOT NULL | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정한다. 완료 이벤트는 `record_card_image_id`로 행을 찾으므로 UNIQUE를 두지 않는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
@@ -504,9 +504,9 @@
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
 > **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
 > **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
-> **`(record_card_id, sort_order)`에 UNIQUE를 두지 않는다** — 수정 때 순서를 다시 매기면 중간 상태에서 값이 겹친다. 같은 값이 생기지 않는 것은 수정 유스케이스가 보장한다.
+> UNIQUE `uk_record_card_image_sort_order`: `(record_card_id, sort_order)` **DEFERRABLE INITIALLY DEFERRED** — 한 카드에서 같은 자리에 사진 두 장이 오지 않는다. **커밋 때 검사한다** — 수정(9-3)에서 순서를 맞바꾸면 한 행씩 UPDATE하는 중간에 값이 겹치고, Hibernate는 flush 때 INSERT를 DELETE보다 먼저 보내 "빼고 같은 자리에 넣기"도 중간에 겹친다. 즉시 검사면 정상 수정이 실패한다. 최종 결과의 중복만 막는 안전장치다 — 순서는 도메인이 0부터 다시 매기므로 정상 경로에서는 걸리지 않고, 걸리면 커밋 실패(500)다. 엔티티가 `@UniqueConstraint(options = "deferrable initially deferred")`로 선언해 로컬·E2E 스키마에도 생긴다. 같은 카드를 동시에 고치는 경쟁은 이 제약이 아니라 잠금이 막는다 — 카드 쓰기는 모두 `running_records` 행을 먼저 잠근다. 앞 열이 `record_card_id`라 카드 사진 조회 인덱스를 겸한다.
 
-> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. key로 찾은 행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
+> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. ID(`record_card_id`·`record_card_image_id`)로 찾은 행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
 
 ---
 
@@ -620,7 +620,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_room_chat_histories.running_room_chat_id | 메시지 하나의 수정 이력 조회(신고 대응)·메시지 삭제 시 CASCADE — FK 조회 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
 | record_cards.(user_id, display_order) WHERE deleted_at IS NULL | 프로필 카드 목록(10-3) — UNIQUE `uk_record_card_user_display_order`가 겸한다. 순위 역순(최신이 위)·커서 조건을 역방향 스캔으로 처리한다. 공개 범위는 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
-| record_card_images.record_card_id | 카드 사진 조회(8-1, 10-3 장수) — FK 조회. 순서(`sort_order`)는 카드당 10장 이하라 읽은 뒤 정렬한다 |
+| record_card_images.(record_card_id, sort_order) | 카드 사진 조회(8-1, 10-3 장수)와 카드 삭제 CASCADE — UNIQUE `uk_record_card_image_sort_order`(DEFERRABLE)가 겸한다. 따로 FK 인덱스를 두지 않는다 |
 | running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
 | running_room_sessions.(user_id, is_connected) | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 타며, 현재 방 조회는 `is_connected=true`를 항상 함께 본다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다. 슬롯별 대기 인원 집계(`GET /match-rooms/slots`)도 같은 인덱스를 탄다 — 앞 세 컬럼은 등치, `start_at`은 그날 하루 범위, `target_distance`는 거르지 않고 인덱스에서 읽어 거리별로 묶으며 `current_player_count`만 테이블에서 읽는다 |
