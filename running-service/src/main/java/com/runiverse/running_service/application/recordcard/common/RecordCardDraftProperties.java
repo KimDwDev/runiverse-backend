@@ -11,8 +11,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "record-card.draft")
 @Validated
 public record RecordCardDraftProperties(
-        // 초안 유효 시간 — 이 안에 9-2로 확정해야 한다. 조각 URL도 같은 시간을 준다(큰 파일은 모바일에서 오래 걸린다).
-        // 한 번에 올리는 URL은 이보다 짧은 storage.s3.presigned-url-ttl을 따른다
+        // 초안 유효 시간 — 이 안에 9-2로 확정해야 한다. 업로드 URL(한 번에·조각 모두)도 같은 시간을 준다 —
+        // URL이 초안보다 먼저 끝나면 초안이 살아 있어도 올릴 수 없어 9-1부터 다시 해야 한다
         @NotNull Duration ttl,
         // 사진 한 장의 최대 크기 — 넘으면 9-1이 400으로 거절한다. 응답 문구는 이 값으로 만든다
         @NotNull DataSize maxImageSize,

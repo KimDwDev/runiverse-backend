@@ -3,6 +3,7 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.common.port.out.GenerateUploadUrlPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +23,12 @@ public class FakeUploadUrlGenerator implements GenerateUploadUrlPort, GenerateRe
     public String generate(String key, String contentType, long sizeBytes) {
         issued.add(new IssuedUrl(key, contentType, sizeBytes));
         return urlOf(key);
+    }
+
+    // 기록 카드 버킷 — 유효 시간만 더 받는다
+    @Override
+    public String generate(String key, String contentType, long sizeBytes, Duration urlTtl) {
+        return generate(key, contentType, sizeBytes);
     }
 
     // 아래는 검증 전용

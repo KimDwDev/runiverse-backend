@@ -24,7 +24,7 @@ public class RecordCardS3Adapter implements GenerateRecordCardUploadUrlPort, Sta
     private final S3Client s3Client;
 
     @Override
-    public String generate(String key, String contentType, long sizeBytes) {
+    public String generate(String key, String contentType, long sizeBytes, Duration urlTtl) {
         // 형식·크기를 서명에 넣어 클라가 다른 값으로 올리지 못하게 막는다
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(properties.recordCardBucket())
@@ -33,7 +33,7 @@ public class RecordCardS3Adapter implements GenerateRecordCardUploadUrlPort, Sta
                 .contentLength(sizeBytes)
                 .build();
         return s3Presigner.presignPutObject(builder -> builder
-                        .signatureDuration(properties.presignedUrlTtl())
+                        .signatureDuration(urlTtl)
                         .putObjectRequest(putObjectRequest))
                 .url()
                 .toString();

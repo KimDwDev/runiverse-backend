@@ -3,7 +3,6 @@ package com.runiverse.running_service.domain.recordcard;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.exception.DeletedAtRequiredException;
-import com.runiverse.running_service.domain.recordcard.exception.DuplicateMusicKeyException;
 import com.runiverse.running_service.domain.recordcard.exception.DuplicateRecordCardImageException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidDisplayOrderException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidThumbnailIndexException;
@@ -48,9 +47,9 @@ public class RecordCard {
 
     private static final int MAX_IMAGES = 10;
 
-    // 카드에 새로 넣을 사진 하나 — 사진 ID·사진 key는 업로드 URL을 줄 때 정한 것, 음악 key는 서버가 정해 둔 것이다.
+    // 카드에 새로 넣을 사진 하나 — 사진 ID·사진 key는 업로드 URL을 줄 때 정한 것이다. 음악 key는 AI 서버가 나중에 준다.
     // 설명(caption)은 선택이라 null·공백이면 설명 없는 사진이 된다
-    public record ImageDraft(UUID recordCardImageId, String imageKey, String musicKey, String caption) {
+    public record ImageDraft(UUID recordCardImageId, String imageKey, String caption) {
 
     }
 
@@ -79,7 +78,7 @@ public class RecordCard {
     private RecordCardMemo memo;                      // 회고 글 — 음악 생성이 감정·여운을 읽는다
     private DisplayOrder displayOrder;                // 지운 카드는 DELETED
     private RecordCardImageKey thumbnailImageKey;     // 사진이 없으면 null
-    private MusicKey baseMusicKey;
+    private MusicKey baseMusicKey;                    // AI 서버가 완료 알림으로 준다 — READY일 때만 있다
     private final List<RecordCardImage> images;       // 캐러셀 순서(sortOrder)대로
     private LocalDateTime deletedAt;                  // 지우지 않았으면 null
 
@@ -98,7 +97,8 @@ public class RecordCard {
         this.baseMusicStatus = baseMusicStatus;
         this.memo = new RecordCardMemo(memo);
         this.displayOrder = new DisplayOrder(displayOrder);
-        this.baseMusicKey = new MusicKey(baseMusicKey);
+        this.baseMusicKey = baseMusicKey == null ? null : new MusicKey(baseMusicKey);
+        RecordCardImage.requireKeyOnlyWhenReady(this.baseMusicStatus, this.baseMusicKey);
         this.deletedAt = deletedAt;
 
         // 지운 카드만 순위가 -1이다
@@ -108,17 +108,16 @@ public class RecordCard {
 
         List<RecordCardImage> sorted = images == null ? List.of()
                 : images.stream().sorted(Comparator.comparingInt(RecordCardImage::getSortOrder)).toList();
-        validateImages(sorted, this.baseMusicKey);
+        validateImages(sorted);
         this.images = new ArrayList<>(sorted);
 
         this.thumbnailImageKey = thumbnailImageKey == null ? null : new RecordCardImageKey(thumbnailImageKey);
         validateThumbnail(this.images, this.thumbnailImageKey);
     }
 
-    // 처음 만드는 카드 — 기본곡과 사진 음악은 모두 이제부터 만든다. 썸네일 위치를 주지 않으면 첫 사진이다
+    // 처음 만드는 카드 — 기본곡과 사진 음악은 모두 이제부터 만들어 key가 아직 없다. 썸네일 위치를 주지 않으면 첫 사진이다
     public static RecordCard create(UUID recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
-                                    RecordCardActivityType activityType, String memo,
-                                    DisplayOrder displayOrder, String baseMusicKey,
+                                    RecordCardActivityType activityType, String memo, DisplayOrder displayOrder,
                                     List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
         requireLiveOrder(displayOrder);
         List<RecordCardImage> images = addAll(imageDrafts);
@@ -132,7 +131,6 @@ public class RecordCard {
                 .memo(memo)
                 .displayOrder(displayOrder.value())
                 .thumbnailImageKey(thumbnailKeyAt(images, thumbnailIndex))
-                .baseMusicKey(baseMusicKey)
                 .images(images)
                 .build();
     }
@@ -190,7 +188,7 @@ public class RecordCard {
                 case ImageSlot.Add add -> next.add(RecordCardImage.add(add.draft(), next.size()));
             }
         }
-        validateImages(next, baseMusicKey);
+        validateImages(next);
         String nextThumbnail = thumbnailIndex != null
                 ? thumbnailKeyAt(next, thumbnailIndex)
                 : keepOrFirstThumbnail(next, thumbnailImageKey);
@@ -223,10 +221,9 @@ public class RecordCard {
         this.thumbnailImageKey = null;
     }
 
-    // 지운 카드를 새 내용으로 덮어 되살린다 — ID와 작성 시각은 그대로고, 기본곡도 다시 만든다
+    // 지운 카드를 새 내용으로 덮어 되살린다 — ID와 작성 시각은 그대로고, 기본곡도 다시 만들어 옛 key는 버린다
     public void revive(RecordCardVisibility visibility, RecordCardActivityType activityType, String memo,
-                       DisplayOrder displayOrder, String baseMusicKey, List<ImageDraft> imageDrafts,
-                       Integer thumbnailIndex) {
+                       DisplayOrder displayOrder, List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
         if (!isDeleted()) {
             throw new RecordCardNotDeletedException();
         }
@@ -234,16 +231,15 @@ public class RecordCard {
         RecordCardVisibility nextVisibility = requireVisibility(visibility);
         RecordCardActivityType nextActivityType = requireActivityType(activityType);
         RecordCardMemo nextMemo = new RecordCardMemo(memo);
-        MusicKey nextBaseMusicKey = new MusicKey(baseMusicKey);
         List<RecordCardImage> nextImages = addAll(imageDrafts);
-        validateImages(nextImages, nextBaseMusicKey);
+        validateImages(nextImages);
         String nextThumbnail = thumbnailKeyAt(nextImages, thumbnailIndex);
 
         this.visibility = nextVisibility;
         this.activityType = nextActivityType;
         this.memo = nextMemo;
         this.displayOrder = displayOrder;
-        this.baseMusicKey = nextBaseMusicKey;
+        this.baseMusicKey = null;
         this.baseMusicStatus = MusicStatus.PENDING;
         this.images.clear();
         this.images.addAll(nextImages);
@@ -251,29 +247,39 @@ public class RecordCard {
         this.deletedAt = null;
     }
 
-    // 음악 생성 완료 알림 — 바꿨으면 true. 이미 끝난 음악·없는 key·지운 카드에 온 알림은 무시하고 false
-    public boolean completeMusic(String musicKey, MusicStatus result) {
+    // 기본곡 생성 완료 알림 — 바꿨으면 true. READY면 AI가 올린 key를 함께 받는다.
+    // 이미 끝난 음악·지운 카드에 온 알림은 무시하고 false(Kafka는 같은 알림을 두 번 줄 수 있다)
+    public boolean completeBaseMusic(MusicStatus result, String musicKey) {
         MusicStatus checked = MusicStatus.result(result);
-        MusicKey key = new MusicKey(musicKey);
+        if (isDeleted() || !baseMusicStatus.isPending()) {
+            return false;
+        }
+        MusicKey key = RecordCardImage.keyFor(checked, musicKey);
+        this.baseMusicStatus = checked;
+        this.baseMusicKey = key;
+        return true;
+    }
+
+    // 사진 음악 생성 완료 알림 — 사진 ID로 찾는다. 이 카드에 없는 사진(수정에서 뺀 사진)·지운 카드에 온 알림은 무시하고 false
+    public boolean completeImageMusic(UUID recordCardImageId, MusicStatus result, String musicKey) {
+        MusicStatus checked = MusicStatus.result(result);
         if (isDeleted()) {
             return false;
         }
-        if (baseMusicKey.equals(key)) {
-            if (!baseMusicStatus.isPending()) {
-                return false;
-            }
-            this.baseMusicStatus = checked;
-            return true;
-        }
+        RecordCardImageId id = new RecordCardImageId(recordCardImageId);
         return images.stream()
-                .filter(image -> image.getMusicKey().equals(key))
+                .filter(image -> image.getRecordCardImageId().equals(id))
                 .findFirst()
-                .map(image -> image.completeMusic(checked))
+                .map(image -> image.completeMusic(checked, musicKey))
                 .orElse(false);
     }
 
     public boolean isDeleted() {
         return deletedAt != null;
+    }
+
+    public Optional<MusicKey> getBaseMusicKey() {
+        return Optional.ofNullable(baseMusicKey);
     }
 
     public Optional<RecordCardImageKey> getThumbnailImageKey() {
@@ -327,21 +333,16 @@ public class RecordCard {
         return images;
     }
 
-    // 사진 수·사진 중복·음악 key 중복 — 사진 ID·음악 key가 겹치면 완료 알림이 어느 음악인지 가릴 수 없다
-    private static void validateImages(List<RecordCardImage> images, MusicKey baseMusicKey) {
+    // 사진 수·사진 중복 — 사진 ID가 겹치면 완료 알림이 어느 사진의 것인지 가릴 수 없다
+    private static void validateImages(List<RecordCardImage> images) {
         if (images.size() > MAX_IMAGES) {
             throw new TooManyRecordCardImagesException();
         }
         Set<RecordCardImageId> imageIds = new HashSet<>();
         Set<RecordCardImageKey> imageKeys = new HashSet<>();
-        Set<MusicKey> musicKeys = new HashSet<>();
-        musicKeys.add(baseMusicKey);
         for (RecordCardImage image : images) {
             if (!imageIds.add(image.getRecordCardImageId()) || !imageKeys.add(image.getImageKey())) {
                 throw new DuplicateRecordCardImageException();
-            }
-            if (!musicKeys.add(image.getMusicKey())) {
-                throw new DuplicateMusicKeyException();
             }
         }
     }

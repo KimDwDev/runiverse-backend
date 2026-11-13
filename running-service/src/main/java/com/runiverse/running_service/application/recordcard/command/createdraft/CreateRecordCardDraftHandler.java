@@ -118,8 +118,9 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
         long partSizeBytes = properties.partSize().toBytes();
 
         if (image.fileSizeBytes() <= partSizeBytes) {
-            // 한 번에 올린다 — URL 유효 시간은 storage.s3.presigned-url-ttl(초안보다 짧다)
-            String uploadUrl = generateRecordCardUploadUrlPort.generate(key, contentType.getMimeType(), image.fileSizeBytes());
+            // 한 번에 올린다 — URL도 초안과 같은 시간을 준다
+            String uploadUrl = generateRecordCardUploadUrlPort.generate(
+                    key, contentType.getMimeType(), image.fileSizeBytes(), ttl);
             draftImages.add(new DraftImage(recordCardImageId, key, contentType.getMimeType(), image.fileSizeBytes(),
                     caption, UploadType.SINGLE, null, null, false));
             uploads.add(new Upload.Single(recordCardImageId, key, uploadUrl));

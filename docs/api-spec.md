@@ -2744,7 +2744,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `uploads[].recordCardImageId` | String | O | 사진 ID(UUID) — 이때 정해 확정 때 그대로 저장한다. 앱은 이 값으로 업로드 결과를 자기 사진과 맞추고, 확정 뒤 카드 응답(8-1 `images[].recordCardImageId`)·수정(9-3)에서 같은 사진을 가리킨다. 작성(9-1)과 수정(9-3)이 같은 확정(9-2)을 쓰므로 순서가 아니라 이 ID로 맞춘다 |
 | `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/{recordCardId}/{recordCardImageId}/{fileName}`. 서버가 정한다. 카드마다, 사진마다 폴더가 있다. **한글·공백이 든 key라도 앱은 받은 `uploadUrl`을 다시 인코딩하지 않고 그대로 쓴다** — 다시 인코딩하면 서명이 깨진다 — 카드 ID·사진 ID는 이때 정해 확정 때 그대로 저장한다 |
 | `uploads[].uploadType` | String | O | `SINGLE`(10MB 이하, 한 번에) · `MULTIPART`(10MB 초과, 조각으로) |
-| `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)·유효 시간(운영값, 현재 10분)은 11-1과 같다 |
+| `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)은 11-1과 같다. **유효 시간은 초안과 같다(현재 30분)** — 11-1(10분)보다 길다. 초안이 살아 있는 동안은 올릴 수 있어야 한다 |
 | `uploads[].partSizeBytes` | Integer | X | `MULTIPART`일 때만. 조각 크기(현재 10MB). 마지막 조각만 이보다 작다 |
 | `uploads[].parts` | Array | X | `MULTIPART`일 때만. 조각마다 `partNumber`(1부터)와 presigned PUT URL. 조각 수 = `fileSizeBytes ÷ partSizeBytes` 올림 |
 

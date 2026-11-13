@@ -23,7 +23,7 @@ public enum RecordCardErrorCode implements ErrorCode {
     RECORD_CARD_IMAGE_KEY_TOO_LONG("RECORD_CARD_IMAGE_KEY_TOO_LONG", "사진 키는 255자를 초과할 수 없습니다."),
     MUSIC_KEY_REQUIRED("MUSIC_KEY_REQUIRED", "음악 키는 필수입니다."),
     MUSIC_KEY_TOO_LONG("MUSIC_KEY_TOO_LONG", "음악 키는 255자를 초과할 수 없습니다."),
-    DUPLICATE_MUSIC_KEY("DUPLICATE_MUSIC_KEY", "한 카드 안에서 음악 키가 겹칠 수 없습니다."),
+    MUSIC_KEY_STATUS_MISMATCH("MUSIC_KEY_STATUS_MISMATCH", "음악 키는 생성이 끝난(READY) 음악에만 있어야 합니다."),
     // 음악 생성 상태
     MUSIC_STATUS_REQUIRED("MUSIC_STATUS_REQUIRED", "음악 생성 상태는 필수입니다."),
     INVALID_MUSIC_RESULT("INVALID_MUSIC_RESULT", "음악 생성 결과는 READY 또는 FAILED여야 합니다."),

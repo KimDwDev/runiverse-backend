@@ -151,15 +151,15 @@ class RecordCardS3AdapterTest {
     }
 
     @Test
-    @DisplayName("한 번에 올리는 URL은 기록 카드 버킷을 가리키고, 형식·크기를 서명하며, 짧은 업로드 TTL을 따른다")
+    @DisplayName("한 번에 올리는 URL은 기록 카드 버킷을 가리키고, 형식·크기를 서명하며, 받은 유효 시간(초안과 같다)을 따른다")
     void singleUploadUrl() {
         // when
-        String url = adapter.generate(KEY, "image/jpeg", 20_480L);
+        String url = adapter.generate(KEY, "image/jpeg", 20_480L, URL_TTL);
 
         // then -> 프로필 사진 버킷(user-assets)으로 가면 AI 서버가 읽지 못한다
         assertThat(url).startsWith("https://%s.s3.%s.amazonaws.com/%s?".formatted(RECORD_CARD_BUCKET, REGION, KEY));
         assertThat(queryParam(url, "X-Amz-SignedHeaders")).contains("content-type").contains("content-length");
-        assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(Duration.ofMinutes(10).toSeconds()));
+        assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(URL_TTL.toSeconds()));
     }
 
     private static String queryParam(String url, String name) {

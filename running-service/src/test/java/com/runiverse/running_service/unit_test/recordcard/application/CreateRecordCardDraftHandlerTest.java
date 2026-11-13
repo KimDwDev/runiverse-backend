@@ -104,7 +104,7 @@ class CreateRecordCardDraftHandlerTest {
         givenOwnRecordWithoutCard();
         when(generateImageIdPort.generate()).thenReturn(IMAGE_ID_1);
         String key = "record-cards/%s/%s/%s/노을 사진.JPG".formatted(USER_ID, CARD_ID, IMAGE_ID_1);
-        when(generateUploadUrlPort.generate(key, "image/jpeg", 204800L)).thenReturn("https://signed");
+        when(generateUploadUrlPort.generate(key, "image/jpeg", 204800L, TTL)).thenReturn("https://signed");
 
         // when
         CreateRecordCardDraftResult result = handler.handle(command(
@@ -152,7 +152,7 @@ class CreateRecordCardDraftHandlerTest {
         assertThat(result.uploads()).containsExactly(new Upload.Multipart(IMAGE_ID_1, key, PART_SIZE, parts));
         assertThat(savedDraft().images()).containsExactly(new DraftImage(IMAGE_ID_1, key, "image/png", size,
                 null, UploadType.MULTIPART, "s3-upload-id", 3, false));
-        verify(generateUploadUrlPort, never()).generate(anyString(), anyString(), anyLong());
+        verify(generateUploadUrlPort, never()).generate(anyString(), anyString(), anyLong(), any());
     }
 
     @Test

@@ -33,6 +33,8 @@ import java.util.UUID;
                 columnNames = {"record_card_id", "sort_order"}, options = "deferrable initially deferred")
 )
 @Check(name = "ck_record_card_image_music_status", constraints = "music_status in ('PENDING', 'READY', 'FAILED')")
+// 음악 key는 AI 서버가 완료 알림으로 준다 — 생성이 끝난(READY) 음악에만 있다
+@Check(name = "ck_record_card_image_music_key", constraints = "(music_status = 'READY') = (music_key is not null)")
 @Check(name = "ck_record_card_image_sort_order", constraints = "sort_order between 0 and 9")
 @Check(name = "ck_record_card_image_caption_length",
         constraints = "caption is null or char_length(caption) between 1 and 100")
@@ -66,30 +68,29 @@ public class RecordCardImageJpaEntity extends BaseTimeEntity {
     @Column(name = "caption", length = 100)
     private String caption;
 
-    @Column(name = "music_key", nullable = false, length = 255, updatable = false)
+    // AI 서버가 완료 알림으로 준 key — READY일 때만 있다
+    @Column(name = "music_key", length = 255)
     private String musicKey;
 
-    private RecordCardImageJpaEntity(UUID recordCardImageId, RecordCardJpaEntity recordCard, String imageKey,
-                                     String musicKey) {
+    private RecordCardImageJpaEntity(UUID recordCardImageId, RecordCardJpaEntity recordCard, String imageKey) {
         this.recordCardImageId = recordCardImageId;
         this.recordCard = recordCard;
         this.imageKey = imageKey;
-        this.musicKey = musicKey;
     }
 
     // 새로 넣는 사진 — 나머지 값은 apply가 옮긴다
     public static RecordCardImageJpaEntity create(UUID recordCardImageId, RecordCardJpaEntity recordCard,
-                                                  String imageKey, String musicKey, MusicStatus musicStatus,
+                                                  String imageKey, MusicStatus musicStatus, String musicKey,
                                                   int sortOrder, String caption) {
-        RecordCardImageJpaEntity entity = new RecordCardImageJpaEntity(recordCardImageId, recordCard, imageKey,
-                musicKey);
-        entity.apply(musicStatus, sortOrder, caption);
+        RecordCardImageJpaEntity entity = new RecordCardImageJpaEntity(recordCardImageId, recordCard, imageKey);
+        entity.apply(musicStatus, musicKey, sortOrder, caption);
         return entity;
     }
 
-    // 도메인이 바꾼 값을 옮긴다 — 순서·설명(수정)과 음악 상태(완료 이벤트)만 바뀐다. 사진·음악 key는 바뀌지 않는다
-    public void apply(MusicStatus musicStatus, int sortOrder, String caption) {
+    // 도메인이 바꾼 값을 옮긴다 — 순서·설명(수정)과 음악 상태·key(완료 알림)만 바뀐다. 사진 key는 바뀌지 않는다
+    public void apply(MusicStatus musicStatus, String musicKey, int sortOrder, String caption) {
         this.musicStatus = musicStatus;
+        this.musicKey = musicKey;
         this.sortOrder = sortOrder;
         this.caption = caption;
     }

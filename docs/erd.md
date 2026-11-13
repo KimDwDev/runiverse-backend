@@ -477,6 +477,7 @@
 > **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`activity_type`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
 > CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
+> CHECK `ck_record_card_base_music_key`: `(base_music_status = 'READY') = (base_music_key is not null)` — key는 AI 서버가 완료 알림으로 주므로 READY인 기본곡에만 있다
 > CHECK `ck_record_card_activity_type`: `activity_type in ('DAILY', 'TRAVEL', 'RACE')`
 > CHECK `ck_record_card_memo_length`: `char_length(memo) between 1 and 500`
 > CHECK `ck_record_card_display_order`: `(deleted_at is null and display_order >= 1) or (deleted_at is not null and display_order = -1)` — 살아 있으면 1 이상, 지웠으면 -1
@@ -500,6 +501,7 @@
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
+> CHECK `ck_record_card_image_music_key`: `(music_status = 'READY') = (music_key is not null)` — 기본곡과 같다
 > CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
 > **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
