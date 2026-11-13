@@ -93,7 +93,7 @@ class RecordCardDraftRedisAdapterTest {
     private static RecordCardDraft draft() {
         UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
         UUID userId = UUID.fromString("01a0f2d4-6180-7000-8000-446655440015");
-        return new RecordCardDraft(DRAFT_ID, cardId, userId, 501L, RecordCardActivityType.TRAVEL,
+        return new RecordCardDraft(DRAFT_ID, RecordCardDraft.DraftType.CREATE, cardId, userId, 501L, RecordCardActivityType.TRAVEL,
                 "바람이 좋았다", RecordCardVisibility.FRIENDS, List.of(
                 new DraftImage(UUID.fromString("01a0f2d4-6180-7000-8000-44665544012d"), "k/1/image.jpg",
                         "image/jpeg", 204800L, "노을", UploadType.SINGLE, null, null, false),

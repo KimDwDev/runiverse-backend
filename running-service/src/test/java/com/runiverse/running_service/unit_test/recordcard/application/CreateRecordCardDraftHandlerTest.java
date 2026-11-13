@@ -116,6 +116,7 @@ class CreateRecordCardDraftHandlerTest {
 
         RecordCardDraft draft = savedDraft();
         assertThat(draft.recordCardDraftId()).isEqualTo(DRAFT_ID);
+        assertThat(draft.type()).isEqualTo(RecordCardDraft.DraftType.CREATE);
         assertThat(draft.recordCardId()).isEqualTo(CARD_ID);
         assertThat(draft.userId()).isEqualTo(USER_ID);
         assertThat(draft.runningRecordId()).isEqualTo(RUNNING_RECORD_ID);

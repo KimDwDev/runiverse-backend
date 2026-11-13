@@ -17,6 +17,7 @@ import com.runiverse.running_service.application.recordcard.port.out.GenerateRec
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftImage;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftType;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.UploadType;
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardDraftPort;
 import com.runiverse.running_service.application.recordcard.port.out.StartMultipartUploadPort;
@@ -79,8 +80,8 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
         UUID recordCardDraftId = generateRecordCardDraftIdPort.generate();
         Integer thumbnailIndex = draftImages.isEmpty() ? null
                 : command.thumbnailIndex() == null ? 0 : command.thumbnailIndex();
-        RecordCardDraft draft = new RecordCardDraft(recordCardDraftId, recordCardId, command.userId(),
-                command.runningRecordId(), activityType, command.memo(), visibility, draftImages,
+        RecordCardDraft draft = new RecordCardDraft(recordCardDraftId, DraftType.CREATE, recordCardId,
+                command.userId(), command.runningRecordId(), activityType, command.memo(), visibility, draftImages,
                 thumbnailIndex, false);
         LocalDateTime expiresAt = LocalDateTime.now().plus(ttl);
         saveRecordCardDraftPort.save(draft, ttl);

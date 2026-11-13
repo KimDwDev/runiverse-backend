@@ -6,9 +6,11 @@ import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import java.util.List;
 import java.util.UUID;
 
-// 9-1이 받은 작성 내용 — 확정(9-2) 전까지 Redis에만 둔다. DB에는 사진까지 확인된 카드만 들어간다
+// 작성(9-1)·수정(9-3)이 받은 내용 — 확정(9-2) 전까지 Redis에만 둔다. DB에는 사진까지 확인된 카드만 들어간다.
+// 초안 ID는 요청마다 새로 나오고, 확정은 초안 ID 하나로 이 값을 읽어 종류(type)로 작성·수정을 가른다
 public record RecordCardDraft(
         UUID recordCardDraftId,
+        DraftType type,                 // 작성인지 수정인지 — 같은 확정(9-2)이 이 값으로 갈라진다
         UUID recordCardId,              // 이때 정한 카드 ID — 확정 때 이 값으로 저장한다. 지운 카드가 있었으면 그 카드의 ID
         UUID userId,                    // 초안을 만든 사람 — 다른 사람이 확정하면 404
         Long runningRecordId,
@@ -37,6 +39,12 @@ public record RecordCardDraft(
             boolean merged              // 조각을 합쳤는지 — 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
     ) {
 
+    }
+
+    // 수정(UPDATE)은 9-3을 만들 때 쓴다 — 그때 수정 당시 카드의 updated_at·남길 사진도 함께 둔다
+    public enum DraftType {
+        CREATE,
+        UPDATE
     }
 
     public enum UploadType {
