@@ -121,7 +121,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
             String uploadUrl = generateUploadUrlPort.generate(key, contentType.getMimeType(), image.fileSizeBytes());
             draftImages.add(new DraftImage(recordCardImageId, key, contentType.getMimeType(), image.fileSizeBytes(),
                     caption, UploadType.SINGLE, null, null, false));
-            uploads.add(new Upload.Single(key, uploadUrl));
+            uploads.add(new Upload.Single(recordCardImageId, key, uploadUrl));
             return;
         }
 
@@ -130,6 +130,6 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
                 key, contentType.getMimeType(), image.fileSizeBytes(), partSizeBytes, ttl);
         draftImages.add(new DraftImage(recordCardImageId, key, contentType.getMimeType(), image.fileSizeBytes(),
                 caption, UploadType.MULTIPART, multipart.uploadId(), multipart.parts().size(), false));
-        uploads.add(new Upload.Multipart(key, partSizeBytes, multipart.parts()));
+        uploads.add(new Upload.Multipart(recordCardImageId, key, partSizeBytes, multipart.parts()));
     }
 }

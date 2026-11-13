@@ -17,17 +17,21 @@ public record CreateRecordCardDraftResult(
     }
 
     // 사진 하나를 올릴 곳 — 크기에 따라 둘 중 하나다
+    // 사진 ID를 함께 준다 — 앱이 업로드 결과를 자기 사진과 맞추고, 수정(9-3)에서 이 사진을 가리킬 때 쓴다
     public sealed interface Upload {
+
+        UUID recordCardImageId();
 
         String imageKey();
 
         // 한 번에 올린다 — URL 하나
-        record Single(String imageKey, String uploadUrl) implements Upload {
+        record Single(UUID recordCardImageId, String imageKey, String uploadUrl) implements Upload {
 
         }
 
         // 조각으로 나눠 올린다 — S3 UploadId는 초안에만 두고 여기 싣지 않는다
-        record Multipart(String imageKey, long partSizeBytes, List<MultipartUpload.Part> parts) implements Upload {
+        record Multipart(UUID recordCardImageId, String imageKey, long partSizeBytes, List<MultipartUpload.Part> parts)
+                implements Upload {
 
             public Multipart {
                 parts = List.copyOf(parts);

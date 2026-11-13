@@ -2716,11 +2716,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "expiresAt": "2026-07-25T21:40:00",
   "uploads": [
     {
+      "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544012d",
       "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/IMG_2034.jpg",
       "uploadType": "SINGLE",
       "uploadUrl": "https://..."
     },
     {
+      "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544013e",
       "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...3e/한강 야경.png",
       "uploadType": "MULTIPART",
       "partSizeBytes": 10485760,
@@ -2739,6 +2741,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 카드의 `recordCardId`와 다르다 — 같은 기록으로 초안을 여러 번 만들 수 있고, 수정(9-3)도 초안을 만든다 |
 | `expiresAt` | String | O | 이 시각까지 9-2로 확정해야 한다(운영값, 현재 발급 뒤 30분) |
 | `uploads` | Array | O | 사진마다 업로드할 곳. 사진이 없으면 빈 배열 |
+| `uploads[].recordCardImageId` | String | O | 사진 ID(UUID) — 이때 정해 확정 때 그대로 저장한다. 앱은 이 값으로 업로드 결과를 자기 사진과 맞추고, 확정 뒤 카드 응답(8-1 `images[].recordCardImageId`)·수정(9-3)에서 같은 사진을 가리킨다. 작성(9-1)과 수정(9-3)이 같은 확정(9-2)을 쓰므로 순서가 아니라 이 ID로 맞춘다 |
 | `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/{recordCardId}/{recordCardImageId}/{fileName}`. 서버가 정한다. 카드마다, 사진마다 폴더가 있다. **한글·공백이 든 key라도 앱은 받은 `uploadUrl`을 다시 인코딩하지 않고 그대로 쓴다** — 다시 인코딩하면 서명이 깨진다 — 카드 ID·사진 ID는 이때 정해 확정 때 그대로 저장한다 |
 | `uploads[].uploadType` | String | O | `SINGLE`(10MB 이하, 한 번에) · `MULTIPART`(10MB 초과, 조각으로) |
 | `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)·유효 시간(운영값, 현재 10분)은 11-1과 같다 |

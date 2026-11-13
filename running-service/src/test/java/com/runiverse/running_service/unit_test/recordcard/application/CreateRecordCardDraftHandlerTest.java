@@ -112,7 +112,7 @@ class CreateRecordCardDraftHandlerTest {
 
         // then
         assertThat(result.recordCardDraftId()).isEqualTo(DRAFT_ID);
-        assertThat(result.uploads()).containsExactly(new Upload.Single(key, "https://signed"));
+        assertThat(result.uploads()).containsExactly(new Upload.Single(IMAGE_ID_1, key, "https://signed"));
 
         RecordCardDraft draft = savedDraft();
         assertThat(draft.recordCardDraftId()).isEqualTo(DRAFT_ID);
@@ -148,7 +148,7 @@ class CreateRecordCardDraftHandlerTest {
                 List.of(new CreateRecordCardDraftCommand.Image("image/png", size, "IMG_0002.png", null)), null));
 
         // then
-        assertThat(result.uploads()).containsExactly(new Upload.Multipart(key, PART_SIZE, parts));
+        assertThat(result.uploads()).containsExactly(new Upload.Multipart(IMAGE_ID_1, key, PART_SIZE, parts));
         assertThat(savedDraft().images()).containsExactly(new DraftImage(IMAGE_ID_1, key, "image/png", size,
                 null, UploadType.MULTIPART, "s3-upload-id", 3, false));
         verify(generateUploadUrlPort, never()).generate(anyString(), anyString(), anyLong());
@@ -186,6 +186,7 @@ class CreateRecordCardDraftHandlerTest {
         assertThat(result.uploads()).extracting(Upload::imageKey).containsExactly(
                 "record-cards/%s/%s/%s/IMG_0001.jpg".formatted(USER_ID, CARD_ID, IMAGE_ID_1),
                 "record-cards/%s/%s/%s/IMG_0002.png".formatted(USER_ID, CARD_ID, IMAGE_ID_2));
+        assertThat(result.uploads()).extracting(Upload::recordCardImageId).containsExactly(IMAGE_ID_1, IMAGE_ID_2);
         RecordCardDraft draft = savedDraft();
         assertThat(draft.images()).extracting(DraftImage::recordCardImageId).containsExactly(IMAGE_ID_1, IMAGE_ID_2);
         assertThat(draft.thumbnailIndex()).isEqualTo(1);
