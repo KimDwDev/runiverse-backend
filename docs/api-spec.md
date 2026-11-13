@@ -2688,8 +2688,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "visibility": "PUBLIC",
   "images": [
-    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "caption": "다리 밑에서 본 노을" },
-    { "mimeType": "image/png", "fileSizeBytes": 512000 }
+    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "fileName": "IMG_2034.jpg", "caption": "다리 밑에서 본 노을" },
+    { "mimeType": "image/png", "fileSizeBytes": 512000, "fileName": "한강 야경.png" }
   ],
   "thumbnailIndex": 0
 }
@@ -2704,6 +2704,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `images` | Array | X | 올릴 사진 0~10장. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
 | `images[].mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) — 11-1과 같다 |
 | `images[].fileSizeBytes` | Integer | O | 1 이상 104,857,600(100MB) 이하. 실제 업로드 크기와 같아야 한다 — 한 번에 올리면 서명에 들어가고, 나눠 올리면 조각 수가 이 값으로 정해진다 |
+| `images[].fileName` | String | O | 사용자가 올린 파일 이름, 1~100자. **사진 key의 마지막 부분에 그대로 들어간다**(`uploads[].imageKey`) — 한글·공백도 그대로다. `/`·`\`·제어 문자는 쓸 수 없고 `.`·`..`만으로 된 이름도 받지 않는다(400). 같은 이름의 사진이 여러 장이어도 사진마다 폴더가 달라 겹치지 않는다 |
 | `images[].caption` | String | X | 사진 설명(선택), 100자 이하. **생략·빈 문자열·공백만이면 설명 없음**(null로 저장 — 400이 아니다). AI가 사진만으로 장면을 알기 어려울 때 그 사진의 음악 재료로 쓴다(9-5 `images[].caption`) |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `images` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
 
@@ -2715,12 +2716,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "expiresAt": "2026-07-25T21:40:00",
   "uploads": [
     {
-      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/image.jpg",
+      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/IMG_2034.jpg",
       "uploadType": "SINGLE",
       "uploadUrl": "https://..."
     },
     {
-      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...3e/image.png",
+      "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...3e/한강 야경.png",
       "uploadType": "MULTIPART",
       "partSizeBytes": 10485760,
       "parts": [
@@ -2738,7 +2739,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 카드의 `recordCardId`와 다르다 — 같은 기록으로 초안을 여러 번 만들 수 있고, 수정(9-3)도 초안을 만든다 |
 | `expiresAt` | String | O | 이 시각까지 9-2로 확정해야 한다(운영값, 현재 발급 뒤 30분) |
 | `uploads` | Array | O | 사진마다 업로드할 곳. 사진이 없으면 빈 배열 |
-| `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/{recordCardId}/{recordCardImageId}/image.{확장자}`. 서버가 정한다. 카드마다, 사진마다 폴더가 있다 — 카드 ID·사진 ID는 이때 정해 확정 때 그대로 저장한다 |
+| `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/{recordCardId}/{recordCardImageId}/{fileName}`. 서버가 정한다. 카드마다, 사진마다 폴더가 있다. **한글·공백이 든 key라도 앱은 받은 `uploadUrl`을 다시 인코딩하지 않고 그대로 쓴다** — 다시 인코딩하면 서명이 깨진다 — 카드 ID·사진 ID는 이때 정해 확정 때 그대로 저장한다 |
 | `uploads[].uploadType` | String | O | `SINGLE`(10MB 이하, 한 번에) · `MULTIPART`(10MB 초과, 조각으로) |
 | `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)·유효 시간(운영값, 현재 10분)은 11-1과 같다 |
 | `uploads[].partSizeBytes` | Integer | X | `MULTIPART`일 때만. 조각 크기(현재 10MB). 마지막 조각만 이보다 작다 |
@@ -2772,6 +2773,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
+  "message": "활동 유형은 DAILY, TRAVEL, RACE 중 하나여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "회고 글은 필수입니다."
 }
 
@@ -2787,7 +2793,27 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
+  "message": "공개 범위는 FRIENDS, PUBLIC, PRIVATE 중 하나여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "사진은 10장 이하만 넣을 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 이름은 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 이름은 100자 이하여야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "파일 이름에 쓸 수 없는 문자가 있습니다."
 }
 
 {

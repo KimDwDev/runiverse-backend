@@ -17,8 +17,8 @@ public record CreateRecordCardDraftCommand(
         images = images == null ? List.of() : List.copyOf(images);
     }
 
-    // 올릴 사진 하나 — 아직 파일은 없고 형식·크기만 안다
-    public record Image(String mimeType, long fileSizeBytes, String caption) {
+    // 올릴 사진 하나 — 아직 파일은 없고 형식·크기·이름만 안다. 이름은 사용자가 올린 파일 이름 그대로다
+    public record Image(String mimeType, long fileSizeBytes, String fileName, String caption) {
 
     }
 }

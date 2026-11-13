@@ -110,7 +110,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
                              Duration ttl, List<DraftImage> draftImages, List<Upload> uploads) {
         ImageContentType contentType = ImageContentType.from(image.mimeType());
         UUID recordCardImageId = generateImageIdPort.generate();
-        String key = RecordCardStorageKeys.imageKey(userId, recordCardId, recordCardImageId, contentType);
+        String key = RecordCardStorageKeys.imageKey(userId, recordCardId, recordCardImageId, image.fileName());
         String caption = RecordCardImageCaption.ofNullable(image.caption())
                 .map(RecordCardImageCaption::value)
                 .orElse(null);
