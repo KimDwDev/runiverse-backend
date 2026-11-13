@@ -19,7 +19,7 @@ public class RecordCardImage {
     private final RecordCardImageId recordCardImageId;   // 사진 key를 발급할 때 정한다 — 저장 전에도 있다
     private final RecordCardImageKey imageKey;
     private RecordCardImageCaption caption;              // 선택 입력 — 없으면 null. 남긴 사진도 수정에서 바뀐다
-    private MusicKey musicKey;                           // AI 서버가 완료 알림으로 준다 — READY일 때만 있다
+    private MusicKey musicKey;                           // AI 서버가 완료 알림으로 준다 — COMPLETED일 때만 있다
     private MusicStatus musicStatus;
     private int sortOrder;                               // 캐러셀 순서 — 카드가 매긴다
 
@@ -29,7 +29,7 @@ public class RecordCardImage {
         if (musicStatus == null) {
             throw new MusicStatusRequiredException();
         }
-        requireKeyOnlyWhenReady(musicStatus, musicKey);
+        requireKeyOnlyWhenCompleted(musicStatus, musicKey);
         this.recordCardImageId = recordCardImageId;
         this.imageKey = imageKey;
         this.caption = caption;
@@ -43,10 +43,10 @@ public class RecordCardImage {
         return new RecordCardImage(new RecordCardImageId(draft.recordCardImageId()),
                 new RecordCardImageKey(draft.imageKey()),
                 RecordCardImageCaption.ofNullable(draft.caption()).orElse(null),
-                null, MusicStatus.PENDING, sortOrder);
+                null, MusicStatus.GENERATING, sortOrder);
     }
 
-    // 저장된 사진을 되돌린다 — 음악 key는 READY일 때만 있다. 순서가 맞는지는 카드가 본다
+    // 저장된 사진을 되돌린다 — 음악 key는 COMPLETED일 때만 있다. 순서가 맞는지는 카드가 본다
     public static RecordCardImage restore(UUID recordCardImageId, String imageKey, String caption, String musicKey,
                                           MusicStatus musicStatus, int sortOrder) {
         return new RecordCardImage(new RecordCardImageId(recordCardImageId), new RecordCardImageKey(imageKey),
@@ -63,10 +63,10 @@ public class RecordCardImage {
         this.caption = caption;
     }
 
-    // 생성 완료 알림 — READY면 AI가 올린 key를 함께 받는다. 이미 끝난 음악에 온 알림(중복 전달)은 무시하고 false
+    // 생성 완료 알림 — COMPLETED면 AI가 올린 key를 함께 받는다. 이미 끝난 음악에 온 알림(중복 전달)은 무시하고 false
     boolean completeMusic(MusicStatus result, String musicKey) {
         MusicStatus checked = MusicStatus.result(result);
-        if (!musicStatus.isPending()) {
+        if (!musicStatus.isGenerating()) {
             return false;
         }
         MusicKey key = keyFor(checked, musicKey);
@@ -83,13 +83,13 @@ public class RecordCardImage {
         return Optional.ofNullable(musicKey);
     }
 
-    // READY면 key가 반드시 있고, 실패면 key를 버린다 — 실패한 음악은 객체가 없다
+    // COMPLETED면 key가 반드시 있고, 실패면 key를 버린다 — 실패한 음악은 객체가 없다
     static MusicKey keyFor(MusicStatus result, String musicKey) {
-        return result == MusicStatus.READY ? new MusicKey(musicKey) : null;
+        return result == MusicStatus.COMPLETED ? new MusicKey(musicKey) : null;
     }
 
-    static void requireKeyOnlyWhenReady(MusicStatus status, MusicKey musicKey) {
-        if ((status == MusicStatus.READY) != (musicKey != null)) {
+    static void requireKeyOnlyWhenCompleted(MusicStatus status, MusicKey musicKey) {
+        if ((status == MusicStatus.COMPLETED) != (musicKey != null)) {
             throw new MusicKeyStatusMismatchException();
         }
     }

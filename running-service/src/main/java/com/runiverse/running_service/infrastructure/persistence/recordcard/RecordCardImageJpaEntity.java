@@ -32,9 +32,9 @@ import java.util.UUID;
         uniqueConstraints = @UniqueConstraint(name = "uk_record_card_image_sort_order",
                 columnNames = {"record_card_id", "sort_order"}, options = "deferrable initially deferred")
 )
-@Check(name = "ck_record_card_image_music_status", constraints = "music_status in ('PENDING', 'READY', 'FAILED')")
-// 음악 key는 AI 서버가 완료 알림으로 준다 — 생성이 끝난(READY) 음악에만 있다
-@Check(name = "ck_record_card_image_music_key", constraints = "(music_status = 'READY') = (music_key is not null)")
+@Check(name = "ck_record_card_image_music_status", constraints = "music_status in ('GENERATING', 'COMPLETED', 'FAILED')")
+// 음악 key는 AI 서버가 완료 알림으로 준다 — 생성이 끝난(COMPLETED) 음악에만 있다
+@Check(name = "ck_record_card_image_music_key", constraints = "(music_status = 'COMPLETED') = (music_key is not null)")
 @Check(name = "ck_record_card_image_sort_order", constraints = "sort_order between 0 and 9")
 @Check(name = "ck_record_card_image_caption_length",
         constraints = "caption is null or char_length(caption) between 1 and 100")
@@ -68,7 +68,7 @@ public class RecordCardImageJpaEntity extends BaseTimeEntity {
     @Column(name = "caption", length = 100)
     private String caption;
 
-    // AI 서버가 완료 알림으로 준 key — READY일 때만 있다
+    // AI 서버가 완료 알림으로 준 key — COMPLETED일 때만 있다
     @Column(name = "music_key", length = 255)
     private String musicKey;
 

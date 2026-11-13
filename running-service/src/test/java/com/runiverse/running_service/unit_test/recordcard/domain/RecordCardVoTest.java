@@ -223,30 +223,30 @@ class RecordCardVoTest {
     class Status {
 
         @ParameterizedTest
-        @EnumSource(value = MusicStatus.class, names = {"READY", "FAILED"})
-        @DisplayName("생성 결과는 READY·FAILED를 받는다")
+        @EnumSource(value = MusicStatus.class, names = {"COMPLETED", "FAILED"})
+        @DisplayName("생성 결과는 COMPLETED·FAILED를 받는다")
         void acceptResult(MusicStatus result) {
             // when & then
             assertThat(MusicStatus.result(result)).isEqualTo(result);
         }
 
         @Test
-        @DisplayName("생성 결과로 PENDING이나 null은 거부한다")
+        @DisplayName("생성 결과로 GENERATING이나 null은 거부한다")
         void rejectNonResult() {
             // when & then
-            assertThatThrownBy(() -> MusicStatus.result(MusicStatus.PENDING))
+            assertThatThrownBy(() -> MusicStatus.result(MusicStatus.GENERATING))
                     .isInstanceOf(InvalidMusicResultException.class);
             assertThatThrownBy(() -> MusicStatus.result(null))
                     .isInstanceOf(InvalidMusicResultException.class);
         }
 
         @Test
-        @DisplayName("PENDING만 생성 중이다")
+        @DisplayName("GENERATING만 생성 중이다")
         void onlyPendingIsPending() {
             // when & then
-            assertThat(MusicStatus.PENDING.isPending()).isTrue();
-            assertThat(MusicStatus.READY.isPending()).isFalse();
-            assertThat(MusicStatus.FAILED.isPending()).isFalse();
+            assertThat(MusicStatus.GENERATING.isGenerating()).isTrue();
+            assertThat(MusicStatus.COMPLETED.isGenerating()).isFalse();
+            assertThat(MusicStatus.FAILED.isGenerating()).isFalse();
         }
     }
 }

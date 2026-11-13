@@ -41,10 +41,10 @@ import java.util.UUID;
                 unique = true, options = "where deleted_at is null")
 )
 @Check(name = "ck_record_card_visibility", constraints = "visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')")
-@Check(name = "ck_record_card_base_music_status", constraints = "base_music_status in ('PENDING', 'READY', 'FAILED')")
-// 음악 key는 AI 서버가 완료 알림으로 준다 — 생성이 끝난(READY) 기본곡에만 있다
+@Check(name = "ck_record_card_base_music_status", constraints = "base_music_status in ('GENERATING', 'COMPLETED', 'FAILED')")
+// 음악 key는 AI 서버가 완료 알림으로 준다 — 생성이 끝난(COMPLETED) 기본곡에만 있다
 @Check(name = "ck_record_card_base_music_key",
-        constraints = "(base_music_status = 'READY') = (base_music_key is not null)")
+        constraints = "(base_music_status = 'COMPLETED') = (base_music_key is not null)")
 @Check(name = "ck_record_card_activity_type", constraints = "activity_type in ('DAILY', 'TRAVEL', 'RACE')")
 @Check(name = "ck_record_card_memo_length", constraints = "char_length(memo) between 1 and 500")
 @Check(name = "ck_record_card_display_order",
@@ -90,7 +90,7 @@ public class RecordCardJpaEntity extends BaseTimeEntity {
     @Column(name = "thumbnail_image_key", length = 255)
     private String thumbnailImageKey;
 
-    // AI 서버가 완료 알림으로 준 key — READY일 때만 있다
+    // AI 서버가 완료 알림으로 준 key — COMPLETED일 때만 있다
     @Column(name = "base_music_key", length = 255)
     private String baseMusicKey;
 

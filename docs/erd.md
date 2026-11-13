@@ -464,20 +464,20 @@
 | user_id | UUID | → users, NOT NULL | 작성자. **기록 주인과 같다** — 생성 시 `running_records.user_id`와 대조한다 |
 | visibility | enum | NOT NULL | 카드별 공개 범위. 기본값을 서버에 두지 않는다 — 작성 화면 기본값은 클라가 `PUBLIC`으로 둔다 |
 | activity_type | enum | NOT NULL | 그날 러닝의 성격 — `DAILY`(일상) / `TRAVEL`(여행) / `RACE`(대회). 사용자가 고르고, AI가 기본곡·사진 음악의 맥락으로 쓴다 |
-| base_music_status | enum | NOT NULL, default `PENDING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
+| base_music_status | enum | NOT NULL, default `GENERATING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
 | memo | text | NOT NULL | **회고 글**, 1~500자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
 | display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람의 살아 있는 카드 중 최댓값 + 1(없으면 1). **지우면 `-1`**이고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 되살리면 다시 최댓값 + 1(맨 뒤). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
-| base_music_key | varchar(255) | nullable | 기본곡 S3 key. **AI 서버가 정해 완료 이벤트로 알려 준다** — 카드 행은 key 없이(null) `PENDING`으로 생기고, `READY`가 되면서 이 값이 채워진다. `FAILED`면 null로 남는다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾는다 |
+| base_music_key | varchar(255) | nullable | 기본곡 S3 key. **AI 서버가 정해 완료 이벤트로 알려 준다** — 카드 행은 key 없이(null) `GENERATING`으로 생기고, `COMPLETED`가 되면서 이 값이 채워진다. `FAILED`면 null로 남는다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | |
 | deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
 > UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 부분 인덱스가 아니다. 지운 카드의 행도 자리를 차지하므로 다시 만들 때는 새 행을 넣지 않고 그 행을 되살린다. 처음 만드는 요청이 동시에 두 번 오면 이 제약이 하나만 남긴다(api-spec 9-2의 409)
-> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 key 없이(null) `PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
+> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 key 없이(null) `GENERATING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
 > **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`activity_type`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
-> CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
-> CHECK `ck_record_card_base_music_key`: `(base_music_status = 'READY') = (base_music_key is not null)` — key는 AI 서버가 완료 알림으로 주므로 READY인 기본곡에만 있다
+> CHECK `ck_record_card_base_music_status`: `base_music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
+> CHECK `ck_record_card_base_music_key`: `(base_music_status = 'COMPLETED') = (base_music_key is not null)` — key는 AI 서버가 완료 알림으로 주므로 COMPLETED인 기본곡에만 있다
 > CHECK `ck_record_card_activity_type`: `activity_type in ('DAILY', 'TRAVEL', 'RACE')`
 > CHECK `ck_record_card_memo_length`: `char_length(memo) between 1 and 500`
 > CHECK `ck_record_card_display_order`: `(deleted_at is null and display_order >= 1) or (deleted_at is not null and display_order = -1)` — 살아 있으면 1 이상, 지웠으면 -1
@@ -493,22 +493,22 @@
 |---|---|---|---|
 | record_card_image_id | UUID | PK | UUIDv7. **DB가 매기지 않고 사진 key를 발급할 때(api-spec 9-1·9-3) 정한다** — 사진 key의 사진 폴더(`…/{recordCardId}/{recordCardImageId}/…`)가 이 값이다. AI 서버가 이 값을 키로 저장하고 완료 이벤트로 돌려주므로, 받은 결과가 어느 사진의 것인지 이 값으로 찾는다 |
 | record_card_id | UUID | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 카드를 소프트 삭제할 때는 CASCADE가 아니라 앱이 사진 행을 지운다 |
-| music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
+| music_status | enum | NOT NULL, default `GENERATING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
 | caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). 수정(9-3)에서 바꿀 수 있고, 바꿔도 음악은 다시 만들지 않는다. AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
-| music_key | varchar(255) | nullable | 이 사진 음악의 S3 key. 기본곡과 같이 AI 서버가 완료 이벤트로 알려 준 값을 `READY`가 될 때 저장한다(그 전·`FAILED`면 null). 완료 이벤트는 `record_card_image_id`로 행을 찾는다 |
+| music_key | varchar(255) | nullable | 이 사진 음악의 S3 key. 기본곡과 같이 AI 서버가 완료 이벤트로 알려 준 값을 `COMPLETED`가 될 때 저장한다(그 전·`FAILED`면 null). 완료 이벤트는 `record_card_image_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
-> CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
-> CHECK `ck_record_card_image_music_key`: `(music_status = 'READY') = (music_key is not null)` — 기본곡과 같다
+> CHECK `ck_record_card_image_music_status`: `music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
+> CHECK `ck_record_card_image_music_key`: `(music_status = 'COMPLETED') = (music_key is not null)` — 기본곡과 같다
 > CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
 > **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
 > **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
 > UNIQUE `uk_record_card_image_sort_order`: `(record_card_id, sort_order)` **DEFERRABLE INITIALLY DEFERRED** — 한 카드에서 같은 자리에 사진 두 장이 오지 않는다. **커밋 때 검사한다** — 수정(9-3)에서 순서를 맞바꾸면 한 행씩 UPDATE하는 중간에 값이 겹치고, Hibernate는 flush 때 INSERT를 DELETE보다 먼저 보내 "빼고 같은 자리에 넣기"도 중간에 겹친다. 즉시 검사면 정상 수정이 실패한다. 최종 결과의 중복만 막는 안전장치다 — 순서는 도메인이 0부터 다시 매기므로 정상 경로에서는 걸리지 않고, 걸리면 커밋 실패(500)다. 엔티티가 `@UniqueConstraint(options = "deferrable initially deferred")`로 선언해 로컬·E2E 스키마에도 생긴다. 같은 카드를 동시에 고치는 경쟁은 이 제약이 아니라 잠금이 막는다 — 카드 쓰기는 모두 `running_records` 행을 먼저 잠근다. 앞 열이 `record_card_id`라 카드 사진 조회 인덱스를 겸한다.
 
-> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. ID(`record_card_id`·`record_card_image_id`)로 찾은 행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
+> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `GENERATING` → `COMPLETED`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `GENERATING`이 아닌 행에 온 이벤트는 무시한다. ID(`record_card_id`·`record_card_image_id`)로 찾은 행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
 
 ---
 
@@ -586,7 +586,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | record_cards.visibility | FRIENDS / PUBLIC / PRIVATE | 카드별 개별 저장 — 친구만 / 전체 / 나만 |
 | record_cards.activity_type | DAILY / TRAVEL / RACE | 일상 / 여행 / 대회 — 카드 단위. AI 음악 생성 입력 |
-| record_cards.base_music_status · record_card_images.music_status | PENDING / READY / FAILED | 생성 중 / S3에 올라옴 / 생성 실패. 완료 이벤트로만 바뀐다 |
+| record_cards.base_music_status · record_card_images.music_status | GENERATING / COMPLETED / FAILED | 생성 중 / 완료(AI가 준 key가 있다) / 생성 실패. 완료 이벤트로만 바뀐다 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 화면(`RoomInfo.invitations`)은 `PENDING`만 보여주지만, 다시 초대할 때 보낸 횟수를 이어서 세려면 행이 남아야 한다 |

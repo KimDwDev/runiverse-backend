@@ -78,7 +78,7 @@ public class RecordCard {
     private RecordCardMemo memo;                      // 회고 글 — 음악 생성이 감정·여운을 읽는다
     private DisplayOrder displayOrder;                // 지운 카드는 DELETED
     private RecordCardImageKey thumbnailImageKey;     // 사진이 없으면 null
-    private MusicKey baseMusicKey;                    // AI 서버가 완료 알림으로 준다 — READY일 때만 있다
+    private MusicKey baseMusicKey;                    // AI 서버가 완료 알림으로 준다 — COMPLETED일 때만 있다
     private final List<RecordCardImage> images;       // 캐러셀 순서(sortOrder)대로
     private LocalDateTime deletedAt;                  // 지우지 않았으면 null
 
@@ -98,7 +98,7 @@ public class RecordCard {
         this.memo = new RecordCardMemo(memo);
         this.displayOrder = new DisplayOrder(displayOrder);
         this.baseMusicKey = baseMusicKey == null ? null : new MusicKey(baseMusicKey);
-        RecordCardImage.requireKeyOnlyWhenReady(this.baseMusicStatus, this.baseMusicKey);
+        RecordCardImage.requireKeyOnlyWhenCompleted(this.baseMusicStatus, this.baseMusicKey);
         this.deletedAt = deletedAt;
 
         // 지운 카드만 순위가 -1이다
@@ -127,7 +127,7 @@ public class RecordCard {
                 .userId(userId)
                 .visibility(visibility)
                 .activityType(activityType)
-                .baseMusicStatus(MusicStatus.PENDING)
+                .baseMusicStatus(MusicStatus.GENERATING)
                 .memo(memo)
                 .displayOrder(displayOrder.value())
                 .thumbnailImageKey(thumbnailKeyAt(images, thumbnailIndex))
@@ -240,18 +240,18 @@ public class RecordCard {
         this.memo = nextMemo;
         this.displayOrder = displayOrder;
         this.baseMusicKey = null;
-        this.baseMusicStatus = MusicStatus.PENDING;
+        this.baseMusicStatus = MusicStatus.GENERATING;
         this.images.clear();
         this.images.addAll(nextImages);
         this.thumbnailImageKey = nextThumbnail == null ? null : new RecordCardImageKey(nextThumbnail);
         this.deletedAt = null;
     }
 
-    // 기본곡 생성 완료 알림 — 바꿨으면 true. READY면 AI가 올린 key를 함께 받는다.
+    // 기본곡 생성 완료 알림 — 바꿨으면 true. COMPLETED면 AI가 올린 key를 함께 받는다.
     // 이미 끝난 음악·지운 카드에 온 알림은 무시하고 false(Kafka는 같은 알림을 두 번 줄 수 있다)
     public boolean completeBaseMusic(MusicStatus result, String musicKey) {
         MusicStatus checked = MusicStatus.result(result);
-        if (isDeleted() || !baseMusicStatus.isPending()) {
+        if (isDeleted() || !baseMusicStatus.isGenerating()) {
             return false;
         }
         MusicKey key = RecordCardImage.keyFor(checked, musicKey);
