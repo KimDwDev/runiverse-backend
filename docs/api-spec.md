@@ -2559,7 +2559,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "recordCardId": 88,
+  "recordCardId": "01a0f2d4-6180-7000-8000-4466554400c8",
   "author": {
     "userId": "01a0f2d4-6180-7000-8000-446655440015",
     "nickname": "동완러너",
@@ -2587,7 +2587,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   },
   "images": [
     {
-      "recordCardImageId": 301,
+      "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544012d",
       "imageUrl": "https://...",
       "caption": "다리 밑에서 본 노을",
       "isThumbnail": true,
@@ -2604,7 +2604,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `recordCardId` | Integer | O | 기록 카드 ID |
+| `recordCardId` | String | O | 기록 카드 ID(UUID) |
 | `author` | Object | O | 작성자 — `userId`·`nickname`·`profileImageUrl`(사진이 없으면 null) |
 | `isMine` | Boolean | O | 내 카드 여부 — 수정·삭제 버튼을 가른다 |
 | `visibility` | String | O | `FRIENDS`(친구만) · `PUBLIC`(전체) · `PRIVATE`(나만) |
@@ -2621,7 +2621,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `record.routes` | Number[][][] | O | 경로 — **6-1 `routes`와 같은 형식**(조각 배열, 조각마다 `[[위도, 경도], …]`) |
 | `baseMusic` | Object | O | 기본곡 — 첫 장에서 재생 |
 | `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(지도 장 다음부터). 사진이 없으면 빈 배열 |
-| `images[].recordCardImageId` | Integer | O | 사진 ID — 수정(9-3)에서 이미 올린 사진을 가리킬 때 쓴다 |
+| `images[].recordCardImageId` | String | O | 사진 ID(UUID) — 수정(9-3)에서 이미 올린 사진을 가리킬 때 쓴다 |
 | `images[].imageUrl` | String | O | 사진 URL |
 | `images[].caption` | String | X | 사진 설명(한 줄, 1~100자). 작성자가 붙이지 않았으면 null |
 | `images[].isThumbnail` | Boolean | O | 썸네일 사진 여부 — 사진이 있으면 정확히 한 장이 `true`다. 편집 화면에서 현재 썸네일을 표시할 때 쓴다 |
@@ -2735,7 +2735,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 확정된 카드의 `recordCardId`(숫자)와 다르다 |
+| `recordCardDraftId` | String | O | 이번 작성 요청의 **초안 ID**(UUID). Redis에서 작성 내용을 찾는 열쇠다. 9-2에 넘긴다. 카드의 `recordCardId`와 다르다 — 같은 기록으로 초안을 여러 번 만들 수 있고, 수정(9-3)도 초안을 만든다 |
 | `expiresAt` | String | O | 이 시각까지 9-2로 확정해야 한다(운영값, 현재 발급 뒤 30분) |
 | `uploads` | Array | O | 사진마다 업로드할 곳. 사진이 없으면 빈 배열 |
 | `uploads[].imageKey` | String | O | 사진 S3 key — `record-cards/{userId}/images/{imageId}.{확장자}`. 서버가 정한다 |
@@ -2754,6 +2754,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 숨긴 방(`running_rooms.deleted_at` 있음)의 기록은 없는 기록으로 본다 — 7-1에서 빠지는 것과 맞춘다
   - 사진을 올리기 전에 기록·회고 글·중복을 걸러, 쓸모없는 업로드를 하지 않게 한다
 - **작성 내용은 Redis에만 둔다** — DB에는 아무것도 쓰지 않는다.
+- **카드 ID(`recordCardId`, UUID)를 이때 정해 초안에 둔다** — 사진 key가 카드 폴더 아래라 업로드 URL을 주기 전에 카드 ID가 있어야 한다. 9-2는 이 값을 PK로 저장한다. 이 기록에 지운 카드가 있으면 새로 만들지 않고 그 카드의 ID를 쓴다(9-2가 그 행을 되살린다)
 - **같은 기록으로 다시 요청하면 새 `recordCardDraftId`가 나온다** — 이전 요청은 유효 시간까지 남지만, 먼저 확정한 쪽만 카드가 된다(다른 쪽 확정은 409)
 
 - **에러 (400 Bad Request — 요청 검증)**
@@ -2843,7 +2844,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
      - `MULTIPART`: `ListParts`로 조각이 전부 올라왔는지(개수·크기) 보고, `CompleteMultipartUpload`로 합친 뒤 위와 같이 HEAD로 확인한다. 합친 사진은 초안에 "합침"으로 표시해 두어, 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
   3. 확정 시점에 다시 검사한다 — 9-1 뒤에 다른 요청이 먼저 카드를 만들었으면 409, 9-3 뒤에 카드가 바뀌었으면 409 `RECORD_CARD_CHANGED`, 카드가 지워졌으면 404
   4. DB에 한 트랜잭션으로 반영한다
-     - **작성(9-1에서 온 것)**: 카드·사진 행을 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·활동유형·회고 글을 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 순위(`display_order`)는 살아 있는 내 카드 중 최댓값 + 1이고, 되살려도 맨 뒤가 된다. 기본곡도 새로 만든다. `recordCardId`·`createdAt`은 되살릴 때 예전 값 그대로다(`erd.md` `record_cards` 되살리기)
+     - **작성(9-1에서 온 것)**: 9-1이 정한 `recordCardId`로 카드·사진 행을 저장한다. **이 기록에 지운 카드가 있으면 새 행을 넣지 않고 그 행을 되살린다** — `deleted_at`을 비우고 공개 범위·활동유형·회고 글을 새 값으로 덮고 새 사진 행을 넣는다(옛 사진 행은 9-4에서 이미 지워졌다). 순위(`display_order`)는 살아 있는 내 카드 중 최댓값 + 1이고, 되살려도 맨 뒤가 된다. 기본곡도 새로 만든다. `recordCardId`·`createdAt`은 되살릴 때 예전 값 그대로다(`erd.md` `record_cards` 되살리기)
      - **수정(9-3에서 온 것)**: 9-3이 받은 변경을 한 번에 반영한다(아래 9-3 사진 처리)
      - 음악 key는 서버가 이때 정해(`record-cards/{userId}/music/{musicId}`) 기본곡은 `record_cards.base_music_key`, 사진 음악은 `record_card_images.music_key`에 넣는다. 썸네일은 `thumbnailIndex` 위치 사진의 key를 `record_cards.thumbnail_image_key`에 복사한다
      - **같은 트랜잭션에서 음악 생성 요청 이벤트를 아웃박스에 기록한다** — 작성이면 기본곡 + 사진 전부, 수정이면 새 사진만(9-5). 만들 음악이 없으면 기록하지 않는다
@@ -2914,7 +2915,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "activityType": "TRAVEL",
   "visibility": "FRIENDS",
   "images": [
-    { "recordCardImageId": 301, "caption": "다리 밑에서 본 노을" },
+    { "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544012d", "caption": "다리 밑에서 본 노을" },
     { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "caption": "결승선 앞" }
   ],
   "thumbnailIndex": 1
@@ -3092,7 +3093,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "user_id": "01a0f2d4-6180-7000-8000-446655440000",
-  "record_card_id": 101,
+  "record_card_id": "01a0f2d4-6180-7000-8000-4466554400c8",
   "memo": "힘들었지만 끝까지 달려서 뿌듯했다",
   "activity_type": "TRAVEL",
   "running_summary": {
@@ -3107,6 +3108,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   },
   "photos": [
     {
+      "record_card_image_id": "01a0f2d4-6180-7000-8000-44665544012d",
       "image_key": "record-cards/01a0f2d4-.../images/9f1c2b7e-....jpg",
       "caption": "바닷가에서 찍은 사진"
     }
@@ -3117,7 +3119,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `user_id` | String | O | 작성자 ID(UUID) |
-| `record_card_id` | Integer | O | 카드 ID |
+| `record_card_id` | String | O | 카드 ID(UUID). AI 서버가 이 값을 키로 저장한다 |
 | `memo` | String | O | 회고 글(1~500자). 기본곡의 감정·여운 재료 |
 | `activity_type` | String | O | `DAILY` · `TRAVEL` · `RACE` — 카드 단위 |
 | `running_summary` | Object | O | 카드가 붙은 러닝 기록의 수치. **발행할 때 `running_records`에서 읽어 싣는다** — AI 서버는 기록을 조회하지 않는다 |
@@ -3130,14 +3132,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `running_summary.temperature` | Number | O | 기온(섭씨, 소수 한 자리). 조회 실패 폴백은 `15.0`이라 실제 15도와 구분할 수 없다 |
 | `running_summary.total_elevation_gain` | Integer | X | 누적 상승 고도(미터). 유효 표본이 부족해 기록에 없으면 null |
 | `photos` | Array | O | 음악을 만들 사진. **카드 순서(`sort_order`)대로** 싣는다. 사진이 없으면 빈 배열 |
+| `photos[].record_card_image_id` | String | O | 사진 ID(UUID). AI 서버가 이 값을 키로 저장하고, 완료 이벤트로 어느 사진의 음악인지 돌려줄 때 쓴다 |
 | `photos[].image_key` | String | O | 사진 S3 key — AI 서버가 S3에서 직접 읽는다 |
 | `photos[].caption` | String | X | 사진 설명. 없으면 null |
 
 - **이 토픽의 필드 이름은 `snake_case`다** — 앱 API(`camelCase`)와 다르다. AI 서버와의 내부 계약이라 AI 서버 쪽 이름을 따른다.
 
-> **아직 정하지 않은 것 — 요청 이벤트를 위 형태로 바꾸며 생겼다**: 이벤트에 음악 key·요청 ID·사진 ID가 없다. 완료 이벤트(아래)·`record_cards.base_music_key`·`record_card_images.music_key`는 아직 "서버가 음악 key를 정해 요청에 싣고, 완료도 그 key로 돌아온다"는 이전 설계 그대로다. 함께 정해야 한다:
+> **아직 정하지 않은 것 — 요청 이벤트를 위 형태로 바꾸며 생겼다**: 이벤트에 음악 key·요청 ID가 없다. 사진은 `record_card_image_id`(UUID)로 가리킬 수 있다. 완료 이벤트(아래)·`record_cards.base_music_key`·`record_card_images.music_key`는 아직 "서버가 음악 key를 정해 요청에 싣고, 완료도 그 key로 돌아온다"는 이전 설계 그대로다. 함께 정해야 한다:
 > 1. AI가 음악을 어느 S3 key에 올리는가
-> 2. 완료 이벤트로 어느 음악(기본곡·어느 사진)인지 어떻게 찾는가 — `image_key`로 찾을지
+> 2. 완료 이벤트가 어느 음악(기본곡·어느 사진)의 결과인지 어떻게 알리는가 — 사진은 `record_card_image_id`로 찾을 수 있다. 기본곡을 어떻게 가리킬지와 완료 이벤트 모양은 AI 서버와 정한다
 > 3. 수정(9-3)으로 새 사진만 보낼 때 기본곡을 다시 만들지 말라는 것을 어떻게 알리는가
 > 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가
 
@@ -3146,7 +3149,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "requestId": "01a0f2d4-6180-7000-8000-446655440099",
-  "recordCardId": 88,
+  "recordCardId": "01a0f2d4-6180-7000-8000-4466554400c8",
   "results": [
     { "musicKey": "record-cards/01a0f2d4-.../music/5c3e1a9d-...", "status": "READY" },
     { "musicKey": "record-cards/01a0f2d4-.../music/7d2e4f10-...", "status": "FAILED" }
@@ -3158,7 +3161,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `requestId` | String | O | 요청 이벤트의 `requestId` 그대로 |
-| `recordCardId` | Integer | O | 요청 이벤트의 `recordCardId` 그대로 |
+| `recordCardId` | String | O | 요청 이벤트의 `record_card_id` 그대로 |
 | `results` | Array | O | 요청에 실은 음악마다 하나. 일부만 성공해도 한 이벤트에 함께 담는다 |
 | `results[].musicKey` | String | O | 요청 이벤트의 `musicKey` 그대로 |
 | `results[].status` | String | O | `READY`(그 key에 S3 객체를 올렸음) · `FAILED`(만들지 못함) |
@@ -3249,7 +3252,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "items": [
     {
-      "recordCardId": 88,
+      "recordCardId": "01a0f2d4-6180-7000-8000-4466554400c8",
       "thumbnailUrl": "https://...",
       "imageCount": 3,
       "startedAt": "2026-07-25T19:00:30",
@@ -3262,7 +3265,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `recordCardId` | Integer | O | 기록 카드 ID |
+| `recordCardId` | String | O | 기록 카드 ID(UUID) |
 | `thumbnailUrl` | String | X | 썸네일 사진 URL(`record_cards.thumbnail_image_key`, presigned GET, 8-1과 같은 유효 시간) — 기본은 첫 사진, 작성자가 고르면 그 사진. **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
 | `imageCount` | Integer | O | 사진 장수(0~10) |
 | `startedAt` | String | O | 카드가 붙은 러닝의 시작 시각 |

@@ -459,7 +459,7 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| record_card_id | bigint | PK | |
+| record_card_id | UUID | PK | UUIDv7. **DB가 매기지 않고 작성 요청(api-spec 9-1)이 정한다** — 사진 key가 카드 폴더(`record-cards/{userId}/{recordCardId}/…`) 아래라 업로드 URL을 주기 전에 ID가 있어야 한다. 확정(9-2)이 이 값으로 행을 넣는다. 되살리면 예전 값 그대로다. AI 서버도 이 값을 키로 저장한다 |
 | running_record_id | bigint | FK → running_records, NOT NULL, UNIQUE, ON DELETE CASCADE | 카드가 붙은 기록. **기록과 1:1** — 지운 카드도 행이 남아 기록당 행은 평생 하나다([§0](#0-공통-규칙)) |
 | user_id | UUID | → users, NOT NULL | 작성자. **기록 주인과 같다** — 생성 시 `running_records.user_id`와 대조한다 |
 | visibility | enum | NOT NULL | 카드별 공개 범위. 기본값을 서버에 두지 않는다 — 작성 화면 기본값은 클라가 `PUBLIC`으로 둔다 |
@@ -490,8 +490,8 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| record_card_image_id | bigint | PK | |
-| record_card_id | bigint | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 카드를 소프트 삭제할 때는 CASCADE가 아니라 앱이 사진 행을 지운다 |
+| record_card_image_id | UUID | PK | UUIDv7. **DB가 매기지 않고 사진 key를 발급할 때(api-spec 9-1·9-3) 정한다** — 사진 key의 사진 폴더(`…/{recordCardId}/{recordCardImageId}/…`)가 이 값이다. AI 서버가 이 값을 키로 저장하고 완료 이벤트로 돌려주므로, 받은 결과가 어느 사진의 것인지 이 값으로 찾는다 |
+| record_card_id | UUID | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 카드를 소프트 삭제할 때는 CASCADE가 아니라 앱이 사진 행을 지운다 |
 | music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
