@@ -4,7 +4,6 @@ import com.runiverse.running_service.domain.recordcard.RecordCard;
 import com.runiverse.running_service.domain.recordcard.RecordCard.ImageDraft;
 import com.runiverse.running_service.domain.recordcard.RecordCard.ImageSlot;
 import com.runiverse.running_service.domain.recordcard.RecordCardImage;
-import com.runiverse.running_service.domain.recordcard.exception.DeletedAtRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.MusicKeyRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.MusicKeyStatusMismatchException;
 import com.runiverse.running_service.domain.recordcard.exception.DuplicateRecordCardImageException;
@@ -12,11 +11,9 @@ import com.runiverse.running_service.domain.recordcard.exception.InvalidDisplayO
 import com.runiverse.running_service.domain.recordcard.exception.InvalidMusicResultException;
 import com.runiverse.running_service.domain.recordcard.exception.InvalidThumbnailIndexException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardActivityTypeRequiredException;
-import com.runiverse.running_service.domain.recordcard.exception.RecordCardDeletedException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageCaptionTooLongException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardImageNotInCardException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardMemoRequiredException;
-import com.runiverse.running_service.domain.recordcard.exception.RecordCardNotDeletedException;
 import com.runiverse.running_service.domain.recordcard.exception.RecordCardVisibilityRequiredException;
 import com.runiverse.running_service.domain.recordcard.exception.ThumbnailNotInImagesException;
 import com.runiverse.running_service.domain.recordcard.exception.TooManyRecordCardImagesException;
@@ -34,7 +31,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -51,7 +47,6 @@ class RecordCardTest {
     private static final Long RUNNING_RECORD_ID = 501L;
     private static final String BASE_MUSIC_KEY = "record-cards/u/music/base";
     private static final String MEMO = "힘들었지만 끝까지 달려서 뿌듯했다";
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 8, 21, 0);
 
     @Nested
     @DisplayName("생성")
@@ -64,7 +59,6 @@ class RecordCardTest {
             RecordCard card = create(List.of(draft("a"), draft("b")), null);
 
             // then
-            assertThat(card.isDeleted()).isFalse();
             assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.GENERATING);
             assertThat(card.getImages())
                     .extracting(image -> image.getImageKey().value(), RecordCardImage::getSortOrder,
@@ -178,15 +172,6 @@ class RecordCardTest {
         }
 
         @Test
-        @DisplayName("삭제 표시 순위로는 만들 수 없다")
-        void rejectDeletedOrder() {
-            // when & then
-            assertThatThrownBy(() -> RecordCard.create(CARD_ID, RUNNING_RECORD_ID, USER_ID, RecordCardVisibility.PUBLIC,
-                    RecordCardActivityType.DAILY, MEMO, DisplayOrder.DELETED, List.of(), null))
-                    .isInstanceOf(InvalidDisplayOrderException.class);
-        }
-
-        @Test
         @DisplayName("공개 범위가 없으면 거부한다")
         void rejectMissingVisibility() {
             // when & then
@@ -263,24 +248,6 @@ class RecordCardTest {
             // then
             assertThat(card.getImages().get(0).getCaption()).contains(new RecordCardImageCaption("다리 밑 노을"));
             assertThat(card.getImages().get(1).getCaption()).isEmpty();
-        }
-
-        @Test
-        @DisplayName("지운 카드인데 순위가 -1이 아니거나, 살아 있는데 -1이면 거부한다")
-        void rejectDeletionMismatch() {
-            // when & then
-            assertThatThrownBy(() -> RecordCard.restore(CARD_ID)
-                    .runningRecordId(RUNNING_RECORD_ID).userId(USER_ID).visibility(RecordCardVisibility.PUBLIC)
-                    .activityType(RecordCardActivityType.DAILY).memo(MEMO)
-                    .baseMusicStatus(MusicStatus.COMPLETED).displayOrder(3).baseMusicKey(BASE_MUSIC_KEY)
-                    .deletedAt(NOW).build())
-                    .isInstanceOf(InvalidDisplayOrderException.class);
-            assertThatThrownBy(() -> RecordCard.restore(CARD_ID)
-                    .runningRecordId(RUNNING_RECORD_ID).userId(USER_ID).visibility(RecordCardVisibility.PUBLIC)
-                    .activityType(RecordCardActivityType.DAILY).memo(MEMO)
-                    .baseMusicStatus(MusicStatus.COMPLETED).displayOrder(-1).baseMusicKey(BASE_MUSIC_KEY)
-                    .build())
-                    .isInstanceOf(InvalidDisplayOrderException.class);
         }
 
         @Test
@@ -554,121 +521,6 @@ class RecordCardTest {
     }
 
     @Nested
-    @DisplayName("삭제")
-    class Delete {
-
-        @Test
-        @DisplayName("지우면 순위는 -1, 사진과 썸네일은 비고, 회고 글·활동유형·기본곡은 남는다")
-        void delete() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-
-            // when
-            card.delete(NOW);
-
-            // then
-            assertThat(card.isDeleted()).isTrue();
-            assertThat(card.getDeletedAt()).contains(NOW);
-            assertThat(card.getDisplayOrder()).isEqualTo(DisplayOrder.DELETED);
-            assertThat(card.getImages()).isEmpty();
-            assertThat(card.getThumbnailImageKey()).isEmpty();
-            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo(MEMO));
-            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.DAILY);
-            assertThat(card.getBaseMusicKey()).contains(new MusicKey(BASE_MUSIC_KEY));
-        }
-
-        @Test
-        @DisplayName("지운 카드는 다시 지우거나 고칠 수 없다")
-        void rejectChangesAfterDelete() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-            card.delete(NOW);
-
-            // when & then
-            assertThatThrownBy(() -> card.delete(NOW)).isInstanceOf(RecordCardDeletedException.class);
-            assertThatThrownBy(() -> card.changeMemo("x")).isInstanceOf(RecordCardDeletedException.class);
-            assertThatThrownBy(() -> card.changeActivityType(RecordCardActivityType.RACE))
-                    .isInstanceOf(RecordCardDeletedException.class);
-            assertThatThrownBy(() -> card.changeVisibility(RecordCardVisibility.PUBLIC))
-                    .isInstanceOf(RecordCardDeletedException.class);
-            assertThatThrownBy(() -> card.rearrangeImages(List.of(), null))
-                    .isInstanceOf(RecordCardDeletedException.class);
-            assertThatThrownBy(() -> card.changeThumbnail(0)).isInstanceOf(RecordCardDeletedException.class);
-        }
-
-        @Test
-        @DisplayName("삭제 시각이 없으면 거부한다")
-        void rejectMissingDeletedAt() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-
-            // when & then
-            assertThatThrownBy(() -> card.delete(null)).isInstanceOf(DeletedAtRequiredException.class);
-            assertThat(card.isDeleted()).isFalse();
-        }
-    }
-
-    @Nested
-    @DisplayName("되살리기")
-    class Revive {
-
-        @Test
-        @DisplayName("지운 카드를 새 내용으로 덮는다 — ID는 그대로고 기본곡은 다시 만들어 옛 key를 버린다")
-        void revive() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-            card.delete(NOW);
-
-            // when
-            card.revive(RecordCardVisibility.FRIENDS, RecordCardActivityType.TRAVEL, "다시 뛰었다", new DisplayOrder(7),
-                    List.of(draft("z")), null);
-
-            // then
-            assertThat(card.isDeleted()).isFalse();
-            assertThat(card.getRecordCardId()).isEqualTo(new RecordCardId(CARD_ID));
-            assertThat(card.getVisibility()).isEqualTo(RecordCardVisibility.FRIENDS);
-            assertThat(card.getActivityType()).isEqualTo(RecordCardActivityType.TRAVEL);
-            assertThat(card.getMemo()).isEqualTo(new RecordCardMemo("다시 뛰었다"));
-            assertThat(card.getDisplayOrder()).isEqualTo(new DisplayOrder(7));
-            assertThat(card.getBaseMusicKey()).isEmpty();
-            assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.GENERATING);
-            assertThat(card.getImages()).extracting(image -> image.getImageKey().value())
-                    .containsExactly(imageKey("z"));
-            assertThat(card.getThumbnailImageKey()).contains(new RecordCardImageKey(imageKey("z")));
-        }
-
-        @Test
-        @DisplayName("지우지 않은 카드는 되살릴 수 없다")
-        void rejectLiveCard() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-
-            // when & then
-            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, MEMO,
-                    new DisplayOrder(7), List.of(), null))
-                    .isInstanceOf(RecordCardNotDeletedException.class);
-        }
-
-        @Test
-        @DisplayName("되살리는 내용이 틀리면 거부하고 지운 상태 그대로다")
-        void rejectBadContentAndStayDeleted() {
-            // given
-            RecordCard card = restoredWithThreeImages();
-            card.delete(NOW);
-
-            // when & then
-            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, MEMO,
-                    new DisplayOrder(7), List.of(draft("z")), 3))
-                    .isInstanceOf(InvalidThumbnailIndexException.class);
-            assertThatThrownBy(() -> card.revive(RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, "",
-                    new DisplayOrder(7), List.of(), null))
-                    .isInstanceOf(RecordCardMemoRequiredException.class);
-            assertThat(card.isDeleted()).isTrue();
-            assertThat(card.getDisplayOrder()).isEqualTo(DisplayOrder.DELETED);
-        }
-    }
-
-    @Nested
     @DisplayName("음악 생성 완료")
     class CompleteMusic {
 
@@ -733,20 +585,15 @@ class RecordCardTest {
         }
 
         @Test
-        @DisplayName("이 카드에 없는 사진이나 지운 카드에 온 결과는 무시한다")
-        void ignoreUnknownImageAndDeletedCard() {
+        @DisplayName("이 카드에 없는 사진에 온 결과는 무시한다")
+        void ignoreUnknownImage() {
             // given
             RecordCard card = restoredWithThreeImages();
 
             // when & then -> 수정에서 뺀 사진의 음악이 늦게 끝난 경우다
             assertThat(card.completeImageMusic(id(99), MusicStatus.COMPLETED, "ai/music/gone.wav")).isFalse();
-
-            // given
-            card.delete(NOW);
-
-            // when & then
-            assertThat(card.completeImageMusic(id(3), MusicStatus.COMPLETED, "ai/music/c.wav")).isFalse();
-            assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "ai/music/base.wav")).isFalse();
+            assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus)
+                    .containsExactly(MusicStatus.COMPLETED, MusicStatus.FAILED, MusicStatus.GENERATING);
         }
 
         @Test

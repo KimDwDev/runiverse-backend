@@ -60,7 +60,7 @@ class CreateRecordCardDraftIntegrationTest {
         handler = new CreateRecordCardDraftHandler(
                 new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10)),
                 recordCardStore,    // ExistsOwnRunningRecordPort
-                recordCardStore,    // FindRecordCardByRunningRecordPort
+                recordCardStore,    // ExistsRecordCardByRunningRecordPort
                 draftIds,           // GenerateRecordCardDraftIdPort
                 cardIds,            // GenerateRecordCardIdPort
                 imageIds,           // GenerateImageIdPort
@@ -118,23 +118,6 @@ class CreateRecordCardDraftIntegrationTest {
     }
 
     @Test
-    @DisplayName("지운 카드가 있는 기록이면 그 카드 ID로 초안을 만든다")
-    void reuseDeletedCard() {
-        // given
-        UUID deletedCardId = UuidCreator.getTimeOrderedEpoch();
-        recordCardStore.addCard(RECORD_ID, deletedCardId, true);
-
-        // when
-        CreateRecordCardDraftResult result = handler.handle(command(List.of(
-                new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, "a.jpg", null)), null));
-
-        // then
-        assertThat(draftStore.find(result.recordCardDraftId()).orElseThrow().recordCardId()).isEqualTo(deletedCardId);
-        assertThat(result.uploads().getFirst().imageKey()).startsWith(
-                "record-cards/%s/%s/".formatted(userId, deletedCardId));
-    }
-
-    @Test
     @DisplayName("남의 기록·숨긴 방의 기록·없는 기록이면 404이고, 업로드 URL도 초안도 남기지 않는다")
     void rejectNotOwnRecord() {
         // given
@@ -151,10 +134,10 @@ class CreateRecordCardDraftIntegrationTest {
     }
 
     @Test
-    @DisplayName("살아 있는 카드가 있으면 409이고, 업로드 URL도 초안도 남기지 않는다")
+    @DisplayName("이 기록에 카드가 있으면 409이고, 업로드 URL도 초안도 남기지 않는다")
     void rejectLiveCard() {
         // given
-        recordCardStore.addCard(RECORD_ID, UuidCreator.getTimeOrderedEpoch(), false);
+        recordCardStore.addCard(RECORD_ID);
 
         // when & then
         assertThatThrownBy(() -> handler.handle(commandFor(RECORD_ID)))

@@ -1,25 +1,25 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
-// 카드를 붙일 기록과 그 기록의 카드 — 기록 주인·숨긴 방과 카드 삭제 여부만 흉내 낸다
-public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, FindRecordCardByRunningRecordPort {
+// 카드를 붙일 기록과 그 기록의 카드 — 기록 주인·숨긴 방과 카드가 있는지만 흉내 낸다
+public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, ExistsRecordCardByRunningRecordPort {
 
     private record StoredRecord(UUID userId, boolean roomHidden) {
 
     }
 
     private final Map<Long, StoredRecord> records = new HashMap<>();
-    private final Map<Long, ExistingRecordCard> cards = new HashMap<>();
+    private final Set<Long> recordsWithCard = new HashSet<>();
 
     @Override
     public boolean existsOwnedBy(RunningRecordId runningRecordId, UserId userId) {
@@ -28,8 +28,8 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Find
     }
 
     @Override
-    public Optional<ExistingRecordCard> findByRunningRecord(RunningRecordId runningRecordId) {
-        return Optional.ofNullable(cards.get(runningRecordId.value()));
+    public boolean existsByRunningRecord(RunningRecordId runningRecordId) {
+        return recordsWithCard.contains(runningRecordId.value());
     }
 
     // 아래는 준비 전용
@@ -41,7 +41,7 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Find
         records.put(runningRecordId, new StoredRecord(userId, true));
     }
 
-    public void addCard(long runningRecordId, UUID recordCardId, boolean deleted) {
-        cards.put(runningRecordId, new ExistingRecordCard(new RecordCardId(recordCardId), deleted));
+    public void addCard(long runningRecordId) {
+        recordsWithCard.add(runningRecordId);
     }
 }

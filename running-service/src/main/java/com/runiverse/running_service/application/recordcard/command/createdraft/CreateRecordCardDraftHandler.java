@@ -10,7 +10,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
@@ -43,7 +43,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
 
     private final RecordCardDraftProperties properties;
     private final ExistsOwnRunningRecordPort existsOwnRunningRecordPort;
-    private final FindRecordCardByRunningRecordPort findRecordCardByRunningRecordPort;
+    private final ExistsRecordCardByRunningRecordPort existsRecordCardByRunningRecordPort;
     private final GenerateRecordCardDraftIdPort generateRecordCardDraftIdPort;
     private final GenerateRecordCardIdPort generateRecordCardIdPort;
     private final GenerateImageIdPort generateImageIdPort;
@@ -64,9 +64,12 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
             throw new RunningRecordNotFoundException();
         }
 
-        // 3. 카드 ID를 정한다 — 살아 있는 카드가 있으면 409(사진을 올리기 전에 막는다),
-        //    지운 카드가 있으면 그 ID로 되살린다. 최종 판정은 확정(9-2)이 다시 한다
-        UUID recordCardId = decideRecordCardId(runningRecordId);
+        // 3. 이 기록에 카드가 있으면 409 — 사진을 올리기 전에 막는다. 최종 판정은 확정(9-2)이 잠금 안에서 다시 한다.
+        //    카드 ID는 지금 정한다 — 사진 key의 카드 폴더라 업로드 URL보다 먼저 있어야 한다
+        if (existsRecordCardByRunningRecordPort.existsByRunningRecord(runningRecordId)) {
+            throw new RecordCardAlreadyExistsException();
+        }
+        UUID recordCardId = generateRecordCardIdPort.generate();
 
         // 4. 사진마다 ID·key를 정하고 업로드 URL을 준다 — 크기에 따라 한 번에 또는 조각으로
         Duration ttl = properties.ttl();
@@ -94,17 +97,6 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
         if (images.stream().anyMatch(image -> image.fileSizeBytes() > maxBytes)) {
             throw new RecordCardImageTooLargeException(properties.maxImageSize().toMegabytes());
         }
-    }
-
-    private UUID decideRecordCardId(RunningRecordId runningRecordId) {
-        return findRecordCardByRunningRecordPort.findByRunningRecord(runningRecordId)
-                .map(existing -> {
-                    if (!existing.deleted()) {
-                        throw new RecordCardAlreadyExistsException();
-                    }
-                    return existing.recordCardId().value();
-                })
-                .orElseGet(generateRecordCardIdPort::generate);
     }
 
     private void issueUpload(UUID userId, UUID recordCardId, CreateRecordCardDraftCommand.Image image,

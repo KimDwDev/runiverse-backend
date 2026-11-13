@@ -108,8 +108,8 @@ class RecordCardVoTest {
     class Order {
 
         @ParameterizedTest
-        @ValueSource(ints = {0, -2, Integer.MIN_VALUE})
-        @DisplayName("1 이상과 삭제 표시(-1) 밖의 값은 거부한다")
+        @ValueSource(ints = {0, -1, -2, Integer.MIN_VALUE})
+        @DisplayName("1보다 작은 순위는 거부한다 — 지운 카드는 행이 사라져 -1 표시가 없다")
         void rejectOutOfRange(int value) {
             // when & then
             assertThatThrownBy(() -> new DisplayOrder(value))
@@ -123,21 +123,6 @@ class RecordCardVoTest {
             assertThat(DisplayOrder.FIRST.next()).isEqualTo(new DisplayOrder(2));
         }
 
-        @Test
-        @DisplayName("삭제 표시에서는 다음 순위를 셀 수 없다")
-        void deletedHasNoNext() {
-            // when & then -> -1 + 1 = 0은 순위가 아니다
-            assertThatThrownBy(DisplayOrder.DELETED::next)
-                    .isInstanceOf(InvalidDisplayOrderException.class);
-        }
-
-        @Test
-        @DisplayName("-1만 삭제 표시다")
-        void onlyMinusOneIsDeleted() {
-            // when & then
-            assertThat(new DisplayOrder(-1).isDeleted()).isTrue();
-            assertThat(DisplayOrder.FIRST.isDeleted()).isFalse();
-        }
     }
 
     @Nested

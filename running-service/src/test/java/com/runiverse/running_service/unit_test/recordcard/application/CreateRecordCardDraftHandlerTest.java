@@ -10,8 +10,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort.ExistingRecordCard;
+import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
@@ -24,7 +23,6 @@ import com.runiverse.running_service.application.recordcard.port.out.StartMultip
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
-import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +36,6 @@ import org.springframework.util.unit.DataSize;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +57,6 @@ class CreateRecordCardDraftHandlerTest {
     private static final UUID USER_ID = UUID.fromString("01a0f2d4-6180-7000-8000-446655440015");
     private static final UUID DRAFT_ID = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400d1");
     private static final UUID CARD_ID = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
-    private static final UUID DELETED_CARD_ID = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c1");
     private static final UUID IMAGE_ID_1 = UUID.fromString("01a0f2d4-6180-7000-8000-44665544012d");
     private static final UUID IMAGE_ID_2 = UUID.fromString("01a0f2d4-6180-7000-8000-44665544013e");
     private static final long RUNNING_RECORD_ID = 501L;
@@ -72,7 +68,7 @@ class CreateRecordCardDraftHandlerTest {
     @Mock
     private ExistsOwnRunningRecordPort existsOwnRunningRecordPort;
     @Mock
-    private FindRecordCardByRunningRecordPort findRecordCardByRunningRecordPort;
+    private ExistsRecordCardByRunningRecordPort existsRecordCardByRunningRecordPort;
     @Mock
     private GenerateRecordCardDraftIdPort generateRecordCardDraftIdPort;
     @Mock
@@ -93,7 +89,7 @@ class CreateRecordCardDraftHandlerTest {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(
                 TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10));
         handler = new CreateRecordCardDraftHandler(properties, existsOwnRunningRecordPort,
-                findRecordCardByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
+                existsRecordCardByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
@@ -243,27 +239,6 @@ class CreateRecordCardDraftHandlerTest {
     }
 
     @Test
-    @DisplayName("지운 카드가 있는 기록이면 새 카드 ID를 만들지 않고 그 카드의 ID를 쓴다")
-    void reuseDeletedCardId() {
-        // given -> 확정(9-2)이 그 행을 되살린다. 사진도 같은 카드 폴더에 들어간다
-        when(existsOwnRunningRecordPort.existsOwnedBy(new RunningRecordId(RUNNING_RECORD_ID), new UserId(USER_ID)))
-                .thenReturn(true);
-        when(findRecordCardByRunningRecordPort.findByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
-                .thenReturn(Optional.of(new ExistingRecordCard(new RecordCardId(DELETED_CARD_ID), true)));
-        when(generateRecordCardDraftIdPort.generate()).thenReturn(DRAFT_ID);
-        when(generateImageIdPort.generate()).thenReturn(IMAGE_ID_1);
-
-        // when
-        CreateRecordCardDraftResult result = handler.handle(command(
-                List.of(new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, "IMG_0001.jpg", null)), null));
-
-        // then
-        assertThat(savedDraft().recordCardId()).isEqualTo(DELETED_CARD_ID);
-        assertThat(result.uploads().getFirst().imageKey()).contains("/" + DELETED_CARD_ID + "/");
-        verifyNoInteractions(generateRecordCardIdPort);
-    }
-
-    @Test
     @DisplayName("초안 유효 시간을 저장소에 넘기고, 응답의 만료 시각은 지금부터 그 시간 뒤다")
     void passTtlAndExpiresAt() {
         // given
@@ -286,7 +261,7 @@ class CreateRecordCardDraftHandlerTest {
                 new CreateRecordCardDraftCommand.Image("image/jpeg", MAX_SIZE + 1, "IMG_0001.jpg", null)), null)))
                 .isInstanceOf(RecordCardImageTooLargeException.class)
                 .hasMessage("이미지는 100MB 이하만 업로드할 수 있습니다.");
-        verifyNoInteractions(existsOwnRunningRecordPort, findRecordCardByRunningRecordPort,
+        verifyNoInteractions(existsOwnRunningRecordPort, existsRecordCardByRunningRecordPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
@@ -318,18 +293,18 @@ class CreateRecordCardDraftHandlerTest {
         assertThatThrownBy(() -> handler.handle(command(
                 List.of(new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, "IMG_0001.jpg", null)), null)))
                 .isInstanceOf(RunningRecordNotFoundException.class);
-        verifyNoInteractions(findRecordCardByRunningRecordPort, generateImageIdPort, generateUploadUrlPort,
+        verifyNoInteractions(existsRecordCardByRunningRecordPort, generateImageIdPort, generateUploadUrlPort,
                 startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
     @Test
-    @DisplayName("살아 있는 카드가 이미 있으면 409로 거절하고, 업로드를 시작하거나 초안을 남기지 않는다")
+    @DisplayName("이 기록에 카드가 이미 있으면 409로 거절하고, 카드 ID를 만들거나 업로드를 시작하지 않는다")
     void rejectLiveCard() {
         // given
         when(existsOwnRunningRecordPort.existsOwnedBy(new RunningRecordId(RUNNING_RECORD_ID), new UserId(USER_ID)))
                 .thenReturn(true);
-        when(findRecordCardByRunningRecordPort.findByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
-                .thenReturn(Optional.of(new ExistingRecordCard(new RecordCardId(CARD_ID), false)));
+        when(existsRecordCardByRunningRecordPort.existsByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
+                .thenReturn(true);
 
         // when & then
         assertThatThrownBy(() -> handler.handle(command(
@@ -342,8 +317,8 @@ class CreateRecordCardDraftHandlerTest {
     private void givenOwnRecordWithoutCard() {
         when(existsOwnRunningRecordPort.existsOwnedBy(new RunningRecordId(RUNNING_RECORD_ID), new UserId(USER_ID)))
                 .thenReturn(true);
-        when(findRecordCardByRunningRecordPort.findByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
-                .thenReturn(Optional.empty());
+        when(existsRecordCardByRunningRecordPort.existsByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
+                .thenReturn(false);
         when(generateRecordCardIdPort.generate()).thenReturn(CARD_ID);
         when(generateRecordCardDraftIdPort.generate()).thenReturn(DRAFT_ID);
     }
