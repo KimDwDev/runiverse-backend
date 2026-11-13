@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.common.exception.ErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.NotificationErrorCode;
+import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RelationshipErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
 import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
@@ -266,6 +267,7 @@ public class GlobalExceptionHandler {
             case InviteErrorCode code -> toStatus(code);
             case NotificationErrorCode code -> toStatus(code);
             case RoomChatErrorCode code -> toStatus(code);
+            case RecordCardErrorCode code -> toStatus(code);
         };
     }
 
@@ -372,6 +374,14 @@ public class GlobalExceptionHandler {
             // 러닝이 시작됐다 — 요청이 틀린 게 아니라 방 상태와 부딪힌 것이다
             case ROOM_CHAT_CLOSED -> HttpStatus.CONFLICT;
             case INVALID_ROOM_CHAT_CURSOR -> HttpStatus.BAD_REQUEST;
+        };
+    }
+
+    private HttpStatus toStatus(RecordCardErrorCode code) {
+        return switch (code) {
+            case RECORD_CARD_IMAGE_TOO_LARGE -> HttpStatus.BAD_REQUEST;
+            // 기록과 카드는 1:1이다 — 다른 요청이 먼저 만들었다
+            case RECORD_CARD_ALREADY_EXISTS -> HttpStatus.CONFLICT;
         };
     }
 

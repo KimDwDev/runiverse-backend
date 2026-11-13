@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.presentation;
 
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
+import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
@@ -117,6 +118,15 @@ public class ErrorExposurePolicyTest {
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.CONFLICT,
                 RoomChatErrorCode.ROOM_CHAT_CLOSED.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 카드가 있는 기록은 409 그대로 노출한다")
+    void recordCardAlreadyExistsIsExposed() {
+        // 가려지면 500으로 바뀌어, 클라가 작성 화면을 닫고 카드로 보낼지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                RecordCardErrorCode.RECORD_CARD_ALREADY_EXISTS.getCode())).isTrue();
     }
 
     @Test
