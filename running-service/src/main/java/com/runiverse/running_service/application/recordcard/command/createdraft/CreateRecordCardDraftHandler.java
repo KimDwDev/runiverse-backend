@@ -2,7 +2,6 @@ package com.runiverse.running_service.application.recordcard.command.createdraft
 
 import com.runiverse.running_service.application.common.ImageContentType;
 import com.runiverse.running_service.application.common.port.out.GenerateImageIdPort;
-import com.runiverse.running_service.application.common.port.out.GenerateUploadUrlPort;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
 import com.runiverse.running_service.application.recordcard.common.RecordCardStorageKeys;
@@ -14,6 +13,7 @@ import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRu
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
+import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftImage;
@@ -47,7 +47,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
     private final GenerateRecordCardDraftIdPort generateRecordCardDraftIdPort;
     private final GenerateRecordCardIdPort generateRecordCardIdPort;
     private final GenerateImageIdPort generateImageIdPort;
-    private final GenerateUploadUrlPort generateUploadUrlPort;
+    private final GenerateRecordCardUploadUrlPort generateRecordCardUploadUrlPort;
     private final StartMultipartUploadPort startMultipartUploadPort;
     private final SaveRecordCardDraftPort saveRecordCardDraftPort;
 
@@ -119,7 +119,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
 
         if (image.fileSizeBytes() <= partSizeBytes) {
             // 한 번에 올린다 — URL 유효 시간은 storage.s3.presigned-url-ttl(초안보다 짧다)
-            String uploadUrl = generateUploadUrlPort.generate(key, contentType.getMimeType(), image.fileSizeBytes());
+            String uploadUrl = generateRecordCardUploadUrlPort.generate(key, contentType.getMimeType(), image.fileSizeBytes());
             draftImages.add(new DraftImage(recordCardImageId, key, contentType.getMimeType(), image.fileSizeBytes(),
                     caption, UploadType.SINGLE, null, null, false));
             uploads.add(new Upload.Single(recordCardImageId, key, uploadUrl));

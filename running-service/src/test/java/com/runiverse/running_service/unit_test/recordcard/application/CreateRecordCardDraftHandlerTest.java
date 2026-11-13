@@ -1,7 +1,6 @@
 package com.runiverse.running_service.unit_test.recordcard.application;
 
 import com.runiverse.running_service.application.common.port.out.GenerateImageIdPort;
-import com.runiverse.running_service.application.common.port.out.GenerateUploadUrlPort;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftHandler;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
@@ -15,6 +14,7 @@ import com.runiverse.running_service.application.recordcard.port.out.FindRecordC
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardByRunningRecordPort.ExistingRecordCard;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
+import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftImage;
@@ -80,7 +80,7 @@ class CreateRecordCardDraftHandlerTest {
     @Mock
     private GenerateImageIdPort generateImageIdPort;
     @Mock
-    private GenerateUploadUrlPort generateUploadUrlPort;
+    private GenerateRecordCardUploadUrlPort generateUploadUrlPort;
     @Mock
     private StartMultipartUploadPort startMultipartUploadPort;
     @Mock

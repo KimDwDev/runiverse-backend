@@ -5,8 +5,6 @@ import com.runiverse.running_service.application.common.port.out.GenerateUploadU
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.application.common.port.out.LoadUploadedImagePort;
 import com.runiverse.running_service.application.common.port.out.UploadedImage;
-import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
-import com.runiverse.running_service.application.recordcard.port.out.StartMultipartUploadPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -20,20 +18,17 @@ import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
-import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImagePort, GenerateViewUrlPort,
-        DeleteImagesPort, StartMultipartUploadPort {
+        DeleteImagesPort {
 
     private final S3Presigner s3Presigner;
     private final S3Properties properties;
@@ -53,39 +48,6 @@ public class S3StorageAdapter implements GenerateUploadUrlPort, LoadUploadedImag
                 .putObjectRequest(putObjectRequest));
         return presignedRequest.url().toString();
 
-    }
-
-    @Override
-    public MultipartUpload start(String key, String contentType, long fileSizeBytes, long partSizeBytes,
-                                 Duration urlTtl) {
-        // 1. 나눠 올리기를 시작한다 — 조각에는 Content-Type이 없어 합친 사진의 형식은 여기서 정해진다
-        String uploadId = s3Client.createMultipartUpload(request -> request
-                        .bucket(properties.userAssetBucket())
-                        .key(key)
-                        .contentType(contentType))
-                .uploadId();
-
-        // 2. 조각마다 URL을 서명한다 — 크기를 서명에 넣어 앱이 다르게 자르면 S3가 거절한다. 마지막 조각만 작다
-        int partCount = Math.toIntExact(Math.ceilDiv(fileSizeBytes, partSizeBytes));
-        List<MultipartUpload.Part> parts = new ArrayList<>(partCount);
-        for (int partNumber = 1; partNumber <= partCount; partNumber++) {
-            long offset = (partNumber - 1) * partSizeBytes;
-            long contentLength = Math.min(partSizeBytes, fileSizeBytes - offset);
-            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
-                    .bucket(properties.userAssetBucket())
-                    .key(key)
-                    .uploadId(uploadId)
-                    .partNumber(partNumber)
-                    .contentLength(contentLength)
-                    .build();
-            String url = s3Presigner.presignUploadPart(builder -> builder
-                            .signatureDuration(urlTtl)
-                            .uploadPartRequest(uploadPartRequest))
-                    .url()
-                    .toString();
-            parts.add(new MultipartUpload.Part(partNumber, url));
-        }
-        return new MultipartUpload(uploadId, parts);
     }
 
     @Override
