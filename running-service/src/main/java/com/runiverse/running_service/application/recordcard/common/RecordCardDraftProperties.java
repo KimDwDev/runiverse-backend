@@ -14,8 +14,7 @@ public record RecordCardDraftProperties(
         // 초안 유효 시간 — 이 안에 9-2로 확정해야 한다. 조각 URL도 같은 시간을 준다(큰 파일은 모바일에서 오래 걸린다).
         // 한 번에 올리는 URL은 이보다 짧은 storage.s3.presigned-url-ttl을 따른다
         @NotNull Duration ttl,
-        // 사진 한 장의 최대 크기 — 넘으면 9-1이 400으로 거절한다.
-        // 응답 문구(api-spec 9-1 "이미지는 100MB 이하만…")에 이 값이 박혀 있어 바꾸면 문구·명세도 함께 고친다
+        // 사진 한 장의 최대 크기 — 넘으면 9-1이 400으로 거절한다. 응답 문구는 이 값으로 만든다
         @NotNull DataSize maxImageSize,
         // 이 크기 이하는 URL 하나로 한 번에 올리고, 넘으면 이 크기씩 조각으로 나눠 올린다 — 마지막 조각만 이보다 작다
         @NotNull DataSize partSize
