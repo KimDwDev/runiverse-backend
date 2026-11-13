@@ -480,7 +480,7 @@
 > CHECK `ck_record_card_activity_type`: `activity_type in ('DAILY', 'TRAVEL', 'RACE')`
 > CHECK `ck_record_card_memo_length`: `char_length(memo) between 1 and 500`
 > CHECK `ck_record_card_display_order`: `display_order >= 1`
-> UNIQUE `uk_record_card_user_display_order`: `(user_id, display_order)` — 한 사람의 카드끼리 순위가 겹치지 않는다. 같은 사람이 다른 기록 둘로 동시에 만들어 최댓값을 같이 읽으면 하나가 이 제약에 걸린다 — 유스케이스가 순위를 다시 읽어 한 번 더 시도한다. 목록 조회(10-3) 인덱스를 겸한다
+> UNIQUE `uk_record_card_user_display_order`: `(user_id, display_order)` — 한 사람의 카드끼리 순위가 겹치지 않는다. 같은 사람이 다른 기록 둘로 동시에 만들어 최댓값을 같이 읽으면 하나가 이 제약에 걸린다 — 걸린 쪽은 다시 시도하지 않고 409로 돌려보낸다(api-spec 9-2). 기록 행 잠금은 같은 기록끼리만 줄을 세운다. 목록 조회(10-3) 인덱스를 겸한다
 > **썸네일은 앱이 맞춘다** — `thumbnail_image_key`가 이 카드 사진 중 하나라는 것, 사진이 있으면 null이 아니라는 것은 스키마가 강제하지 않는다. 썸네일 사진을 수정에서 빼면 남은 첫 사진(없으면 null)으로 바꾼다
 > **`running_records`는 write-once라 카드가 기록을 고치지 않는다** — 거리·시간·경로·시작 시각은 조회할 때 기록에서 읽어 붙인다(목록 10-3도 기록을 JOIN한다). 카드에 수치를 복사해 두지 않는다.
 
