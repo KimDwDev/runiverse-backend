@@ -61,7 +61,7 @@ class CreateRecordCardDraftIntegrationTest {
                 new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10),
                         Duration.ofSeconds(30)),
                 recordCardStore,    // ExistsOwnRunningRecordPort
-                recordCardStore,    // ExistsRecordCardByRunningRecordPort
+                recordCardStore,    // FindRecordCardIdByRunningRecordPort
                 draftIds,           // GenerateRecordCardDraftIdPort
                 cardIds,            // GenerateRecordCardIdPort
                 imageIds,           // GenerateImageIdPort
@@ -138,7 +138,7 @@ class CreateRecordCardDraftIntegrationTest {
     @DisplayName("이 기록에 카드가 있으면 409이고, 업로드 URL도 초안도 남기지 않는다")
     void rejectLiveCard() {
         // given
-        recordCardStore.addCard(RECORD_ID);
+        recordCardStore.addCard(RECORD_ID, UuidCreator.getTimeOrderedEpoch());
 
         // when & then
         assertThatThrownBy(() -> handler.handle(commandFor(RECORD_ID)))

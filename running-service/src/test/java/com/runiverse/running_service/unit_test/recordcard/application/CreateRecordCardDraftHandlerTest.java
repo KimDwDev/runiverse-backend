@@ -10,7 +10,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
@@ -23,6 +23,7 @@ import com.runiverse.running_service.application.recordcard.port.out.StartMultip
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +37,7 @@ import org.springframework.util.unit.DataSize;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,7 +70,7 @@ class CreateRecordCardDraftHandlerTest {
     @Mock
     private ExistsOwnRunningRecordPort existsOwnRunningRecordPort;
     @Mock
-    private ExistsRecordCardByRunningRecordPort existsRecordCardByRunningRecordPort;
+    private FindRecordCardIdByRunningRecordPort findRecordCardIdByRunningRecordPort;
     @Mock
     private GenerateRecordCardDraftIdPort generateRecordCardDraftIdPort;
     @Mock
@@ -89,7 +91,7 @@ class CreateRecordCardDraftHandlerTest {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(
                 TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         handler = new CreateRecordCardDraftHandler(properties, existsOwnRunningRecordPort,
-                existsRecordCardByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
+                findRecordCardIdByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
@@ -261,7 +263,7 @@ class CreateRecordCardDraftHandlerTest {
                 new CreateRecordCardDraftCommand.Image("image/jpeg", MAX_SIZE + 1, "IMG_0001.jpg", null)), null)))
                 .isInstanceOf(RecordCardImageTooLargeException.class)
                 .hasMessage("이미지는 100MB 이하만 업로드할 수 있습니다.");
-        verifyNoInteractions(existsOwnRunningRecordPort, existsRecordCardByRunningRecordPort,
+        verifyNoInteractions(existsOwnRunningRecordPort, findRecordCardIdByRunningRecordPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
@@ -293,7 +295,7 @@ class CreateRecordCardDraftHandlerTest {
         assertThatThrownBy(() -> handler.handle(command(
                 List.of(new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, "IMG_0001.jpg", null)), null)))
                 .isInstanceOf(RunningRecordNotFoundException.class);
-        verifyNoInteractions(existsRecordCardByRunningRecordPort, generateImageIdPort, generateUploadUrlPort,
+        verifyNoInteractions(findRecordCardIdByRunningRecordPort, generateImageIdPort, generateUploadUrlPort,
                 startMultipartUploadPort, saveRecordCardDraftPort);
     }
 
@@ -303,8 +305,8 @@ class CreateRecordCardDraftHandlerTest {
         // given
         when(existsOwnRunningRecordPort.existsOwnedBy(new RunningRecordId(RUNNING_RECORD_ID), new UserId(USER_ID)))
                 .thenReturn(true);
-        when(existsRecordCardByRunningRecordPort.existsByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
-                .thenReturn(true);
+        when(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
+                .thenReturn(Optional.of(new RecordCardId(CARD_ID)));
 
         // when & then
         assertThatThrownBy(() -> handler.handle(command(
@@ -317,8 +319,8 @@ class CreateRecordCardDraftHandlerTest {
     private void givenOwnRecordWithoutCard() {
         when(existsOwnRunningRecordPort.existsOwnedBy(new RunningRecordId(RUNNING_RECORD_ID), new UserId(USER_ID)))
                 .thenReturn(true);
-        when(existsRecordCardByRunningRecordPort.existsByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
-                .thenReturn(false);
+        when(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(new RunningRecordId(RUNNING_RECORD_ID)))
+                .thenReturn(Optional.empty());
         when(generateRecordCardIdPort.generate()).thenReturn(CARD_ID);
         when(generateRecordCardDraftIdPort.generate()).thenReturn(DRAFT_ID);
     }

@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.persistence.recordcard;
 
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.infrastructure.persistence.recordcard.RecordCardPersistenceAdapter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -11,6 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.UUID;
+import java.util.stream.Stream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -20,44 +24,45 @@ import static org.mockito.Mockito.verify;
 
 // EntityManager를 목으로 대체하므로 파라미터 묶기·결과 해석만 검증한다 — JPQL은 E2E가 실제 DB로 확인한다
 @ExtendWith(MockitoExtension.class)
-@DisplayName("기록에 카드가 있는지 어댑터 단위 테스트")
-class RecordCardExistsByRunningRecordTest {
+@DisplayName("기록으로 카드 ID 찾기 어댑터 단위 테스트")
+class RecordCardFindIdByRunningRecordTest {
 
     private static final long RECORD_ID = 501L;
+    private static final UUID CARD_ID = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
 
     @Mock
     private EntityManager entityManager;
 
     @Mock
-    private TypedQuery<Long> query;
+    private TypedQuery<UUID> query;
 
     @InjectMocks
     private RecordCardPersistenceAdapter adapter;
 
     @Test
-    @DisplayName("기록 ID로 세어 한 건이라도 있으면 참이다")
-    void existsWhenCounted() {
+    @DisplayName("카드가 있으면 그 카드 ID를 돌려준다")
+    void foundCardId() {
         // given
-        givenCount(1L);
+        givenRows(Stream.of(CARD_ID));
 
         // when & then
-        assertThat(adapter.existsByRunningRecord(new RunningRecordId(RECORD_ID))).isTrue();
+        assertThat(adapter.findIdByRunningRecord(new RunningRecordId(RECORD_ID))).contains(new RecordCardId(CARD_ID));
         verify(query).setParameter("runningRecordId", RECORD_ID);
     }
 
     @Test
-    @DisplayName("카드가 없으면 거짓이다 — 지운 카드도 행이 없다")
-    void notExistsWhenZero() {
+    @DisplayName("카드가 없으면 비어 있다 — 지운 카드도 행이 없다")
+    void noCard() {
         // given
-        givenCount(0L);
+        givenRows(Stream.empty());
 
         // when & then
-        assertThat(adapter.existsByRunningRecord(new RunningRecordId(RECORD_ID))).isFalse();
+        assertThat(adapter.findIdByRunningRecord(new RunningRecordId(RECORD_ID))).isEmpty();
     }
 
-    private void givenCount(long count) {
-        given(entityManager.createQuery(anyString(), eq(Long.class))).willReturn(query);
+    private void givenRows(Stream<UUID> rows) {
+        given(entityManager.createQuery(anyString(), eq(UUID.class))).willReturn(query);
         given(query.setParameter(anyString(), any())).willReturn(query);
-        given(query.getSingleResult()).willReturn(count);
+        given(query.getResultStream()).willReturn(rows);
     }
 }

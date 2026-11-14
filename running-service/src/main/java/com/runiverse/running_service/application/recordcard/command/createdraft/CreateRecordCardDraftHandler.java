@@ -10,7 +10,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardDraftIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardIdPort;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardUploadUrlPort;
@@ -43,7 +43,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
 
     private final RecordCardDraftProperties properties;
     private final ExistsOwnRunningRecordPort existsOwnRunningRecordPort;
-    private final ExistsRecordCardByRunningRecordPort existsRecordCardByRunningRecordPort;
+    private final FindRecordCardIdByRunningRecordPort findRecordCardIdByRunningRecordPort;
     private final GenerateRecordCardDraftIdPort generateRecordCardDraftIdPort;
     private final GenerateRecordCardIdPort generateRecordCardIdPort;
     private final GenerateImageIdPort generateImageIdPort;
@@ -66,7 +66,7 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
 
         // 3. 이 기록에 카드가 있으면 409 — 사진을 올리기 전에 막는다. 최종 판정은 확정(9-2)이 잠금 안에서 다시 한다.
         //    카드 ID는 지금 정한다 — 사진 key의 카드 폴더라 업로드 URL보다 먼저 있어야 한다
-        if (existsRecordCardByRunningRecordPort.existsByRunningRecord(runningRecordId)) {
+        if (findRecordCardIdByRunningRecordPort.findIdByRunningRecord(runningRecordId).isPresent()) {
             throw new RecordCardAlreadyExistsException();
         }
         UUID recordCardId = generateRecordCardIdPort.generate();

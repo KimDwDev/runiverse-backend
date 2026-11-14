@@ -1,25 +1,25 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
-import com.runiverse.running_service.application.recordcard.port.out.ExistsRecordCardByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 
 // 카드를 붙일 기록과 그 기록의 카드 — 기록 주인·숨긴 방과 카드가 있는지만 흉내 낸다
-public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, ExistsRecordCardByRunningRecordPort {
+public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, FindRecordCardIdByRunningRecordPort {
 
     private record StoredRecord(UUID userId, boolean roomHidden) {
 
     }
 
     private final Map<Long, StoredRecord> records = new HashMap<>();
-    private final Set<Long> recordsWithCard = new HashSet<>();
+    private final Map<Long, UUID> cardIdsByRecord = new HashMap<>();
 
     @Override
     public boolean existsOwnedBy(RunningRecordId runningRecordId, UserId userId) {
@@ -28,8 +28,8 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Exis
     }
 
     @Override
-    public boolean existsByRunningRecord(RunningRecordId runningRecordId) {
-        return recordsWithCard.contains(runningRecordId.value());
+    public Optional<RecordCardId> findIdByRunningRecord(RunningRecordId runningRecordId) {
+        return Optional.ofNullable(cardIdsByRecord.get(runningRecordId.value())).map(RecordCardId::new);
     }
 
     // 아래는 준비 전용
@@ -41,7 +41,7 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Exis
         records.put(runningRecordId, new StoredRecord(userId, true));
     }
 
-    public void addCard(long runningRecordId) {
-        recordsWithCard.add(runningRecordId);
+    public void addCard(long runningRecordId, UUID recordCardId) {
+        cardIdsByRecord.put(runningRecordId, recordCardId);
     }
 }
