@@ -17,7 +17,10 @@ public record RecordCardDraftProperties(
         // 사진 한 장의 최대 크기 — 넘으면 9-1이 400으로 거절한다. 응답 문구는 이 값으로 만든다
         @NotNull DataSize maxImageSize,
         // 이 크기 이하는 URL 하나로 한 번에 올리고, 넘으면 이 크기씩 조각으로 나눠 올린다 — 마지막 조각만 이보다 작다
-        @NotNull DataSize partSize
+        @NotNull DataSize partSize,
+        // 같은 초안의 확정을 하나만 처리하는 잠금의 유효 시간 — 확정 처리(S3 확인·합치기, DB 저장)보다 길어야 한다.
+        // 지나면 저절로 풀려, 잡은 서버가 죽어도 잠금이 남지 않는다
+        @NotNull Duration lockTtl
 ) {
 
     // S3는 마지막을 뺀 조각이 5MiB보다 작으면 합치기(CompleteMultipartUpload)를 거절한다
@@ -29,6 +32,11 @@ public record RecordCardDraftProperties(
     @AssertTrue(message = "초안 유효 시간은 0보다 커야 한다")
     public boolean isTtlPositive() {
         return ttl == null || ttl.isPositive();
+    }
+
+    @AssertTrue(message = "확정 잠금 유효 시간은 0보다 커야 한다")
+    public boolean isLockTtlPositive() {
+        return lockTtl == null || lockTtl.isPositive();
     }
 
     // 확정 때 S3가 거절하면 사용자가 사진을 다 올린 뒤라 — 기동 때 막는다

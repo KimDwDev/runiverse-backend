@@ -58,7 +58,8 @@ class CreateRecordCardDraftIntegrationTest {
         uploadUrls = new FakeUploadUrlGenerator();
         multipartUploads = new FakeMultipartUploadStarter();
         handler = new CreateRecordCardDraftHandler(
-                new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10)),
+                new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10),
+                        Duration.ofSeconds(30)),
                 recordCardStore,    // ExistsOwnRunningRecordPort
                 recordCardStore,    // ExistsRecordCardByRunningRecordPort
                 draftIds,           // GenerateRecordCardDraftIdPort

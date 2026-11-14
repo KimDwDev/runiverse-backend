@@ -87,7 +87,7 @@ class CreateRecordCardDraftHandlerTest {
     @BeforeEach
     void setUp() {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(
-                TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10));
+                TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         handler = new CreateRecordCardDraftHandler(properties, existsOwnRunningRecordPort,
                 existsRecordCardByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
