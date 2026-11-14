@@ -12,8 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,7 +43,7 @@ class RecordCardFindIdByRunningRecordTest {
     @DisplayName("카드가 있으면 그 카드 ID를 돌려준다")
     void foundCardId() {
         // given
-        givenRows(Stream.of(CARD_ID));
+        givenRows(List.of(CARD_ID));
 
         // when & then
         assertThat(adapter.findIdByRunningRecord(new RunningRecordId(RECORD_ID))).contains(new RecordCardId(CARD_ID));
@@ -54,15 +54,15 @@ class RecordCardFindIdByRunningRecordTest {
     @DisplayName("카드가 없으면 비어 있다 — 지운 카드도 행이 없다")
     void noCard() {
         // given
-        givenRows(Stream.empty());
+        givenRows(List.of());
 
         // when & then
         assertThat(adapter.findIdByRunningRecord(new RunningRecordId(RECORD_ID))).isEmpty();
     }
 
-    private void givenRows(Stream<UUID> rows) {
+    private void givenRows(List<UUID> rows) {
         given(entityManager.createQuery(anyString(), eq(UUID.class))).willReturn(query);
         given(query.setParameter(anyString(), any())).willReturn(query);
-        given(query.getResultStream()).willReturn(rows);
+        given(query.getResultList()).willReturn(rows);
     }
 }

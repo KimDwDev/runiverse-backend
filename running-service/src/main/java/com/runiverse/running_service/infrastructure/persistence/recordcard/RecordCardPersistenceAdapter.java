@@ -33,14 +33,15 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
 
     @Override
     public Optional<RecordCardId> findIdByRunningRecord(RunningRecordId runningRecordId) {
-        // uk_record_card_running_record(running_record_id)를 탄다 — 기록당 많아야 한 행이다. 엔티티 대신 ID만 읽는다
+        // uk_record_card_running_record(running_record_id)를 탄다 — 기록당 많아야 한 행이다. 엔티티 대신 ID만 읽는다.
+        // 작성 요청(9-1)은 트랜잭션 없이 부른다 — getResultStream()은 트랜잭션 밖에서 커서가 먼저 닫혀 쓰지 않는다
         return entityManager.createQuery("""
                         SELECT card.recordCardId
                         FROM RecordCardJpaEntity card
                         WHERE card.runningRecord.runningRecordId = :runningRecordId
                         """, UUID.class)
                 .setParameter("runningRecordId", runningRecordId.value())
-                .getResultStream()
+                .getResultList().stream()
                 .findFirst()
                 .map(RecordCardId::new);
     }
