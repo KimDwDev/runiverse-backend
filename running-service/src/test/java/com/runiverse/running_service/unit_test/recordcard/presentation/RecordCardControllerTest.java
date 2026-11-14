@@ -1,12 +1,18 @@
 package com.runiverse.running_service.unit_test.recordcard.presentation;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftCommand;
+import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftNotFoundException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardImageNotUploadedException;
+import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
@@ -65,11 +71,15 @@ class RecordCardControllerTest {
     @Mock
     private CreateRecordCardDraftUsecase createRecordCardDraftUsecase;
 
+    @Mock
+    private CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase))
+        mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
+                completeRecordCardDraftUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
@@ -217,6 +227,58 @@ class RecordCardControllerTest {
         assertThat(result.getResponse().getStatus()).isEqualTo(409);
         assertThat(body(result)).containsEntry("code", "RECORD_CARD_ALREADY_EXISTS")
                 .containsEntry("message", "이미 기록 카드가 있는 러닝입니다.");
+    }
+
+    @Test
+    @DisplayName("확정은 토큰 주인과 경로의 초안 ID로 넘기고, 201로 카드 ID만 내려 준다")
+    void completeDraft() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+        given(completeRecordCardDraftUsecase.handle(any())).willReturn(new CompleteRecordCardDraftResult(cardId));
+
+        // when
+        MvcResult result = mockMvc.perform(post("/record-cards/drafts/{id}/complete", DRAFT_ID)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(201);
+        verify(completeRecordCardDraftUsecase).handle(new CompleteRecordCardDraftCommand(USER_ID, DRAFT_ID));
+        assertThat(body(result)).isEqualTo(Map.of("recordCardId", cardId.toString()));
+    }
+
+    @Test
+    @DisplayName("초안 ID가 UUIDv7 형식이 아니면 400이고 유스케이스를 부르지 않는다")
+    void rejectMalformedDraftId() throws Exception {
+        // when
+        MvcResult result = mockMvc.perform(post("/record-cards/drafts/{id}/complete", "1-1-1-1-1")).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(result)).containsEntry("code", "INVALID_REQUEST");
+        verifyNoInteractions(completeRecordCardDraftUsecase);
+    }
+
+    @Test
+    @DisplayName("확정의 실패는 명세대로 404·409·400을 그대로 내려 준다")
+    void completeDraftErrors() throws Exception {
+        // given
+        given(completeRecordCardDraftUsecase.handle(any()))
+                .willThrow(new RecordCardDraftNotFoundException())
+                .willThrow(new RecordCardDraftInProgressException())
+                .willThrow(new RecordCardImageNotUploadedException());
+
+        // when & then
+        MvcResult notFound = mockMvc.perform(post("/record-cards/drafts/{id}/complete", DRAFT_ID)).andReturn();
+        assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult inProgress = mockMvc.perform(post("/record-cards/drafts/{id}/complete", DRAFT_ID)).andReturn();
+        assertThat(inProgress.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(inProgress)).containsEntry("code", "RECORD_CARD_DRAFT_IN_PROGRESS")
+                .containsEntry("message", "기록 카드를 저장하고 있습니다. 잠시 후 다시 시도해 주세요.");
+
+        MvcResult notUploaded = mockMvc.perform(post("/record-cards/drafts/{id}/complete", DRAFT_ID)).andReturn();
+        assertThat(notUploaded.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(notUploaded)).containsEntry("code", "RECORD_CARD_IMAGE_NOT_UPLOADED")
+                .containsEntry("message", "업로드되지 않은 이미지입니다.");
     }
 
     private MvcResult perform() throws Exception {
