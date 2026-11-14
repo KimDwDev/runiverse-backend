@@ -3,6 +3,7 @@ package com.runiverse.running_service.application.recordcard.port.out;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +27,20 @@ public record RecordCardDraft(
         images = List.copyOf(images);
     }
 
+    // 확정한 초안 — 저장이 끝났다는 표시만 바꾼다. 재시도가 이 표시를 보고 같은 카드를 돌려받는다
+    public RecordCardDraft confirm() {
+        return new RecordCardDraft(recordCardDraftId, type, recordCardId, userId, runningRecordId, activityType, memo,
+                visibility, images, thumbnailIndex, true);
+    }
+
+    // 사진 하나를 바꾼 초안 — 나눠 올린 사진을 합친 뒤 그 사진만 "합침"으로 바꿀 때 쓴다
+    public RecordCardDraft withImage(int index, DraftImage image) {
+        List<DraftImage> next = new ArrayList<>(images);
+        next.set(index, image);
+        return new RecordCardDraft(recordCardDraftId, type, recordCardId, userId, runningRecordId, activityType, memo,
+                visibility, next, thumbnailIndex, confirmed);
+    }
+
     // 올릴 사진 하나 — 확정 때 S3 실물을 여기 적힌 형식·크기와 대조한다
     public record DraftImage(
             UUID recordCardImageId,     // 이때 정한 사진 ID — 사진 key의 사진 폴더이고, 확정 때 이 값으로 저장한다
@@ -39,6 +54,11 @@ public record RecordCardDraft(
             boolean merged              // 조각을 합쳤는지 — 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
     ) {
 
+        // 조각을 합쳤다 — 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
+        public DraftImage merge() {
+            return new DraftImage(recordCardImageId, imageKey, contentType, fileSizeBytes, caption, uploadType,
+                    multipartUploadId, partCount, true);
+        }
     }
 
     // 수정(UPDATE)은 9-3을 만들 때 쓴다 — 그때 수정 당시 카드의 updated_at·남길 사진도 함께 둔다
