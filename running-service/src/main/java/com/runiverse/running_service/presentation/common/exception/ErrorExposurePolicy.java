@@ -75,7 +75,9 @@ public final class ErrorExposurePolicy {
             // 러닝이 시작돼 채팅이 닫혔다 — 가려지면 앱이 채팅 입력을 닫을지 가를 수 없다
             RoomChatErrorCode.ROOM_CHAT_CLOSED.getCode(),
             // 이 기록에 카드가 이미 있다 — 가려지면 앱이 작성 화면을 닫고 카드로 보낼지 가를 수 없다
-            RecordCardErrorCode.RECORD_CARD_ALREADY_EXISTS.getCode()
+            RecordCardErrorCode.RECORD_CARD_ALREADY_EXISTS.getCode(),
+            // 처리 중인 확정과 부딪혔다 — 가려지면 앱이 다시 부를지 가를 수 없다
+            RecordCardErrorCode.RECORD_CARD_DRAFT_IN_PROGRESS.getCode()
     );
 
     private ErrorExposurePolicy() {

@@ -130,6 +130,15 @@ public class ErrorExposurePolicyTest {
     }
 
     @Test
+    @DisplayName("처리 중인 확정과 부딪힌 기록 카드 확정은 409 그대로 노출한다")
+    void recordCardDraftInProgressIsExposed() {
+        // 가려지면 500으로 바뀌어, 클라가 잠시 뒤 다시 부를지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                RecordCardErrorCode.RECORD_CARD_DRAFT_IN_PROGRESS.getCode())).isTrue();
+    }
+
+    @Test
     @DisplayName("온보딩 미완료는 409 그대로 노출한다")
     void onboardingNotCompletedIsExposed() {
         // 러닝 시작·닉네임 변경이 공통으로 쓰는 코드 — 클라가 온보딩 화면으로 보내야 한다
