@@ -1,5 +1,7 @@
 package com.runiverse.running_service.unit_test.infrastructure.storage;
 
+import com.runiverse.running_service.application.common.port.out.UploadedImage;
+import com.runiverse.running_service.application.recordcard.port.out.CompleteMultipartUploadPort.MultipartCompletion;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.infrastructure.storage.S3Properties;
 import com.runiverse.running_service.infrastructure.storage.RecordCardS3Adapter;
@@ -11,9 +13,20 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.core.pagination.sync.SdkIterable;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListPartsRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.NoSuchUploadException;
+import software.amazon.awssdk.services.s3.model.Part;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.paginators.ListPartsIterable;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
@@ -26,8 +39,11 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 // 서명은 실제 presigner로 만들고(네트워크 없음), 서명에 넣은 요청은 가로채 크기를 본다 — URL에는 서명한 헤더 이름만 보인다
@@ -160,6 +176,118 @@ class RecordCardS3AdapterTest {
         assertThat(url).startsWith("https://%s.s3.%s.amazonaws.com/%s?".formatted(RECORD_CARD_BUCKET, REGION, KEY));
         assertThat(queryParam(url, "X-Amz-SignedHeaders")).contains("content-type").contains("content-length");
         assertThat(queryParam(url, "X-Amz-Expires")).isEqualTo(String.valueOf(URL_TTL.toSeconds()));
+    }
+
+    @Test
+    @DisplayName("HEAD로 기록 카드 버킷의 사진 크기·형식을 읽는다")
+    void loadImage() {
+        // given
+        List<HeadObjectRequest> heads = new ArrayList<>();
+        when(s3Client.headObject(any(Consumer.class))).thenAnswer(invocation -> {
+            HeadObjectRequest.Builder builder = HeadObjectRequest.builder();
+            ((Consumer<HeadObjectRequest.Builder>) invocation.getArgument(0)).accept(builder);
+            heads.add(builder.build());
+            return HeadObjectResponse.builder().contentLength(20_480L).contentType("image/jpeg").build();
+        });
+
+        // when & then
+        assertThat(adapter.load(KEY)).contains(new UploadedImage(20_480L, "image/jpeg"));
+        assertThat(heads.getFirst().bucket()).isEqualTo(RECORD_CARD_BUCKET);
+        assertThat(heads.getFirst().key()).isEqualTo(KEY);
+    }
+
+    @Test
+    @DisplayName("사진이 없으면 NoSuchKey든 404 상태든 비어 있고, 다른 S3 오류는 던진다")
+    void loadMissingImage() {
+        // given
+        when(s3Client.headObject(any(Consumer.class)))
+                .thenThrow(NoSuchKeyException.builder().build())
+                .thenThrow(S3Exception.builder().statusCode(404).build())
+                .thenThrow(S3Exception.builder().statusCode(403).build());
+
+        // when & then
+        assertThat(adapter.load(KEY)).isEmpty();
+        assertThat(adapter.load(KEY)).isEmpty();
+        assertThatThrownBy(() -> adapter.load(KEY)).isInstanceOf(S3Exception.class);
+    }
+
+    @Test
+    @DisplayName("조각이 다 있으면 번호순으로 ETag를 모아 합친다")
+    void completeWhenAllPartsUploaded() {
+        // given -> 목록이 번호순이 아니어도 합칠 때는 번호순이어야 한다
+        givenParts(List.of(part(2, "e2"), part(1, "e1"), part(3, "e3")));
+        List<CompleteMultipartUploadRequest> completes = new ArrayList<>();
+        when(s3Client.completeMultipartUpload(any(Consumer.class))).thenAnswer(invocation -> {
+            CompleteMultipartUploadRequest.Builder builder = CompleteMultipartUploadRequest.builder();
+            ((Consumer<CompleteMultipartUploadRequest.Builder>) invocation.getArgument(0)).accept(builder);
+            completes.add(builder.build());
+            return null;
+        });
+
+        // when
+        MultipartCompletion result = adapter.complete(KEY, "s3-upload-id", 3);
+
+        // then
+        assertThat(result).isEqualTo(MultipartCompletion.COMPLETED);
+        CompleteMultipartUploadRequest complete = completes.getFirst();
+        assertThat(complete.bucket()).isEqualTo(RECORD_CARD_BUCKET);
+        assertThat(complete.key()).isEqualTo(KEY);
+        assertThat(complete.uploadId()).isEqualTo("s3-upload-id");
+        assertThat(complete.multipartUpload().parts())
+                .extracting(CompletedPart::partNumber, CompletedPart::eTag)
+                .containsExactly(org.assertj.core.api.Assertions.tuple(1, "e1"),
+                        org.assertj.core.api.Assertions.tuple(2, "e2"),
+                        org.assertj.core.api.Assertions.tuple(3, "e3"));
+    }
+
+    @Test
+    @DisplayName("조각이 덜 올라왔으면 합치지 않고 빠졌다고 알린다")
+    void partsMissing() {
+        // given
+        givenParts(List.of(part(1, "e1")));
+
+        // when & then
+        assertThat(adapter.complete(KEY, "s3-upload-id", 3)).isEqualTo(MultipartCompletion.PARTS_MISSING);
+        verify(s3Client, never()).completeMultipartUpload(any(Consumer.class));
+    }
+
+    @Test
+    @DisplayName("UploadId가 S3에 없으면(이미 합쳤거나 정리됐다) 그렇다고 알린다 — HEAD로 가를 몫이다")
+    void uploadNotFound() {
+        // given
+        when(s3Client.listPartsPaginator(any(Consumer.class))).thenThrow(NoSuchUploadException.builder().build());
+
+        // when & then
+        assertThat(adapter.complete(KEY, "s3-upload-id", 3)).isEqualTo(MultipartCompletion.UPLOAD_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("조각을 확인한 뒤 합치는 사이 다른 요청이 먼저 합쳤어도 같은 결과다")
+    void uploadGoneBetweenListAndComplete() {
+        // given
+        givenParts(List.of(part(1, "e1")));
+        when(s3Client.completeMultipartUpload(any(Consumer.class))).thenThrow(NoSuchUploadException.builder().build());
+
+        // when & then
+        assertThat(adapter.complete(KEY, "s3-upload-id", 1)).isEqualTo(MultipartCompletion.UPLOAD_NOT_FOUND);
+    }
+
+    private void givenParts(List<Part> parts) {
+        ListPartsIterable iterable = mock(ListPartsIterable.class);
+        SdkIterable<Part> partIterable = parts::iterator;
+        when(iterable.parts()).thenReturn(partIterable);
+        when(s3Client.listPartsPaginator(any(Consumer.class))).thenAnswer(invocation -> {
+            ListPartsRequest.Builder builder = ListPartsRequest.builder();
+            ((Consumer<ListPartsRequest.Builder>) invocation.getArgument(0)).accept(builder);
+            ListPartsRequest request = builder.build();
+            assertThat(request.bucket()).isEqualTo(RECORD_CARD_BUCKET);
+            assertThat(request.uploadId()).isEqualTo("s3-upload-id");
+            return iterable;
+        });
+    }
+
+    private static Part part(int number, String eTag) {
+        return Part.builder().partNumber(number).eTag(eTag).build();
     }
 
     private static String queryParam(String url, String name) {
