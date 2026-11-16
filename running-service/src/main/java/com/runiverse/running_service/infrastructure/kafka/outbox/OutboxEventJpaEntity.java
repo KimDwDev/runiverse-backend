@@ -1,4 +1,4 @@
-package com.runiverse.running_service.infrastructure.persistence.messaging;
+package com.runiverse.running_service.infrastructure.kafka.outbox;
 
 import com.runiverse.running_service.infrastructure.persistence.common.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
