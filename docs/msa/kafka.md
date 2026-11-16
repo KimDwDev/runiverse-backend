@@ -182,8 +182,9 @@ running-service에는 아직 Kafka 클라이언트가 없다 — 요청은 Debez
 
 - [ ] 계정 `{env}.debezium` (SCRAM-SHA-512)
 - [ ] 요청 토픽 `WRITE` `DESCRIBE`를 `{env}.debezium`에 주고, `{env}.running-service`에서 뺀다
-- [ ] Kafka Connect 내부 토픽 3개(설정·오프셋·상태) — 관리자가 미리 만든다(자동 생성이 꺼져 있다). **`cleanup.policy=compact`**, 복제 계수 1, 설정 토픽은 파티션 1개
-- [ ] Connect 워커 그룹과 내부 토픽 권한
+- [ ] Kafka Connect 내부 토픽 3개(설정·오프셋·상태) — 관리자가 미리 만든다(자동 생성이 꺼져 있다). **`cleanup.policy=compact`**, 복제 계수 1, 설정 토픽은 파티션 1개. **환경마다 따로, 이름은 `{env}.`로 시작**
+- [ ] Connect 워커 그룹(환경마다 따로)과 내부 토픽 권한
+- [ ] Debezium heartbeat 토픽 — 미리 만들고 `{env}.debezium`에 `WRITE` ([cdc.md](cdc.md) 「Debezium 설정에서 정할 것」)
 - [ ] Connect가 도는 곳에 CA 인증서
 - [ ] 중복 방지(`enable.idempotence=true`)를 켠 채로 발행되는지 확인 — 지금까지 송수신 검증은 끄고 했다. Connect 워커 설정에 `producer.enable.idempotence=true`로 명시해 기본값에 기대지 않는다
 

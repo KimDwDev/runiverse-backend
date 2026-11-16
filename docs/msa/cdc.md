@@ -1,0 +1,145 @@
+# CDC — 아웃박스 행을 Kafka로
+
+커밋된 `outbox_events` 행을 Debezium이 Postgres WAL에서 읽어 Kafka에 발행하는 경로의 **지금 상태, 설계, 준비할 것**을 적는다. 설치 명령은 적지 않는다.
+
+| 무엇 | 어디 |
+|---|---|
+| 아웃박스 테이블 (정본) | [erd.md](../erd.md) `outbox_events` |
+| 아웃박스를 쓰는 코드 규칙 | [outbox-inbox.md](outbox-inbox.md) |
+| 발행되는 이벤트 계약 (헤더·key·본문) | [api-spec.md](../api-spec.md) 9-5 |
+| Kafka 클러스터·계정·권한 | [kafka.md](kafka.md) |
+
+## 지금 상태
+
+| 항목 | 상태 |
+|---|---|
+| 아웃박스 행 쓰기 | **됨** — 9-2 작성 확정 트랜잭션에서 쓴다 |
+| 요청 토픽 | 있음 (`test`·`dev` 공유 클러스터, `prod` 운영 클러스터) |
+| Kafka 계정 `{env}.debezium` | 없음 |
+| Postgres 논리 복제 (`rds.logical_replication`) | **꺼짐** — 세 DB 모두 |
+| Kafka Connect · Debezium | 없음 |
+
+- **지금은 아웃박스 행이 쌓이기만 하고 아무도 보내지 않는다.** 아웃박스 코드가 CDC보다 먼저 배포되면 그동안 만든 카드의 음악은 `GENERATING`에 머문다 — 커넥터를 처음 붙일 때 그 행을 보낼지 정한다(「정하지 않은 것」 2).
+
+## 구조
+
+```text
+running-service ──INSERT──▶ RDS Postgres
+                             outbox_events ─ WAL ─▶ 복제 슬롯 ─▶ Kafka Connect
+                             (publication: outbox_events만)        └ Debezium Postgres 커넥터
+                                                                     └ Outbox Event Router
+                                                                            │ SASL_SSL ({env}.debezium)
+                                                                            ▼
+                                                              {env}.record-card.music.requested
+```
+
+- **환경마다 경로가 하나씩 따로다** — DB 하나에 커넥터 하나, 슬롯 하나. 커넥터 하나가 여러 환경의 DB를 읽지 않는다.
+- **전달은 최소 한 번이다** — Connect는 어디까지 보냈는지를 주기적으로 기록하고, 그 뒤에야 슬롯 위치를 앞으로 민다. 재시작하면 마지막 기록 뒤의 행을 다시 보낸다. 받는 쪽 inbox가 거른다([outbox-inbox.md](outbox-inbox.md)).
+
+### 환경
+
+DB는 세 환경이 모두 다르다.
+
+| 환경 | DB | Kafka | Connect |
+|---|---|---|---|
+| `dev` | 로컬 Postgres | 공유 클러스터 — **로컬에서 붙을 수 없다** (아래) | 정할 것 |
+| `test` | test RDS | 공유 클러스터 (`test.*`) | 정할 것 |
+| `prod` | prod RDS | 운영 클러스터 | 정할 것 |
+
+- **로컬 dev는 공유 클러스터에 발행할 수 없다** — 브로커는 VPC 안 주소로만 접속을 받고 인증서도 그 주소로 발급됐다([kafka.md](kafka.md) 「TLS」). VPC 안의 Connect는 로컬 Postgres에 닿지 않는다. 로컬에서 CDC까지 확인하려면 Postgres·Kafka·Connect를 로컬 Docker로 함께 띄운다(`infra/kafka/`). 공유 클러스터의 `dev.*` 토픽·계정을 무엇에 쓸지도 함께 정한다(「정하지 않은 것」 5).
+
+## Postgres 쪽
+
+### 논리 복제 켜기 (RDS)
+
+- **`rds.logical_replication=1`은 재부팅해야 적용된다** — 기본 파라미터 그룹은 고칠 수 없어, 쓰는 파라미터 그룹이 기본이면 사용자 정의 그룹을 만들어 바꿔 끼우고 이것도 재부팅이 필요하다. **prod는 점검 시간을 잡는다.**
+- 로컬 Postgres는 `wal_level=logical`로 띄운다.
+
+### 커넥터 전용 DB 계정
+
+- **슈퍼유저를 주지 않는다** — RDS의 복제 역할(`rds_replication`)과 `outbox_events` 조회 권한만 준다. 앱 계정(`DATABASE_USERNAME`)을 같이 쓰지 않는다.
+- 비밀번호는 SSM에 둔다.
+
+### publication — `outbox_events`만
+
+- **publication은 관리자가 `outbox_events` 하나만 담아 미리 만든다.** 커넥터가 스스로 만들지 않게 한다(`publication.autocreate.mode=disabled`) — 커넥터 계정에 테이블 소유권을 주지 않아도 되고, 다른 테이블(사용자 정보·위치)의 변경이 커넥터로 나가지 않는다.
+- 새 이벤트를 더해도 테이블은 같아 publication을 바꿀 일이 없다. heartbeat 테이블을 두면 그것도 담는다(아래).
+
+### 복제 슬롯 — 가장 조심할 것
+
+- **슬롯은 커넥터가 확인한 위치 뒤의 WAL을 지우지 못하게 붙잡는다.** 커넥터가 멈추거나 Kafka가 내려가면 그동안 WAL이 쌓여 **RDS 디스크가 차고, 차면 DB 전체가 멈춘다** — 음악 기능이 아니라 서비스 전체 장애다.
+- **커넥터가 정상이어도 WAL이 쌓일 수 있다** — 슬롯 위치는 publication에 든 테이블의 변경이 있어야 앞으로 간다. 기록 카드를 아무도 만들지 않는 동안 다른 테이블(러닝 기록 등)의 쓰기와 RDS 자체 쓰기로 WAL은 계속 늘지만 슬롯은 제자리다. **heartbeat로 주기적으로 publication 안 테이블에 써서 슬롯을 민다**(`heartbeat.interval.ms` + `heartbeat.action.query`) — 이 쿼리가 쓸 테이블이 필요하다(「정하지 않은 것」 3).
+- **막는 장치는 두 겹이다**
+  - 상한: `max_slot_wal_keep_size` — 넘으면 Postgres가 슬롯을 버리고 WAL을 지운다. 디스크는 지키지만 그 슬롯은 못 쓰게 되어 커넥터를 다시 만들어야 한다. 버려진 구간의 이벤트는 아웃박스 행으로 남아 있다(다시 보내는 절차는 아직 없다).
+  - 알람: 슬롯 지연(WAL 보유량)과 디스크 여유를 본다. 상한에 닿기 전에 알아야 한다.
+- **커넥터를 영구히 내리면 슬롯을 지운다** — 남은 슬롯은 아무도 읽지 않는데 WAL을 계속 붙잡는다. 환경을 정리할 때 체크리스트에 넣는다.
+- 슬롯 이름은 환경마다 고정한다(`slot.name`) — 커넥터를 다시 만들어도 같은 슬롯을 이어 쓴다.
+
+## Debezium 설정에서 정할 것
+
+이벤트 계약(9-5)이 이 설정으로 결정된다 — 바꾸면 받는 쪽이 깨진다.
+
+| 아웃박스 컬럼 | Kafka 메시지 | 설정 |
+|---|---|---|
+| `outbox_event_id` | 헤더 `id` | `table.field.event.id=outbox_event_id` |
+| `aggregate_id` | key | `table.field.event.key=aggregate_id` |
+| `topic` | 토픽 | `route.by.field=topic`, `route.topic.replacement=${routedByValue}` — 기본값은 앞에 `outbox.event.`을 붙이므로 꼭 바꾼다 |
+| `payload` | value | `table.field.event.payload=payload` |
+
+- **key·value는 문자열 그대로 내보낸다** (제안: `key.converter`·`value.converter`를 `StringConverter`로)
+  - key — JSON 변환기를 쓰면 `"..."`처럼 따옴표가 붙은 값이 나가 AI 서버가 보내는 key(따옴표 없는 카드 ID)와 달라진다.
+  - value — `jsonb`는 Debezium에서 문자열로 읽힌다. JSON 변환기를 쓰면 문자열로 한 번 더 감싸져(`"{\"user_id\":...}"`) 계약과 달라진다. 펼치는 설정(`table.expand.json.payload`)은 **`null` 필드를 기본으로 빼 버려** "값이 없어도 키를 `null`로 둔다"는 규칙과 맞지 않는다. 문자열 변환기는 DB에 저장된 JSON 텍스트를 그대로 보낸다.
+  - `jsonb`는 저장할 때 키 순서를 바꾼다 — 받는 쪽은 키 순서에 기대지 않는다.
+- **커넥터는 `outbox_events`만 읽는다** (`table.include.list`), **라우터는 아웃박스 메시지에만 적용한다** — heartbeat 메시지가 라우터를 지나지 않게 한다.
+- **`tombstones.on.delete=false`** — 지난 행을 지우게 되면 삭제가 Kafka로 나가지 않아야 한다(정리 방식을 정할 때 함께 검증).
+- **heartbeat는 Kafka 토픽에도 메시지를 쓴다** — 토픽 자동 생성이 꺼져 있어 관리자가 미리 만들고 `{env}.debezium`에 쓰기 권한을 준다. 이름이 `{env}.`로 시작하도록 접두어를 정한다([kafka.md](kafka.md)).
+- **스냅샷** — 처음 붙을 때 이미 있는 행을 읽을지(`snapshot.mode`). 「정하지 않은 것」 2.
+- 프로듀서 중복 방지를 명시한다([kafka.md](kafka.md) 「보내는 쪽은 중복 방지를 켠다」).
+
+## Kafka Connect
+
+### 어디서 돌리든 필요한 것
+
+- RDS 5432와 Kafka 9092에 닿는 네트워크(보안 그룹). Kafka에는 **인증서 SAN과 같은 VPC 안 주소**로 붙는다.
+- 그 환경 클러스터의 CA 인증서 — test와 prod의 CA가 다르다.
+- 시크릿 두 개: DB 계정 비밀번호, `{env}.debezium` 비밀번호.
+- 환경마다 따로인 Connect 그룹·내부 토픽 3개 — 이름은 `{env}.`로 시작한다(test·dev가 한 클러스터를 같이 쓴다).
+
+### 주의
+
+- **REST API(기본 8083)는 인증이 없다** — 이 API로 커넥터를 만들고 설정을 읽을 수 있다. 외부에 열지 않는다(루프백 또는 보안 그룹으로 막는다).
+- **커넥터 설정은 Connect 설정 토픽에 평문으로 저장된다** — 비밀번호를 커넥터 설정에 직접 넣지 않고, 워커의 config provider(파일·환경 변수)로 실행할 때 읽게 한다. REST API로 설정을 조회해도 비밀번호가 보이지 않는다.
+- 커넥터 설정 JSON은 `infra/kafka/`에 둔다 — 비밀번호 자리는 provider 참조만 남는다.
+
+## 검증 — 테스트가 못 보는 것
+
+E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확인한다.
+
+- [ ] 카드를 하나 만들면 요청 토픽에 메시지가 **하나** 나간다
+- [ ] 헤더 `id`가 `outbox_event_id`와 같다
+- [ ] key가 따옴표 없는 카드 ID다
+- [ ] value가 `payload` JSON 그대로다 — 문자열로 감싸지지 않고, `null` 필드가 남아 있다
+- [ ] 토픽이 `outbox_events.topic` 값 그대로다(`outbox.event.` 접두어 없음)
+- [ ] 커넥터를 재시작해도 이벤트가 빠지지 않는다(중복은 허용)
+- [ ] 카드를 만들지 않고 두어도 슬롯 지연이 늘지 않는다(heartbeat)
+- [ ] AI 서버 계정으로 읽힌다
+
+## 준비 순서
+
+1. **RDS** — 사용자 정의 파라미터 그룹 + `rds.logical_replication=1` + 재부팅 → `max_slot_wal_keep_size` → 커넥터 DB 계정 → publication(+ heartbeat 테이블)
+2. **Kafka** — [kafka.md](kafka.md) 「Debezium을 붙일 때 Kafka에 더할 것」
+3. **Connect** — 띄우고, CA 인증서·시크릿을 넣고, REST API를 막는다
+4. **커넥터 등록** — `infra/kafka/`의 설정으로
+5. **검증** — 위 체크리스트
+6. **알람** — 슬롯 지연·디스크 여유
+7. test에서 끝난 뒤 prod에 같은 순서로 (prod는 재부팅 점검 시간)
+
+## 정하지 않은 것
+
+1. **Connect를 어디서 돌릴지** — Kafka EC2에 같이(네트워크는 단순하지만 노드 하나에 장애가 몰린다), 별도 EC2, 컨테이너. 환경마다 같은 방식으로 한다.
+2. **처음 붙일 때 이미 쌓인 행** — 보낼지(스냅샷) 말지(`snapshot.mode=no_data`). 보내면 오래된 카드의 음악이 뒤늦게 만들어지고, 안 보내면 그 카드들은 `GENERATING`에 남는다. 스냅샷 행을 라우터가 어떻게 다루는지도 test에서 확인한다.
+3. **heartbeat 테이블** — 이름·컬럼. 정하면 erd에 더하고 publication에 넣는다.
+4. **슬롯 상한과 알람 값** — `max_slot_wal_keep_size` 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
+5. **로컬 dev 경로** — 로컬 Docker로 CDC까지 띄울지, 아웃박스 행만 확인할지(지금 E2E 방식). 공유 클러스터의 `dev.*` 토픽·계정을 쓸 곳.
+6. **RDS 확인** — Postgres 버전, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
+7. **지난 행 정리** — 언제 지울지, 지울 때 Kafka로 아무것도 나가지 않는지.
