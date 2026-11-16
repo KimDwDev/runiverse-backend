@@ -40,13 +40,21 @@ running-service ──INSERT──▶ RDS Postgres
 
 DB는 세 환경이 모두 다르다.
 
-| 환경 | DB | Kafka | Connect |
+| 환경 | DB | Kafka | 커넥터 |
 |---|---|---|---|
-| `dev` | 로컬 Postgres | 공유 클러스터 — **로컬에서 붙을 수 없다** (아래) | 정할 것 |
-| `test` | test RDS | 공유 클러스터 (`test.*`) | 정할 것 |
-| `prod` | prod RDS | 운영 클러스터 | 정할 것 |
+| `dev` | 로컬 Postgres | 공유 클러스터 (`dev.*`) | **없다** — VPC 안의 Connect가 로컬 Postgres에 닿지 않는다 |
+| `test` | test RDS | 공유 클러스터 (`test.*`) | test RDS를 읽는 커넥터 하나 |
+| `prod` | prod RDS | 운영 클러스터 | prod RDS를 읽는 커넥터 하나 |
 
-- **로컬 dev는 공유 클러스터에 발행할 수 없다** — 브로커는 VPC 안 주소로만 접속을 받고 인증서도 그 주소로 발급됐다([kafka.md](kafka.md) 「TLS」). VPC 안의 Connect는 로컬 Postgres에 닿지 않는다. 로컬에서 CDC까지 확인하려면 Postgres·Kafka·Connect를 로컬 Docker로 함께 띄운다(`infra/kafka/`). 공유 클러스터의 `dev.*` 토픽·계정을 무엇에 쓸지도 함께 정한다(「정하지 않은 것」 5).
+- **로컬에서 CDC까지 확인할 때는 로컬 앱을 test RDS에 붙인다**(bastion 경유) — 로컬 앱이 test RDS에 쓴 아웃박스 행을 test 커넥터가 읽어 발행한다. 로컬 Postgres에 쓴 행은 아무도 보내지 않는다.
+
+### `KAFKA_ENV`는 기계가 아니라 DB를 따른다
+
+**test RDS에 붙은 앱은 로컬이라도 `KAFKA_ENV=test`로 띄운다.**
+
+- 아웃박스 `topic` 값은 쓰는 앱의 `KAFKA_ENV`로 정해지고, 커넥터는 그 값대로 보낸다. 로컬 앱을 `dev`로 띄운 채 test RDS에 붙으면 test 커넥터가 `dev.*` 토픽으로 보내려 한다.
+- `test.debezium`에는 `dev.*` 쓰기 권한이 없어 **커넥터가 멈춘다. 재시작해도 같은 행에서 다시 멈춘다** — 행은 이미 WAL에 있어 지워도 소용없다. 그동안 슬롯이 WAL을 붙잡는다(아래 「복제 슬롯」).
+- **막는 장치(제안)**: test DB의 `ck_outbox_event_topic`을 `test` 토픽만 허용하도록 좁힌다 — 운영 DDL이 `prod`만 허용하는 것과 같다. 그러면 잘못 띄운 앱은 9-2 저장에서 바로 실패해 커넥터까지 가지 않는다.
 
 ## Postgres 쪽
 
@@ -140,6 +148,8 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 2. **처음 붙일 때 이미 쌓인 행** — 보낼지(스냅샷) 말지(`snapshot.mode=no_data`). 보내면 오래된 카드의 음악이 뒤늦게 만들어지고, 안 보내면 그 카드들은 `GENERATING`에 남는다. 스냅샷 행을 라우터가 어떻게 다루는지도 test에서 확인한다.
 3. **heartbeat 테이블** — 이름·컬럼. 정하면 erd에 더하고 publication에 넣는다.
 4. **슬롯 상한과 알람 값** — `max_slot_wal_keep_size` 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
-5. **로컬 dev 경로** — 로컬 Docker로 CDC까지 띄울지, 아웃박스 행만 확인할지(지금 E2E 방식). 공유 클러스터의 `dev.*` 토픽·계정을 쓸 곳.
+5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB 스키마를 어떻게 관리하는지(JPA 자동 생성인지 손으로 쓴 SQL인지)에 따라 방법이 다르다.
 6. **RDS 확인** — Postgres 버전, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
 7. **지난 행 정리** — 언제 지울지, 지울 때 Kafka로 아무것도 나가지 않는지.
+8. **로컬에서 완료 이벤트 받기** — 완료 구독을 만들 때. 로컬 앱은 Kafka에 직접 닿지 않는다(브로커가 VPC 안 주소를 알려 주고 인증서도 그 주소라, SSH 터널로 우회되지 않는다). 로컬 Docker Kafka를 쓸지, test 서버에서 확인할지 정한다. 공유 클러스터의 `dev.*` 토픽·계정을 쓰는 곳도 이때 정해진다.
+9. **로컬 dev에서 음악 요청을 보내지 않기 (나중에)** — 메일·푸시처럼 로컬에서는 실제로 보내지 않게 한다. 메일·푸시는 `local` 프로필이면 로그만 남기는 어댑터로 바뀐다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 다만 아웃박스는 **로컬에서 test RDS에 붙여 CDC를 확인할 때는 실제로 써야 해서** 같은 `local` 프로필로 끄면 그 확인을 못 한다 — 끄는 기준을 프로필이 아니라 붙는 DB(`KAFKA_ENV`)에 둘지 함께 정한다.
