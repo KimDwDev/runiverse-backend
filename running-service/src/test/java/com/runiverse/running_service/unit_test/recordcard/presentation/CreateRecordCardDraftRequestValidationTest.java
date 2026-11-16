@@ -140,10 +140,10 @@ class CreateRecordCardDraftRequestValidationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"../a.jpg", "a/b.jpg", "a\\b.jpg", ".", "..", "a\nb.jpg", "a\u0000.jpg"})
-    @DisplayName("폴더를 벗어나는 문자나 . · ..만인 이름은 거절한다")
+    @ValueSource(strings = {"../a.jpg", "a/b.jpg", "a\\b.jpg", ".", "..", " . ", ".. ", "  ..", "a\nb.jpg", "a\u0000.jpg"})
+    @DisplayName("폴더를 벗어나는 문자나, 앞뒤 공백을 지우면 . · ..만 남는 이름은 거절한다")
     void rejectUnsafeFileName(String fileName) {
-        // when & then -> 이름이 사진 key의 마지막 부분에 그대로 들어간다
+        // when & then -> 앞뒤 공백을 지운 이름이 사진 key의 마지막 부분에 들어간다
         assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null)))
                 .containsExactly("파일 이름에 쓸 수 없는 문자가 있습니다.");
     }
@@ -152,6 +152,13 @@ class CreateRecordCardDraftRequestValidationTest {
     @ValueSource(strings = {"...", ".hidden.jpg", "a..b.jpg"})
     @DisplayName("점이 섞였어도 . · ..만 아니면 받는다")
     void allowDotsInName(String fileName) {
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"photo.jpg ", " photo.jpg", "  my photo.jpg  "})
+    @DisplayName("앞뒤 공백이 있는 이름도 받는다 — 거절하지 않고 Command가 지운다")
+    void allowSurroundingSpaces(String fileName) {
         assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null))).isEmpty();
     }
 

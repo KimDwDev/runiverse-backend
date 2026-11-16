@@ -48,10 +48,11 @@ public record CreateRecordCardDraftRequest(
             @Min(value = 1, message = "파일 크기는 1바이트 이상이어야 합니다.")
             Long fileSizeBytes,
 
-            // 사진 key의 마지막 부분에 그대로 들어간다 — 폴더를 벗어나는 / · \ · 제어 문자와 . · ..만인 이름을 막는다
+            // 사진 key의 마지막 부분에 들어간다 — 폴더를 벗어나는 / · \ · 제어 문자와, 앞뒤 공백을 지우면 . · ..만 남는 이름을 막는다.
+            // 앞뒤 공백은 막지 않는다 — Command가 지우고 받는다
             @NotBlank(message = "파일 이름은 필수입니다.")
             @Size(max = 100, message = "파일 이름은 100자 이하여야 합니다.")
-            @Pattern(regexp = "^(?!\\.{1,2}$)[^/\\\\\\p{Cntrl}]+$", message = "파일 이름에 쓸 수 없는 문자가 있습니다.")
+            @Pattern(regexp = "^(?! *\\.{1,2} *$)[^/\\\\\\p{Cntrl}]+$", message = "파일 이름에 쓸 수 없는 문자가 있습니다.")
             String fileName,
 
             // 생략·빈 문자열·공백만이면 설명 없음(400이 아니다)

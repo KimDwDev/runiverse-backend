@@ -210,6 +210,25 @@ class CreateRecordCardDraftHandlerTest {
     }
 
     @Test
+    @DisplayName("파일 이름의 앞뒤 공백은 지우고 key를 만든다 — 업로드 URL 서명·초안·응답이 같은 key다")
+    void fileNameIsTrimmedBeforeKey() {
+        // given - 공백이 남으면 S3 key는 공백 붙은 이름이고, DB key는 사진 key VO가 다듬어 서로 갈린다
+        givenOwnRecordWithoutCard();
+        when(generateImageIdPort.generate()).thenReturn(IMAGE_ID_1);
+        String key = "record-cards/%s/%s/%s/my photo.jpg".formatted(USER_ID, CARD_ID, IMAGE_ID_1);
+        when(generateUploadUrlPort.generate(key, "image/jpeg", 1L, TTL)).thenReturn("https://signed");
+
+        // when - 가운데 공백은 이름의 일부라 남는다
+        CreateRecordCardDraftResult result = handler.handle(command(List.of(
+                new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, "  my photo.jpg ", null)), null));
+
+        // then
+        assertThat(result.uploads()).extracting(Upload::imageKey).containsExactly(key);
+        assertThat(savedDraft().images()).extracting(DraftImage::imageKey).containsExactly(key);
+        verify(generateUploadUrlPort).generate(key, "image/jpeg", 1L, TTL);
+    }
+
+    @Test
     @DisplayName("사진이 없으면 업로드 목록이 비고 썸네일도 없다")
     void noImages() {
         // given
