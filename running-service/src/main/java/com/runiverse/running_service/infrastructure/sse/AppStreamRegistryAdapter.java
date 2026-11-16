@@ -38,7 +38,12 @@ public class AppStreamRegistryAdapter implements AppStreamPort {
         return Optional.ofNullable(connectionByUser.get(userId));
     }
 
-    // keep-alive 전용 — 포트에 두지 않는다. 유스케이스가 아니라 연결 유지라는 기술 관심사다
+    @Override
+    public Collection<AppStreamConnection> findAll() {
+        return all();
+    }
+
+    // keep-alive가 쓴다. 홈 공지는 같은 스냅샷을 포트의 findAll()로 받는다
     Collection<AppStreamConnection> all() {
         // 순회 중 등록·해제가 일어나도 안전하게 스냅샷을 준다
         return List.copyOf(connectionByUser.values());

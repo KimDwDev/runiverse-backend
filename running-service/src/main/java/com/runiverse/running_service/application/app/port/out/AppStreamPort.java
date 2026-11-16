@@ -2,6 +2,7 @@ package com.runiverse.running_service.application.app.port.out;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
 
+import java.util.Collection;
 import java.util.Optional;
 
 public interface AppStreamPort {
@@ -14,4 +15,7 @@ public interface AppStreamPort {
 
     // 이 인스턴스에 붙어 있으면 돌려준다. 다른 서버에 붙은 유저는 그쪽이 자기 몫을 보낸다
     Optional<AppStreamConnection> find(UserId userId);
+
+    // 이 인스턴스에 붙어 있는 연결 전부 — 다른 서버에 붙은 연결은 그쪽이 같은 일을 한다
+    Collection<AppStreamConnection> findAll();
 }
