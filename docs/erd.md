@@ -6,7 +6,7 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`·`record_cards.record_card_id`·`record_card_images.record_card_image_id`는 **UUID**(기록 카드 둘은 DB가 매기지 않는 UUIDv7 — 표 참고), 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`·`record_cards.record_card_id`·`record_card_images.record_card_image_id`는 **UUID**(기록 카드 둘은 DB가 매기지 않는 UUIDv7 — 표 참고), 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`·`recordCardId`·`recordCardImageId`는 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`). (`running_room_invitations.inviter_id`/`invitee_id`도 같다). `record_cards.running_record_id`는 FK + ON DELETE CASCADE(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`(복합 PK)·`user_relationships`·`scheduled_jobs`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§5](#5-enum-사전), 조건의 이유는 비고가 설명한다.

@@ -2711,7 +2711,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ```json
 {
-  "recordCardDraftId": "3f2a9c1e-7b4d-4e0a-9c55-1d2e3f4a5b6c",
+  "recordCardDraftId": "01a0f2d4-6180-7000-8000-4466554400d1",
   "expiresAt": "2026-07-25T21:40:00",
   "uploads": [
     {
