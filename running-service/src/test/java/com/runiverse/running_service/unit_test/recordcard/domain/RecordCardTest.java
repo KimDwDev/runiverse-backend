@@ -125,11 +125,11 @@ class RecordCardTest {
         }
 
         @Test
-        @DisplayName("사진은 10장까지 받고 11장은 거부한다")
+        @DisplayName("사진은 5장까지 받고 6장은 거부한다")
         void limitImageCount() {
             // when & then
-            assertThat(create(drafts(10), null).getImages()).hasSize(10);
-            assertThatThrownBy(() -> create(drafts(11), null))
+            assertThat(create(drafts(5), null).getImages()).hasSize(5);
+            assertThatThrownBy(() -> create(drafts(6), null))
                     .isInstanceOf(TooManyRecordCardImagesException.class);
         }
 
@@ -448,11 +448,11 @@ class RecordCardTest {
         }
 
         @Test
-        @DisplayName("11장으로 바꾸려 하면 거부한다")
+        @DisplayName("6장으로 바꾸려 하면 거부한다")
         void rejectTooMany() {
             // given
             RecordCard card = restoredWithThreeImages();
-            List<ImageSlot> slots = IntStream.range(0, 11).<ImageSlot>mapToObj(i -> add("n" + i)).toList();
+            List<ImageSlot> slots = IntStream.range(0, 6).<ImageSlot>mapToObj(i -> add("n" + i)).toList();
 
             // when & then
             assertThatThrownBy(() -> card.rearrangeImages(slots, null))

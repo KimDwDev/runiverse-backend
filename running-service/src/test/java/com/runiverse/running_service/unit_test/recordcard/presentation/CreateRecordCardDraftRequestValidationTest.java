@@ -97,11 +97,11 @@ class CreateRecordCardDraftRequestValidationTest {
     }
 
     @Test
-    @DisplayName("사진은 10장까지 받고 11장이면 거절한다")
+    @DisplayName("사진은 5장까지 받고 6장이면 거절한다")
     void limitImageCount() {
-        assertThat(messages(request(Collections.nCopies(10, image(1L)), null))).isEmpty();
-        assertThat(messages(request(Collections.nCopies(11, image(1L)), null)))
-                .containsExactly("사진은 10장 이하만 넣을 수 있습니다.");
+        assertThat(messages(request(Collections.nCopies(5, image(1L)), null))).isEmpty();
+        assertThat(messages(request(Collections.nCopies(6, image(1L)), null)))
+                .containsExactly("사진은 5장 이하만 넣을 수 있습니다.");
     }
 
     @Test

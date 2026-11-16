@@ -2700,7 +2700,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` |
 | `memo` | String | O | **회고 글**, 1~500자. 공백만 있으면 400 — AI가 기본곡을 만들 때 감정·여운을 읽는다 |
 | `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
-| `images` | Array | X | 올릴 사진 0~10장. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
+| `images` | Array | X | 올릴 사진 0~5장. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
 | `images[].mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) — 11-1과 같다 |
 | `images[].fileSizeBytes` | Integer | O | 1 이상 104,857,600(100MB) 이하. 실제 업로드 크기와 같아야 한다 — 한 번에 올리면 서명에 들어가고, 나눠 올리면 조각 수가 이 값으로 정해진다 |
 | `images[].fileName` | String | O | 사용자가 올린 파일 이름, 1~100자. **앞뒤 공백을 지운 이름이 사진 key의 마지막 부분에 들어간다**(`uploads[].imageKey`) — 앞뒤 공백은 400이 아니라 지우고 받는다. 한글·가운데 공백은 그대로다. 그래서 key의 이름이 보낸 `fileName`과 다를 수 있다 — 앱은 key가 필요하면 `uploads[].imageKey`를 쓰고, 업로드는 받은 URL로 한다. `/`·`\`·제어 문자는 쓸 수 없고, 앞뒤 공백을 지우면 `.`·`..`만 남는 이름도 받지 않는다(400). 같은 이름의 사진이 여러 장이어도 사진마다 폴더가 달라 겹치지 않는다 |
@@ -2805,7 +2805,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "사진은 10장 이하만 넣을 수 있습니다."
+  "message": "사진은 5장 이하만 넣을 수 있습니다."
 }
 
 {
@@ -2994,7 +2994,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `memo` | String | X | 회고 글, 1~500자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
 | `activityType` | String | X | `DAILY` · `TRAVEL` · `RACE` |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
-| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~10개). 항목마다 `recordCardImageId`(카드에 계속 둘 이미 올린 사진) **또는** `mimeType`·`fileSizeBytes`(새로 올릴 사진, 9-1과 같은 규칙) 중 **한 가지**. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
+| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~5개). 항목마다 `recordCardImageId`(카드에 계속 둘 이미 올린 사진) **또는** `mimeType`·`fileSizeBytes`(새로 올릴 사진, 9-1과 같은 규칙) 중 **한 가지**. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
 | `images[].caption` | String | X | **수정 뒤의 설명**이다 — 사진 목록이 수정 뒤 전체이듯 설명도 그렇다. **이미 올린 사진도 지금 설명을 그대로 다시 보낸다** — 생략·빈 문자열·공백만이면 설명을 지운다. 새 사진은 9-1과 같다 |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
 
@@ -3025,7 +3025,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "사진은 10장 이하만 넣을 수 있습니다."
+  "message": "사진은 5장 이하만 넣을 수 있습니다."
 }
 
 {
@@ -3334,7 +3334,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `recordCardId` | String | O | 기록 카드 ID(UUID) |
 | `thumbnailUrl` | String | X | 썸네일 사진 URL(`record_cards.thumbnail_image_key`, presigned GET, 8-1과 같은 유효 시간) — 기본은 첫 사진, 작성자가 고르면 그 사진. **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
-| `imageCount` | Integer | O | 사진 장수(0~10) |
+| `imageCount` | Integer | O | 사진 장수(0~5) |
 | `startedAt` | String | O | 카드가 붙은 러닝의 시작 시각 |
 | `totalDistanceMeters` | Integer | O | 그 러닝의 총 이동 거리(m) |
 

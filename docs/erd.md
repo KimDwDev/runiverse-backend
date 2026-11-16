@@ -501,9 +501,9 @@
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
 > CHECK `ck_record_card_image_music_key`: `(music_status = 'COMPLETED') = (music_key is not null)` — 기본곡과 같다
-> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
+> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 4` — 카드당 사진이 최대 5장이라 0~4다
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
-> **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
+> **카드당 사진은 0~5장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
 > **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. 지우기 직전 모습은 `record_card_histories`의 `images`에 남는다. S3 객체는 프로필 사진처럼 남긴다.
 > UNIQUE `uk_record_card_image_sort_order`: `(record_card_id, sort_order)` **DEFERRABLE INITIALLY DEFERRED** — 한 카드에서 같은 자리에 사진 두 장이 오지 않는다. **커밋 때 검사한다** — 수정(9-3)에서 순서를 맞바꾸면 한 행씩 UPDATE하는 중간에 값이 겹치고, Hibernate는 flush 때 INSERT를 DELETE보다 먼저 보내 "빼고 같은 자리에 넣기"도 중간에 겹친다. 즉시 검사면 정상 수정이 실패한다. 최종 결과의 중복만 막는 안전장치다 — 순서는 도메인이 0부터 다시 매기므로 정상 경로에서는 걸리지 않고, 걸리면 커밋 실패(500)다. 엔티티가 `@UniqueConstraint(options = "deferrable initially deferred")`로 선언해 로컬·E2E 스키마에도 생긴다. 같은 카드를 동시에 고치는 경쟁은 이 제약이 아니라 잠금이 막는다 — 카드 쓰기는 모두 `running_records` 행을 먼저 잠근다. 앞 열이 `record_card_id`라 카드 사진 조회 인덱스를 겸한다.
 
