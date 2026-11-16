@@ -1,7 +1,9 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
@@ -24,12 +26,14 @@ import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,7 +41,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort,
         LoadRecentRunningPacesPort, LoadMyRunningRecordsPort, LoadRecordedRoutesPort, ExistsOwnRunningRecordPort,
-        LockOwnRunningRecordPort {
+        LockOwnRunningRecordPort, LoadRunningSummaryPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
@@ -144,6 +148,24 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultList()
                 .isEmpty();
+    }
+
+    @Override
+    public Optional<RunningSummary> load(RunningRecordId runningRecordId) {
+        // 음악 생성 요청에 실을 수치만 읽는다 — 작성 확정이 이 행을 잠근 같은 트랜잭션에서 부른다. PK로 한 행이다
+        return entityManager.createQuery("""
+                        SELECT record.totalDistance, record.totalDuration, record.avgPace, record.avgCadence,
+                               record.startAt, record.weatherCode, record.temperature, record.totalElevationGain
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.runningRecordId = :runningRecordId
+                        """, Tuple.class)
+                .setParameter("runningRecordId", runningRecordId.value())
+                .getResultList().stream()
+                .findFirst()
+                .map(row -> new RunningSummary(
+                        row.get(0, Integer.class), row.get(1, Integer.class), row.get(2, Integer.class),
+                        row.get(3, Integer.class), row.get(4, LocalDateTime.class), row.get(5, Integer.class),
+                        row.get(6, BigDecimal.class), row.get(7, Integer.class)));
     }
 
     @Override
