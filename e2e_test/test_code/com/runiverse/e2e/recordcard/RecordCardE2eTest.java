@@ -263,13 +263,19 @@ class RecordCardE2eTest extends E2eTestSupport {
         assertThat(missing.text("code")).isEqualTo("RECORD_CARD_IMAGE_NOT_UPLOADED");
         assertThat(querySql("SELECT count(*) FROM record_cards WHERE running_record_id = " + runningRecordId))
                 .containsExactly("0");
-        assertThat(querySql("SELECT count(*) FROM outbox_events o JOIN record_cards c ON c.record_card_id::text = o.aggregate_id"
-                + " WHERE c.running_record_id = " + runningRecordId)).containsExactly("0");
+        // 카드가 없으니 카드 ID는 사진 key(record-cards/{userId}/{recordCardId}/...)에서 꺼내 아웃박스를 직접 센다
+        String recordCardId = ((String) uploads.get(0).get("imageKey")).split("/")[2];
+        assertThat(querySql("SELECT count(*) FROM outbox_events WHERE aggregate_id = '" + recordCardId + "'"))
+                .containsExactly("0");
 
         // 빠진 것만 올리고 다시 확정한다 — 실패한 확정이 잠금을 남기지 않았다
         uploadRecordCardImage((String) uploads.get(1).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
         Response completed = post(completePath, Map.of(), user.accessToken());
         assertThat(completed.status()).isEqualTo(201);
+        // 실패한 확정은 아무것도 남기지 않았고, 성공한 확정이 한 줄을 쓴다
+        assertThat(completed.text("recordCardId")).isEqualTo(recordCardId);
+        assertThat(querySql("SELECT count(*) FROM outbox_events WHERE aggregate_id = '" + recordCardId + "'"))
+                .containsExactly("1");
     }
 
     @Test
