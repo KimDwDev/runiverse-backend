@@ -22,6 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("배포 이미지 대상 기록 카드 작성(9-1 작성 요청 → S3 업로드 → 9-2 확정) E2E 테스트")
 class RecordCardE2eTest extends E2eTestSupport {
@@ -109,6 +110,33 @@ class RecordCardE2eTest extends E2eTestSupport {
         assertThat(retried.text("recordCardId")).isEqualTo(recordCardId);
         assertThat(querySql("SELECT count(*) FROM record_cards WHERE running_record_id = " + runningRecordId))
                 .containsExactly("1");
+
+        // 카드와 같은 트랜잭션에서 음악 생성 요청이 아웃박스에 한 줄 남는다 — 재확정은 다시 쓰지 않는다
+        assertThat(querySql("""
+                SELECT aggregate_type, topic, payload->>'user_id', payload->>'memo', payload->>'activity_type',
+                       jsonb_array_length(payload->'photos')
+                FROM outbox_events WHERE aggregate_id = '%s'
+                """.formatted(recordCardId)))
+                .containsExactly(String.join("|", "RECORD_CARD", "test.record-card.music.requested", user.userId(),
+                        "한강 한 바퀴", "DAILY", "2"));
+        // 사진은 카드 순서대로, 설명이 없는 사진도 caption 키가 null로 남는다(jsonb로 저장돼도 키가 빠지지 않는다)
+        assertThat(querySql("""
+                SELECT photo->>'record_card_image_id', photo->>'image_key', jsonb_typeof(photo->'caption')
+                FROM outbox_events, jsonb_array_elements(payload->'photos') WITH ORDINALITY AS p(photo, n)
+                WHERE aggregate_id = '%s' ORDER BY n
+                """.formatted(recordCardId)))
+                .containsExactly(
+                        String.join("|", (String) uploads.get(0).get("recordCardImageId"), firstKey, "string"),
+                        String.join("|", (String) uploads.get(1).get("recordCardImageId"), secondKey, "null"));
+        // 기록 요약은 running_records 값 그대로고, 시작 시각만 +09:00이 붙는다
+        assertThat(querySql("""
+                SELECT (s->>'total_distance')::int = r.total_distance, (s->>'total_duration')::int = r.total_duration,
+                       (s->>'avg_pace')::int = r.avg_pace, s ? 'avg_cadence', s ? 'total_elevation_gain',
+                       s->>'start_at' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\+09:00$'
+                FROM outbox_events o, jsonb_extract_path(o.payload, 'running_summary') AS s, running_records r
+                WHERE o.aggregate_id = '%s' AND r.running_record_id = %d
+                """.formatted(recordCardId, runningRecordId)))
+                .containsExactly("t|t|t|t|t|t");
     }
 
     @Test
@@ -209,6 +237,9 @@ class RecordCardE2eTest extends E2eTestSupport {
         });
         assertThat(querySql("SELECT count(*) FROM record_cards WHERE running_record_id = " + runningRecordId))
                 .containsExactly("1");
+        // 동시 확정이어도 음악 요청은 한 번이다
+        assertThat(querySql("SELECT count(*) FROM outbox_events WHERE aggregate_id = '"
+                + created.get(0).text("recordCardId") + "'")).containsExactly("1");
     }
 
     @Test
@@ -232,6 +263,8 @@ class RecordCardE2eTest extends E2eTestSupport {
         assertThat(missing.text("code")).isEqualTo("RECORD_CARD_IMAGE_NOT_UPLOADED");
         assertThat(querySql("SELECT count(*) FROM record_cards WHERE running_record_id = " + runningRecordId))
                 .containsExactly("0");
+        assertThat(querySql("SELECT count(*) FROM outbox_events o JOIN record_cards c ON c.record_card_id::text = o.aggregate_id"
+                + " WHERE c.running_record_id = " + runningRecordId)).containsExactly("0");
 
         // 빠진 것만 올리고 다시 확정한다 — 실패한 확정이 잠금을 남기지 않았다
         uploadRecordCardImage((String) uploads.get(1).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
@@ -339,6 +372,26 @@ class RecordCardE2eTest extends E2eTestSupport {
                 ORDER BY conname
                 """))
                 .containsExactly("uk_record_card_running_record", "uk_record_card_user_display_order");
+    }
+
+    @Test
+    @DisplayName("아웃박스는 다른 환경 토픽과 모르는 대상 종류를 DB에서 막는다")
+    void outboxChecksRejectWrongTopic() {
+        // given - 앱이 만든 스키마(엔티티 @Check)다. 운영 DDL은 prod만 허용하도록 더 좁힌다
+        String insert = """
+                INSERT INTO outbox_events (outbox_event_id, aggregate_type, aggregate_id, topic, payload, created_at)
+                VALUES (gen_random_uuid(), '%s', 'x', '%s', '{}'::jsonb, now());
+                """;
+
+        // when & then -> 환경 이름 오타·없는 토픽·대상 종류 오타는 저장 단계에서 실패한다
+        for (String[] values : new String[][]{
+                {"RECORD_CARD", "deploy.record-card.music.requested"},
+                {"RECORD_CARD", "test.record-card.music.generated"},
+                {"record_card", "test.record-card.music.requested"}}) {
+            assertThatThrownBy(() -> executeSql(insert.formatted(values[0], values[1])))
+                    .hasMessageContaining("violates check constraint");
+        }
+        assertThat(querySql("SELECT count(*) FROM outbox_events WHERE aggregate_id = 'x'")).containsExactly("0");
     }
 
     private String createCardWithoutImages(TestUser user, long runningRecordId) {

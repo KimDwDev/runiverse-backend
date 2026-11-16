@@ -4,13 +4,17 @@ import com.runiverse.running_service.application.recordcard.port.out.CreateRecor
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
 import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -19,7 +23,11 @@ import java.util.UUID;
 // 카드를 붙일 기록과 그 기록의 카드 — 기록 주인·숨긴 방, 카드 ID, 작성자별 순위와 두 UNIQUE만 흉내 낸다.
 // 잠금은 흉내 내지 않는다(한 스레드라 줄 설 일이 없다)
 public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, LockOwnRunningRecordPort,
-        FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort {
+        FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort, LoadRunningSummaryPort {
+
+    // 기록마다 같은 수치를 돌려준다 — 요약 값 자체는 어댑터 단위 테스트와 E2E가 본다
+    public static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
+            LocalDateTime.of(2026, 10, 19, 6, 30), 61, new BigDecimal("15.0"), 22);
 
     private record StoredRecord(UUID userId, boolean roomHidden) {
 
@@ -39,6 +47,11 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     @Override
     public boolean lockOwnedBy(RunningRecordId runningRecordId, UserId userId) {
         return existsOwnedBy(runningRecordId, userId);
+    }
+
+    @Override
+    public Optional<RunningSummary> load(RunningRecordId runningRecordId) {
+        return records.containsKey(runningRecordId.value()) ? Optional.of(SUMMARY) : Optional.empty();
     }
 
     @Override

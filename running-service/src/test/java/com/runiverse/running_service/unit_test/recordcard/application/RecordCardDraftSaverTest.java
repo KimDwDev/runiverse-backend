@@ -8,11 +8,16 @@ import com.runiverse.running_service.application.recordcard.port.out.CreateRecor
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort.CreateResult;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftImage;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.DraftType;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft.UploadType;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.Photo;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
+import com.runiverse.running_service.application.recordcard.port.out.RequestRecordCardMusicPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
@@ -31,6 +36,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -52,6 +60,8 @@ class RecordCardDraftSaverTest {
     private static final long RECORD_ID = 501L;
     private static final RunningRecordId RECORD = new RunningRecordId(RECORD_ID);
     private static final UserId USER = new UserId(USER_ID);
+    private static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
+            LocalDateTime.of(2026, 10, 19, 6, 30), 61, new BigDecimal("15.0"), 22);
 
     @Mock
     private LockOwnRunningRecordPort lockOwnRunningRecordPort;
@@ -61,6 +71,10 @@ class RecordCardDraftSaverTest {
     private LoadMaxDisplayOrderPort loadMaxDisplayOrderPort;
     @Mock
     private CreateRecordCardPort createRecordCardPort;
+    @Mock
+    private LoadRunningSummaryPort loadRunningSummaryPort;
+    @Mock
+    private RequestRecordCardMusicPort requestRecordCardMusicPort;
 
     @InjectMocks
     private RecordCardDraftSaver saver;
@@ -71,6 +85,7 @@ class RecordCardDraftSaverTest {
         // given
         given(lockOwnRunningRecordPort.lockOwnedBy(RECORD, USER)).willReturn(true);
         given(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(RECORD)).willReturn(Optional.empty());
+        given(loadRunningSummaryPort.load(RECORD)).willReturn(Optional.of(SUMMARY));
         given(loadMaxDisplayOrderPort.loadMax(USER)).willReturn(Optional.of(new DisplayOrder(3)));
         given(createRecordCardPort.create(any())).willReturn(CreateResult.CREATED);
 
@@ -100,6 +115,7 @@ class RecordCardDraftSaverTest {
         // given
         given(lockOwnRunningRecordPort.lockOwnedBy(RECORD, USER)).willReturn(true);
         given(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(RECORD)).willReturn(Optional.empty());
+        given(loadRunningSummaryPort.load(RECORD)).willReturn(Optional.of(SUMMARY));
         given(loadMaxDisplayOrderPort.loadMax(USER)).willReturn(Optional.empty());
         given(createRecordCardPort.create(any())).willReturn(CreateResult.CREATED);
 
@@ -120,7 +136,8 @@ class RecordCardDraftSaverTest {
 
         // when & then
         assertThatThrownBy(() -> saver.save(draft())).isInstanceOf(RunningRecordNotFoundException.class);
-        verifyNoInteractions(findRecordCardIdByRunningRecordPort, loadMaxDisplayOrderPort, createRecordCardPort);
+        verifyNoInteractions(findRecordCardIdByRunningRecordPort, loadMaxDisplayOrderPort, createRecordCardPort,
+                requestRecordCardMusicPort);
     }
 
     @Test
@@ -134,8 +151,8 @@ class RecordCardDraftSaverTest {
         // when
         saver.save(draft());
 
-        // then
-        verifyNoInteractions(loadMaxDisplayOrderPort, createRecordCardPort);
+        // then -> 이미 커밋된 카드라 음악 요청도 그때 함께 커밋됐다 — 다시 쓰면 같은 카드의 요청이 두 번 나간다
+        verifyNoInteractions(loadMaxDisplayOrderPort, createRecordCardPort, requestRecordCardMusicPort);
     }
 
     @Test
@@ -148,7 +165,7 @@ class RecordCardDraftSaverTest {
 
         // when & then
         assertThatThrownBy(() -> saver.save(draft())).isInstanceOf(RecordCardAlreadyExistsException.class);
-        verifyNoInteractions(loadMaxDisplayOrderPort, createRecordCardPort);
+        verifyNoInteractions(loadMaxDisplayOrderPort, createRecordCardPort, requestRecordCardMusicPort);
     }
 
     @Test
@@ -159,6 +176,7 @@ class RecordCardDraftSaverTest {
 
         // when & then
         assertThatThrownBy(() -> saver.save(draft())).isInstanceOf(RecordCardDraftInProgressException.class);
+        verify(requestRecordCardMusicPort, never()).request(any());
     }
 
     @Test
@@ -169,11 +187,47 @@ class RecordCardDraftSaverTest {
 
         // when & then
         assertThatThrownBy(() -> saver.save(draft())).isInstanceOf(RecordCardAlreadyExistsException.class);
+        verify(requestRecordCardMusicPort, never()).request(any());
+    }
+
+    @Test
+    @DisplayName("새로 만든 카드면 기본곡과 카드 사진 전부의 음악을 기록 요약과 함께 한 번 요청한다")
+    void requestsMusicOnCreate() {
+        // given
+        givenCreateResult(CreateResult.CREATED);
+
+        // when
+        saver.save(draft());
+
+        // then
+        ArgumentCaptor<RecordCardMusicRequest> requested = ArgumentCaptor.forClass(RecordCardMusicRequest.class);
+        verify(requestRecordCardMusicPort).request(requested.capture());
+        RecordCardMusicRequest request = requested.getValue();
+        assertThat(request.recordCardId()).isEqualTo(CARD_ID);
+        assertThat(request.userId()).isEqualTo(USER_ID);
+        assertThat(request.memo()).isEqualTo("바람이 좋았다");
+        assertThat(request.activityType()).isEqualTo(RecordCardActivityType.TRAVEL);
+        assertThat(request.runningSummary()).isEqualTo(SUMMARY);
+        assertThat(request.photos()).containsExactly(new Photo(IMAGE_ID, "k/1/a.jpg", "노을"));
+    }
+
+    @Test
+    @DisplayName("기록 요약을 읽지 못하면 404이고 카드도 요청도 만들지 않는다")
+    void summaryMissing() {
+        // given
+        given(lockOwnRunningRecordPort.lockOwnedBy(RECORD, USER)).willReturn(true);
+        given(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(RECORD)).willReturn(Optional.empty());
+        given(loadRunningSummaryPort.load(RECORD)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> saver.save(draft())).isInstanceOf(RunningRecordNotFoundException.class);
+        verifyNoInteractions(loadMaxDisplayOrderPort, createRecordCardPort, requestRecordCardMusicPort);
     }
 
     private void givenCreateResult(CreateResult result) {
         given(lockOwnRunningRecordPort.lockOwnedBy(RECORD, USER)).willReturn(true);
         given(findRecordCardIdByRunningRecordPort.findIdByRunningRecord(RECORD)).willReturn(Optional.empty());
+        given(loadRunningSummaryPort.load(RECORD)).willReturn(Optional.of(SUMMARY));
         given(loadMaxDisplayOrderPort.loadMax(USER)).willReturn(Optional.empty());
         given(createRecordCardPort.create(any())).willReturn(result);
     }
