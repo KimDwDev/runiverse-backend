@@ -12,7 +12,7 @@ import java.util.UUID;
 public record RecordCardDraft(
         UUID recordCardDraftId,
         DraftType type,                 // 작성인지 수정인지 — 같은 확정(9-2)이 이 값으로 갈라진다
-        UUID recordCardId,              // 이때 정한 카드 ID — 확정 때 이 값으로 저장한다. 지운 카드가 있었으면 그 카드의 ID
+        UUID recordCardId,              // 이때 정한 카드 ID — 확정 때 이 값으로 저장한다
         UUID userId,                    // 초안을 만든 사람 — 다른 사람이 확정하면 404
         Long runningRecordId,
         RecordCardActivityType activityType,
