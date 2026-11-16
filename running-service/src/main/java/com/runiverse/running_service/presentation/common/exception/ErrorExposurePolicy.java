@@ -3,6 +3,7 @@ package com.runiverse.running_service.presentation.common.exception;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
+import com.runiverse.running_service.application.common.exception.PushCampaignErrorCode;
 import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
 import com.runiverse.running_service.application.common.exception.RelationshipErrorCode;
@@ -29,6 +30,7 @@ public final class ErrorExposurePolicy {
             CommonErrorCode.METHOD_NOT_ALLOWED.getCode(),
             CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
             CommonErrorCode.APP_UPDATE_REQUIRED.getCode(),
+            CommonErrorCode.INVALID_ADMIN_KEY.getCode(),
             UserErrorCode.INVALID_PROFILE_IMAGE.getCode(),
             UserErrorCode.ACCOUNT_DELETION_UNAVAILABLE.getCode(),
             AuthErrorCode.INVALID_CREDENTIALS.getCode(),
@@ -77,7 +79,9 @@ public final class ErrorExposurePolicy {
             // 이 기록에 카드가 이미 있다 — 가려지면 앱이 작성 화면을 닫고 카드로 보낼지 가를 수 없다
             RecordCardErrorCode.RECORD_CARD_ALREADY_EXISTS.getCode(),
             // 처리 중인 확정과 부딪혔다 — 가려지면 앱이 다시 부를지 가를 수 없다
-            RecordCardErrorCode.RECORD_CARD_DRAFT_IN_PROGRESS.getCode()
+            RecordCardErrorCode.RECORD_CARD_DRAFT_IN_PROGRESS.getCode(),
+            // 가려지면 운영자가 이미 보낸 것인지 서버 오류인지 가를 수 없다
+            PushCampaignErrorCode.PUSH_CAMPAIGN_ALREADY_SENT.getCode()
     );
 
     private ErrorExposurePolicy() {
