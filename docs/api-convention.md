@@ -6,7 +6,7 @@ REST API 표면 규칙 — 엔드포인트 설계·DTO 작성·스펙 문서화�
 
 - Base path: `/api/v1`
 - 필드명: JSON 요청/응답은 camelCase — DB 컬럼은 snake_case 유지, 백엔드에서 매핑한다.
-- ID 타입: `userId`만 UUID, 서버가 발급하는 그 외 리소스 ID는 Long이다. 클라이언트 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열이다.
+- ID 타입: `userId`·`recordCardId`·`recordCardImageId`·`recordCardDraftId`는 UUID, 서버가 발급하는 그 외 리소스 ID는 Long이다. 기록 카드 ID 셋은 UUIDv7이다 — 서버가 DB 저장 전에 정한다(api-spec 9-1). 클라이언트 식별자(`deviceId`)와 커서(`cursor`)·S3 key는 문자열이다.
 - 시각: ISO 8601 `yyyy-MM-ddTHH:mm:ss` — KST 기준, 오프셋 없이 초 단위까지(예: `2026-07-20T13:00:00`). 달력 날짜는 `YYYY-MM-DD`다. 저장은 KST(`DefaultTimeZoneInitializer`), 직렬화 형식은 `JacksonConfig`가 고정한다.
 - DB enum: API에 노출할 때도 동일한 영문 코드를 사용한다. 변환 매핑은 없고 값 목록은 [erd.md](erd.md) §5를 따른다.
 - 사용자 리소스 경로: 타인도 접근할 수 있으면 `/users/{userId}/...`, 본인만 접근하면 `/users/me/...`를 쓴다. 후자는 토큰 주체가 곧 대상이라 경로에 식별자를 받지 않는다.
