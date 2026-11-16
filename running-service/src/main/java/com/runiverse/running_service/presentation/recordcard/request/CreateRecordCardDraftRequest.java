@@ -30,7 +30,7 @@ public record CreateRecordCardDraftRequest(
         String visibility,
 
         // 생략하면 빈 배열과 같다 — 배열 순서가 캐러셀 순서다
-        @Size(max = 10, message = "사진은 10장 이하만 넣을 수 있습니다.")
+        @Size(max = 5, message = "사진은 5장 이하만 넣을 수 있습니다.")
         List<@NotNull(message = "입력값이 올바르지 않습니다.") @Valid Image> images,
 
         // 생략하면 첫 사진 — 사진이 없으면 보내지 않는다
