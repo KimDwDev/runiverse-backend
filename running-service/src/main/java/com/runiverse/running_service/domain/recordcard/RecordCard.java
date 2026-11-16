@@ -41,7 +41,8 @@ import java.util.UUID;
 @Getter
 public class RecordCard {
 
-    private static final int MAX_IMAGES = 10;
+    // 카드 한 장에 붙는 사진 수 상한 — 요청 검증(@Size)과 DB CHECK(sort_order 0~4)와 같은 값이어야 한다
+    private static final int MAX_IMAGES = 5;
 
     // 카드에 새로 넣을 사진 하나 — 사진 ID·사진 key는 업로드 URL을 줄 때 정한 것이다. 음악 key는 AI 서버가 나중에 준다.
     // 설명(caption)은 선택이라 null·공백이면 설명 없는 사진이 된다
@@ -79,7 +80,8 @@ public class RecordCard {
 
     @Builder
     private RecordCard(UUID recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
-                       RecordCardActivityType activityType, MusicStatus baseMusicStatus, String memo, int displayOrder, String thumbnailImageKey,
+                       RecordCardActivityType activityType, MusicStatus baseMusicStatus, String memo,
+                       int displayOrder, String thumbnailImageKey,
                        String baseMusicKey, List<RecordCardImage> images) {
         this.recordCardId = new RecordCardId(recordCardId);
         this.runningRecordId = new RunningRecordId(runningRecordId);
@@ -105,7 +107,8 @@ public class RecordCard {
     }
 
     // 처음 만드는 카드 — 기본곡과 사진 음악은 모두 이제부터 만들어 key가 아직 없다. 썸네일 위치를 주지 않으면 첫 사진이다
-    public static RecordCard create(UUID recordCardId, Long runningRecordId, UUID userId, RecordCardVisibility visibility,
+    public static RecordCard create(UUID recordCardId, Long runningRecordId, UUID userId,
+                                    RecordCardVisibility visibility,
                                     RecordCardActivityType activityType, String memo, DisplayOrder displayOrder,
                                     List<ImageDraft> imageDrafts, Integer thumbnailIndex) {
         requireOrder(displayOrder);

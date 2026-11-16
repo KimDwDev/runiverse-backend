@@ -28,7 +28,7 @@ public enum RecordCardErrorCode implements ErrorCode {
     MUSIC_STATUS_REQUIRED("MUSIC_STATUS_REQUIRED", "음악 생성 상태는 필수입니다."),
     INVALID_MUSIC_RESULT("INVALID_MUSIC_RESULT", "음악 생성 결과는 COMPLETED 또는 FAILED여야 합니다."),
     // 사진 구성
-    TOO_MANY_RECORD_CARD_IMAGES("TOO_MANY_RECORD_CARD_IMAGES", "사진은 10장 이하만 넣을 수 있습니다."),
+    TOO_MANY_RECORD_CARD_IMAGES("TOO_MANY_RECORD_CARD_IMAGES", "사진은 5장 이하만 넣을 수 있습니다."),
     DUPLICATE_RECORD_CARD_IMAGE("DUPLICATE_RECORD_CARD_IMAGE", "같은 사진을 두 번 넣을 수 없습니다."),
     RECORD_CARD_IMAGE_NOT_IN_CARD("RECORD_CARD_IMAGE_NOT_IN_CARD", "이 카드의 사진이 아닙니다."),
     INVALID_THUMBNAIL_INDEX("INVALID_THUMBNAIL_INDEX", "썸네일 위치가 사진 범위를 벗어났습니다."),
