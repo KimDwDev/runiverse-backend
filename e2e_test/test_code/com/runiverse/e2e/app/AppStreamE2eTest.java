@@ -5,6 +5,7 @@ import com.runiverse.e2e.SseStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -20,6 +21,8 @@ class AppStreamE2eTest extends E2eTestSupport {
     // 다른 매칭 테스트와 한 방에 합쳐지지 않게 그쪽이 쓰지 않는 슬롯·거리를 쓴다
     private static final LocalDateTime SLOT = LocalDate.now(APP_ZONE).plusDays(1).atTime(21, 0);
     private static final int DISTANCE = 5000;
+    // 홈 공지는 서버 주기(app-stream.home-notice-interval=30s)마다 온다 — 연결한 순간에 따라 거의 한 주기를 기다린다
+    private static final Duration HOME_NOTICE_TIMEOUT = Duration.ofSeconds(45);
 
     @Test
     @DisplayName("활성 신청이 없어도 연결된다")
@@ -72,6 +75,22 @@ class AppStreamE2eTest extends E2eTestSupport {
                 assertThat(second.status()).isEqualTo(200);
                 first.awaitClosed();
             }
+        }
+    }
+
+    @Test
+    @DisplayName("홈 대기 인원이 주기마다 붙은 연결로 온다")
+    void homeWaitingArrivesPeriodically() {
+        // given
+        TestUser user = signUpAndOnboard();
+
+        try (SseStream stream = openAppStream(user.accessToken())) {
+            // when -> 오늘 칸의 대기 인원은 테스트를 돌리는 시각에 따라 달라 값은 보지 않는다
+            Map<String, Object> waiting = stream.await("HOME_WAITING", HOME_NOTICE_TIMEOUT);
+
+            // then
+            assertThat(waiting).containsOnlyKeys("waitingCount");
+            assertThat(((Number) waiting.get("waitingCount")).intValue()).isNotNegative();
         }
     }
 }

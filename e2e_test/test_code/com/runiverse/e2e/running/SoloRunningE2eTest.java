@@ -2,6 +2,7 @@ package com.runiverse.e2e.running;
 
 import com.runiverse.e2e.E2eTestSupport;
 import com.runiverse.e2e.RunningWebSocket;
+import com.runiverse.e2e.SseStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +40,8 @@ class SoloRunningE2eTest extends E2eTestSupport {
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");
     // 종료는 S3 업로드와 날씨 조회를 함께 태워 응답이 가장 느린 구간이다
     private static final Duration FINISH_TIMEOUT = Duration.ofSeconds(30);
+    // 홈 공지는 서버 주기(app-stream.home-notice-interval=30s)마다 온다 — 연결한 순간에 따라 거의 한 주기를 기다린다
+    private static final Duration HOME_NOTICE_TIMEOUT = Duration.ofSeconds(45);
 
     // 한 테스트 안의 모든 좌표가 같은 기준시각을 써야 한다 —
     // 점마다 now()를 다시 읽으면 간격이 미세하게 어긋난다. JUnit은 테스트마다 인스턴스를 새로 만든다
@@ -195,6 +198,46 @@ class SoloRunningE2eTest extends E2eTestSupport {
         // then
         assertThat(reopened.status()).isEqualTo(201);
         assertThat(reopened.number("runningRoomId")).isNotEqualTo((int) runningRoomId);
+    }
+
+    @Test
+    @DisplayName("솔로를 끝내면 홈 러닝 현황의 오늘 완주 소식에 가린 닉네임과 실제 거리로 실린다")
+    void finishedSoloShowsUpInHomeActivity() {
+        // given -> 목표 없는 솔로는 끝낸 것이 곧 완주다
+        TestUser user = signUpAndOnboard();
+        long runningRoomId = post("/running-rooms/solo", Map.of(), user.accessToken())
+                .number("runningRoomId");
+        try (RunningWebSocket socket = connectRunningWebSocket(user.accessToken())) {
+            socket.send("RUNNING_START", Map.of("runningRoomId", runningRoomId));
+            socket.await("RUNNING_STARTED");
+            sendTrack(socket);
+            socket.send("RUNNING_FINISH", Map.of("forced", false));
+            socket.await("RUNNING_FINISHED", FINISH_TIMEOUT);
+        }
+        String day = trackStartAt.toLocalDate().toString();
+        Map<String, Object> record = get("/users/me/running-records?from=" + day + "&to=" + day, user.accessToken())
+                .objects("runningRecords").get(0);
+
+        // when -> 종료가 커밋된 뒤에 붙었으므로 받는 값은 이 완주까지 반영해 계산한 것이다
+        Map<String, Object> activity;
+        try (SseStream appStream = openAppStream(user.accessToken())) {
+            activity = appStream.await("HOME_ACTIVITY", HOME_NOTICE_TIMEOUT);
+        }
+
+        // then
+        assertThat(activity).containsOnlyKeys(
+                "runningNowCount", "todayFinishedRuns", "todayFinishedCount", "yesterdayFinishedCount");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> runs = (List<Map<String, Object>>) activity.get("todayFinishedRuns");
+        assertThat(runs).hasSizeLessThanOrEqualTo(3);
+        Map<String, Object> mine = runs.stream()
+                .filter(run -> ((Number) run.get("runningRecordId")).longValue()
+                        == ((Number) record.get("runningRecordId")).longValue())
+                .findFirst()
+                .orElseThrow();
+        assertThat(mine.get("nickname")).isEqualTo(user.nickname().substring(0, 1) + "**");
+        assertThat(mine.get("distanceMeters")).isEqualTo(record.get("totalDistanceMeters"));
+        assertThat(((Number) activity.get("todayFinishedCount")).intValue()).isPositive();
     }
 
     @Test
