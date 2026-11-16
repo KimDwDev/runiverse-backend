@@ -120,13 +120,29 @@ class AppVersionFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/app/version", "/actuator/health", "/actuator/prometheus"})
-    @DisplayName("버전 확인 API와 actuator는 구버전이어도 검사하지 않는다")
+    @ValueSource(strings = {"/app/version", "/actuator/health", "/actuator/prometheus", "/admin/push-campaigns/7/send"})
+    @DisplayName("버전 확인 API·actuator·관리자 API는 구버전이어도 검사하지 않는다")
     void skipsExcludedPaths(String path) throws Exception {
-        // when -> 구버전도 업데이트가 필요하다는 답을 받아야 하고, 헬스 체크·수집이 막히면 안 된다
+        // when -> 구버전도 업데이트가 필요하다는 답을 받아야 하고, 헬스 체크·수집이 막히면 안 된다.
+        //         관리자 API는 운영자가 터미널에서 불러 앱 버전 헤더가 없다
         filter.doFilter(request(path, "ANDROID", "0.0.1"), response, chain);
 
         // then
+        assertThat(chain.getRequest()).isNotNull();
+        verifyNoInteractions(checkAppVersionUsecase);
+    }
+
+    @Test
+    @DisplayName("컨텍스트 경로로 풀 수 없는 주소도 예외 없이 관리자 키 필터로 넘긴다")
+    void passesUnparsablePathToAdminKeyFilter() throws Exception {
+        // given -> //api/v1/…는 관리자 경로 매처가 예외를 던진다. 새면 아무나 500을 만든다
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "//api/v1/users/me");
+        request.setContextPath(CONTEXT_PATH);
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then -> 관리자 경로로 보고 넘기면 뒤의 관리자 키 필터가 401로 막는다
         assertThat(chain.getRequest()).isNotNull();
         verifyNoInteractions(checkAppVersionUsecase);
     }

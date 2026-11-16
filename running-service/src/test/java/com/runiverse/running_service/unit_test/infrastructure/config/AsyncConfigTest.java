@@ -7,6 +7,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.SmartLifecycle;
+import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.CountDownLatch;
@@ -78,6 +80,71 @@ class AsyncConfigTest {
         // then
         assertThat(log.messages(Level.WARN)).singleElement().asString()
                 .contains("[기기] 푸시 발송 건너뜀: 종료 중");
+    }
+
+    @Test
+    @DisplayName("컨텍스트가 닫히기 시작하면 진행 중인 공지 발송을 Redis가 멈추기 전에 끊는다")
+    void campaignExecutorInterruptsBeforeRedisStops() throws InterruptedException {
+        // given -> 수천 명을 보내는 캠페인이 아직 돌고 있다. Redis 연결은 Lettuce처럼 단계 0에서 멈춘다
+        AtomicBoolean redisStopped = new AtomicBoolean(false);
+        GenericApplicationContext context = new GenericApplicationContext();
+        context.registerBean("pushCampaignExecutor", ThreadPoolTaskExecutor.class,
+                () -> new AsyncConfig().pushCampaignExecutor());
+        context.registerBean("redisConnectionFactory", SmartLifecycle.class,
+                () -> new StoppingAtPhaseZero(redisStopped));
+        context.refresh();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        AtomicBoolean interruptedBeforeRedisStopped = new AtomicBoolean(false);
+        context.getBean(ThreadPoolTaskExecutor.class).execute(() -> {
+            started.countDown();
+            try {
+                new CountDownLatch(1).await();
+            } catch (InterruptedException e) {
+                interruptedBeforeRedisStopped.set(!redisStopped.get());
+                interrupted.countDown();
+            }
+        });
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        context.close();
+
+        // then -> 기다리다 늦게 끊으면 Redis가 멈춘 뒤 남은 사람마다 발송을 시도한다
+        assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(interruptedBeforeRedisStopped).isTrue();
+    }
+
+    // Lettuce 연결 팩토리처럼 실행기보다 늦은 단계 0에서 멈춘다
+    private static final class StoppingAtPhaseZero implements SmartLifecycle {
+
+        private final AtomicBoolean stopped;
+        private volatile boolean running;
+
+        private StoppingAtPhaseZero(AtomicBoolean stopped) {
+            this.stopped = stopped;
+        }
+
+        @Override
+        public void start() {
+            running = true;
+        }
+
+        @Override
+        public void stop() {
+            stopped.set(true);
+            running = false;
+        }
+
+        @Override
+        public boolean isRunning() {
+            return running;
+        }
+
+        @Override
+        public int getPhase() {
+            return 0;
+        }
     }
 
     private void awaitRelease() {
