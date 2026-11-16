@@ -148,7 +148,7 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 2. **처음 붙일 때 이미 쌓인 행** — 보낼지(스냅샷) 말지(`snapshot.mode=no_data`). 보내면 오래된 카드의 음악이 뒤늦게 만들어지고, 안 보내면 그 카드들은 `GENERATING`에 남는다. 스냅샷 행을 라우터가 어떻게 다루는지도 test에서 확인한다.
 3. **heartbeat 테이블** — 이름·컬럼. 정하면 erd에 더하고 publication에 넣는다.
 4. **슬롯 상한과 알람 값** — `max_slot_wal_keep_size` 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
-5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB 스키마를 어떻게 관리하는지(JPA 자동 생성인지 손으로 쓴 SQL인지)에 따라 방법이 다르다.
+5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB는 JPA 자동 생성(`update`)이라 엔티티 CHECK(세 환경 허용)로 만들어졌다. `update`는 이미 있는 CHECK를 고치지 않으므로, 같은 이름(`ck_outbox_event_topic`)으로 한 번 손으로 바꿔 두면 유지된다. 이벤트를 늘릴 때 test DB CHECK를 손으로 넓혀야 하는 것은 좁히든 안 좁히든 같다(자동 생성이 CHECK를 갱신하지 않는다).
 6. **RDS 확인** — Postgres 버전, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
 7. **지난 행 정리** — 언제 지울지, 지울 때 Kafka로 아무것도 나가지 않는지.
 8. **로컬에서 완료 이벤트 받기** — 완료 구독을 만들 때. 로컬 앱은 Kafka에 직접 닿지 않는다(브로커가 VPC 안 주소를 알려 주고 인증서도 그 주소라, SSH 터널로 우회되지 않는다). 로컬 Docker Kafka를 쓸지, test 서버에서 확인할지 정한다. 공유 클러스터의 `dev.*` 토픽·계정을 쓰는 곳도 이때 정해진다.
