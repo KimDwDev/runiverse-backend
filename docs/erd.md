@@ -501,7 +501,7 @@
 
 > CHECK `ck_record_card_image_music_status`: `music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
 > CHECK `ck_record_card_image_music_key`: `(music_status = 'COMPLETED') = (music_key is not null)` — 기본곡과 같다
-> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 4` — 카드당 사진이 최대 5장이라 0~4다
+> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 4`
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
 > **카드당 사진은 0~5장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
 > **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. 지우기 직전 모습은 `record_card_histories`의 `images`에 남는다. S3 객체는 프로필 사진처럼 남긴다.
