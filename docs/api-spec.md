@@ -3104,59 +3104,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **파티션 키를 `recordCardId`로 둔다** — 한 카드의 요청·완료가 같은 파티션에 들어가 순서가 섞이지 않는다.
 - **완료 토픽은 running-service 전체가 컨슈머 그룹 하나로 구독한다** — ALB 뒤에 인스턴스가 여럿이어도 완료 이벤트 하나는 한 인스턴스만 처리한다. 상태 변경은 DB에만 쓰고 인스턴스 메모리에 두지 않으므로 어느 인스턴스가 받아도 같다.
 
-#### 환경 분리 — 이름 앞에 `{env}`
+#### 이름 · 접속 — [msa/kafka.md](msa/kafka.md)
 
-개발 서버와 테스트 서버는 **Kafka 클러스터 하나를 같이 쓴다.** 그래서 토픽·컨슈머 그룹·계정 이름 앞에 환경 이름을 붙여 서로의 이벤트를 아예 보지 못하게 한다.
-
-- **`{env}` 값은 `dev` · `test` · `prod`** 중 하나다. 운영은 클러스터가 달라도 같은 규칙으로 `prod`를 붙인다 — 환경마다 이름 짓는 법이 달라지지 않게 한다.
-- **이벤트 안에 환경 필드를 넣어 걸러 내지 않는다** — 그러면 남의 환경 이벤트를 받은 뒤에야 버리게 되고, 거르는 코드를 빠뜨린 쪽은 남의 이벤트를 그대로 처리한다. 토픽이 다르면 애초에 받지 않는다.
-- **모든 이름은 `{env}.`로 시작한다** — 토픽·그룹·계정 모두 같다. **구분자는 `.`과 `-`만 쓴다** — Kafka는 메트릭 이름에서 `.`과 `_`를 같게 보므로 `_`는 쓰지 않는다.
-
-| 대상 | 이름 | 비고 |
-|---|---|---|
-| 요청 토픽 | `{env}.record-card.music.requested` | |
-| 완료 토픽 | `{env}.record-card.music.generated` | |
-| running-service 컨슈머 그룹 | `{env}.running-service.record-card-music` | 완료 토픽을 구독한다. 인스턴스가 여럿이어도 그룹은 하나다 |
-| AI 서버 컨슈머 그룹 | `{env}.runiverse-ai.record-card-music` | 요청 토픽을 구독한다. AI 서버가 쓰고, 권한만 여기서 정한다 |
-| running-service 계정 | `{env}.running-service` | SASL 사용자 이름 |
-| AI 서버 계정 | `{env}.runiverse-ai` | SASL 사용자 이름 |
-
-- **컨슈머 그룹은 받는 쪽마다 하나다** — running-service는 완료 토픽을, AI 서버는 요청 토픽을 받으므로 그룹이 두 개다. running-service 인스턴스끼리는 같은 그룹이라 이벤트를 나눠 받는다.
-- **계정도 환경마다 따로 둔다** — 계정이 환경 사이에 같으면 권한으로 막을 수 없어, 설정을 잘못 넣은 개발 서버가 테스트 토픽을 읽어도 클러스터가 허락한다. 계정을 나누면 잘못된 설정은 접속 단계에서 권한 오류로 끝난다.
-
-#### 접속 보안 — TLS + SASL + ACL
-
-- **전송은 TLS, 인증은 SASL/SCRAM-SHA-512** — `security.protocol=SASL_SSL`, `sasl.mechanism=SCRAM-SHA-512`. SCRAM은 비밀번호를 그대로 보내지 않는다.
-- **토픽은 관리자가 미리 만든다** — 클러스터의 `auto.create.topics.enable=false`, 서비스·커넥터 계정에는 `CREATE` 권한을 주지 않는다. 이름을 잘못 쓴 토픽이 저절로 생기지 않게 한다. 복제 수·보관 기간은 운영값이다.
-  - **`cleanup.policy=delete`로 만든다** — 한 카드의 이벤트가 같은 key(`record_card_id`)로 여러 번 나간다. `compact`면 같은 key의 앞 이벤트가 지워진다
-  - **파티션 수는 처음에 정하고 바꾸지 않는다** — 파티션은 `hash(key) % 파티션 수`로 정해져, 수를 바꾸면 같은 카드가 다른 파티션으로 가 순서가 잠깐 깨진다
-- **ACL은 이름 하나씩(LITERAL) 준다** — 접두어(PREFIXED)로 묶지 않는다. 토픽이 두 개뿐이라 하나씩 줘도 번거롭지 않고, 나중에 같은 접두어로 생긴 토픽에 권한이 따라가지 않는다.
-
-| 계정 | 리소스 | 허용 동작 |
-|---|---|---|
-| `{env}.debezium` | 토픽 `{env}.record-card.music.requested` | `WRITE`, `DESCRIBE` |
-| `{env}.running-service` | 토픽 `{env}.record-card.music.generated` | `READ`, `DESCRIBE` |
-| `{env}.running-service` | 그룹 `{env}.running-service.record-card-music` | `READ` |
-| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.requested` | `READ`, `DESCRIBE` |
-| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.generated` | `WRITE`, `DESCRIBE` |
-| `{env}.runiverse-ai` | 그룹 `{env}.runiverse-ai.record-card-music` | `READ` |
-
-- **요청 토픽에 쓰는 것은 running-service가 아니라 CDC 커넥터(`{env}.debezium`)다** — running-service는 아웃박스 테이블에만 쓴다(아래 「요청 이벤트는 아웃박스 + CDC로 발행한다」). 커넥터를 어디서 돌릴지(MSK Connect·직접 띄운 Kafka Connect)와 그에 딸린 내부 토픽·그룹 권한은 인프라를 만들 때 정한다
-- 브로커가 Kafka 3.0 미만이면 멱등 프로듀서에 클러스터 `IDEMPOTENT_WRITE`가 더 필요하다.
-
-#### running-service 환경 변수
-
-| 변수 | 예 | 설명 |
-|---|---|---|
-| `KAFKA_ENV` | `dev` | `{env}` 값. **토픽 두 개와 컨슈머 그룹 이름을 이 값 하나로 만든다** — 이름마다 변수를 두면 하나만 바꾸다 환경이 섞인다. `dev`·`test`·`prod`가 아니면 기동하지 않는다. 로컬은 `dev`다. 아웃박스의 `topic` 값(`{env}.record-card.music.requested`)도 이 값으로 만든다 — 요청 발행부터 필요하다 |
-| `KAFKA_BOOTSTRAP_SERVERS` | `b-1.xxx:9096,b-2.xxx:9096` | 쉼표로 구분 |
-| `KAFKA_SECURITY_PROTOCOL` | `SASL_SSL` | 배포 환경은 항상 `SASL_SSL`. 로컬 Docker Kafka만 `PLAINTEXT` |
-| `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | |
-| `KAFKA_SASL_USERNAME` | `dev.running-service` | `{env}.running-service` |
-| `KAFKA_SASL_PASSWORD` | | 시크릿 — 로그·출력에 남기지 않는다 |
-| `KAFKA_SSL_CA_LOCATION` | `/app/config/kafka-ca.crt` | 브로커를 검증할 CA 인증서(PEM) 경로 — `ssl.truststore.type=PEM`으로 읽어 비밀번호가 없다. 상대 경로는 실행 디렉터리 기준이라 배포에서는 절대 경로를 쓴다 |
-
-- **호스트 검증을 켠다** — `ssl.endpoint.identification.algorithm=https`(Kafka 클라이언트 기본값, 명시해 둔다). 접속 주소가 인증서에 든 주소와 같은지 확인하므로, IP로 접속하면 인증서 SAN에 그 IP가 있어야 한다. 끄지 않는다.
+- **토픽·컨슈머 그룹·계정 이름은 `{env}.`로 시작한다** (`dev` · `test` · `prod`) — dev·test가 클러스터 하나를 같이 써서 이름으로 환경을 가른다. 이벤트 안에 환경 필드를 두지 않는다.
+- 컨슈머 그룹: running-service `{env}.running-service.record-card-music`, AI 서버 `{env}.runiverse-ai.record-card-music`
+- 환경 분리 규칙, 클러스터 구성, 토픽 설정, 접속 보안(TLS·SASL·ACL), running-service 환경 변수는 [msa/kafka.md](msa/kafka.md)에 둔다 — 이 절에는 이벤트 계약만 적는다.
 
 **`{env}.record-card.music.requested`** (running-service → AI)
 
