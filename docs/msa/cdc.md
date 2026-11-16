@@ -24,7 +24,7 @@
 ## 구조
 
 ```text
-running-service ──INSERT──▶ RDS Postgres
+running-service ──INSERT──▶ Postgres    
                              outbox_events ─ WAL ─▶ 복제 슬롯 ─▶ Kafka Connect
                              (publication: outbox_events만)        └ Debezium Postgres 커넥터
                                                                      └ Outbox Event Router
@@ -43,29 +43,38 @@ DB는 세 환경이 모두 다르다.
 | 환경 | DB | Kafka | 커넥터 |
 |---|---|---|---|
 | `dev` | 로컬 Postgres | 공유 클러스터 (`dev.*`) | **없다** — VPC 안의 Connect가 로컬 Postgres에 닿지 않는다 |
-| `test` | test RDS | 공유 클러스터 (`test.*`) | test RDS를 읽는 커넥터 하나 |
+| `test` | test DB — **EC2에 직접 설치한 Postgres** | 공유 클러스터 (`test.*`) | test DB를 읽는 커넥터 하나 |
 | `prod` | prod RDS | 운영 클러스터 | prod RDS를 읽는 커넥터 하나 |
 
-- **로컬에서 CDC까지 확인할 때는 로컬 앱을 test RDS에 붙인다**(bastion 경유) — 로컬 앱이 test RDS에 쓴 아웃박스 행을 test 커넥터가 읽어 발행한다. 로컬 Postgres에 쓴 행은 아무도 보내지 않는다.
+- **test와 prod는 DB 종류가 달라 준비 방법이 다르다** — test는 설정 파일과 재시작, prod는 RDS 파라미터 그룹과 재부팅(아래 「논리 복제 켜기」). test에서 검증한 절차를 prod에 그대로 쓰지 못하는 부분이 있다.
+
+- **로컬에서 CDC까지 확인할 때는 로컬 앱을 test DB에 붙인다**(bastion 경유) — 로컬 앱이 test DB에 쓴 아웃박스 행을 test 커넥터가 읽어 발행한다. 로컬 Postgres에 쓴 행은 아무도 보내지 않는다.
 
 ### `KAFKA_ENV`는 기계가 아니라 DB를 따른다
 
-**test RDS에 붙은 앱은 로컬이라도 `KAFKA_ENV=test`로 띄운다.**
+**test DB에 붙은 앱은 로컬이라도 `KAFKA_ENV=test`로 띄운다.**
 
-- 아웃박스 `topic` 값은 쓰는 앱의 `KAFKA_ENV`로 정해지고, 커넥터는 그 값대로 보낸다. 로컬 앱을 `dev`로 띄운 채 test RDS에 붙으면 test 커넥터가 `dev.*` 토픽으로 보내려 한다.
+- 아웃박스 `topic` 값은 쓰는 앱의 `KAFKA_ENV`로 정해지고, 커넥터는 그 값대로 보낸다. 로컬 앱을 `dev`로 띄운 채 test DB에 붙으면 test 커넥터가 `dev.*` 토픽으로 보내려 한다.
 - `test.debezium`에는 `dev.*` 쓰기 권한이 없어 **커넥터가 멈춘다. 재시작해도 같은 행에서 다시 멈춘다** — 행은 이미 WAL에 있어 지워도 소용없다. 그동안 슬롯이 WAL을 붙잡는다(아래 「복제 슬롯」).
 - **막는 장치(제안)**: test DB의 `ck_outbox_event_topic`을 `test` 토픽만 허용하도록 좁힌다 — 운영 DDL이 `prod`만 허용하는 것과 같다. 그러면 잘못 띄운 앱은 9-2 저장에서 바로 실패해 커넥터까지 가지 않는다.
 
 ## Postgres 쪽
 
-### 논리 복제 켜기 (RDS)
+### 논리 복제 켜기
 
-- **`rds.logical_replication=1`은 재부팅해야 적용된다** — 기본 파라미터 그룹은 고칠 수 없어, 쓰는 파라미터 그룹이 기본이면 사용자 정의 그룹을 만들어 바꿔 끼우고 이것도 재부팅이 필요하다. **prod는 점검 시간을 잡는다.**
-- 로컬 Postgres는 `wal_level=logical`로 띄운다.
+| 환경 | 켜는 곳 | 적용 |
+|---|---|---|
+| `test` (EC2 Postgres) | `postgresql.conf`의 `wal_level=logical` | **Postgres 재시작** — 설정 다시 읽기(reload)로는 바뀌지 않는다 |
+| `prod` (RDS) | 사용자 정의 파라미터 그룹의 `rds.logical_replication=1` | **인스턴스 재부팅** — 점검 시간을 잡는다 |
+| `dev` (로컬) | 필요 없다 — 커넥터가 없다 | |
+
+- **prod**: 기본 파라미터 그룹은 고칠 수 없어, 기본 그룹을 쓰고 있으면 사용자 정의 그룹을 만들어 바꿔 끼운다(이것도 재부팅). 다른 DB와 같이 쓰는 그룹이면 고치지 말고 따로 만든다.
+- **test**: Connect가 도는 곳에서 5432로 붙을 수 있어야 한다 — `listen_addresses`, `pg_hba.conf`에 커넥터 계정과 Connect 주소, 보안 그룹. 논리 복제 접속은 `pg_hba.conf`에서 `replication` 키워드가 아니라 **DB 이름**으로 맞는 줄을 찾는다.
+- `max_replication_slots` · `max_wal_senders`는 기본값(10)으로 충분하다 — 커넥터가 환경마다 하나다.
 
 ### 커넥터 전용 DB 계정
 
-- **슈퍼유저를 주지 않는다** — RDS의 복제 역할(`rds_replication`)과 `outbox_events` 조회 권한만 준다. 앱 계정(`DATABASE_USERNAME`)을 같이 쓰지 않는다.
+- **슈퍼유저를 주지 않는다** — 복제 권한과 `outbox_events` 조회 권한만 준다. 복제 권한은 test(직접 설치)는 계정의 `REPLICATION` 속성, prod(RDS)는 `rds_replication` 역할이다. 앱 계정(`DATABASE_USERNAME`)을 같이 쓰지 않는다.
 - 비밀번호는 SSM에 둔다.
 
 ### publication — `outbox_events`만
@@ -75,11 +84,11 @@ DB는 세 환경이 모두 다르다.
 
 ### 복제 슬롯 — 가장 조심할 것
 
-- **슬롯은 커넥터가 확인한 위치 뒤의 WAL을 지우지 못하게 붙잡는다.** 커넥터가 멈추거나 Kafka가 내려가면 그동안 WAL이 쌓여 **RDS 디스크가 차고, 차면 DB 전체가 멈춘다** — 음악 기능이 아니라 서비스 전체 장애다.
-- **커넥터가 정상이어도 WAL이 쌓일 수 있다** — 슬롯 위치는 publication에 든 테이블의 변경이 있어야 앞으로 간다. 기록 카드를 아무도 만들지 않는 동안 다른 테이블(러닝 기록 등)의 쓰기와 RDS 자체 쓰기로 WAL은 계속 늘지만 슬롯은 제자리다. **heartbeat로 주기적으로 publication 안 테이블에 써서 슬롯을 민다**(`heartbeat.interval.ms` + `heartbeat.action.query`) — 이 쿼리가 쓸 테이블이 필요하다(「정하지 않은 것」 3).
+- **슬롯은 커넥터가 확인한 위치 뒤의 WAL을 지우지 못하게 붙잡는다.** 커넥터가 멈추거나 Kafka가 내려가면 그동안 WAL이 쌓여 **DB 디스크가 차고, 차면 DB 전체가 멈춘다** — 음악 기능이 아니라 서비스 전체 장애다.
+- **커넥터가 정상이어도 WAL이 쌓일 수 있다** — 슬롯 위치는 publication에 든 테이블의 변경이 있어야 앞으로 간다. 기록 카드를 아무도 만들지 않는 동안 다른 테이블(러닝 기록 등)의 쓰기로(RDS는 자체 쓰기도 한다) WAL은 계속 늘지만 슬롯은 제자리다. **heartbeat로 주기적으로 publication 안 테이블에 써서 슬롯을 민다**(`heartbeat.interval.ms` + `heartbeat.action.query`) — 이 쿼리가 쓸 테이블이 필요하다(「정하지 않은 것」 3).
 - **막는 장치는 두 겹이다**
   - 상한: `max_slot_wal_keep_size` — 넘으면 Postgres가 슬롯을 버리고 WAL을 지운다. 디스크는 지키지만 그 슬롯은 못 쓰게 되어 커넥터를 다시 만들어야 한다. 버려진 구간의 이벤트는 아웃박스 행으로 남아 있다(다시 보내는 절차는 아직 없다).
-  - 알람: 슬롯 지연(WAL 보유량)과 디스크 여유를 본다. 상한에 닿기 전에 알아야 한다.
+  - 알람: 슬롯 지연(WAL 보유량)과 디스크 여유를 본다. 상한에 닿기 전에 알아야 한다. **test(EC2)는 RDS처럼 CloudWatch 지표가 없어** 슬롯 지연을 직접 조회해 내보내야 한다.
 - **커넥터를 영구히 내리면 슬롯을 지운다** — 남은 슬롯은 아무도 읽지 않는데 WAL을 계속 붙잡는다. 환경을 정리할 때 체크리스트에 넣는다.
 - 슬롯 이름은 환경마다 고정한다(`slot.name`) — 커넥터를 다시 만들어도 같은 슬롯을 이어 쓴다.
 
@@ -108,7 +117,7 @@ DB는 세 환경이 모두 다르다.
 
 ### 어디서 돌리든 필요한 것
 
-- RDS 5432와 Kafka 9092에 닿는 네트워크(보안 그룹). Kafka에는 **인증서 SAN과 같은 VPC 안 주소**로 붙는다.
+- DB 5432와 Kafka 9092에 닿는 네트워크(보안 그룹). Kafka에는 **인증서 SAN과 같은 VPC 안 주소**로 붙는다.
 - 그 환경 클러스터의 CA 인증서 — test와 prod의 CA가 다르다.
 - 시크릿 두 개: DB 계정 비밀번호, `{env}.debezium` 비밀번호.
 - 환경마다 따로인 Connect 그룹·내부 토픽 3개 — 이름은 `{env}.`로 시작한다(test·dev가 한 클러스터를 같이 쓴다).
@@ -134,7 +143,7 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 
 ## 준비 순서
 
-1. **RDS** — 사용자 정의 파라미터 그룹 + `rds.logical_replication=1` + 재부팅 → `max_slot_wal_keep_size` → 커넥터 DB 계정 → publication(+ heartbeat 테이블)
+1. **DB** — 논리 복제 켜기(test: `wal_level` + 재시작, prod: 파라미터 그룹 + 재부팅) → `max_slot_wal_keep_size` → 커넥터 DB 계정 → publication(+ heartbeat 테이블)
 2. **Kafka** — [kafka.md](kafka.md) 「Debezium을 붙일 때 Kafka에 더할 것」
 3. **Connect** — 띄우고, CA 인증서·시크릿을 넣고, REST API를 막는다
 4. **커넥터 등록** — `infra/kafka/`의 설정으로
@@ -149,7 +158,7 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 3. **heartbeat 테이블** — 이름·컬럼. 정하면 erd에 더하고 publication에 넣는다.
 4. **슬롯 상한과 알람 값** — `max_slot_wal_keep_size` 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
 5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB는 JPA 자동 생성(`update`)이라 엔티티 CHECK(세 환경 허용)로 만들어졌다. `update`는 이미 있는 CHECK를 고치지 않으므로, 같은 이름(`ck_outbox_event_topic`)으로 한 번 손으로 바꿔 두면 유지된다. 이벤트를 늘릴 때 test DB CHECK를 손으로 넓혀야 하는 것은 좁히든 안 좁히든 같다(자동 생성이 CHECK를 갱신하지 않는다).
-6. **RDS 확인** — Postgres 버전, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
+6. **DB 확인** — test·prod의 Postgres 버전(같은지), prod RDS의 Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지), test DB가 어느 EC2에 있는지(앱과 같은 EC2면 디스크를 함께 쓴다).
 7. **지난 행 정리** — 언제 지울지, 지울 때 Kafka로 아무것도 나가지 않는지.
 8. **로컬에서 완료 이벤트 받기** — 완료 구독을 만들 때. 로컬 앱은 Kafka에 직접 닿지 않는다(브로커가 VPC 안 주소를 알려 주고 인증서도 그 주소라, SSH 터널로 우회되지 않는다). 로컬 Docker Kafka를 쓸지, test 서버에서 확인할지 정한다. 공유 클러스터의 `dev.*` 토픽·계정을 쓰는 곳도 이때 정해진다.
-9. **로컬 dev에서 음악 요청을 보내지 않기 (나중에)** — 메일·푸시처럼 로컬에서는 실제로 보내지 않게 한다. 메일·푸시는 `local` 프로필이면 로그만 남기는 어댑터로 바뀐다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 다만 아웃박스는 **로컬에서 test RDS에 붙여 CDC를 확인할 때는 실제로 써야 해서** 같은 `local` 프로필로 끄면 그 확인을 못 한다 — 끄는 기준을 프로필이 아니라 붙는 DB(`KAFKA_ENV`)에 둘지 함께 정한다.
+9. **로컬 dev에서 음악 요청을 보내지 않기 (나중에)** — 메일·푸시처럼 로컬에서는 실제로 보내지 않게 한다. 메일·푸시는 `local` 프로필이면 로그만 남기는 어댑터로 바뀐다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 다만 아웃박스는 **로컬에서 test DB에 붙여 CDC를 확인할 때는 실제로 써야 해서** 같은 `local` 프로필로 끄면 그 확인을 못 한다 — 끄는 기준을 프로필이 아니라 붙는 DB(`KAFKA_ENV`)에 둘지 함께 정한다.

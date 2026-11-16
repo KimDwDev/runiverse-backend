@@ -168,7 +168,7 @@ running-service에는 아직 Kafka 클라이언트가 없다 — 요청은 Debez
 
 | 변수 | 예 | 설명 |
 |---|---|---|
-| `KAFKA_ENV` | `dev` | `{env}` 값. 토픽·그룹 이름을 이 값 하나로 만든다. `dev`·`test`·`prod`가 아니면 기동하지 않는다. **붙는 DB의 환경을 따른다** — 로컬 Postgres면 `dev`, 로컬에서 test RDS에 붙으면 `test`([cdc.md](cdc.md) 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」) |
+| `KAFKA_ENV` | `dev` | `{env}` 값. 토픽·그룹 이름을 이 값 하나로 만든다. `dev`·`test`·`prod`가 아니면 기동하지 않는다. **붙는 DB의 환경을 따른다** — 로컬 Postgres면 `dev`, 로컬에서 test DB에 붙으면 `test`([cdc.md](cdc.md) 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」) |
 | `KAFKA_BOOTSTRAP_SERVERS` | `<브로커 VPC 주소>:9092` | 지금은 노드 하나. 인증서 SAN과 같은 주소를 쓴다 |
 | `KAFKA_SECURITY_PROTOCOL` | `SASL_SSL` | 배포 환경은 항상 `SASL_SSL`. 로컬 Docker Kafka를 만들면(아직 없다) 그것만 `PLAINTEXT` |
 | `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | |

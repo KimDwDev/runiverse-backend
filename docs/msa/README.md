@@ -22,7 +22,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
     │            ▲
     │ INSERT     │ 완료 이벤트 구독 (예정)
     ▼            │
- RDS Postgres    │
+ Postgres        │
  outbox_events   │
     │ CDC        │
     ▼            │
@@ -35,7 +35,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 
 | 서비스 | 맡는 것 | 갖는 데이터 |
 |---|---|---|
-| running-service | 앱 API 전부. 기록 카드 저장, 음악 생성 상태 | RDS — 사용자·러닝·기록 카드의 정본 |
+| running-service | 앱 API 전부. 기록 카드 저장, 음악 생성 상태 | Postgres — 사용자·러닝·기록 카드의 정본 |
 | AI 서버 | 음악 생성 (모델·추론 인프라 포함) | 자기 저장소(inbox 포함). 만든 음악은 S3에 올리고 key를 정한다 |
 | Debezium (Kafka Connect) | 커밋된 아웃박스 행을 Kafka로 발행 | 없음 — 어디까지 보냈는지는 복제 슬롯과 Connect 오프셋 |
 | Kafka | 서비스 사이 이벤트 전달 | 이벤트 7일 보관 |
@@ -78,11 +78,11 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | 환경 | DB | Kafka | 커넥터 |
 |---|---|---|---|
 | `dev` | 로컬 Postgres | 공유 클러스터 (`dev.*`) | 없음 |
-| `test` | test RDS | 공유 클러스터 (`test.*`) | test RDS용 |
+| `test` | test DB (EC2에 직접 설치한 Postgres) | 공유 클러스터 (`test.*`) | test DB용 |
 | `prod` | prod RDS | 운영 클러스터 | prod RDS용 |
 
 - dev·test는 Kafka 클러스터 하나를 이름 접두어로 나눠 쓴다([kafka.md](kafka.md) 「이름」).
-- **`KAFKA_ENV`는 붙는 DB를 따른다** — 로컬 앱이라도 test RDS에 붙으면 `test`다([cdc.md](cdc.md)).
+- **`KAFKA_ENV`는 붙는 DB를 따른다** — 로컬 앱이라도 test DB에 붙으면 `test`다([cdc.md](cdc.md)).
 
 ## 지금 어디까지 왔나
 
