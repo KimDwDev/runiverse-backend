@@ -4,7 +4,7 @@ public sealed interface ErrorCode permits UserErrorCode, UserOnboardingErrorCode
         DeletedUserErrorCode, RunningRoomErrorCode, RunningPlayerErrorCode, RunningMetricErrorCode,
         RunningRecordErrorCode, RunningComboErrorCode, ScheduledJobErrorCode, VersionNameErrorCode, PlatformErrorCode,
         UserRelationshipErrorCode, UserDeviceErrorCode, UserNotificationErrorCode, RecordCardErrorCode,
-        RunningRoomChatErrorCode {
+        RunningRoomChatErrorCode, PushCampaignErrorCode {
 
     String getCode();
 
