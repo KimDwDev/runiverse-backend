@@ -40,7 +40,7 @@ class SoloRunningE2eTest extends E2eTestSupport {
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");
     // 종료는 S3 업로드와 날씨 조회를 함께 태워 응답이 가장 느린 구간이다
     private static final Duration FINISH_TIMEOUT = Duration.ofSeconds(30);
-    // 홈 공지는 서버 주기(app-stream.home-notice-interval=30s)마다 온다 — 연결한 순간에 따라 거의 한 주기를 기다린다
+    // 러닝 현황은 서버 주기(app-stream.home-activity-interval=30s)마다 온다 — 연결한 순간에 따라 거의 한 주기를 기다린다
     private static final Duration HOME_NOTICE_TIMEOUT = Duration.ofSeconds(45);
 
     // 한 테스트 안의 모든 좌표가 같은 기준시각을 써야 한다 —
