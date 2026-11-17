@@ -61,7 +61,7 @@ public class RoomChatPushRequester {
         };
     }
 
-    // 사진 주소는 1시간 뒤 만료된다 — 그 뒤에 받은 앱은 사진 없이 그린다
+    // 사진 주소는 정해진 시간이 지나면 만료된다 — 그 뒤에 받은 앱은 사진 없이 그린다
     private static Map<String, String> dataOf(RoomChat chat) {
         RoomChat.Person person = chat.person();
         Map<String, String> data = new HashMap<>();

@@ -44,7 +44,7 @@ public class RoomChatPresenceWriter {
         }
     }
 
-    // 러닝이 시작되면 채팅이 닫혀 남기지 않는다 — 시작 전에 나갈 때만 부른다
+    // 시작 전에 나갈 때만 부른다
     public void left(RunningRoom room, UserId userId) {
         RoomChat chat = write(RunningRoomChat.left(room.getRunningRoomId().orElseThrow(), userId));
         // 인원이 0이면 받을 사람이 없다

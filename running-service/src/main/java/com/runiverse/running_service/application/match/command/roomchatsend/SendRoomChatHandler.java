@@ -39,7 +39,7 @@ public class SendRoomChatHandler implements SendRoomChatUsecase {
     @Override
     public RoomChat handle(SendRoomChatCommand command) {
         UserId senderId = new UserId(command.userId());
-        UserStatusRow room = roomChatAccessPolicy.requireOpen(senderId, command.runningRoomId());
+        UserStatusRow status = roomChatAccessPolicy.requireOpen(senderId, command.runningRoomId());
 
         RunningRoomId roomId = new RunningRoomId(command.runningRoomId());
         RunningRoomChat chat = RunningRoomChat.send(roomId, senderId, command.content());
@@ -56,7 +56,8 @@ public class SendRoomChatHandler implements SendRoomChatUsecase {
                 saved.createdAt()));
         // 커밋 후 방의 다른 참가자에게 — 보낸 사람은 이 응답으로 화면을 바꾼다
         eventPublisher.publishEvent(new MatchRoomChangedEvent(MatchStreamEvent.roomChatSent(sent)));
-        roomChatPushRequester.request(sent, room.scheduledStartAt(), room.targetDistanceMeters(), membersOf(roomId));
+        roomChatPushRequester.request(
+                sent, status.scheduledStartAt(), status.targetDistanceMeters(), membersOf(roomId));
         return sent;
     }
 

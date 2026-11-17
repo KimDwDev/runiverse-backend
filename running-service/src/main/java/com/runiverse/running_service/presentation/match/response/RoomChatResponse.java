@@ -12,7 +12,7 @@ public record RoomChatResponse(
         Long chatId,
         Long runningRoomId,
         RunningRoomChatType type,
-        // 안내 줄이면 null
+        // 말을 보낸 사람 — 안내 줄이면 null
         PersonResponse sender,
         // 들어오거나 나간 사람 — 말이면 null
         PersonResponse actor,
@@ -29,8 +29,8 @@ public record RoomChatResponse(
                 chat.chatId(),
                 chat.runningRoomId(),
                 chat.type(),
-                PersonResponse.from(chat.sender()),
-                PersonResponse.from(chat.actor()),
+                chat.sender() == null ? null : PersonResponse.from(chat.sender()),
+                chat.actor() == null ? null : PersonResponse.from(chat.actor()),
                 chat.content(),
                 chat.isDeleted(),
                 chat.editedAt(),
@@ -46,9 +46,6 @@ public record RoomChatResponse(
     ) {
 
         public static PersonResponse from(RoomChat.Person person) {
-            if (person == null) {
-                return null;
-            }
             return new PersonResponse(
                     person.userId(),
                     person.nickname(),
