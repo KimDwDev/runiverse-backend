@@ -24,7 +24,7 @@ runiverse-backend
 ├── running-service   # Spring Boot API 서버 (클린 아키텍처 + DDD)
 ├── e2e_test          # Docker Compose 기반 E2E 테스트
 ├── load_test         # k6 부하 테스트 (러닝 상태 저장소 Redis vs RDS 비교)
-├── infra             # 로그 수집(Filebeat) 설정
+├── infra             # 로그 수집(Filebeat)·Kafka 커넥터 설정
 └── docs              # 명세·컨벤션 문서 (msa/ — 서비스 사이 구조)
 ```
 

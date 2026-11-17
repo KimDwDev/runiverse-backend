@@ -68,7 +68,9 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 | AI 서버 컨슈머 그룹 | `{env}.runiverse-ai.record-card-music` |
 | running-service 계정 | `{env}.running-service` |
 | AI 서버 계정 | `{env}.runiverse-ai` |
-| CDC 커넥터 계정 | `{env}.debezium` — **아직 없다** (아래 「Debezium을 붙일 때」) |
+| CDC 커넥터 계정 | `{env}.debezium` — test만 있다 (아래 「Debezium을 붙일 때」). Connect가 내부 토픽을 쓸 때도 이 계정 하나를 쓴다 |
+| Connect 그룹 | `{env}.debezium-connect` |
+| Connect 내부 토픽 | `{env}.debezium-connect.configs` · `.offsets` · `.status` |
 
 - **환경 분리는 검증했다** — dev 계정으로 test 토픽을, test 계정으로 dev 토픽을 조회하면 권한 오류로 끝난다. 계정을 환경마다 나눈 이유가 이것이다: 설정을 잘못 넣은 서버는 접속 단계에서 막힌다.
 
@@ -78,6 +80,10 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 |---|---|---|---|---|
 | `{env}.record-card.music.requested` | 1 | 1 | 7일 (기본값) | `delete` (기본값) |
 | `{env}.record-card.music.generated` | 1 | 1 | 7일 (기본값) | `delete` (기본값) |
+| `{env}.debezium-connect.configs` · `.offsets` · `.status` | 1 | 1 | 키마다 최신 값 | **`compact`** — test만 있다(11-17) |
+| `{env}.debezium-heartbeat.outbox` | 1 | 1 | **1일** | `delete` — Debezium heartbeat 기록. test만 있다(11-17) |
+
+- **Connect 내부 토픽은 `compact`여야 한다** — 커넥터 설정과 "WAL을 어디까지 보냈는지"를 키마다 최신 값으로 남긴다. `delete`면 7일 뒤 지워져 커넥터가 처음부터 다시 시작한다. configs는 파티션이 반드시 1개다.
 
 - **정리 방식은 `delete`여야 한다** — 같은 카드의 이벤트가 같은 key로 여러 번 나간다(9-2 작성 뒤 9-3 수정). `compact`면 앞 이벤트가 지워진다.
 - **파티션 수는 처음에 정하고 바꾸지 않는다** — 파티션은 `hash(key) % 파티션 수`로 정해진다. 늘리면 같은 카드가 다른 파티션으로 가 그 순간 순서가 깨진다(줄이는 것은 Kafka가 허락하지 않는다). 실제 이벤트가 흐르기 전에 정한다(「정하지 않은 것」 1).
@@ -95,6 +101,7 @@ ACL·접속 검증 때 실제 요청·완료 토픽(**운영 `prod` 토픽 포�
 
 - **새 그룹, 오프셋을 처음으로 되돌린 그룹, 7일 넘게 비어 오프셋이 지워진 그룹은 이 메시지를 받는다**(`earliest`일 때) — 본문을 읽지 못하는 메시지다. 완료 구독을 처음 붙일 때 이 경우가 생기기 쉽다([outbox-inbox.md](outbox-inbox.md) 「정하지 않은 것」 3).
 - **실제 연동 전에 지운다**(`kafka-delete-records`). 기다려서 없애려면 약 14일이 걸린다 — 메시지가 적으면 세그먼트가 7일 뒤에 닫히고, 닫힌 뒤 다시 7일이 지나야 지워진다.
+- 11-17 확인: `test.record-card.music.requested`에는 CDC 검증으로 나간 실제 카드 메시지 2개만 있고 예전 검증 메시지는 남아 있지 않다. 완료 토픽과 `dev`·`prod` 토픽은 확인 전이다.
 - **앞으로 접속 검증은 실제 토픽에 하지 않는다** — 검증용 토픽을 따로 두고 권한도 따로 준다.
 
 ## 접속 보안 — TLS + SASL + ACL
@@ -141,7 +148,8 @@ ACL·접속 검증 때 실제 요청·완료 토픽(**운영 `prod` 토픽 포�
 | `kafka-admin` | O — super user (토픽·계정·ACL 관리, 브로커끼리·컨트롤러 통신) |
 | `dev.running-service` · `test.running-service` | O |
 | `dev.runiverse-ai` · `test.runiverse-ai` | O |
-| `{env}.debezium` | **X** — CDC를 붙일 때 만든다 |
+| `test.debezium` | O (11-17) |
+| `dev.debezium` · `prod.debezium` | X — dev는 커넥터가 없어 만들지 않는다. prod는 prod 차례에 |
 
 ### ACL
 
@@ -152,15 +160,18 @@ ACL·접속 검증 때 실제 요청·완료 토픽(**운영 `prod` 토픽 포�
 
 | 계정 | 리소스 | 지금 | 목표 (CDC 적용 뒤) |
 |---|---|---|---|
-| `{env}.running-service` | 토픽 `requested` | `WRITE` `DESCRIBE` | **없음** ⚠️ |
+| `{env}.running-service` | 토픽 `requested` | `WRITE` `DESCRIBE` | 없음 — **일단 유지** ⚠️ |
 | `{env}.running-service` | 토픽 `generated` | `READ` `DESCRIBE` | 그대로 |
 | `{env}.running-service` | 그룹 `{env}.running-service.record-card-music` | `READ` | 그대로 |
 | `{env}.runiverse-ai` | 토픽 `requested` | `READ` `DESCRIBE` | 그대로 |
 | `{env}.runiverse-ai` | 토픽 `generated` | `WRITE` `DESCRIBE` | 그대로 |
 | `{env}.runiverse-ai` | 그룹 `{env}.runiverse-ai.record-card-music` | `READ` | 그대로 |
-| `{env}.debezium` | 토픽 `requested` | 없음 (계정 없음) | `WRITE` `DESCRIBE` |
+| `{env}.debezium` | 토픽 `requested` | test: `WRITE` `DESCRIBE` (11-17) · prod: 아직 | `WRITE` `DESCRIBE` |
+| `{env}.debezium` | Connect 내부 토픽 3개 | test: `READ` `WRITE` `DESCRIBE` `DESCRIBE_CONFIGS` (11-17) · prod: 아직 | 그대로 |
+| `{env}.debezium` | 그룹 `{env}.debezium-connect` | test: `READ` (11-17) · prod: 아직 | 그대로 |
+| `{env}.debezium` | 토픽 `{env}.debezium-heartbeat.outbox` | test: `WRITE` `DESCRIBE` (11-17) · prod: 아직 | 그대로 |
 
-- ⚠️ **running-service가 지금 요청 토픽에 쓸 수 있다** — 직접 발행하던 설계로 만든 권한이다. 아웃박스 + CDC에서는 running-service가 Kafka에 쓰지 않으므로, Debezium 권한을 주면서 함께 뺀다. 남겨 두면 실수로 넣은 직접 발행 코드가 권한 오류 없이 동작한다.
+- ⚠️ **running-service가 지금 요청 토픽에 쓸 수 있다** — 직접 발행하던 설계로 만든 권한이다. 아웃박스 + CDC에서는 running-service가 Kafka에 쓰지 않으므로, 원래는 Debezium 권한을 주면서 함께 빼려 했다. **11-17 결정: 일단 남겨 둔다.** 남아 있는 동안은 실수로 넣은 직접 발행 코드가 권한 오류 없이 동작한다 — 리뷰에서 running-service에 Kafka 프로듀서가 들어오지 않는지 본다(outbox-inbox.md 「앱은 Kafka로 직접 보내지 않는다」).
 
 ## running-service 접속 설정
 
@@ -180,12 +191,12 @@ running-service에는 아직 Kafka 클라이언트가 없다 — 요청은 Debez
 
 자세한 설계는 [cdc.md](cdc.md)에 둔다. Kafka 쪽에서 준비할 것만 적는다.
 
-- [ ] 계정 `{env}.debezium` (SCRAM-SHA-512)
-- [ ] 요청 토픽 `WRITE` `DESCRIBE`를 `{env}.debezium`에 주고, `{env}.running-service`에서 뺀다
-- [ ] Kafka Connect 내부 토픽 3개(설정·오프셋·상태) — 관리자가 미리 만든다(자동 생성이 꺼져 있다). **`cleanup.policy=compact`**, 복제 계수 1, 설정 토픽은 파티션 1개. **환경마다 따로, 이름은 `{env}.`로 시작**
-- [ ] Connect 워커 그룹(환경마다 따로)과 내부 토픽 권한
-- [ ] Debezium heartbeat 토픽 — 미리 만들고 `{env}.debezium`에 `WRITE` ([cdc.md](cdc.md) 「Debezium 설정에서 정할 것」)
-- [ ] Connect가 도는 곳에 CA 인증서
+- [x] 계정 `{env}.debezium` (SCRAM-SHA-512) — test
+- [x] 요청 토픽 `WRITE` `DESCRIBE`를 `{env}.debezium`에 준다 — test (`{env}.running-service` 권한은 일단 유지 — 위 ⚠️)
+- [x] Kafka Connect 내부 토픽 3개(설정·오프셋·상태) — test — 관리자가 미리 만든다(자동 생성이 꺼져 있다). **`cleanup.policy=compact`**, 복제 계수 1, 설정 토픽은 파티션 1개. **환경마다 따로, 이름은 `{env}.`로 시작**
+- [x] Connect 워커 그룹(환경마다 따로)과 내부 토픽 권한 — test
+- [x] Debezium heartbeat 토픽 — test. 미리 만들고 `{env}.debezium`에 `WRITE` ([cdc.md](cdc.md) 「Debezium 설정에서 정할 것」)
+- [x] Connect가 도는 곳에 CA 인증서 — test는 Connect를 Kafka EC2에 같이 두어 이미 있다
 - [ ] 중복 방지(`enable.idempotence=true`)를 켠 채로 발행되는지 확인 — 지금까지 송수신 검증은 끄고 했다. Connect 워커 설정에 `producer.enable.idempotence=true`로 명시해 기본값에 기대지 않는다
 
 ## 보내는 쪽은 중복 방지를 켠다
