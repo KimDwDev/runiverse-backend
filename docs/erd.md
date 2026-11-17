@@ -559,6 +559,20 @@
 > **행은 지우지 않고 남긴다** — 무엇을 언제 보냈는지 DB에서 본다. 보관 기간과 지난 행을 지우는 방법은 아직 정하지 않았다(정할 때 `created_at` 인덱스를 함께 둔다). 지울 때 DELETE가 Kafka로 나가지 않게 커넥터는 `tombstones.on.delete=false`다
 > **발행 상태 컬럼(status)을 두지 않는다** — Debezium은 WAL을 읽기만 하고 이 테이블에 다시 쓰지 않아, 상태를 바꿀 주체가 없다. 어디까지 보냈는지는 행마다가 아니라 복제 슬롯의 확인 위치(`pg_replication_slots.confirmed_flush_lsn`)로 본다 — 그보다 앞에 커밋된 행은 발행됐다. 슬롯 지연은 알람으로 본다
 
+### cdc_heartbeats (CDC 하트비트)
+
+**앱이 쓰지 않는다 — 엔티티가 없다.** Debezium이 1분마다 한 줄 쓰는 테이블이다(`heartbeat.action.query`). 기록 카드가 만들어지지 않는 동안에도 Debezium이 publication 안의 변경을 받아 복제 슬롯 위치를 앞으로 밀게 한다 — 이것이 없으면 다른 테이블 쓰기로 늘어난 WAL을 슬롯이 계속 붙잡는다(test에서 확인, docs/msa/cdc.md).
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| created_at | timestamp | NOT NULL | 쓴 시각(KST 벽시계) |
+
+> **PK를 두지 않는다** — 조회하지 않고, 지울 때도 시각으로만 지운다. publication이 INSERT만 내보내므로(UPDATE·DELETE 없음) 복제용 키도 필요 없다
+> **publication(`outbox_publication`)에 들어 있지만 커넥터의 `table.include.list`에는 없다** — 변경은 Debezium까지 가서 슬롯을 밀고, Kafka로는 나가지 않는다
+> **하루 지난 행은 Debezium이 같은 쿼리에서 지운다** — INSERT와 DELETE를 한 문장(CTE)으로 실행한다. DELETE는 publication이 내보내지 않는다
+> **권한**: 커넥터 DB 계정(`debezium`)에 이 테이블의 `SELECT`·`INSERT`·`DELETE`만 준다
+> **test·prod 모두 손으로 만든다** — 엔티티가 없어 JPA 자동 생성이 만들지 않는다
+
 ## 4. delete_* (스냅샷/이력 테이블)
 
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각. 단 `delete_users`의 `birth_year`·`bmi`는 식별성을 낮춘 가공값이다.

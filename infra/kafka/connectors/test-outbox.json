@@ -19,6 +19,7 @@
   "topic.prefix": "outbox",
   "topic.heartbeat.prefix": "test.debezium-heartbeat",
   "heartbeat.interval.ms": "60000",
+  "heartbeat.action.query": "WITH expired AS (DELETE FROM public.cdc_heartbeats WHERE created_at < (now() AT TIME ZONE 'Asia/Seoul') - interval '1 day') INSERT INTO public.cdc_heartbeats (created_at) VALUES (now() AT TIME ZONE 'Asia/Seoul')",
 
   "key.converter": "org.apache.kafka.connect.storage.StringConverter",
   "value.converter": "org.apache.kafka.connect.storage.StringConverter",

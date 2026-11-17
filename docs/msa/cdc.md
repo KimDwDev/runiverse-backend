@@ -17,9 +17,9 @@
 | 요청 토픽 | 있음 (`test`·`dev` 공유 클러스터, `prod` 운영 클러스터) |
 | Kafka 계정 `{env}.debezium` | 없음 |
 | 커넥터 DB 계정 | test DB `debezium` **있음** — `LOGIN REPLICATION`, `outbox_events` SELECT만 (11-17). 밖에서 접속(`pg_hba.conf`)은 아직 막혀 있다. prod는 아직 |
-| publication | test DB `outbox_publication` **있음** — `outbox_events`만, `publish = 'insert'` (11-17). prod는 아직 |
+| publication | test DB `outbox_publication` **있음** — `outbox_events` + `cdc_heartbeats`, `publish = 'insert'` (11-17). prod는 아직 |
 | Postgres 논리 복제 | test DB(PostgreSQL 17.10, **Kafka와 같은 EC2**, 앱과는 다른 EC2) **켜짐** — `wal_level=logical`, `max_slot_wal_keep_size=5GB`, 슬롯 없음 (11-17). prod RDS는 아직 |
-| Kafka Connect · Debezium | test: **Debezium 3.7.1.Final** 플러그인을 `/opt/kafka/plugins`에 넣었다(Kafka 4.1.2의 Connect를 systemd로 띄울 예정, Kafka·DB EC2에 같이). 아웃박스 변환기는 `debezium-connect-plugins` jar에 들어 있다. Connect는 systemd `kafka-connect`로 떠 있다(REST는 `127.0.0.1:8083`만, 그룹 `test.debezium-connect`). **커넥터 `test-outbox` RUNNING** — 설정은 `infra/kafka/connectors/test-outbox.json`, 슬롯 `debezium_outbox_test`, 스냅샷 없음(`no_data`), heartbeat 1분 (11-17). **실제 카드로 발행 검증 완료**(아래 「검증」) |
+| Kafka Connect · Debezium | test: **Debezium 3.7.1.Final** 플러그인을 `/opt/kafka/plugins`에 넣었다(Kafka 4.1.2의 Connect를 systemd로 띄울 예정, Kafka·DB EC2에 같이). 아웃박스 변환기는 `debezium-connect-plugins` jar에 들어 있다. Connect는 systemd `kafka-connect`로 떠 있다(REST는 `127.0.0.1:8083`만, 그룹 `test.debezium-connect`). **커넥터 `test-outbox` RUNNING** — 설정은 `infra/kafka/connectors/test-outbox.json`, 슬롯 `debezium_outbox_test`, 스냅샷 없음(`no_data`), heartbeat 1분 + `cdc_heartbeats`에 쓰는 `heartbeat.action.query` (11-17). **실제 카드로 발행 검증 완료**(아래 「검증」) |
 
 - **test는 11-17부터 CDC로 발행한다. prod는 아직 아웃박스 행이 쌓이기만 하고 아무도 보내지 않는다.** 아웃박스 코드가 CDC보다 먼저 배포되면 그동안 만든 카드의 음악은 `GENERATING`에 머문다 — 커넥터를 처음 붙일 때 그 행을 보낼지 정한다(「정하지 않은 것」 2).
 
@@ -89,7 +89,7 @@ DB는 세 환경이 모두 다르다.
 ### 복제 슬롯 — 가장 조심할 것
 
 - **슬롯은 커넥터가 확인한 위치 뒤의 WAL을 지우지 못하게 붙잡는다.** 커넥터가 멈추거나 Kafka가 내려가면 그동안 WAL이 쌓여 **DB 디스크가 차고, 차면 DB 전체가 멈춘다** — 음악 기능이 아니라 서비스 전체 장애다.
-- **커넥터가 정상이어도 WAL이 쌓일 수 있다** — 슬롯 위치는 publication에 든 테이블의 변경이 있어야 앞으로 간다. 기록 카드를 아무도 만들지 않는 동안 다른 테이블(러닝 기록 등)의 쓰기로(RDS는 자체 쓰기도 한다) WAL은 계속 늘지만 슬롯은 제자리다. **heartbeat로 슬롯을 민다** — 먼저 주기만 켠다(`heartbeat.interval.ms`): 같은 DB의 다른 테이블 쓰기로 WAL이 늘 때는 Debezium이 주기적으로 읽은 위치를 알리기만 해도 슬롯이 앞으로 간다. DB에 쓰기 자체가 거의 없을 때(RDS 자체 쓰기만 있을 때 등)는 그것으로 부족해, publication 안 테이블에 주기적으로 쓰는 쿼리(`heartbeat.action.query`)와 그 테이블이 더 필요하다(「정하지 않은 것」 3). test는 주기만 켜고 슬롯 지연으로 확인한다(11-17).
+- **커넥터가 정상이어도 WAL이 쌓일 수 있다** — 슬롯 위치는 publication에 든 테이블의 변경이 있어야 앞으로 간다. 기록 카드를 아무도 만들지 않는 동안 다른 테이블(러닝 기록 등)의 쓰기로(RDS는 자체 쓰기도 한다) WAL은 계속 늘지만 슬롯은 제자리다. **heartbeat 쿼리로 슬롯을 민다** — Debezium은 publication 안 변경을 처리할 때만 슬롯 위치를 민다. 그래서 주기(`heartbeat.interval.ms`)만 켜면 heartbeat 기록이 Kafka로 나가도 슬롯은 제자리다(test에서 확인, 아래 「검증」). publication에 `cdc_heartbeats`(erd)를 넣고, Debezium이 heartbeat마다 그 테이블에 한 줄 쓰게 한다(`heartbeat.action.query` — INSERT와 하루 지난 행 DELETE를 한 문장으로). 그 INSERT가 Debezium에게 돌아오면서 슬롯이 앞으로 간다. 이 테이블은 `table.include.list`에 없어 Kafka로는 나가지 않는다.
 - **막는 장치는 두 겹이다**
   - 상한: `max_slot_wal_keep_size` — 넘으면 Postgres가 슬롯을 버리고 WAL을 지운다. 디스크는 지키지만 그 슬롯은 못 쓰게 되어 커넥터를 다시 만들어야 한다. 버려진 구간의 이벤트는 아웃박스 행으로 남아 있다(다시 보내는 절차는 아직 없다).
   - 알람: 슬롯 지연(WAL 보유량)과 디스크 여유를 본다. 상한에 닿기 전에 알아야 한다. **test(EC2)는 RDS처럼 CloudWatch 지표가 없어** 슬롯 상태를 직접 조회해 내보내야 한다 — `pg_replication_slots`의 `wal_status`(상한에 가까워지면 바뀐다)·`safe_wal_size`(상한까지 남은 양)·`invalidation_reason`(상한을 넘어 버려진 이유).
@@ -142,7 +142,7 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 - [x] value가 `payload` JSON 그대로다 — 문자열로 감싸지지 않고, `null` 필드가 남아 있다 — test 11-17 (키 순서는 `jsonb`가 바꾼다)
 - [x] 토픽이 `outbox_events.topic` 값 그대로다(`outbox.event.` 접두어 없음) — test 11-17
 - [x] 커넥터를 재시작해도 이벤트가 빠지지 않는다(중복은 허용) — test 11-17: Connect를 멈춘 채 카드를 만들고(9-2 성공, 슬롯 지연 85 kB) 다시 켜자 그 이벤트가 아웃박스 ID 그대로 나갔다. 이번에는 중복 없음
-- [ ] 카드를 만들지 않고 두어도 슬롯 지연이 늘지 않는다(heartbeat) — test 11-17 관찰 중: 2224 bytes → 56 kB → 320 bytes. 몇 시간 단위로 더 본다
+- [x] 카드를 만들지 않고 두어도 슬롯 지연이 늘지 않는다(heartbeat) — test 11-17. **주기(`heartbeat.interval.ms`)만으로는 부족했다**: publication 밖 테이블에 20만 행을 써 WAL을 18 MB 늘리자, heartbeat 기록은 Kafka로 계속 나가는데도 지연이 19 MB에서 줄지 않았다. Debezium 로그가 이유를 말한다 — `LSN flush mode 'connector': Debezium will flush LSN on event processing ... consider using heartbeat.action.query`(publication 안 변경을 처리할 때만 슬롯을 민다). `cdc_heartbeats` + `heartbeat.action.query`를 더하자 그 19 MB가 약 3분 만에 792 bytes로 풀렸다. 슬롯은 heartbeat 직후가 아니라 Connect가 오프셋을 기록한 뒤(기본 60초 간격) 밀린다
 - [ ] AI 서버 계정으로 읽힌다 — AI 쪽 확인 대기(우리가 AI 그룹으로 읽으면 AI가 받을 메시지를 가져가므로 AI 서버가 확인한다)
 
 ## 준비 순서
@@ -159,7 +159,7 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 
 1. **Connect를 어디서 돌릴지** — Kafka EC2에 같이, 별도 EC2, 컨테이너. **test는 Kafka·DB EC2에 같이 둔다(11-17)** — 2GB(`t3.small`, 여유 약 280MiB)에서는 올릴 수 없어 `t3.medium`(4GB, 여유 약 2.2GiB)으로 키웠다. 같은 EC2라 DB를 밖에 열지 않는다(`localhost`). 실행 방식(systemd·Docker)은 아직. prod는 환경이 따로 구성돼 있어 prod 차례에 본다.
 2. **처음 붙일 때 이미 쌓인 행** — 보낼지(스냅샷) 말지(`snapshot.mode=no_data`). 보내면 오래된 카드의 음악이 뒤늦게 만들어지고, 안 보내면 그 카드들은 `GENERATING`에 남는다. 스냅샷 행을 라우터가 어떻게 다루는지도 test에서 확인한다.
-3. **heartbeat 테이블이 필요한지** — test는 주기만 켜서 확인한다. 슬롯 지연이 늘면, 또는 prod RDS처럼 DB 쓰기가 거의 없으면 테이블을 둔다 — 이름·컬럼을 정해 erd에 더하고 publication에 넣는다(UPDATE로 밀면 `publish`에 `update`가 필요하다).
+3. ~~heartbeat 테이블이 필요한지~~ — **정했다(11-17): 필요하다.** `cdc_heartbeats`(erd)를 publication에 더하고, Debezium이 1분마다 INSERT + 하루 지난 행 DELETE를 한 문장으로 쓴다. publication은 `publish = 'insert'` 그대로.
 4. **슬롯 상한과 알람 값** — test는 `max_slot_wal_keep_size=5GB`로 정했다(루트 디스크 29G를 OS·**Kafka 로그**와 같이 쓰고 23G 남음, 평소 WAL 49M — WAL이 차면 Kafka도 같은 디스크라 함께 멈춘다). prod 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
 5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB는 JPA 자동 생성(`update`)이라 엔티티 CHECK(세 환경 허용)로 만들어졌다. `update`는 이미 있는 CHECK를 고치지 않으므로, 같은 이름(`ck_outbox_event_topic`)으로 한 번 손으로 바꿔 두면 유지된다. 이벤트를 늘릴 때 test DB CHECK를 손으로 넓혀야 하는 것은 좁히든 안 좁히든 같다(자동 생성이 CHECK를 갱신하지 않는다).
 6. **prod RDS 확인** — Postgres 버전이 test(17)와 같은지, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
