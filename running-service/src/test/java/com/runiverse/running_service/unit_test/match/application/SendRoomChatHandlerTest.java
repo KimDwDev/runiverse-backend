@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.match.exception.RoomChatRoomNot
 import com.runiverse.running_service.application.match.port.out.CreateRoomChatPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
+import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomChatRow;
@@ -35,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -158,6 +160,22 @@ class SendRoomChatHandlerTest {
             assertThat(event.runningRoomId()).isEqualTo(ROOM_ID);
             assertThat(event.chat()).isEqualTo(ASSEMBLED);
             assertThat(event.excludedUserId()).isEqualTo(new UserId(SENDER));
+        }
+
+        @Test
+        @DisplayName("방 시각·거리와 지금 배정된 사람으로 채팅 푸시를 요청한다")
+        void requestsPushToRoomMembers() {
+            // given
+            UUID other = UuidCreator.getTimeOrderedEpoch();
+            given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
+                    .willReturn(List.of(new MatchPlayer(SENDER, 360), new MatchPlayer(other, 330)));
+
+            // when
+            handler.handle(command("곧 출발해요"));
+
+            // then -> 보낸 사람은 요청기가 뺀다
+            verify(roomChatPushRequester).request(ASSEMBLED, START, 5_000,
+                    List.of(new UserId(SENDER), new UserId(other)));
         }
     }
 

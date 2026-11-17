@@ -266,6 +266,35 @@ class SettleRunningForAccountDeletionHandlerTest {
     }
 
     @Test
+    @DisplayName("시작 전 방에서 탈퇴하면 방 채팅에 나갔다는 줄을 남긴다")
+    void writesLeftLineBeforeStart() {
+        // given
+        RunningRoom room = room(RunningRoomStatus.MATCHING, 2);
+        givenActiveApplication(room);
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        verify(roomChatPresenceWriter).left(room, new UserId(USER_ID));
+    }
+
+    @Test
+    @DisplayName("시작된 방에서 탈퇴하면 채팅이 닫혀 줄을 남기지 않는다")
+    void noLeftLineAfterStart() {
+        // given
+        givenActiveApplication(room(RunningRoomStatus.STARTED, 2));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        verifyNoInteractions(roomChatPresenceWriter);
+    }
+
+    @Test
     @DisplayName("인원이 0이면 남은 참가자가 없어 이벤트를 발행하지 않는다")
     void skipsEventWhenRoomBecomesEmpty() {
         // given

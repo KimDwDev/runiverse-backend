@@ -145,6 +145,22 @@ class MatchStreamEventTest {
         }
 
         @Test
+        @DisplayName("안내 줄은 들어오거나 나간 사람을 받는 사람에서 뺀다")
+        void noticeExcludesActor() {
+            // given
+            RoomChat notice = new RoomChat(3022L, ROOM_ID, RunningRoomChatType.JOINED,
+                    null, new RoomChat.Person(SENDER, "철수", null, false),
+                    null, false, null, START.minusMinutes(8));
+
+            // when
+            MatchStreamEvent event = MatchStreamEvent.roomChatSent(notice);
+
+            // then
+            assertThat(event.type()).isEqualTo(MatchEventType.ROOM_CHAT_SENT);
+            assertThat(event.excludedUserId()).isEqualTo(new UserId(SENDER));
+        }
+
+        @Test
         @DisplayName("방 상태 이벤트는 받는 사람을 빼지 않는다")
         void roomStateEventsExcludeNobody() {
             // when

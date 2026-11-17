@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.match.command.roomchatsend.Send
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatAccessPolicy;
 import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequestedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.exception.RoomChatClosedException;
 import com.runiverse.running_service.application.match.exception.RoomChatNotFoundException;
@@ -23,6 +24,9 @@ import com.runiverse.running_service.application.match.query.roomchatlist.GetRoo
 import com.runiverse.running_service.application.match.query.roomchatlist.GetRoomChatsQuery;
 import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.RunningRoomChat;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
@@ -58,6 +62,7 @@ class RoomChatIntegrationTest {
 
     private final Map<UUID, UserStatusRow> statuses = new HashMap<>();
     private final List<MatchStreamEvent> published = new ArrayList<>();
+    private final List<RoomChatPushRequestedEvent> pushes = new ArrayList<>();
     private InMemoryRoomChatStore store;
     private SendRoomChatHandler sendHandler;
     private EditRoomChatHandler editHandler;
@@ -80,6 +85,9 @@ class RoomChatIntegrationTest {
         org.springframework.context.ApplicationEventPublisher publisher = event -> {
             if (event instanceof MatchRoomChangedEvent changed) {
                 published.add(changed.event());
+            }
+            if (event instanceof RoomChatPushRequestedEvent push) {
+                pushes.add(push);
             }
         };
         LoadMatchPlayersPort members = roomId -> statuses.entrySet().stream()
@@ -158,6 +166,39 @@ class RoomChatIntegrationTest {
                 .isInstanceOf(RoomChatNotFoundException.class);
         assertThatThrownBy(() -> deleteHandler.handle(new DeleteRoomChatCommand(chulsu, ROOM_ID, sent.chatId())))
                 .isInstanceOf(RoomChatNotFoundException.class);
+        assertThat(store.histories()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("보낸 말은 방의 다른 사람에게 방 시각·거리 제목으로 푸시된다")
+    void messagePushesToOthers() {
+        // when
+        send(chulsu, "곧 출발해요");
+
+        // then
+        assertThat(pushes).extracting(RoomChatPushRequestedEvent::userId).containsExactly(younghee);
+        assertThat(pushes.getFirst().message().title()).isEqualTo("20:00 - 5 km 러닝");
+        assertThat(pushes.getFirst().message().body()).isEqualTo("곧 출발해요");
+    }
+
+    @Test
+    @DisplayName("들어온 본인이어도 입장 줄은 고치거나 지울 수 없어 404이고, 목록에는 보낸 사람 없이 보인다")
+    void noticeIsNotEditable() {
+        // given -> 방에 배정되며 남은 줄이다
+        Long noticeId = store.create(RunningRoomChat.joined(new RunningRoomId(ROOM_ID), new UserId(chulsu))).chatId();
+
+        // when & then
+        assertThatThrownBy(() -> editHandler.handle(new EditRoomChatCommand(chulsu, ROOM_ID, noticeId, "바꿈")))
+                .isInstanceOf(RoomChatNotFoundException.class);
+        assertThatThrownBy(() -> deleteHandler.handle(new DeleteRoomChatCommand(chulsu, ROOM_ID, noticeId)))
+                .isInstanceOf(RoomChatNotFoundException.class);
+
+        // then
+        RoomChat notice = list(younghee).getFirst();
+        assertThat(notice.type()).isEqualTo(RunningRoomChatType.JOINED);
+        assertThat(notice.sender()).isNull();
+        assertThat(notice.actor().nickname()).isEqualTo("철수");
+        assertThat(notice.content()).isNull();
         assertThat(store.histories()).isEmpty();
     }
 

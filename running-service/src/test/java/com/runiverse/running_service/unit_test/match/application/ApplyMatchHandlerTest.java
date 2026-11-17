@@ -138,6 +138,21 @@ class ApplyMatchHandlerTest {
     }
 
     @Test
+    @DisplayName("배정된 방 채팅에 들어왔다는 줄을 남긴다")
+    void writesJoinedLine() {
+        // given
+        givenApplicable();
+
+        // when
+        applyMatchHandler.handle(command(slotAfter(Duration.ofHours(2))));
+
+        // then -> 처음인지 다시인지는 기록기가 방 세션으로 가른다
+        ArgumentCaptor<RunningRoom> room = ArgumentCaptor.forClass(RunningRoom.class);
+        verify(roomChatPresenceWriter).joined(room.capture(), eq(new UserId(USER_ID)));
+        assertThat(room.getValue().getRunningRoomId()).contains(new RunningRoomId(ROOM_ID));
+    }
+
+    @Test
     @DisplayName("페이스는 입력받지 않고 온보딩 값을 복사한다")
     void copiesAvgPaceFromOnboarding() {
         // given -> 매칭 조건에 페이스 항목이 없다

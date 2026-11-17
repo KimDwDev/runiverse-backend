@@ -129,6 +129,42 @@ class RoomChatAssemblerTest {
     }
 
     @Test
+    @DisplayName("안내 줄은 보낸 사람 없이 들어오거나 나간 사람을 actor에 싣는다")
+    void noticeCarriesActor() {
+        // given
+        given(loadPlayerProfilesPort.loadProfiles(List.of(CHULSU)))
+                .willReturn(Map.of(CHULSU, new PlayerProfile(CHULSU, "철수", "profiles/c.png", null)));
+        given(generateViewUrlPort.generate("profiles/c.png")).willReturn("https://cdn/profiles/c.png");
+
+        // when
+        RoomChat chat = assembler.assemble(new RoomChatRow(3022L, ROOM_ID, CHULSU, RunningRoomChatType.JOINED,
+                null, null, null, SENT_AT));
+
+        // then -> 보낸 사람이 없는 줄을 옛 앱은 그리지 않는다
+        assertThat(chat.type()).isEqualTo(RunningRoomChatType.JOINED);
+        assertThat(chat.sender()).isNull();
+        assertThat(chat.actor()).isEqualTo(new RoomChat.Person(CHULSU, "철수", "https://cdn/profiles/c.png", false));
+        assertThat(chat.person()).isEqualTo(chat.actor());
+        assertThat(chat.content()).isNull();
+        assertThat(chat.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 안내 줄은 actor가 탈퇴 유저 형식이다")
+    void deletedActor() {
+        // given
+        given(loadPlayerProfilesPort.loadProfiles(List.of(CHULSU))).willReturn(Map.of());
+
+        // when
+        RoomChat chat = assembler.assemble(new RoomChatRow(3022L, ROOM_ID, CHULSU, RunningRoomChatType.LEFT,
+                null, null, null, SENT_AT));
+
+        // then
+        assertThat(chat.actor()).isEqualTo(new RoomChat.Person(CHULSU, "탈퇴한 사용자", null, true));
+        assertThat(chat.sender()).isNull();
+    }
+
+    @Test
     @DisplayName("빈 페이지는 프로필을 읽지 않고 빈 목록이다")
     void emptyPage() {
         // when

@@ -24,6 +24,7 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
@@ -45,6 +46,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -156,6 +158,21 @@ class OpenInviteRoomHandlerTest {
 
         // then -> 클라는 이 ID를 들고 매칭 스트림을 연다
         assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
+    }
+
+    @Test
+    @DisplayName("연 방 채팅에 방을 연 사람이 들어왔다는 줄을 남긴다")
+    void writesJoinedLine() {
+        // given
+        givenOpenable(START);
+
+        // when
+        handler.handle(commandAt(userId, START));
+
+        // then
+        ArgumentCaptor<RunningRoom> room = ArgumentCaptor.forClass(RunningRoom.class);
+        verify(roomChatPresenceWriter).joined(room.capture(), eq(new UserId(userId)));
+        assertThat(room.getValue().getRunningRoomId()).contains(new RunningRoomId(ROOM_ID));
     }
 
     @Test

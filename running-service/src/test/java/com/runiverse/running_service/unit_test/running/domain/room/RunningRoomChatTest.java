@@ -2,6 +2,7 @@ package com.runiverse.running_service.unit_test.running.domain.room;
 
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.RunningRoomChatHistory;
+import com.runiverse.running_service.domain.running.room.exception.NotRunningRoomChatMessageException;
 import com.runiverse.running_service.domain.running.room.exception.NotRunningRoomChatSenderException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatChangedAtRequiredException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatContentRequiredException;
@@ -9,6 +10,7 @@ import com.runiverse.running_service.domain.running.room.exception.RunningRoomCh
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatNotSavedException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatRoomRequiredException;
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatSenderRequiredException;
+import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatTypeRequiredException;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -251,6 +254,67 @@ class RunningRoomChatTest {
                     .isInstanceOf(RunningRoomChatNotSavedException.class);
             assertThatThrownBy(() -> saved().delete(SENDER, null))
                     .isInstanceOf(RunningRoomChatChangedAtRequiredException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("입장·퇴장 안내 줄")
+    class Notice {
+
+        @Test
+        @DisplayName("들어오고 나간 사람만 적고 내용 없이 만든다")
+        void createsWithoutContent() {
+            // when
+            RunningRoomChat joined = RunningRoomChat.joined(ROOM, SENDER);
+            RunningRoomChat rejoined = RunningRoomChat.rejoined(ROOM, SENDER);
+            RunningRoomChat left = RunningRoomChat.left(ROOM, SENDER);
+
+            // then
+            assertThat(joined.getType()).isEqualTo(RunningRoomChatType.JOINED);
+            assertThat(rejoined.getType()).isEqualTo(RunningRoomChatType.REJOINED);
+            assertThat(left.getType()).isEqualTo(RunningRoomChatType.LEFT);
+            assertThat(List.of(joined, rejoined, left)).allSatisfy(chat -> {
+                assertThat(chat.getRunningRoomId()).isEqualTo(ROOM);
+                assertThat(chat.getUserId()).isEqualTo(SENDER);
+                assertThat(chat.getContent()).isEmpty();
+                assertThat(chat.getRunningRoomChatId()).isEmpty();
+            });
+        }
+
+        @Test
+        @DisplayName("저장된 안내 줄은 행에 내용이 없어도 되살린다")
+        void restoresWithoutContent() {
+            // when
+            RunningRoomChat chat = RunningRoomChat.restore(3022L, 125L, SENDER_ID, RunningRoomChatType.LEFT,
+                    null, null, null);
+
+            // then
+            assertThat(chat.getType()).isEqualTo(RunningRoomChatType.LEFT);
+            assertThat(chat.getContent()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("들어온 본인이어도 고치거나 지울 수 없다")
+        void rejectEditAndDelete() {
+            // given
+            RunningRoomChat chat = RunningRoomChat.restore(3022L, 125L, SENDER_ID, RunningRoomChatType.JOINED,
+                    null, null, null);
+
+            // when & then
+            assertThatThrownBy(() -> chat.edit(SENDER, "곧 출발해요", NOW))
+                    .isInstanceOf(NotRunningRoomChatMessageException.class);
+            assertThatThrownBy(() -> chat.delete(SENDER, NOW))
+                    .isInstanceOf(NotRunningRoomChatMessageException.class);
+            assertThat(chat.getContent()).isEmpty();
+            assertThat(chat.isDeleted()).isFalse();
+        }
+
+        @Test
+        @DisplayName("종류가 없으면 거부한다")
+        void rejectMissingType() {
+            // when & then
+            assertThatThrownBy(() -> RunningRoomChat.restore(3022L, 125L, SENDER_ID, null, null, null, null))
+                    .isInstanceOf(RunningRoomChatTypeRequiredException.class);
         }
     }
 

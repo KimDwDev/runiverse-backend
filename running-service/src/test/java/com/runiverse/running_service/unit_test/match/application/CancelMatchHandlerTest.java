@@ -305,6 +305,37 @@ class CancelMatchHandlerTest {
     }
 
     @Test
+    @DisplayName("시작 전에 나가면 방 채팅에 나갔다는 줄을 남긴다 — 마지막 사람이 나가 방이 닫혀도 남긴다")
+    void writesLeftLineBeforeStart() {
+        // given
+        RunningRoom room = room(startAfter(Duration.ofHours(2)), 1);
+        givenActiveMatch(room);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then
+        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+        verify(roomChatPresenceWriter).left(room, new UserId(USER_ID));
+    }
+
+    @Test
+    @DisplayName("러닝이 시작된 뒤 나가면 채팅이 닫혀 줄을 남기지 않는다")
+    void noLeftLineAfterStart() {
+        // given -> 앱을 켜지 않아 JOINED로 남은 참가자다
+        RunningRoom room = room(LocalDateTime.now().minusMinutes(5), 2);
+        room.closeMatching();
+        room.start();
+        givenActiveMatch(room);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then
+        verifyNoInteractions(roomChatPresenceWriter);
+    }
+
+    @Test
     @DisplayName("러닝이 시작된 뒤에는 취소할 수 없다")
     void cannotCancelAfterRunningStarted() {
         // given -> 여기서 끊으면 WS 종료 경로를 건너뛰어 GPS 트랙과 기록이 저장되지 않는다.

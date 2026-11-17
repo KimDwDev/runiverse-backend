@@ -246,6 +246,24 @@ public class RunningRoomTest {
         }
 
         @Test
+        @DisplayName("나갔던 방에 다시 들어오면 나간 적이 있다고 답한다 — 처음 들어온 사람은 아니다")
+        void hasLeftBeforeAfterRejoin() {
+            // given
+            RunningRoom room = matchRoom();
+            room.join(user(2L), player(2L));
+            room.leave(user(2L), LEFT_AT);
+
+            // when -> 대기 취소 뒤 재신청은 같은 세션 행을 되살린다
+            room.join(user(2L), player(5L));
+            room.join(user(3L), player(3L));
+
+            // then
+            assertThat(room.hasLeftBefore(user(2L))).isTrue();
+            assertThat(room.hasLeftBefore(user(3L))).isFalse();
+            assertThat(room.hasLeftBefore(HOST_USER)).isFalse();
+        }
+
+        @Test
         @DisplayName("솔로 방에는 합류하지 못한다")
         void rejectJoinSoloRoom() {
             // given

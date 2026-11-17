@@ -220,6 +220,21 @@ class AcceptInvitationHandlerTest {
         }
 
         @Test
+        @DisplayName("수락하면 방 채팅에 들어왔다는 줄을 남긴다")
+        void writesJoinedLine() {
+            // given
+            RunningRoom room = pendingRoom(1);
+            givenLocked(room);
+            givenJoinable();
+
+            // when
+            accept();
+
+            // then
+            verify(roomChatPresenceWriter).joined(room, invitee);
+        }
+
+        @Test
         @DisplayName("방 평균 페이스는 기존 참가자에 합류자를 더해 다시 계산한다")
         void recalculatesAvgPace() {
             // given
