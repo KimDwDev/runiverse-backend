@@ -550,7 +550,7 @@
 
 > CHECK `ck_outbox_event_aggregate_type`: `aggregate_type in ('RECORD_CARD')`
 > CHECK `ck_outbox_event_topic`: `topic ~ '^(dev|test|prod)\.record-card\.music\.requested$'`
-> **운영 DDL은 운영 토픽만 허용한다** — 같은 이름의 CHECK를 `topic ~ '^prod\.record-card\.music\.requested$'`로 좁혀 만든다. 엔티티·도메인은 모든 환경에서 같은 코드라 세 환경을 허용하고(test·로컬은 이 엔티티로 테이블을 만든다), 운영 DB는 `KAFKA_ENV`가 잘못 들어가도 다른 환경 토픽으로 새지 않게 저장 단계에서 막는다
+> **배포 DB는 그 환경 토픽만 허용한다** — 같은 이름의 CHECK를 prod는 `topic ~ '^prod\.record-card\.music\.requested$'`, test는 `^test\.`로 좁혀 손으로 만든다. 엔티티·도메인은 모든 환경에서 같은 코드라 세 환경을 허용하고(로컬은 이 엔티티로 테이블을 만든다), 배포 DB는 `KAFKA_ENV`가 잘못 들어가도 다른 환경 토픽으로 새지 않게 저장 단계에서 막는다. JPA 자동 생성(`update`)은 이미 있는 CHECK를 고치지 않으므로, 이벤트를 늘릴 때 배포 DB의 CHECK도 손으로 넓힌다
 > **write-once** — `created_at`만 둔다(§0 감사 컬럼)
 > **토픽 이름은 CHECK로 막는다** — 환경 이름 오타나 없는 토픽이 들어가면 Debezium이 엉뚱한 토픽으로 보내거나 발행에 실패한다. 이벤트 종류가 늘면 식에 더한다
 > **FK를 걸지 않는다** — 이벤트는 대상에 딸린 데이터가 아니라 보낼 메시지다. 대상(카드)을 하드 삭제해도 이미 쓴 이벤트와는 상관없다
@@ -561,7 +561,7 @@
 
 ### cdc_heartbeats (CDC 하트비트)
 
-**앱이 쓰지 않는다 — 엔티티가 없다.** Debezium이 1분마다 한 줄 쓰는 테이블이다(`heartbeat.action.query`). 기록 카드가 만들어지지 않는 동안에도 Debezium이 publication 안의 변경을 받아 복제 슬롯 위치를 앞으로 밀게 한다 — 이것이 없으면 다른 테이블 쓰기로 늘어난 WAL을 슬롯이 계속 붙잡는다(test에서 확인, docs/msa/cdc.md).
+**앱이 쓰지 않는다 — 엔티티가 없다.** Debezium이 1분마다 한 줄 쓰는 테이블이다(`heartbeat.action.query`). 기록 카드가 만들어지지 않는 동안에도 Debezium이 publication 안의 변경을 받아 복제 슬롯 위치를 앞으로 밀게 한다 — 이것이 없으면 다른 테이블 쓰기로 늘어난 WAL을 슬롯이 계속 붙잡는다(docs/msa/cdc.md 「복제 슬롯」).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|

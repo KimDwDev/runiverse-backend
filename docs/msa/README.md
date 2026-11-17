@@ -5,10 +5,10 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | 문서 | 내용 |
 |---|---|
 | [outbox-inbox.md](outbox-inbox.md) | 이벤트를 보내고 받는 코드 규칙 — 아웃박스 쓰기, inbox 처리 순서, 새 이벤트 체크리스트 |
-| [kafka.md](kafka.md) | Kafka 클러스터 지금 구성 — 환경 접두어, 토픽, TLS·SASL·ACL, 접속 설정 |
-| [cdc.md](cdc.md) | 아웃박스 → Kafka 발행 경로 — Debezium, Postgres 논리 복제·복제 슬롯, 준비 순서 |
+| [kafka.md](kafka.md) | Kafka 클러스터 — 환경 접두어, 토픽, TLS·SASL·ACL, 접속 설정 |
+| [cdc.md](cdc.md) | 아웃박스 → Kafka 발행 — Debezium, Postgres 논리 복제·복제 슬롯·heartbeat, 운영·검증 |
 | [api-spec.md](../api-spec.md) 9-5 | 이벤트 계약 — 토픽, key, 헤더, 본문 필드 (AI 서버와 함께 보는 문서) |
-| `infra/kafka/` | 커넥터 설정 — `connectors/test-outbox.json`·`prod-outbox.json` (비밀번호·prod DB 주소는 서버 파일 참조만) |
+| `infra/kafka/connectors/` | Debezium 커넥터 설정 — `test-outbox.json` · `prod-outbox.json` (비밀번호·prod DB 주소는 서버 파일 참조만) |
 
 ## 구성
 
@@ -24,11 +24,11 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
     ▼            │
  Postgres        │
  outbox_events   │
-    │ CDC        │
+    │ WAL        │
     ▼            │
  Debezium ──▶ Kafka ──▶ AI 서버 ──▶ S3 (음악)
-              ▲            │
-              └────────────┘ 완료 이벤트
+ (Connect)     ▲            │
+               └────────────┘ 완료 이벤트
 ```
 
 ## 누가 무엇을 맡는가
@@ -41,7 +41,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | Kafka | 서비스 사이 이벤트 전달 | 이벤트 7일 보관 |
 
 - **데이터는 서비스마다 따로 갖는다** — AI 서버는 running-service DB를 읽지 않는다. 필요한 값은 이벤트에 실어 보낸다(요청 이벤트의 `running_summary`). running-service도 AI 서버 저장소를 모른다.
-- **함께 쓰는 것은 S3뿐이다** — AI 서버는 사진을 `image_key`로 읽고, 음악을 올린 key를 완료 이벤트로 알려 준다. 계약은 key뿐이다.
+- **함께 쓰는 것은 S3뿐이다** — AI 서버는 사진을 `image_key`로 읽고, 음악을 올린 key를 완료 이벤트로 알려 준다.
 
 ## 통신 — 어디로 무엇이 지나가는가
 
@@ -51,9 +51,9 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | running-service 인스턴스 ↔ 인스턴스 | Redis pub/sub | [architecture.md](../architecture.md) 「다중 인스턴스」 |
 | running-service ↔ AI 서버 | **Kafka만** | 이 폴더 |
 
-- **서비스 사이는 Kafka로만 주고받는다** — running-service는 AI 서버를 HTTP로 부르지 않는다(api-spec 9-5). 한쪽이 멈춰도 다른 쪽은 이벤트를 남기고 계속 돈다.
+- **서비스 사이는 Kafka로만 주고받는다** — running-service는 AI 서버를 HTTP로 부르지 않는다. 한쪽이 멈춰도 다른 쪽은 이벤트를 남기고 계속 돈다.
 - **서비스 사이에 Redis pub/sub을 쓰지 않는다** — 받는 쪽이 그 순간 없으면 사라진다. Kafka는 이벤트가 남아 돌아와서 이어 읽는다.
-- **Kafka 이벤트는 running-service 한 대만 받는다** — 그룹 하나로 구독하기 때문이다([kafka.md](kafka.md) 「토픽」). 완료를 앱에 실시간으로 알리게 되면, 받은 인스턴스가 커밋한 뒤 Redis pub/sub으로 앱 연결을 든 인스턴스에 넘긴다 — 기존 SSE 푸시와 같은 방식이다.
+- **Kafka 이벤트는 running-service 한 대만 받는다** — 그룹 하나로 구독한다([kafka.md](kafka.md) 「토픽」). 완료를 앱에 실시간으로 알리게 되면, 받은 인스턴스가 커밋한 뒤 Redis pub/sub으로 앱 연결을 든 인스턴스에 넘긴다 — 기존 SSE 푸시와 같은 방식이다.
 - **보내는 쪽은 잃지 않는 것을, 받는 쪽은 두 번 처리하지 않는 것을 맡는다** — 전달은 최소 한 번이다. running-service는 아웃박스로 보내고 inbox로 받는다([outbox-inbox.md](outbox-inbox.md)).
 
 ## 이벤트
@@ -62,40 +62,40 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 
 | 토픽 (`{env}.` 생략) | 방향 | 보내는 방식 | 받는 쪽 중복 거르기 | 상태 |
 |---|---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 아웃박스 + CDC | AI 서버 inbox (헤더 `id`) | 아웃박스 쓰기 구현됨, CDC 준비 중 |
+| `record-card.music.requested` | running-service → AI | 아웃박스 + CDC | AI 서버 inbox (헤더 `id`) | test·prod CDC 동작 중 |
 | `record-card.music.generated` | AI → running-service | AI 서버가 직접 발행 | running-service inbox + `GENERATING`인 행만 바꾸는 규칙 | 구독·inbox 구현 전 |
 
 ### 흐름 — 기록 카드 음악
 
 1. 앱이 작성을 확정한다(9-2) — 카드·사진과 아웃박스 행이 한 트랜잭션에 커밋된다. 음악은 `GENERATING`이다.
-2. Debezium이 아웃박스 행을 요청 토픽에 발행한다.
+2. Debezium이 WAL에서 그 행을 읽어 요청 토픽에 발행한다.
 3. AI 서버가 inbox로 중복을 거르고 음악을 만들어 S3에 올린다.
 4. AI 서버가 완료 토픽에 결과를 발행한다.
 5. running-service 한 대가 받아 inbox로 거르고 음악 상태를 바꾼다.
 
 ## 환경
 
-| 환경 | DB | Kafka | 커넥터 |
+| 환경 | DB | Kafka | CDC |
 |---|---|---|---|
-| `dev` | 로컬 Postgres | 공유 클러스터 (`dev.*`) | 없음 |
-| `test` | test DB (EC2에 직접 설치한 Postgres) | 공유 클러스터 (`test.*`) | test DB용 |
-| `prod` | prod RDS | 운영 클러스터 | prod RDS용 |
+| `dev` | 로컬 Postgres | 개발 클러스터 (`dev.*`) | 없음 |
+| `test` | EC2에 직접 설치한 Postgres (Kafka와 같은 EC2) | 개발 클러스터 (`test.*`) | 커넥터 `test-outbox` |
+| `prod` | RDS | 운영 클러스터 | 커넥터 `prod-outbox` |
 
 - dev·test는 Kafka 클러스터 하나를 이름 접두어로 나눠 쓴다([kafka.md](kafka.md) 「이름」).
 - **`KAFKA_ENV`는 붙는 DB를 따른다** — 로컬 앱이라도 test DB에 붙으면 `test`다([cdc.md](cdc.md)).
 
-## 지금 어디까지 왔나
+## 지금 상태
 
 | 단계 | 상태 |
 |---|---|
 | 아웃박스 쓰기 (9-2) | 됨 |
-| Kafka 클러스터 (test·dev 공유, prod) | 됨 — 계정·토픽·ACL 구성, 접속 검증 |
-| CDC (논리 복제·Connect·커넥터) | 준비 전 — [cdc.md](cdc.md) 「준비 순서」 |
+| Kafka 클러스터 (개발·운영) | 됨 — 계정·토픽·ACL |
+| CDC (test·prod) | 됨 — 커넥터 동작, 발행·재기동·heartbeat 검증, prod 슬롯 지연 경보 |
+| 아웃박스 코드 배포 | test 서버·prod 배포 전 — `KAFKA_ENV`는 Parameter Store에 있다 |
+| AI 서버 연동 | AI 쪽 확인 대기 |
 | 완료 구독 + inbox | 구현 전 — [outbox-inbox.md](outbox-inbox.md) 「받는 쪽」 |
-
-다음 순서: test에 CDC를 붙여 검증 → 완료 구독과 inbox → prod에 같은 순서로.
 
 ## 서비스나 이벤트를 더할 때
 
 - **이벤트** — [outbox-inbox.md](outbox-inbox.md) 「새 이벤트를 더할 때」 체크리스트.
-- **서비스** — 계정 `{env}.<서비스>`, 컨슈머 그룹 `{env}.<서비스>.<용도>`, 토픽·그룹 권한(이름 하나씩), 환경 클러스터의 CA 인증서([kafka.md](kafka.md)). 이 문서의 표 두 개(맡는 것, 이벤트)에 더한다.
+- **서비스** — 계정 `{env}.<서비스>`, 컨슈머 그룹 `{env}.<서비스>.<용도>`, 토픽·그룹 권한(이름 하나씩), 그 환경 클러스터의 CA 인증서([kafka.md](kafka.md)). 이 문서의 「누가 무엇을 맡는가」와 「이벤트」 표에 더한다.

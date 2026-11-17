@@ -65,7 +65,7 @@
 정본은 [erd.md](../erd.md) `outbox_events`다. 코드를 쓸 때 알아야 할 것만 옮긴다.
 
 - 이벤트 종류마다 테이블을 나누지 않는다 — 한 테이블에 `aggregate_type`·`topic`으로 구분한다.
-- **`topic`·`aggregate_type`은 CHECK로 허용 값을 막는다** — 이벤트를 늘리면 식을 넓혀야 저장된다. 엔티티는 세 환경 토픽을 모두 허용하고, **운영 DDL은 `prod` 토픽만** 허용한다.
+- **`topic`·`aggregate_type`은 CHECK로 허용 값을 막는다** — 이벤트를 늘리면 식을 넓혀야 저장된다. 엔티티는 세 환경 토픽을 모두 허용하고, **배포 DB(test·prod)는 그 환경 토픽만** 허용한다 — 손으로 만든 DDL이라 이벤트를 늘릴 때 함께 넓힌다.
 - FK·인덱스를 두지 않는다. 행은 지우지 않고 남긴다(보관 기간은 아직 정하지 않았다).
 
 ## 받는 쪽 — Inbox
@@ -99,7 +99,7 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 ### 정하지 않은 것
 
-1. **무엇으로 거르는가** — 완료 이벤트는 AI 서버가 발행해 우리 아웃박스 ID가 없다. AI 서버가 준 완료 이벤트 형식(11-16)에는 `inference_id`가 있다 — 키 후보다. Kafka 헤더로 이벤트 ID를 주는지도 AI 서버와 확인한다.
+1. **무엇으로 거르는가** — 완료 이벤트는 AI 서버가 발행해 우리 아웃박스 ID가 없다. AI 서버가 정한 완료 이벤트 형식에는 `inference_id`가 있다 — 키 후보다. Kafka 헤더로 이벤트 ID를 주는지도 AI 서버와 확인한다.
 2. **inbox 스키마** — 컬럼·보관 기간·지난 행 정리. 정하면 erd에 더한다.
 3. **처리할 수 없는 메시지** — 본문을 읽지 못하거나 계약에 맞지 않는 메시지는 다시 받아도 계속 실패해 그 파티션이 멈춘다. 따로 모을지(DLT)와 언제 넘길지 정한다.
 4. **Kafka 클라이언트 의존성** — running-service에는 아직 없다. 완료 구독을 만들 때 들어온다.
@@ -118,7 +118,7 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 - [ ] api-spec에 계약을 적는다 — 토픽, 방향, 단위, key, 본문 필드
 - [ ] 업무 언어로 포트를 만들고, `infrastructure/kafka/outbox/`에 어댑터를 둔다
 - [ ] 포트를 부르는 곳이 저장과 같은 트랜잭션이고, 새로 저장했을 때만 부르는지 확인한다
-- [ ] erd `outbox_events`의 CHECK를 넓힌다 — `ck_outbox_event_topic`, 새 대상이면 `ck_outbox_event_aggregate_type`과 `AggregateType`. **운영 DDL(prod만)도 함께**
+- [ ] erd `outbox_events`의 CHECK를 넓힌다 — `ck_outbox_event_topic`, 새 대상이면 `ck_outbox_event_aggregate_type`과 `AggregateType`. **test·prod DB의 CHECK도 손으로 함께**(각 환경 토픽만)
 - [ ] Kafka에 토픽을 만들고 권한을 준다 ([kafka.md](kafka.md))
 - [ ] CDC 설정이 바뀌는지 확인한다 ([cdc.md](cdc.md))
 - [ ] 테스트 — 아래 "테스트"의 세 층
@@ -137,4 +137,4 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 | 통합 | 흐름 안에서 요청이 남는가 — 포트를 메모리 대역으로 바꾼다 | `InMemoryRecordCardMusicRequests` |
 | E2E | 실제 DB에 행이 남는가 — 실패한 요청은 0줄, 성공한 요청은 1줄 | `RecordCardE2eTest` |
 
-- **테스트가 통과해도 검증되지 않는 것** — CDC가 실제로 발행하는지, 헤더·key·토픽이 컬럼대로 나가는지, 운영 DDL의 CHECK. E2E 스택에는 Kafka·Debezium이 없다 ([cdc.md](cdc.md)에서 다룬다).
+- **테스트가 통과해도 검증되지 않는 것** — CDC가 실제로 발행하는지, 헤더·key·토픽이 컬럼대로 나가는지, 배포 DB의 CHECK. E2E 스택에는 Kafka·Debezium이 없다 — 직접 확인하는 항목은 [cdc.md](cdc.md) 「검증」.
