@@ -274,11 +274,6 @@ public class RunningRoom {
         return findSession(userId).filter(RoomSession::isConnected).isPresent();
     }
 
-    // 이 방에서 나간 적이 있나 — 다시 배정돼도 세션이 되살아날 뿐 이탈 횟수는 남는다
-    public boolean hasLeftBefore(UserId userId) {
-        return findSession(userId).filter(session -> session.getLeaveCount().value() > 0).isPresent();
-    }
-
     // 상한은 보낸 사람마다 센다 — 아직 보낸 적 없으면 닿지 않았다
     public boolean hasReachedInviteLimit(UserId inviterId, UserId inviteeId, int maxInviteCount) {
         return sentBy(inviterId, inviteeId)

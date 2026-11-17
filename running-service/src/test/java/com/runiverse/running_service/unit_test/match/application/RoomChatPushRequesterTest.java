@@ -73,7 +73,7 @@ class RoomChatPushRequesterTest {
     }
 
     @Test
-    @DisplayName("처음 들어온 줄은 들어온 사람 이름으로 본문을 만들고 사진이 없으면 사진 키를 싣지 않는다")
+    @DisplayName("들어온 줄은 들어온 사람 이름으로 본문을 만들고 사진이 없으면 사진 키를 싣지 않는다")
     void joinedNotice() {
         // when
         requester.request(notice(RunningRoomChatType.JOINED), START, 5_000, MEMBERS);
@@ -113,11 +113,9 @@ class RoomChatPushRequesterTest {
     }
 
     @Test
-    @DisplayName("다시 들어온 줄·나간 줄은 푸시하지 않는 줄이라 거부한다")
+    @DisplayName("나간 줄은 푸시하지 않는 줄이라 거부한다")
     void rejectsSilentNotice() {
         // when & then
-        assertThatThrownBy(() -> requester.request(notice(RunningRoomChatType.REJOINED), START, 5_000, MEMBERS))
-                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> requester.request(notice(RunningRoomChatType.LEFT), START, 5_000, MEMBERS))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(published).isEmpty();

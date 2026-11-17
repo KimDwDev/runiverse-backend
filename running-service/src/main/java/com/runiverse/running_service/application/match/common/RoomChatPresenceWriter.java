@@ -10,8 +10,6 @@ import com.runiverse.running_service.domain.running.metric.vo.Distance;
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
-import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -19,7 +17,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 // 방에 들어오고 나간 것을 채팅 안내 줄로 남긴다 — 참가 상태를 바꾼 트랜잭션 안에서, 방을 바꾼 뒤에 부른다.
-// 줄은 그 당사자를 뺀 방 사람에게 실시간으로 가고, 푸시는 처음 들어올 때만 간다
+// 줄은 그 당사자를 뺀 방 사람에게 실시간으로 가고, 푸시는 들어올 때만 간다
 @Component
 @RequiredArgsConstructor
 public class RoomChatPresenceWriter {
@@ -29,19 +27,12 @@ public class RoomChatPresenceWriter {
     private final RoomChatPushRequester roomChatPushRequester;
     private final ApplicationEventPublisher eventPublisher;
 
-    // 나갔던 방에 다시 배정되면 세션이 되살아나 이탈 횟수가 남아 있다 — 푸시하지 않는다.
-    // 대기 취소는 곧바로 다시 신청할 수 있어, 푸시하면 취소·재신청마다 방 사람들에게 간다
+    // 나갔던 방에 다시 들어와도 처음과 같게 남기고 푸시한다
     public void joined(RunningRoom room, UserId userId) {
-        RunningRoomId roomId = room.getRunningRoomId().orElseThrow();
-        RunningRoomChat line = room.hasLeftBefore(userId)
-                ? RunningRoomChat.rejoined(roomId, userId)
-                : RunningRoomChat.joined(roomId, userId);
-        RoomChat chat = write(line);
+        RoomChat chat = write(RunningRoomChat.joined(room.getRunningRoomId().orElseThrow(), userId));
         eventPublisher.publishEvent(new MatchRoomChangedEvent(MatchStreamEvent.roomChatSent(chat)));
-        if (line.getType() == RunningRoomChatType.JOINED) {
-            roomChatPushRequester.request(chat, room.getStartAt(),
-                    room.getTargetDistance().map(Distance::meters).orElse(null), membersOf(room));
-        }
+        roomChatPushRequester.request(chat, room.getStartAt(),
+                room.getTargetDistance().map(Distance::meters).orElse(null), membersOf(room));
     }
 
     // 시작 전에 나갈 때만 부른다

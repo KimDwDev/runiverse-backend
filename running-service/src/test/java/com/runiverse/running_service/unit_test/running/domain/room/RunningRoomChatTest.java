@@ -266,14 +266,12 @@ class RunningRoomChatTest {
         void createsWithoutContent() {
             // when
             RunningRoomChat joined = RunningRoomChat.joined(ROOM, SENDER);
-            RunningRoomChat rejoined = RunningRoomChat.rejoined(ROOM, SENDER);
             RunningRoomChat left = RunningRoomChat.left(ROOM, SENDER);
 
             // then
             assertThat(joined.getType()).isEqualTo(RunningRoomChatType.JOINED);
-            assertThat(rejoined.getType()).isEqualTo(RunningRoomChatType.REJOINED);
             assertThat(left.getType()).isEqualTo(RunningRoomChatType.LEFT);
-            assertThat(List.of(joined, rejoined, left)).allSatisfy(chat -> {
+            assertThat(List.of(joined, left)).allSatisfy(chat -> {
                 assertThat(chat.getRunningRoomId()).isEqualTo(ROOM);
                 assertThat(chat.getUserId()).isEqualTo(SENDER);
                 assertThat(chat.getContent()).isEmpty();

@@ -76,7 +76,7 @@ class RoomChatPresenceWriterTest {
         given(roomChatAssembler.assemble(any(RoomChatRow.class))).willReturn(ASSEMBLED);
     }
 
-    // 손님의 세션은 이탈 횟수로 처음인지 다시인지 갈린다. 나간 사람은 배정이 풀려 있다
+    // 손님의 이탈 횟수로 처음 들어온 경우와 다시 들어온 경우를 만든다. 나간 사람은 배정이 풀려 있다
     private static RunningRoom room(int guestLeaveCount, int currentPlayerCount, boolean guestConnected) {
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
@@ -121,7 +121,7 @@ class RoomChatPresenceWriterTest {
     }
 
     @Test
-    @DisplayName("나갔던 방에 다시 들어오면 다시 들어온 줄을 남기고 실시간으로만 알린다")
+    @DisplayName("나갔던 방에 다시 들어와도 처음과 같게 입장 줄을 남기고 푸시를 요청한다")
     void rejoin() {
         // given
         givenSaved();
@@ -129,12 +129,13 @@ class RoomChatPresenceWriterTest {
         // when
         writer.joined(room(1, 2, true), new UserId(GUEST));
 
-        // then -> 대기 취소·재신청을 되풀이해도 방 사람들 폰이 울리지 않는다
+        // then -> 이탈 횟수가 남아 있어도 처음 들어온 것과 가르지 않는다
         ArgumentCaptor<RunningRoomChat> saved = ArgumentCaptor.forClass(RunningRoomChat.class);
         verify(createRoomChatPort).create(saved.capture());
-        assertThat(saved.getValue().getType()).isEqualTo(RunningRoomChatType.REJOINED);
+        assertThat(saved.getValue().getType()).isEqualTo(RunningRoomChatType.JOINED);
         verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
-        verifyNoInteractions(roomChatPushRequester);
+        verify(roomChatPushRequester).request(ASSEMBLED, START, 5_000,
+                List.of(new UserId(HOST), new UserId(GUEST)));
     }
 
     @Test

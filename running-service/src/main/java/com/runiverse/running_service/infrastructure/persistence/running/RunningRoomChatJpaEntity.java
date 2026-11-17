@@ -33,7 +33,7 @@ import java.util.UUID;
         indexes = @Index(name = "idx_room_chat_room_chat", columnList = "running_room_id, running_room_chat_id")
 )
 @Check(name = "ck_running_room_chat_content_length", constraints = "char_length(content) between 1 and 200")
-@Check(name = "ck_running_room_chat_type", constraints = "type in ('MESSAGE', 'JOINED', 'REJOINED', 'LEFT')")
+@Check(name = "ck_running_room_chat_type", constraints = "type in ('MESSAGE', 'JOINED', 'LEFT')")
 @Check(name = "ck_running_room_chat_shape",
         constraints = "(type = 'MESSAGE' and content is not null)"
                 + " or (type <> 'MESSAGE' and content is null and edited_at is null and deleted_at is null)")

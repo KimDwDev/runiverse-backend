@@ -101,9 +101,9 @@ class RoomChatE2eTest extends E2eTestSupport {
             assertThat(apply(guest).number("runningRoomId")).isEqualTo(runningRoomId);
             Map<String, Object> rejoined = hostStream.await("ROOM_CHAT_SENT");
 
-            // then - 셋 다 보낸 사람 없이 guest를 actor로 싣는다
+            // then - 다시 들어와도 처음과 같은 입장 줄이고, 셋 다 보낸 사람 없이 guest를 actor로 싣는다
             assertThat(List.of(joined, left, rejoined)).extracting(line -> line.get("type"))
-                    .containsExactly("JOINED", "LEFT", "REJOINED");
+                    .containsExactly("JOINED", "LEFT", "JOINED");
             assertThat(List.of(joined, left, rejoined)).allSatisfy(line -> {
                 assertThat(line).containsEntry("sender", null).containsEntry("content", null);
                 assertThat(actor(line)).containsEntry("userId", guest.userId());

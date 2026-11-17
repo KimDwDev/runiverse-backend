@@ -67,10 +67,6 @@ public class RunningRoomChat {
         return notice(runningRoomId, userId, RunningRoomChatType.JOINED);
     }
 
-    public static RunningRoomChat rejoined(RunningRoomId runningRoomId, UserId userId) {
-        return notice(runningRoomId, userId, RunningRoomChatType.REJOINED);
-    }
-
     public static RunningRoomChat left(RunningRoomId runningRoomId, UserId userId) {
         return notice(runningRoomId, userId, RunningRoomChatType.LEFT);
     }

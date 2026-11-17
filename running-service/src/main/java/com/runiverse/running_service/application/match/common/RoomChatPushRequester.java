@@ -56,7 +56,7 @@ public class RoomChatPushRequester {
         return switch (chat.type()) {
             case MESSAGE -> chat.content();
             case JOINED -> "%s님이 들어왔어요".formatted(chat.actor().nickname());
-            case REJOINED, LEFT -> throw new IllegalArgumentException("푸시하지 않는 줄이다 — type=" + chat.type());
+            case LEFT -> throw new IllegalArgumentException("푸시하지 않는 줄이다 — type=" + chat.type());
         };
     }
 
