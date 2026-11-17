@@ -1,4 +1,4 @@
-package com.runiverse.running_service.application.match.common;
+package com.runiverse.running_service.application.device.command.push;
 
 import com.runiverse.running_service.application.device.port.out.PushMessage;
 

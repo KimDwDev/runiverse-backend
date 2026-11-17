@@ -1,6 +1,5 @@
-package com.runiverse.running_service.application.match.common;
+package com.runiverse.running_service.application.device.command.push;
 
-import com.runiverse.running_service.application.device.command.push.SendPushCommand;
 import com.runiverse.running_service.application.device.port.in.SendPushUsecase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;

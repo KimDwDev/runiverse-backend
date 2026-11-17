@@ -2,6 +2,7 @@ package com.runiverse.running_service.integration_test.match;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.common.port.out.PlayerProfile;
+import com.runiverse.running_service.application.device.command.push.RoomChatPushRequestedEvent;
 import com.runiverse.running_service.application.match.command.roomchatdelete.DeleteRoomChatCommand;
 import com.runiverse.running_service.application.match.command.roomchatdelete.DeleteRoomChatHandler;
 import com.runiverse.running_service.application.match.command.roomchatedit.EditRoomChatCommand;
@@ -11,7 +12,6 @@ import com.runiverse.running_service.application.match.command.roomchatsend.Send
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatAccessPolicy;
 import com.runiverse.running_service.application.match.common.RoomChatAssembler;
-import com.runiverse.running_service.application.match.common.RoomChatPushRequestedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.exception.RoomChatClosedException;
 import com.runiverse.running_service.application.match.exception.RoomChatNotFoundException;
