@@ -11,9 +11,12 @@ import com.runiverse.running_service.application.match.command.roomchatsend.Send
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatAccessPolicy;
 import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.exception.RoomChatClosedException;
 import com.runiverse.running_service.application.match.exception.RoomChatNotFoundException;
+import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
+import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.query.roomchatlist.GetRoomChatsHandler;
@@ -79,7 +82,12 @@ class RoomChatIntegrationTest {
                 published.add(changed.event());
             }
         };
-        sendHandler = new SendRoomChatHandler(policy, store, assembler, publisher);
+        LoadMatchPlayersPort members = roomId -> statuses.entrySet().stream()
+                .filter(entry -> entry.getValue().runningRoomId().equals(roomId.value()))
+                .map(entry -> new MatchPlayer(entry.getKey(), 360))
+                .toList();
+        sendHandler = new SendRoomChatHandler(policy, store, assembler, members,
+                new RoomChatPushRequester(publisher), publisher);
         editHandler = new EditRoomChatHandler(policy, store, store, store, assembler, publisher);
         deleteHandler = new DeleteRoomChatHandler(policy, store, store, assembler, publisher);
         listHandler = new GetRoomChatsHandler(policy, store, assembler);

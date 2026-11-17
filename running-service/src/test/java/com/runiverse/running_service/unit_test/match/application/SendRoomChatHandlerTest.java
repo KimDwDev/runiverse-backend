@@ -6,18 +6,23 @@ import com.runiverse.running_service.application.match.command.roomchatsend.Send
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatAccessPolicy;
 import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.exception.RoomChatClosedException;
 import com.runiverse.running_service.application.match.exception.RoomChatRoomNotFoundException;
 import com.runiverse.running_service.application.match.port.out.CreateRoomChatPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.match.port.out.SavedRoomChat;
+import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,6 +59,9 @@ class SendRoomChatHandlerTest {
     private static final RoomChat ASSEMBLED = new RoomChat(CHAT_ID, ROOM_ID,
             RunningRoomChatType.MESSAGE, new RoomChat.Person(SENDER, "철수", "https://cdn/profiles/c.png", false), null,
             "곧 출발해요", false, null, SENT_AT);
+    private static final LocalDateTime START = LocalDateTime.of(2026, 11, 11, 19, 30);
+    private static final UserStatusRow STATUS = new UserStatusRow(
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHING, START, 5_000);
 
     @Mock
     private RoomChatAccessPolicy roomChatAccessPolicy;
@@ -65,13 +73,20 @@ class SendRoomChatHandlerTest {
     private RoomChatAssembler roomChatAssembler;
 
     @Mock
+    private LoadMatchPlayersPort loadMatchPlayersPort;
+
+    @Mock
+    private RoomChatPushRequester roomChatPushRequester;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private SendRoomChatHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new SendRoomChatHandler(roomChatAccessPolicy, createRoomChatPort, roomChatAssembler, eventPublisher);
+        handler = new SendRoomChatHandler(roomChatAccessPolicy, createRoomChatPort, roomChatAssembler,
+                loadMatchPlayersPort, roomChatPushRequester, eventPublisher);
     }
 
     private static SendRoomChatCommand command(String content) {
@@ -84,6 +99,7 @@ class SendRoomChatHandlerTest {
 
         @BeforeEach
         void givenSaved() {
+            given(roomChatAccessPolicy.requireOpen(new UserId(SENDER), ROOM_ID)).willReturn(STATUS);
             given(createRoomChatPort.create(any())).willReturn(new SavedRoomChat(CHAT_ID, SENT_AT));
             given(roomChatAssembler.assemble(any(RoomChatRow.class))).willReturn(ASSEMBLED);
         }

@@ -20,7 +20,8 @@ public class RoomChatAccessPolicy {
 
     private final LoadUserStatusPort loadUserStatusPort;
 
-    public void requireOpen(UserId userId, Long runningRoomId) {
+    // 판정에 쓴 방 상태를 돌려준다 — 채팅 푸시 제목·만료가 방 시각·거리를 쓴다
+    public UserStatusRow requireOpen(UserId userId, Long runningRoomId) {
         // 1. 이 방에 배정돼 있나 — 배정이 없거나, 다른 방에 배정됐거나, 솔로 방이면 셋 다 404다.
         //    배정은 유저당 하나라 "내 배정 방 = 요청한 방"이면 방 존재도 함께 확인된다
         UserStatusRow status = loadUserStatusPort.loadStatus(userId)
@@ -31,6 +32,7 @@ public class RoomChatAccessPolicy {
         if (!isOpen(status.roomStatus())) {
             throw new RoomChatClosedException();
         }
+        return status;
     }
 
     private static boolean isOpen(RunningRoomStatus roomStatus) {
