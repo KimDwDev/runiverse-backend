@@ -1,6 +1,5 @@
 package com.runiverse.running_service.application.match.common;
 
-import com.runiverse.running_service.application.device.command.push.RoomChatPushRequestedEvent;
 import com.runiverse.running_service.application.device.port.out.PushMessage;
 import com.runiverse.running_service.application.device.port.out.PushType;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
