@@ -231,7 +231,7 @@
 | deleted_at | timestamp | nullable | **본인이 지운 시각**(소프트 삭제). **되돌리지 않는다** — 한 번 찍히면 바뀌지 않고, 지운 메시지는 수정할 수 없다. 화면에는 내용 없이 "삭제된 메시지"로 남는다 |
 
 > CHECK `ck_running_room_chat_content_length`: `char_length(content) between 1 and 200`
-> CHECK `ck_running_room_chat_type`: `type in ('MESSAGE', 'JOINED', 'REJOINED', 'LEFT')`
+> CHECK `ck_running_room_chat_type`: `type in ('MESSAGE', 'JOINED', 'LEFT')`
 > CHECK `ck_running_room_chat_shape`: `(type = 'MESSAGE' and content is not null) or (type <> 'MESSAGE' and content is null and edited_at is null and deleted_at is null)`
 
 > **안내 줄은 고치지도 지우지도 않는다** — 배정·이탈과 같은 트랜잭션에서 생기고, 수정·삭제 경로는 말(`MESSAGE`)만 읽는다.
@@ -582,7 +582,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 화면(`RoomInfo.invitations`)은 `PENDING`만 보여주지만, 다시 초대할 때 보낸 횟수를 이어서 세려면 행이 남아야 한다 |
-| running_room_chats.type | MESSAGE / JOINED / REJOINED / LEFT | 참가자가 쓴 말 / 처음 들어옴 / 나갔던 방에 다시 들어옴 / 나감. 입장은 안내 문구가 같아도 푸시·안 읽음 배지 대상 여부가 달라 `JOINED`/`REJOINED`로 나누고, 퇴장은 횟수와 무관하게 둘 다 대상이 아니므로 `LEFT` 하나로 담는다 |
+| running_room_chats.type | MESSAGE / JOINED / LEFT | 참가자가 쓴 말 / 들어옴 / 나감. 나갔던 방에 다시 들어와도 `JOINED`다 |
 | user_notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
