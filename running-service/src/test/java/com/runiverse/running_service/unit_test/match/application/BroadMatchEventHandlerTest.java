@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.RunningReady;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import ch.qos.logback.classic.Level;
@@ -100,7 +101,7 @@ class BroadMatchEventHandlerTest {
     void roomChatSkipsSender() {
         // given -> A가 보냈다. A의 화면은 REST 응답이 이미 바꿨다
         MatchStreamEvent event = MatchStreamEvent.roomChatSent(new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(USER_A.value(), "철수", null, false),
+                RunningRoomChatType.MESSAGE, new RoomChat.Person(USER_A.value(), "철수", null, false), null,
                 "곧 출발해요", false, null, LocalDateTime.now()));
         given(loadMatchRoomMembersPort.usersIn(ROOM_ID)).willReturn(Set.of(USER_A, USER_B));
         given(matchStreamPort.find(USER_B)).willReturn(Optional.of(connectionB));

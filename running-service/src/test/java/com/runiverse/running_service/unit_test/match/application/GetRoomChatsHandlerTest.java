@@ -15,6 +15,7 @@ import com.runiverse.running_service.application.match.query.roomchatlist.GetRoo
 import com.runiverse.running_service.application.match.query.roomchatlist.GetRoomChatsResult;
 import com.runiverse.running_service.application.match.query.roomchatlist.RoomChatCursor;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -46,9 +47,10 @@ class GetRoomChatsHandlerTest {
     private static final UUID ME = UuidCreator.getTimeOrderedEpoch();
     private static final UUID CHULSU = UuidCreator.getTimeOrderedEpoch();
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2026, 11, 11, 18, 52, 10);
-    private static final RoomChatRow ROW = new RoomChatRow(3021L, ROOM_ID, CHULSU, "곧 출발해요", null, null, SENT_AT);
-    private static final RoomChat CHAT = new RoomChat(3021L, ROOM_ID,
-            new RoomChat.Sender(CHULSU, "철수", null, false), "곧 출발해요", false, null, SENT_AT);
+    private static final RoomChatRow ROW = new RoomChatRow(3021L, ROOM_ID, CHULSU, RunningRoomChatType.MESSAGE,
+            "곧 출발해요", null, null, SENT_AT);
+    private static final RoomChat CHAT = new RoomChat(3021L, ROOM_ID, RunningRoomChatType.MESSAGE,
+            new RoomChat.Person(CHULSU, "철수", null, false), null, "곧 출발해요", false, null, SENT_AT);
 
     @Mock
     private RoomChatAccessPolicy roomChatAccessPolicy;

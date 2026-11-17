@@ -11,6 +11,7 @@ import com.runiverse.running_service.domain.running.room.exception.RunningRoomCh
 import com.runiverse.running_service.domain.running.room.exception.RunningRoomChatSenderRequiredException;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +48,8 @@ class RunningRoomChatTest {
             assertThat(chat.getRunningRoomChatId()).isEmpty();
             assertThat(chat.getRunningRoomId()).isEqualTo(ROOM);
             assertThat(chat.getUserId()).isEqualTo(SENDER);
-            assertThat(chat.getContent()).isEqualTo(new RunningRoomChatContent("곧 출발해요"));
+            assertThat(chat.getType()).isEqualTo(RunningRoomChatType.MESSAGE);
+            assertThat(chat.getContent()).contains(new RunningRoomChatContent("곧 출발해요"));
             assertThat(chat.isEdited()).isFalse();
             assertThat(chat.isDeleted()).isFalse();
         }
@@ -79,7 +81,8 @@ class RunningRoomChatTest {
         @DisplayName("저장된 수정·삭제 시각을 그대로 되살린다")
         void restoreTimes() {
             // when
-            RunningRoomChat chat = RunningRoomChat.restore(3021L, 125L, SENDER_ID, "곧 출발해요", SENT_AT, NOW);
+            RunningRoomChat chat = RunningRoomChat.restore(3021L, 125L, SENDER_ID, RunningRoomChatType.MESSAGE,
+                    "곧 출발해요", SENT_AT, NOW);
 
             // then
             assertThat(chat.getRunningRoomChatId()).contains(new RunningRoomChatId(3021L));
@@ -104,7 +107,7 @@ class RunningRoomChatTest {
             RunningRoomChatHistory history = chat.edit(SENDER, "5분 늦어요", NOW);
 
             // then
-            assertThat(chat.getContent()).isEqualTo(new RunningRoomChatContent("5분 늦어요"));
+            assertThat(chat.getContent()).contains(new RunningRoomChatContent("5분 늦어요"));
             assertThat(chat.getEditedAt()).contains(NOW);
             assertThat(history.getRunningRoomChatId()).isEqualTo(new RunningRoomChatId(3021L));
             assertThat(history.getContent()).isEqualTo(new RunningRoomChatContent("곧 출발해요"));
@@ -123,7 +126,7 @@ class RunningRoomChatTest {
             // then
             assertThat(first.getContent().value()).isEqualTo("곧 출발해요");
             assertThat(second.getContent().value()).isEqualTo("5분 늦어요");
-            assertThat(chat.getContent().value()).isEqualTo("10분 늦어요");
+            assertThat(chat.getContent().orElseThrow().value()).isEqualTo("10분 늦어요");
             assertThat(chat.getEditedAt()).contains(NOW.plusMinutes(1));
         }
 
@@ -150,7 +153,7 @@ class RunningRoomChatTest {
             // when & then
             assertThatThrownBy(() -> chat.edit(OTHER, "5분 늦어요", NOW))
                     .isInstanceOf(NotRunningRoomChatSenderException.class);
-            assertThat(chat.getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(chat.getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
             assertThat(chat.isEdited()).isFalse();
         }
 
@@ -175,7 +178,7 @@ class RunningRoomChatTest {
             // when & then
             assertThatThrownBy(() -> chat.edit(SENDER, " ", NOW))
                     .isInstanceOf(RunningRoomChatContentRequiredException.class);
-            assertThat(chat.getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(chat.getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
             assertThat(chat.isEdited()).isFalse();
         }
 
@@ -209,7 +212,7 @@ class RunningRoomChatTest {
             // then
             assertThat(chat.isDeleted()).isTrue();
             assertThat(chat.getDeletedAt()).contains(NOW);
-            assertThat(chat.getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(chat.getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
         }
 
         @Test
@@ -263,6 +266,6 @@ class RunningRoomChatTest {
     }
 
     private static RunningRoomChat saved() {
-        return RunningRoomChat.restore(3021L, 125L, SENDER_ID, "곧 출발해요", null, null);
+        return RunningRoomChat.restore(3021L, 125L, SENDER_ID, RunningRoomChatType.MESSAGE, "곧 출발해요", null, null);
     }
 }

@@ -16,6 +16,7 @@ import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.match.port.out.SavedRoomChat;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,7 +52,7 @@ class SendRoomChatHandlerTest {
     private static final UUID SENDER = UuidCreator.getTimeOrderedEpoch();
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2026, 11, 11, 18, 52, 10);
     private static final RoomChat ASSEMBLED = new RoomChat(CHAT_ID, ROOM_ID,
-            new RoomChat.Sender(SENDER, "철수", "https://cdn/profiles/c.png", false),
+            RunningRoomChatType.MESSAGE, new RoomChat.Person(SENDER, "철수", "https://cdn/profiles/c.png", false), null,
             "곧 출발해요", false, null, SENT_AT);
 
     @Mock
@@ -111,7 +112,8 @@ class SendRoomChatHandlerTest {
             verify(createRoomChatPort).create(saved.capture());
             assertThat(saved.getValue().getRunningRoomId()).isEqualTo(new RunningRoomId(ROOM_ID));
             assertThat(saved.getValue().getUserId()).isEqualTo(new UserId(SENDER));
-            assertThat(saved.getValue().getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(saved.getValue().getType()).isEqualTo(RunningRoomChatType.MESSAGE);
+            assertThat(saved.getValue().getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
             assertThat(saved.getValue().getRunningRoomChatId()).isEmpty();
         }
 
@@ -123,7 +125,7 @@ class SendRoomChatHandlerTest {
 
             // then -> ID·보낸 시각은 저장이 만들고, 새 메시지라 고친 적도 지운 적도 없다
             verify(roomChatAssembler).assemble(new RoomChatRow(
-                    CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, null, SENT_AT));
+                    CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE, "곧 출발해요", null, null, SENT_AT));
         }
 
         @Test

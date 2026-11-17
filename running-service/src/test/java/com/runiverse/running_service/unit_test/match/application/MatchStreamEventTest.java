@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.RunningReady;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.DisplayName;
@@ -106,7 +107,7 @@ class MatchStreamEventTest {
 
         private static RoomChat chatOf(UUID sender) {
             return new RoomChat(3021L, ROOM_ID,
-                    new RoomChat.Sender(sender, "철수", null, false),
+                    RunningRoomChatType.MESSAGE, new RoomChat.Person(sender, "철수", null, false), null,
                     "곧 출발해요", false, null, START.minusMinutes(8));
         }
 

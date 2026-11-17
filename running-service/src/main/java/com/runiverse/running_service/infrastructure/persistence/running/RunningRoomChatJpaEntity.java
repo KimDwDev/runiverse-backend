@@ -1,8 +1,11 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
@@ -30,6 +33,10 @@ import java.util.UUID;
         indexes = @Index(name = "idx_room_chat_room_chat", columnList = "running_room_id, running_room_chat_id")
 )
 @Check(name = "ck_running_room_chat_content_length", constraints = "char_length(content) between 1 and 200")
+@Check(name = "ck_running_room_chat_type", constraints = "type in ('MESSAGE', 'JOINED', 'REJOINED', 'LEFT')")
+@Check(name = "ck_running_room_chat_shape",
+        constraints = "(type = 'MESSAGE' and content is not null)"
+                + " or (type <> 'MESSAGE' and content is null and edited_at is null and deleted_at is null)")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RunningRoomChatJpaEntity extends BaseTimeEntity {
 
@@ -45,12 +52,16 @@ public class RunningRoomChatJpaEntity extends BaseTimeEntity {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private RunningRoomJpaEntity room;
 
-    // 보낸 사람 — 논리 참조다. 탈퇴해도 채팅은 남고, 탈퇴는 이 행을 건드리지 않는다
+    // 보낸 사람(안내 줄은 들어오거나 나간 사람) — 논리 참조다. 탈퇴해도 채팅은 남고, 탈퇴는 이 행을 건드리지 않는다
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    // 지금 보이는 내용 — 지워도 남긴다(신고 대응). API로는 지운 뒤 내려가지 않는다
-    @Column(name = "content", nullable = false, columnDefinition = "text")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, updatable = false, length = 20)
+    private RunningRoomChatType type;
+
+    // 지금 보이는 내용 — 지워도 남긴다(신고 대응). API로는 지운 뒤 내려가지 않는다. 안내 줄은 null
+    @Column(name = "content", columnDefinition = "text")
     private String content;
 
     // 마지막 수정 시각 — updated_at은 삭제로도 바뀌어 "수정됨"을 가르지 못한다
@@ -61,15 +72,18 @@ public class RunningRoomChatJpaEntity extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    private RunningRoomChatJpaEntity(RunningRoomJpaEntity room, UUID userId, String content) {
+    private RunningRoomChatJpaEntity(RunningRoomJpaEntity room, UUID userId, RunningRoomChatType type,
+                                     String content) {
         this.room = room;
         this.userId = userId;
+        this.type = type;
         this.content = content;
     }
 
-    // 새로 보낸 채팅 — 수정·삭제 시각은 비어서 시작한다
-    public static RunningRoomChatJpaEntity create(RunningRoomJpaEntity room, UUID userId, String content) {
-        return new RunningRoomChatJpaEntity(room, userId, content);
+    // 새로 저장하는 채팅 — 수정·삭제 시각은 비어서 시작한다
+    public static RunningRoomChatJpaEntity create(RunningRoomJpaEntity room, UUID userId, RunningRoomChatType type,
+                                                  String content) {
+        return new RunningRoomChatJpaEntity(room, userId, type, content);
     }
 
     // 도메인이 바꾼 값을 옮긴다 — 고치기는 content·editedAt을, 지우기는 deletedAt을 바꾼다.

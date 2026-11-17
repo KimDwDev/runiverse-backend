@@ -40,6 +40,7 @@ import com.runiverse.running_service.application.match.query.roomchatlist.GetRoo
 import com.runiverse.running_service.application.match.query.roomchatlist.GetRoomChatsResult;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsQuery;
 import com.runiverse.running_service.application.match.query.slot.GetMatchSlotsResult;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.match.controller.MatchRoomController;
@@ -619,8 +620,8 @@ class MatchRoomControllerTest {
     void 채팅_보내기는_201로_채팅을_돌려준다() throws Exception {
         // given
         UUID sender = USER_ID;
-        given(sendRoomChatUsecase.handle(any())).willReturn(new RoomChat(3021L, 125L,
-                new RoomChat.Sender(sender, "철수", "https://cdn/profile.png", false),
+        given(sendRoomChatUsecase.handle(any())).willReturn(new RoomChat(3021L, 125L, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(sender, "철수", "https://cdn/profile.png", false), null,
                 "곧 출발해요", false, null, LocalDateTime.of(2026, 7, 25, 18, 52, 10)));
 
         // when
@@ -638,6 +639,8 @@ class MatchRoomControllerTest {
         assertThat(body)
                 .containsEntry("chatId", 3021)
                 .containsEntry("runningRoomId", 125)
+                .containsEntry("type", "MESSAGE")
+                .containsEntry("actor", null)
                 .containsEntry("content", "곧 출발해요")
                 .containsEntry("isDeleted", false)
                 .containsEntry("editedAt", null)
@@ -648,7 +651,7 @@ class MatchRoomControllerTest {
                 "profileImageUrl", "https://cdn/profile.png",
                 "isDeleted", false));
         assertThat(body).containsOnlyKeys(
-                "chatId", "runningRoomId", "sender", "content", "isDeleted", "editedAt", "createdAt");
+                "chatId", "runningRoomId", "type", "sender", "actor", "content", "isDeleted", "editedAt", "createdAt");
     }
 
     @Test
@@ -674,8 +677,8 @@ class MatchRoomControllerTest {
     @DisplayName("채팅 보내기: 200자는 받고 201자는 400이다")
     void 채팅_보내기는_200자를_넘으면_400이다() throws Exception {
         // given
-        given(sendRoomChatUsecase.handle(any())).willReturn(new RoomChat(1L, 125L,
-                new RoomChat.Sender(USER_ID, "철수", null, false),
+        given(sendRoomChatUsecase.handle(any())).willReturn(new RoomChat(1L, 125L, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(USER_ID, "철수", null, false), null,
                 "가".repeat(200), false, null, LocalDateTime.of(2026, 7, 25, 18, 52, 10)));
 
         // when
@@ -754,7 +757,8 @@ class MatchRoomControllerTest {
     }
 
     private static RoomChat listedChat(long chatId, String content, boolean deleted) {
-        return new RoomChat(chatId, 125L, new RoomChat.Sender(USER_ID, "철수", null, false),
+        return new RoomChat(chatId, 125L, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(USER_ID, "철수", null, false), null,
                 content, deleted, null, LocalDateTime.of(2026, 11, 11, 18, 52, 10));
     }
 
@@ -781,7 +785,7 @@ class MatchRoomControllerTest {
         List<Map<String, Object>> items = (List<Map<String, Object>>) body.get("items");
         assertThat(items).extracting(item -> item.get("chatId")).containsExactly(3022, 3021);
         assertThat(items.get(0)).containsOnlyKeys(
-                "chatId", "runningRoomId", "sender", "content", "isDeleted", "editedAt", "createdAt");
+                "chatId", "runningRoomId", "type", "sender", "actor", "content", "isDeleted", "editedAt", "createdAt");
         // 지운 메시지도 자리를 지키고 내용 키는 null로 남는다
         assertThat(items.get(1)).containsEntry("content", null).containsEntry("isDeleted", true);
     }
@@ -875,8 +879,8 @@ class MatchRoomControllerTest {
     @DisplayName("채팅 수정: 토큰 주체·경로 방·메시지 ID·내용을 넘기고 200으로 고친 뒤의 Chat을 돌려준다")
     void 채팅_수정은_200으로_고친_채팅을_돌려준다() throws Exception {
         // given
-        given(editRoomChatUsecase.handle(any())).willReturn(new RoomChat(3021L, 125L,
-                new RoomChat.Sender(USER_ID, "철수", null, false),
+        given(editRoomChatUsecase.handle(any())).willReturn(new RoomChat(3021L, 125L, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(USER_ID, "철수", null, false), null,
                 "조금 늦어요", false, LocalDateTime.of(2026, 7, 25, 18, 54, 0),
                 LocalDateTime.of(2026, 7, 25, 18, 52, 10)));
 
@@ -896,7 +900,8 @@ class MatchRoomControllerTest {
                 .containsEntry("content", "조금 늦어요")
                 .containsEntry("isDeleted", false)
                 .containsEntry("editedAt", "2026-07-25T18:54:00")
-                .containsOnlyKeys("chatId", "runningRoomId", "sender", "content", "isDeleted", "editedAt", "createdAt");
+                .containsOnlyKeys("chatId", "runningRoomId", "type", "sender", "actor", "content", "isDeleted",
+                        "editedAt", "createdAt");
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.runiverse.running_service.application.match.port.out;
 
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -8,7 +10,10 @@ import java.util.UUID;
 public record RoomChatRow(
         Long chatId,
         Long runningRoomId,
-        UUID senderId,
+        // 보낸 사람 — 안내 줄은 들어오거나 나간 사람
+        UUID userId,
+        RunningRoomChatType type,
+        // 안내 줄은 null
         String content,
         // 고친 적 없으면 null
         LocalDateTime editedAt,

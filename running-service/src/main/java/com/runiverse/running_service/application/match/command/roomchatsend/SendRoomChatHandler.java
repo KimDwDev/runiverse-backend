@@ -42,7 +42,8 @@ public class SendRoomChatHandler implements SendRoomChatUsecase {
                 saved.chatId(),
                 command.runningRoomId(),
                 command.userId(),
-                chat.getContent().value(),
+                chat.getType(),
+                chat.getContent().orElseThrow().value(),
                 null,
                 null,
                 saved.createdAt()));

@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.common.RoomChatAssembler;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,8 @@ class RoomChatAssemblerTest {
 
     private static RoomChatRow row(long chatId, UUID sender, String content,
                                    LocalDateTime editedAt, LocalDateTime deletedAt) {
-        return new RoomChatRow(chatId, ROOM_ID, sender, content, editedAt, deletedAt, SENT_AT);
+        return new RoomChatRow(chatId, ROOM_ID, sender, RunningRoomChatType.MESSAGE, content, editedAt, deletedAt,
+                SENT_AT);
     }
 
     @Test
@@ -66,7 +68,8 @@ class RoomChatAssemblerTest {
 
         // then
         assertThat(chat).isEqualTo(new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(CHULSU, "철수", "https://cdn/profiles/c.png", false),
+                RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(CHULSU, "철수", "https://cdn/profiles/c.png", false), null,
                 "곧 출발해요", false, null, SENT_AT));
     }
 
@@ -99,7 +102,7 @@ class RoomChatAssemblerTest {
         RoomChat chat = assembler.assemble(row(3021L, CHULSU, "곧 출발해요", null, null));
 
         // then -> 보낸 사람 탈퇴와 메시지 삭제는 다른 축이다
-        assertThat(chat.sender()).isEqualTo(new RoomChat.Sender(CHULSU, "탈퇴한 사용자", null, true));
+        assertThat(chat.sender()).isEqualTo(new RoomChat.Person(CHULSU, "탈퇴한 사용자", null, true));
         assertThat(chat.content()).isEqualTo("곧 출발해요");
         assertThat(chat.isDeleted()).isFalse();
         verifyNoInteractions(generateViewUrlPort);

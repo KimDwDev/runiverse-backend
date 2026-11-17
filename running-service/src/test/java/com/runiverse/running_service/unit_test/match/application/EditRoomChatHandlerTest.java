@@ -19,6 +19,7 @@ import com.runiverse.running_service.application.match.port.out.UpdateRoomChatPo
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.RunningRoomChatHistory;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +58,7 @@ class EditRoomChatHandlerTest {
     private static final UUID OTHER = UuidCreator.getTimeOrderedEpoch();
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2026, 11, 11, 18, 52, 10);
     private static final RoomChat ASSEMBLED = new RoomChat(CHAT_ID, ROOM_ID,
-            new RoomChat.Sender(SENDER, "철수", null, false),
+            RunningRoomChatType.MESSAGE, new RoomChat.Person(SENDER, "철수", null, false), null,
             "조금 늦어요", false, SENT_AT.plusMinutes(2), SENT_AT);
 
     @Mock
@@ -99,7 +100,8 @@ class EditRoomChatHandlerTest {
 
     private static LockedRoomChat locked(LocalDateTime deletedAt) {
         return new LockedRoomChat(
-                RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, deletedAt), SENT_AT);
+                RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE, "곧 출발해요",
+                        null, deletedAt), SENT_AT);
     }
 
     @Nested
@@ -129,7 +131,7 @@ class EditRoomChatHandlerTest {
             order.verify(eventPublisher).publishEvent(published.capture());
 
             assertThat(history.getValue().getContent().value()).isEqualTo("곧 출발해요");
-            assertThat(updated.getValue().getContent().value()).isEqualTo("조금 늦어요");
+            assertThat(updated.getValue().getContent().orElseThrow().value()).isEqualTo("조금 늦어요");
             assertThat(updated.getValue().isEdited()).isTrue();
             assertThat(published.getValue().event().type()).isEqualTo(MatchEventType.ROOM_CHAT_EDITED);
             assertThat(published.getValue().event().chat()).isEqualTo(ASSEMBLED);
@@ -152,7 +154,8 @@ class EditRoomChatHandlerTest {
             verify(roomChatAssembler).assemble(row.capture());
             assertThat(row.getValue().chatId()).isEqualTo(CHAT_ID);
             assertThat(row.getValue().runningRoomId()).isEqualTo(ROOM_ID);
-            assertThat(row.getValue().senderId()).isEqualTo(SENDER);
+            assertThat(row.getValue().userId()).isEqualTo(SENDER);
+            assertThat(row.getValue().type()).isEqualTo(RunningRoomChatType.MESSAGE);
             assertThat(row.getValue().content()).isEqualTo("조금 늦어요");
             assertThat(row.getValue().editedAt()).isAfterOrEqualTo(before);
             assertThat(row.getValue().deletedAt()).isNull();
