@@ -217,23 +217,27 @@
 
 ### running_room_chats (방 채팅 메시지)
 
-매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. **방 안에 있는 동안만**(배정됨 + 신청 `JOINED` + 방 `MATCHING`·`MATCHED`) 보내고 고치고 지운다 — 러닝이 시작되면 막힌다. 늦게 들어온 사람도 그 방의 메시지를 처음부터 본다. 지난 메시지는 REST 목록 조회(커서 페이지네이션)로 받고, SSE 입장 이벤트에는 싣지 않는다.
+매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. **방 안에 있는 동안만**(배정됨 + 신청 `JOINED` + 방 `MATCHING`·`MATCHED`) 보내고 고치고 지운다 — 러닝이 시작되면 막힌다. 늦게 들어온 사람도 그 방의 메시지를 처음부터 본다. 지난 메시지는 REST 목록 조회(커서 페이지네이션)로 받고, SSE 입장 이벤트에는 싣지 않는다. 방에 들어오고 나간 것을 알리는 안내 줄도 이 표에 함께 담는다(`type`).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_room_chat_id | bigint | PK | API `chatId`(Long). 생성 순서대로 늘어나 정렬·커서·클라 중복 제거의 기준이다 |
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 메시지가 오간 방. `running_room_sessions`와 같은 정책 |
-| user_id | UUID | → users, NOT NULL | 보낸 사람. **논리 참조** — 탈퇴해도 메시지는 남고 "탈퇴 유저"로 보인다. 탈퇴는 이 행을 건드리지 않는다(`deleted_at`을 찍지 않는다 — 탈퇴 여부는 `users`에 행이 없다는 것으로 이미 드러난다) |
-| content | text | NOT NULL | **지금 보이는 내용**, 1~200자. 수정하면 새 값으로 덮고 직전 값은 `running_room_chat_histories`로 옮긴다. 공백만 있는 글은 도메인 VO가 거른다. **지워도 남긴다** — 신고 대응 근거이며, API로는 내려주지 않는다 |
+| user_id | UUID | → users, NOT NULL | 보낸 사람, 안내 줄이면 들어오거나 나간 사람. **논리 참조** — 탈퇴해도 메시지는 남고 "탈퇴 유저"로 보인다. 탈퇴는 이 행을 건드리지 않는다(`deleted_at`을 찍지 않는다 — 탈퇴 여부는 `users`에 행이 없다는 것으로 이미 드러난다) |
+| type | enum | NOT NULL | 말인지 입장·퇴장 안내 줄인지 — [§5](#5-enum-사전). 한 번 정해지면 바뀌지 않는다 |
+| content | text | nullable | **지금 보이는 내용**, 1~200자. 수정하면 새 값으로 덮고 직전 값은 `running_room_chat_histories`로 옮긴다. 공백만 있는 글은 도메인 VO가 거른다. **지워도 남긴다** — 신고 대응 근거이며, API로는 내려주지 않는다. 안내 줄은 null이다 — 문구는 앱이 `type`과 그 사람의 지금 닉네임으로 그린다 |
 | edited_at | timestamp | nullable | 마지막 수정 시각, 수정한 적 없으면 null. "수정됨" 표시용이다 — `updated_at`은 생성 때도 `created_at`과 미세하게 다르게 찍히고 삭제로도 바뀌어 수정 여부를 가르지 못한다 |
 | created_at / updated_at | timestamp | NOT NULL | `created_at` = 보낸 시각, `updated_at` = 마지막 변경(수정·삭제) 시각 |
 | deleted_at | timestamp | nullable | **본인이 지운 시각**(소프트 삭제). **되돌리지 않는다** — 한 번 찍히면 바뀌지 않고, 지운 메시지는 수정할 수 없다. 화면에는 내용 없이 "삭제된 메시지"로 남는다 |
 
 > CHECK `ck_running_room_chat_content_length`: `char_length(content) between 1 and 200`
+> CHECK `ck_running_room_chat_type`: `type in ('MESSAGE', 'JOINED', 'REJOINED', 'LEFT')`
+> CHECK `ck_running_room_chat_shape`: `(type = 'MESSAGE' and content is not null) or (type <> 'MESSAGE' and content is null and edited_at is null and deleted_at is null)`
 
+> **안내 줄은 고치지도 지우지도 않는다** — 배정·이탈과 같은 트랜잭션에서 생기고, 수정·삭제 경로는 말(`MESSAGE`)만 읽는다.
 > **수정은 이력을 먼저 남긴다** — 메시지 행을 잠그고(`FOR UPDATE`) 직전 `content`를 이력에 INSERT한 뒤 `content`·`edited_at`을 바꾼다. 한 트랜잭션이다. 잠그지 않으면 연달아 온 두 수정이 같은 직전 값을 읽어 이력 하나가 빠진다.
 > **삭제는 이력을 남기지 않는다** — 행에 마지막 내용이 그대로 남고 시각은 `deleted_at`이 말한다. 이력을 시간순으로 읽은 뒤 이 행의 `content`를 붙이면 처음 보낸 내용부터 마지막까지 복원된다.
-> **보내기·수정·삭제는 방 안에 있는 사람만 한다**(`running_room_sessions.is_connected = true`, `running_players.status = 'JOINED'`, 방 `MATCHING`·`MATCHED`), 수정·삭제는 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
+> **보내기·수정·삭제는 방 안에 있는 사람만 한다**(`running_room_sessions.is_connected = true`, `running_players.status = 'JOINED'`, 방 `MATCHING`·`MATCHED`), 수정·삭제는 말을 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
 > **재전송 중복을 막는 키를 두지 않는다** — 클라가 자동 재전송하지 않는 것으로 막는다(api-spec 채팅 절). 중복 제보가 생기면 `client_message_id` + UNIQUE를 더한다.
 
 ### running_room_chat_histories (방 채팅 메시지 수정 이력)
@@ -578,6 +582,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 화면(`RoomInfo.invitations`)은 `PENDING`만 보여주지만, 다시 초대할 때 보낸 횟수를 이어서 세려면 행이 남아야 한다 |
+| running_room_chats.type | MESSAGE / JOINED / REJOINED / LEFT | 참가자가 쓴 말 / 처음 들어옴 / 나갔던 방에 다시 들어옴 / 나감. 입장은 안내 문구가 같아도 푸시·안 읽음 배지 대상 여부가 달라 `JOINED`/`REJOINED`로 나누고, 퇴장은 횟수와 무관하게 둘 다 대상이 아니므로 `LEFT` 하나로 담는다 |
 | user_notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
