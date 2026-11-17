@@ -16,12 +16,12 @@
 | 아웃박스 행 쓰기 | **됨** — 9-2 작성 확정 트랜잭션에서 쓴다 |
 | 요청 토픽 | 있음 (`test`·`dev` 공유 클러스터, `prod` 운영 클러스터) |
 | Kafka 계정 `{env}.debezium` | 없음 |
-| 커넥터 DB 계정 | test DB `debezium` **있음** — `LOGIN REPLICATION`, `outbox_events` SELECT만 (11-17). 밖에서 접속(`pg_hba.conf`)은 아직 막혀 있다. prod는 아직 |
-| publication | test DB `outbox_publication` **있음** — `outbox_events` + `cdc_heartbeats`, `publish = 'insert'` (11-17). prod는 아직 |
-| Postgres 논리 복제 | test DB(PostgreSQL 17.10, **Kafka와 같은 EC2**, 앱과는 다른 EC2) **켜짐** — `wal_level=logical`, `max_slot_wal_keep_size=5GB`, 슬롯 없음 (11-17). prod RDS는 아직 |
-| Kafka Connect · Debezium | test: **Debezium 3.7.1.Final** 플러그인을 `/opt/kafka/plugins`에 넣었다(Kafka 4.1.2의 Connect를 systemd로 띄울 예정, Kafka·DB EC2에 같이). 아웃박스 변환기는 `debezium-connect-plugins` jar에 들어 있다. Connect는 systemd `kafka-connect`로 떠 있다(REST는 `127.0.0.1:8083`만, 그룹 `test.debezium-connect`). **커넥터 `test-outbox` RUNNING** — 설정은 `infra/kafka/connectors/test-outbox.json`, 슬롯 `debezium_outbox_test`, 스냅샷 없음(`no_data`), heartbeat 1분 + `cdc_heartbeats`에 쓰는 `heartbeat.action.query` (11-17). **실제 카드로 발행 검증 완료**(아래 「검증」) |
+| 커넥터 DB 계정 | test DB `debezium` **있음** — `LOGIN REPLICATION`, `outbox_events` SELECT만 (11-17). 밖에서 접속(`pg_hba.conf`)은 아직 막혀 있다. prod RDS `debezium` **있음** — `rds_replication` 역할, `outbox_events` SELECT, `cdc_heartbeats` SELECT·INSERT·DELETE (11-17) |
+| publication | test DB `outbox_publication` **있음** — `outbox_events` + `cdc_heartbeats`, `publish = 'insert'` (11-17). prod도 같은 모양으로 **있음** (11-17). prod 테이블 두 개는 `admin`이 손으로 만들었고(토픽 CHECK는 `prod`만), 앱 계정(`runiverse_app`)은 기본 권한으로 쓰기 권한을 받았다 |
+| Postgres 논리 복제 | test DB(PostgreSQL 17.10, **Kafka와 같은 EC2**, 앱과는 다른 EC2) **켜짐** — `wal_level=logical`, `max_slot_wal_keep_size=5GB`, 슬롯 없음 (11-17). prod RDS(**PostgreSQL 18.3**) **켜짐** — 사용자 정의 파라미터 그룹 `runiverse-backend-deploy-postgres18`(`rds.logical_replication=1`, `max_slot_wal_keep_size=10240` MB)으로 바꾸고 재부팅, `wal_level=logical`, 슬롯 없음 (11-17) |
+| Kafka Connect · Debezium | test: **Debezium 3.7.1.Final** 플러그인을 `/opt/kafka/plugins`에 넣었다(Kafka 4.1.2의 Connect를 systemd로 띄울 예정, Kafka·DB EC2에 같이). 아웃박스 변환기는 `debezium-connect-plugins` jar에 들어 있다. Connect는 systemd `kafka-connect`로 떠 있다(REST는 `127.0.0.1:8083`만, 그룹 `test.debezium-connect`). **커넥터 `test-outbox` RUNNING** — 설정은 `infra/kafka/connectors/test-outbox.json`, 슬롯 `debezium_outbox_test`, 스냅샷 없음(`no_data`), heartbeat 1분 + `cdc_heartbeats`에 쓰는 `heartbeat.action.query` (11-17). **실제 카드로 발행 검증 완료**(아래 「검증」). prod: 같은 3.7.1.Final 플러그인을 prod Kafka EC2 `/opt/kafka/plugins`에 넣고 Connect를 systemd `kafka-connect`로 띄웠다(REST는 `127.0.0.1:8083`만, 그룹 `prod.debezium-connect`). **커넥터 `prod-outbox` RUNNING** — 설정은 `infra/kafka/connectors/prod-outbox.json`(DB 주소·비밀번호는 서버 파일 참조), 슬롯 `debezium_outbox_prod`, 스냅샷 없음, heartbeat 쿼리 동작 확인 — 붙인 지 약 12분 뒤 슬롯 지연 712 bytes (11-17). 실제 이벤트 검증은 아웃박스 코드 배포 뒤 |
 
-- **test는 11-17부터 CDC로 발행한다. prod는 아직 아웃박스 행이 쌓이기만 하고 아무도 보내지 않는다.** 아웃박스 코드가 CDC보다 먼저 배포되면 그동안 만든 카드의 음악은 `GENERATING`에 머문다 — 커넥터를 처음 붙일 때 그 행을 보낼지 정한다(「정하지 않은 것」 2).
+- **test·prod 모두 11-17부터 CDC가 붙어 있다.** prod는 아웃박스 코드가 아직 배포 전이라 나가는 이벤트가 없다 — 커넥터를 먼저 붙였으므로 배포 뒤 첫 카드부터 빠짐없이 나간다. 아웃박스 코드가 CDC보다 먼저 배포되면 그동안 만든 카드의 음악은 `GENERATING`에 머문다 — 커넥터를 처음 붙일 때 그 행을 보낼지 정한다(「정하지 않은 것」 2).
 
 ## 구조
 
@@ -145,6 +145,16 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 - [x] 카드를 만들지 않고 두어도 슬롯 지연이 늘지 않는다(heartbeat) — test 11-17. **주기(`heartbeat.interval.ms`)만으로는 부족했다**: publication 밖 테이블에 20만 행을 써 WAL을 18 MB 늘리자, heartbeat 기록은 Kafka로 계속 나가는데도 지연이 19 MB에서 줄지 않았다. Debezium 로그가 이유를 말한다 — `LSN flush mode 'connector': Debezium will flush LSN on event processing ... consider using heartbeat.action.query`(publication 안 변경을 처리할 때만 슬롯을 민다). `cdc_heartbeats` + `heartbeat.action.query`를 더하자 그 19 MB가 약 3분 만에 792 bytes로 풀렸다. 슬롯은 heartbeat 직후가 아니라 Connect가 오프셋을 기록한 뒤(기본 60초 간격) 밀린다
 - [ ] AI 서버 계정으로 읽힌다 — AI 쪽 확인 대기(우리가 AI 그룹으로 읽으면 AI가 받을 메시지를 가져가므로 AI 서버가 확인한다)
 
+### prod — 배포 전 확인 (11-17)
+
+아웃박스 코드를 배포하기 전에, 검증용 아웃박스 행을 손으로 넣어 prod 경로를 한 번 돌렸다. prod에만 있는 차이(RDS 암호화 접속 `sslmode=require`, 파일에서 읽는 DB 주소, PostgreSQL 18, prod 계정·권한)가 이 경로에 있어서다.
+
+- [x] 행 하나(`aggregate_id = 'prod-cdc-smoke-001'`, 본문 `{"check": "prod-cdc-smoke", "memo": null}`)를 넣자 `prod.record-card.music.requested`에 메시지가 **하나** 나갔다 — 헤더 `id` = `outbox_event_id`, key는 따옴표 없는 `prod-cdc-smoke-001`, value는 JSON 그대로이고 `null`이 남았다. 헤더 모양은 test와 같다
+- [x] 확인 뒤 지웠다 — Kafka는 `kafka-delete-records`로 그 메시지 앞까지 지웠고(토픽이 다시 0개), DB 행은 `DELETE`로 지웠다. **DB `DELETE`는 Kafka로 나가지 않았다**(publication이 INSERT만 내보낸다)
+- 검증 메시지는 offset 2였다 — 0·1은 예전 ACL 검증 메시지가 보관 기간으로 지워진 자리다. 이 토픽의 시작 위치는 이제 3이다
+- [ ] 배포 뒤 첫 실제 카드로 같은 항목을 한 번 더 본다
+- [ ] AI prod 서버가 `prod.*` 계정·토픽·그룹으로 붙어 받는다 — AI 쪽
+
 ## 준비 순서
 
 1. **DB** — 논리 복제 켜기(test: `wal_level` + 재시작, prod: 파라미터 그룹 + 재부팅) → `max_slot_wal_keep_size` → 커넥터 DB 계정 → publication(+ heartbeat 테이블)
@@ -152,17 +162,17 @@ E2E에는 Kafka·Debezium이 없다. 처음 붙일 때(test 환경) 직접 확�
 3. **Connect** — 띄우고, CA 인증서·시크릿을 넣고, REST API를 막는다
 4. **커넥터 등록** — `infra/kafka/`의 설정으로
 5. **검증** — 위 체크리스트
-6. **알람** — 슬롯 지연·디스크 여유
+6. **알람** — 슬롯 지연(prod: CloudWatch `prod-cdc-replication-slot-lag`, 11-17). test는 아직
 7. test에서 끝난 뒤 prod에 같은 순서로 (prod는 재부팅 점검 시간)
 
 ## 정하지 않은 것
 
-1. **Connect를 어디서 돌릴지** — Kafka EC2에 같이, 별도 EC2, 컨테이너. **test는 Kafka·DB EC2에 같이 둔다(11-17)** — 2GB(`t3.small`, 여유 약 280MiB)에서는 올릴 수 없어 `t3.medium`(4GB, 여유 약 2.2GiB)으로 키웠다. 같은 EC2라 DB를 밖에 열지 않는다(`localhost`). 실행 방식(systemd·Docker)은 아직. prod는 환경이 따로 구성돼 있어 prod 차례에 본다.
+1. **Connect를 어디서 돌릴지** — Kafka EC2에 같이, 별도 EC2, 컨테이너. **test는 Kafka·DB EC2에 같이 둔다(11-17)** — 2GB(`t3.small`, 여유 약 280MiB)에서는 올릴 수 없어 `t3.medium`(4GB, 여유 약 2.2GiB)으로 키웠다. 같은 EC2라 DB를 밖에 열지 않는다(`localhost`). 실행 방식(systemd·Docker)은 아직. **prod도 Kafka EC2에 같이 둔다(11-17)** — prod Kafka EC2는 `t3.medium`(여유 약 2.5GiB, 디스크 73G 남음)이라 키우지 않아도 된다. RDS는 다른 곳이라 Connect가 네트워크로 붙는다 — RDS 보안 그룹에 Kafka EC2의 보안 그룹을 5432로 허용한다.
 2. **처음 붙일 때 이미 쌓인 행** — 보낼지(스냅샷) 말지(`snapshot.mode=no_data`). 보내면 오래된 카드의 음악이 뒤늦게 만들어지고, 안 보내면 그 카드들은 `GENERATING`에 남는다. 스냅샷 행을 라우터가 어떻게 다루는지도 test에서 확인한다.
 3. ~~heartbeat 테이블이 필요한지~~ — **정했다(11-17): 필요하다.** `cdc_heartbeats`(erd)를 publication에 더하고, Debezium이 1분마다 INSERT + 하루 지난 행 DELETE를 한 문장으로 쓴다. publication은 `publish = 'insert'` 그대로.
-4. **슬롯 상한과 알람 값** — test는 `max_slot_wal_keep_size=5GB`로 정했다(루트 디스크 29G를 OS·**Kafka 로그**와 같이 쓰고 23G 남음, 평소 WAL 49M — WAL이 차면 Kafka도 같은 디스크라 함께 멈춘다). prod 크기, 알람 임계값, 받을 곳([metrics-convention.md](../metrics-convention.md)와 맞춘다).
+4. **슬롯 상한과 알람 값** — test는 `max_slot_wal_keep_size=5GB`로 정했다(루트 디스크 29G를 OS·**Kafka 로그**와 같이 쓰고 23G 남음, 평소 WAL 49M — WAL이 차면 Kafka도 같은 디스크라 함께 멈춘다). **prod는 정했다(11-17)**: `max_slot_wal_keep_size=10240` MB(100 GiB 중 10%, 스토리지 자동 조정 전에 멈춘다), CloudWatch 경보 `prod-cdc-replication-slot-lag` — `AWS/RDS` `OldestReplicationSlotLag`(prod DB 하나) 최대값이 5분 단위로 15분 연속 1GB 초과면 SNS `runiverse-prod-alerts`(이메일)로 알린다. 지표가 끊기면(슬롯이 사라지면) 위반으로 본다. **test는 알람이 아직 없다** — CloudWatch가 없어 `pg_replication_slots`를 직접 조회해 내보내야 한다.
 5. **test DB의 토픽 CHECK를 `test`로 좁힐지** — 위 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」. test DB는 JPA 자동 생성(`update`)이라 엔티티 CHECK(세 환경 허용)로 만들어졌다. `update`는 이미 있는 CHECK를 고치지 않으므로, 같은 이름(`ck_outbox_event_topic`)으로 한 번 손으로 바꿔 두면 유지된다. 이벤트를 늘릴 때 test DB CHECK를 손으로 넓혀야 하는 것은 좁히든 안 좁히든 같다(자동 생성이 CHECK를 갱신하지 않는다).
-6. **prod RDS 확인** — Postgres 버전이 test(17)와 같은지, Multi-AZ 여부(장애 조치 때 복제 슬롯이 넘어가는지).
+6. **prod RDS 확인** — 버전은 **18.3으로 test(17.10)와 다르다**(11-17). Debezium 3.7은 둘 다 지원하지만, test에서 본 동작을 prod 검증 체크리스트로 다시 확인한다. RDS for PostgreSQL(Aurora 아님), `db.t3.small`, **단일 AZ** — 장애 조치로 슬롯을 잃을 걱정은 지금은 없다(Multi-AZ로 바꾸면 다시 본다). 파라미터 그룹은 **기본 그룹(`default.postgres18`)이라 고칠 수 없어** 사용자 정의 그룹을 만들어 바꿔 끼운다(재부팅). **스토리지 자동 조정이 켜져 있다(100 GiB → 최대 1000 GiB)** — 슬롯이 WAL을 붙잡으면 디스크가 차서 멈추는 대신 스토리지가 조용히 늘어나고 줄어들지 않는다(비용). `max_slot_wal_keep_size`와 슬롯 지연 알람이 이것도 막는다 (11-17).
 7. **지난 행 정리** — 언제 지울지, 지울 때 Kafka로 아무것도 나가지 않는지.
 8. **로컬에서 완료 이벤트 받기** — 완료 구독을 만들 때. 로컬 앱은 Kafka에 직접 닿지 않는다(브로커가 VPC 안 주소를 알려 주고 인증서도 그 주소라, SSH 터널로 우회되지 않는다). 로컬 Docker Kafka를 쓸지, test 서버에서 확인할지 정한다. 공유 클러스터의 `dev.*` 토픽·계정을 쓰는 곳도 이때 정해진다.
 9. **로컬 dev에서 음악 요청을 보내지 않기 (나중에)** — 메일·푸시처럼 로컬에서는 실제로 보내지 않게 한다. 메일·푸시는 `local` 프로필이면 로그만 남기는 어댑터로 바뀐다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 다만 아웃박스는 **로컬에서 test DB에 붙여 CDC를 확인할 때는 실제로 써야 해서** 같은 `local` 프로필로 끄면 그 확인을 못 한다 — 끄는 기준을 프로필이 아니라 붙는 DB(`KAFKA_ENV`)에 둘지 함께 정한다.

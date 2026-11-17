@@ -8,7 +8,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | [kafka.md](kafka.md) | Kafka 클러스터 지금 구성 — 환경 접두어, 토픽, TLS·SASL·ACL, 접속 설정 |
 | [cdc.md](cdc.md) | 아웃박스 → Kafka 발행 경로 — Debezium, Postgres 논리 복제·복제 슬롯, 준비 순서 |
 | [api-spec.md](../api-spec.md) 9-5 | 이벤트 계약 — 토픽, key, 헤더, 본문 필드 (AI 서버와 함께 보는 문서) |
-| `infra/kafka/` | 커넥터 설정 — `connectors/test-outbox.json` (비밀번호는 서버 파일 참조만) |
+| `infra/kafka/` | 커넥터 설정 — `connectors/test-outbox.json`·`prod-outbox.json` (비밀번호·prod DB 주소는 서버 파일 참조만) |
 
 ## 구성
 
