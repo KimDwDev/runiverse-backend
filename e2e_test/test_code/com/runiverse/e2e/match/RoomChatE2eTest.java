@@ -48,6 +48,8 @@ class RoomChatE2eTest extends E2eTestSupport {
             assertThat(sent.status()).isEqualTo(201);
             int chatId = sent.number("chatId");
             assertThat(sent.number("runningRoomId")).isEqualTo(runningRoomId);
+            assertThat(sent.text("type")).isEqualTo("MESSAGE");
+            assertThat(sent.body()).containsEntry("actor", null);
             assertThat(sent.text("content")).isEqualTo("곧 출발해요");
             assertThat(sent.bool("isDeleted")).isFalse();
             assertThat(sent.body()).containsEntry("editedAt", null);
@@ -70,10 +72,54 @@ class RoomChatE2eTest extends E2eTestSupport {
 
             // then - 저장된 행이 응답과 같다
             List<String> rows = querySql("""
-                    SELECT running_room_id, user_id, content, edited_at IS NULL, deleted_at IS NULL
+                    SELECT running_room_id, user_id, type, content, edited_at IS NULL, deleted_at IS NULL
                     FROM running_room_chats WHERE running_room_chat_id = %d
                     """.formatted(chatId));
-            assertThat(rows).containsExactly("%d|%s|곧 출발해요|t|t".formatted(runningRoomId, guest.userId()));
+            assertThat(rows).containsExactly("%d|%s|MESSAGE|곧 출발해요|t|t".formatted(runningRoomId, guest.userId()));
+        } finally {
+            leave(host);
+            leave(guest);
+        }
+    }
+
+    @Test
+    @DisplayName("들어오고 나가고 다시 들어오면 안내 줄이 남아 방의 다른 사람에게 가고, 안내 줄은 고치거나 지울 수 없다")
+    void presenceLinesReachOthersAndAreNotEditable() {
+        // given - host 혼자 방에 있고 스트림을 열었다
+        TestUser host = signUpAndOnboard();
+        TestUser guest = signUpAndOnboard();
+        int runningRoomId = apply(host).number("runningRoomId");
+
+        try (SseStream hostStream = openMatchStream(host.accessToken())) {
+            hostStream.await("MATCH_ROOM_ENTRANCE");
+
+            // when - guest가 들어오고, 나가고, 같은 방에 다시 신청한다
+            assertThat(apply(guest).number("runningRoomId")).isEqualTo(runningRoomId);
+            Map<String, Object> joined = hostStream.await("ROOM_CHAT_SENT");
+            leave(guest);
+            Map<String, Object> left = hostStream.await("ROOM_CHAT_SENT");
+            assertThat(apply(guest).number("runningRoomId")).isEqualTo(runningRoomId);
+            Map<String, Object> rejoined = hostStream.await("ROOM_CHAT_SENT");
+
+            // then - 셋 다 보낸 사람 없이 guest를 actor로 싣는다
+            assertThat(List.of(joined, left, rejoined)).extracting(line -> line.get("type"))
+                    .containsExactly("JOINED", "LEFT", "REJOINED");
+            assertThat(List.of(joined, left, rejoined)).allSatisfy(line -> {
+                assertThat(line).containsEntry("sender", null).containsEntry("content", null);
+                assertThat(actor(line)).containsEntry("userId", guest.userId());
+            });
+            // then - 목록에도 같은 값으로 남는다(DB CHECK·JPQL을 탄다)
+            assertThat(get(chatsPath(runningRoomId), guest.accessToken()).objects("items").subList(0, 3))
+                    .containsExactly(rejoined, left, joined);
+            assertThat(querySql("SELECT type, content IS NULL FROM running_room_chats WHERE running_room_chat_id = "
+                    + joined.get("chatId"))).containsExactly("JOINED|t");
+
+            // then - 들어온 본인이어도 안내 줄은 없는 메시지와 같다
+            int joinedId = ((Number) joined.get("chatId")).intValue();
+            Response edit = patch(chatPath(runningRoomId, joinedId), Map.of("content", "바꿈"), guest.accessToken());
+            assertThat(edit.status()).isEqualTo(404);
+            assertThat(edit.text("code")).isEqualTo("NOT_FOUND");
+            assertThat(delete(chatPath(runningRoomId, joinedId), guest.accessToken()).status()).isEqualTo(404);
         } finally {
             leave(host);
             leave(guest);
@@ -144,8 +190,9 @@ class RoomChatE2eTest extends E2eTestSupport {
             assertThat(tooLong.status()).isEqualTo(400);
             assertThat(tooLong.text("message")).isEqualTo("메시지는 200자 이하여야 합니다.");
             assertThat(noToken.status()).isEqualTo(401);
-            assertThat(querySql("SELECT count(*) FROM running_room_chats WHERE running_room_id = " + runningRoomId))
-                    .containsExactly("0");
+            // 들어왔다는 안내 줄 하나만 있다
+            assertThat(querySql("SELECT type FROM running_room_chats WHERE running_room_id = " + runningRoomId))
+                    .containsExactly("JOINED");
         } finally {
             leave(member);
         }
@@ -187,22 +234,33 @@ class RoomChatE2eTest extends E2eTestSupport {
         assertThat(apply(guest).number("runningRoomId")).isEqualTo(runningRoomId);
 
         try {
-            // when - 두 개씩 끊어 읽는다
+            // when - 두 개씩 끊어 읽는다. 앞뒤로 두 사람이 들어온 안내 줄이 있다
             Response page1 = get(chatsPath(runningRoomId) + "?limit=2", guest.accessToken());
             String cursor = page1.text("nextCursor");
             Response page2 = get(chatsPath(runningRoomId) + "?limit=2&cursor=" + cursor, guest.accessToken());
+            Response page3 = get(chatsPath(runningRoomId) + "?limit=2&cursor=" + page2.text("nextCursor"),
+                    guest.accessToken());
 
-            // then - 첫 페이지는 가장 최근 두 건이고 보내기 응답과 같은 모양이다(실제 JPQL·조립을 탄다)
+            // then - 첫 페이지는 가장 최근 두 줄이고 보내기 응답과 같은 모양이다(실제 JPQL·조립을 탄다)
             assertThat(page1.status()).isEqualTo(200);
-            assertThat(page1.objects("items")).containsExactly(third.body(), second.body());
+            List<Map<String, Object>> latest = page1.objects("items");
+            assertThat(latest.get(0))
+                    .containsEntry("type", "JOINED")
+                    .containsEntry("sender", null)
+                    .containsEntry("content", null);
+            assertThat(actor(latest.get(0))).containsEntry("userId", guest.userId());
+            assertThat(latest.get(1)).isEqualTo(third.body());
             assertThat(cursor).isNotBlank();
-            // then - 다음 페이지는 남은 한 건이고 방의 첫 메시지라 커서가 끝난다
-            assertThat(page2.status()).isEqualTo(200);
-            assertThat(page2.objects("items")).containsExactly(first.body());
-            assertThat(page2.body()).containsEntry("nextCursor", null);
+            assertThat(page2.objects("items")).containsExactly(second.body(), first.body());
+            // then - 마지막 페이지는 방을 연 사람의 입장 줄이고 방의 첫 줄이라 커서가 끝난다
+            assertThat(page3.objects("items")).singleElement().satisfies(item -> {
+                assertThat(item).containsEntry("type", "JOINED");
+                assertThat(actor(item)).containsEntry("userId", host.userId());
+            });
+            assertThat(page3.body()).containsEntry("nextCursor", null);
             // then - limit 없이 부르면 한 번에 다 온다(기본 20)
             assertThat(get(chatsPath(runningRoomId), guest.accessToken()).objects("items"))
-                    .extracting(item -> item.get("content")).containsExactly("셋", "둘", "하나");
+                    .extracting(item -> item.get("content")).containsExactly(null, "셋", "둘", "하나", null);
         } finally {
             leave(host);
             leave(guest);
@@ -223,8 +281,9 @@ class RoomChatE2eTest extends E2eTestSupport {
             // when
             List<Map<String, Object>> items = get(chatsPath(runningRoomId), member.accessToken()).objects("items");
 
-            // then - 순서와 자리는 그대로다
-            assertThat(items).extracting(item -> ((Number) item.get("chatId")).intValue())
+            // then - 순서와 자리는 그대로다. 맨 끝은 들어왔다는 안내 줄이다
+            assertThat(items).extracting(item -> item.get("type")).containsExactly("MESSAGE", "MESSAGE", "JOINED");
+            assertThat(items.subList(0, 2)).extracting(item -> ((Number) item.get("chatId")).intValue())
                     .containsExactly(deletedId, keptId);
             assertThat(items.get(0))
                     .containsEntry("content", null)
@@ -407,5 +466,10 @@ class RoomChatE2eTest extends E2eTestSupport {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> sender(Map<String, Object> chat) {
         return (Map<String, Object>) chat.get("sender");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> actor(Map<String, Object> chat) {
+        return (Map<String, Object>) chat.get("actor");
     }
 }
