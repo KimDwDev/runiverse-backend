@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.common.port.out.FlushPendingCha
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
@@ -103,6 +104,8 @@ class SettleRunningForAccountDeletionHandlerTest {
     @Mock
     private RoomInfoAssembler roomInfoAssembler;
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private SettleRunningForAccountDeletionHandler handler;
@@ -113,7 +116,7 @@ class SettleRunningForAccountDeletionHandlerTest {
                 lockMatchApplicationPort, loadMatchRoomPort, lockRunningRoomPort,
                 loadMatchPlayersPort, updateMatchRoomPort, flushPendingChangesPort, updateRunningPlayerPort,
                 startMatchCooldownPort, finishRunningUsecase, roomInfoAssembler,
-                MATCH_PROPERTIES, eventPublisher);
+                MATCH_PROPERTIES, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test

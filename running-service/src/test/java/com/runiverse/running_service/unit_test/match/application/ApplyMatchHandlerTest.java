@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.command.apply.ApplyMatchH
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchResult;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
@@ -103,6 +104,9 @@ class ApplyMatchHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private ApplyMatchHandler applyMatchHandler;
@@ -117,7 +121,7 @@ class ApplyMatchHandlerTest {
         applyMatchHandler = new ApplyMatchHandler(
                 matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort, matchRoomAssigner,
-                matchSlotPolicy, roomInfoAssembler, eventPublisher);
+                matchSlotPolicy, roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test

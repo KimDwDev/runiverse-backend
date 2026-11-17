@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.match.command.cancel.CancelMatc
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
@@ -98,6 +99,9 @@ class CancelMatchHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private CancelMatchHandler cancelMatchHandler;
@@ -110,7 +114,7 @@ class CancelMatchHandlerTest {
                 new MatchProperties(CLOSE_OFFSET, Duration.ofMinutes(5), READY_OFFSET, FORCE_FINISH_OFFSET,
                         PACE_TIE_TOLERANCE, COOLDOWN,
                         LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000)),
-                roomInfoAssembler, eventPublisher);
+                roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test

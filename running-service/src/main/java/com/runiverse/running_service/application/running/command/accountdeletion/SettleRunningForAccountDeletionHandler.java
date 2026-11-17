@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.common.port.out.FlushPendingCha
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
@@ -52,6 +53,7 @@ public class SettleRunningForAccountDeletionHandler
     private final FinishRunningUsecase finishRunningUsecase;
     private final RoomInfoAssembler roomInfoAssembler;
     private final MatchProperties matchProperties;
+    private final RoomChatPresenceWriter roomChatPresenceWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -118,6 +120,8 @@ public class SettleRunningForAccountDeletionHandler
         // 평균은 시작 전에만 남은 참가자로 다시 낸다 — 시작 후에는 뛴 방의 평균으로 남긴다
         room.recalculateAvgPace(pacesAfterLeave(room, userId));
         leaveRoom(userId, room, now);
+        // 시작 전이라 채팅이 열려 있다 — 나간 줄은 계정이 지워진 뒤 탈퇴한 사용자로 보인다
+        roomChatPresenceWriter.left(room, userId);
     }
 
     // 인원을 줄이고, 0이 되면 방이 CANCELLED로 닫힌다

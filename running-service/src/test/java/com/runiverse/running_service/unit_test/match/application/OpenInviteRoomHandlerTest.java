@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
@@ -84,6 +85,9 @@ class OpenInviteRoomHandlerTest {
     @Mock
     private ScheduleJobPort scheduleJobPort;
 
+    @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
     // 실제 정책을 감싼 spy — 값 검증(validate)과 마감 계산은 실제로 타고, 시각 범위(isSelectable)만 필요할 때 고정한다.
     // 핸들러가 지금 시각을 직접 읽어 23:49 이후에 돌면 고를 시각이 없기 때문이다. 경계 자체는 InviteStartPolicyTest가 본다
     private InviteStartPolicy inviteStartPolicy;
@@ -97,7 +101,7 @@ class OpenInviteRoomHandlerTest {
                 inviteStartPolicy,
                 existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort, createMatchRoomPort,
-                scheduleJobPort, MATCH_PROPERTIES);
+                scheduleJobPort, MATCH_PROPERTIES, roomChatPresenceWriter);
         userId = UuidCreator.getTimeOrderedEpoch();
     }
 

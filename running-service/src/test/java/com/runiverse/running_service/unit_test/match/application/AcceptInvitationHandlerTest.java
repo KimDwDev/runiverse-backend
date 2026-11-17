@@ -17,6 +17,7 @@ import com.runiverse.running_service.application.match.port.out.LockMatchRoomPor
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
@@ -101,6 +102,9 @@ class AcceptInvitationHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private AcceptInvitationHandler handler;
@@ -115,7 +119,7 @@ class AcceptInvitationHandlerTest {
                 lockMatchRoomPort, updateMatchRoomPort,
                 new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES),
                 existsActiveApplicationPort, loadUserAvgPacePort, createMatchApplicationPort,
-                loadMatchPlayersPort, roomInfoAssembler, eventPublisher);
+                loadMatchPlayersPort, roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
         host = newUser();
         otherInviter = newUser();
         invitee = newUser();

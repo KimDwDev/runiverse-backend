@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.port.in.OpenInviteRoomUsecase;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
@@ -34,6 +35,7 @@ public class OpenInviteRoomHandler implements OpenInviteRoomUsecase {
     private final CreateMatchRoomPort createMatchRoomPort;
     private final ScheduleJobPort scheduleJobPort;
     private final MatchProperties matchProperties;
+    private final RoomChatPresenceWriter roomChatPresenceWriter;
 
     @Override
     public OpenInviteRoomResult handle(OpenInviteRoomCommand command) {
@@ -71,6 +73,8 @@ public class OpenInviteRoomHandler implements OpenInviteRoomUsecase {
         scheduleJobPort.schedule(ScheduledJobType.RUNNING_START, roomId, startAt);
         scheduleJobPort.schedule(
                 ScheduledJobType.RUNNING_FORCE_FINISH, roomId, startAt.plus(matchProperties.forceFinishOffset()));
+        // 6. 채팅에 방을 연 사람이 들어왔다는 줄을 남긴다 — 수락해 들어온 사람이 본다
+        roomChatPresenceWriter.joined(room, userId);
         // 혼자인 방이라 알릴 기존 참가자가 없다 — 본인은 응답을 받고 스트림을 열어 입장 스냅샷을 받는다
         return new OpenInviteRoomResult(roomId);
     }

@@ -22,6 +22,9 @@ import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchPushRequester;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
+import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.InvitationNotFoundException;
 import com.runiverse.running_service.application.match.exception.InviteCountExceededException;
@@ -52,6 +55,7 @@ import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchCooldownStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryPlayerProfileStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRoomChatStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryUserRelationshipStore;
 import com.runiverse.running_service.integration_test.fake.RecordingMatchStreamConnection;
@@ -138,10 +142,16 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 matchStore,                                                 // LoadMatchRoomPort
                 runningStore                                                // LoadMatchRoomDetailPort
         );
+        RoomChatPresenceWriter roomChatPresenceWriter = new RoomChatPresenceWriter(
+                new InMemoryRoomChatStore(),
+                new RoomChatAssembler(new InMemoryPlayerProfileStore(userStore, onboardingStore),
+                        new FakeViewUrlGenerator()),
+                new RoomChatPushRequester(eventPublisher),
+                eventPublisher);
         openHandler = new OpenInviteRoomHandler(
                 inviteStartPolicy, runningStore, onboardingStore, runningStore, runningStore,
                 new ScheduleJobHandler(new InMemoryScheduledJobStore(), event -> {
-                }), MATCH_PROPERTIES);
+                }), MATCH_PROPERTIES, roomChatPresenceWriter);
         inviteHandler = new SendInvitationHandler(
                 runningStore,        // LockMatchRoomPort
                 runningStore,        // UpdateMatchRoomPort
@@ -158,13 +168,14 @@ public class RunningInvitationIntegrationTest extends IntegrationTestSupport {
                 onboardingStore,     // LoadUserAvgPacePort
                 runningStore,        // CreateMatchApplicationPort
                 matchStore,          // LoadMatchPlayersPort
-                roomInfoAssembler, eventPublisher);
+                roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
         declineHandler = new DeclineInvitationHandler(
                 runningStore, runningStore, roomInfoAssembler, eventPublisher);
         // 나가기는 매칭 방과 같은 POST /match-rooms/leave다
         cancelHandler = new CancelMatchHandler(
                 runningStore, matchStore, runningStore, matchStore, runningStore, runningStore,
-                new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, eventPublisher);
+                new InMemoryMatchCooldownStore(), MATCH_PROPERTIES, roomInfoAssembler, roomChatPresenceWriter,
+                eventPublisher);
         // 모집 마감 예약이 깨워 부르는 핸들러 — 테스트는 시각을 기다리지 않고 바로 부른다
         closeHandler = new CloseMatchingHandler(
                 runningStore, runningStore, roomInfoAssembler, matchPushRequester, eventPublisher);
