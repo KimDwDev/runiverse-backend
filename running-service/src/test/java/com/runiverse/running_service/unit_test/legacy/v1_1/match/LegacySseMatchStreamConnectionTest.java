@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.application.match.port.out.RunningReady;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.legacy.v1_1.match.response.LegacyRoomInfoResponse;
@@ -122,7 +123,8 @@ class LegacySseMatchStreamConnectionTest {
     @DisplayName("방 채팅은 1.1.x가 모르는 이벤트라 보내지 않는다")
     void roomChatIsNotSent() throws Exception {
         // given
-        RoomChat chat = new RoomChat(3021L, ROOM_ID, new RoomChat.Sender(PLAYER, "철수", null, false),
+        RoomChat chat = new RoomChat(3021L, ROOM_ID, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(PLAYER, "철수", null, false), null,
                 "곧 출발해요", false, null, START.minusMinutes(8));
 
         // when
@@ -137,7 +139,8 @@ class LegacySseMatchStreamConnectionTest {
     @DisplayName("채팅 수정·삭제도 1.1.x가 모르는 이벤트라 보내지 않는다")
     void roomChatEditedAndDeletedAreNotSent() throws Exception {
         // given
-        RoomChat chat = new RoomChat(3021L, ROOM_ID, new RoomChat.Sender(PLAYER, "철수", null, false),
+        RoomChat chat = new RoomChat(3021L, ROOM_ID, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(PLAYER, "철수", null, false), null,
                 null, true, null, START.minusMinutes(8));
 
         // when

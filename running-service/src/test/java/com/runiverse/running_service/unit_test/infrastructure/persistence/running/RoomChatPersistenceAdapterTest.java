@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.match.port.out.LockedRoomChat;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.RunningRoomChatHistory;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.infrastructure.persistence.running.RoomChatPersistenceAdapter;
 import com.runiverse.running_service.infrastructure.persistence.running.RunningRoomChatHistoryJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.running.RunningRoomChatJpaEntity;
@@ -55,7 +56,8 @@ class RoomChatPersistenceAdapterTest {
 
     // 식별자·보낸 시각은 DB가 채우므로 저장된 행을 흉내 내려면 직접 넣는다
     private static RunningRoomChatJpaEntity savedEntity(String content) {
-        RunningRoomChatJpaEntity entity = RunningRoomChatJpaEntity.create(mock(RunningRoomJpaEntity.class), SENDER, content);
+        RunningRoomChatJpaEntity entity = RunningRoomChatJpaEntity.create(
+                mock(RunningRoomJpaEntity.class), SENDER, RunningRoomChatType.MESSAGE, content);
         ReflectionTestUtils.setField(entity, "runningRoomChatId", CHAT_ID);
         ReflectionTestUtils.setField(entity, "createdAt", CREATED_AT);
         return entity;
@@ -65,6 +67,7 @@ class RoomChatPersistenceAdapterTest {
         when(entityManager.createQuery(anyString(), eq(RunningRoomChatJpaEntity.class))).thenReturn(chatQuery);
         when(chatQuery.setParameter("chatId", CHAT_ID)).thenReturn(chatQuery);
         when(chatQuery.setParameter("runningRoomId", ROOM_ID)).thenReturn(chatQuery);
+        when(chatQuery.setParameter("messageType", RunningRoomChatType.MESSAGE)).thenReturn(chatQuery);
         when(chatQuery.setLockMode(LockModeType.PESSIMISTIC_WRITE)).thenReturn(chatQuery);
         when(chatQuery.getResultList()).thenReturn(rows);
     }
@@ -82,14 +85,16 @@ class RoomChatPersistenceAdapterTest {
             // when
             Optional<LockedRoomChat> locked = adapter.loadForUpdate(ROOM_ID, CHAT_ID);
 
-            // then -> 잠금이 빠지면 연달아 온 두 수정이 같은 직전 내용을 읽어 이력 하나가 빠진다
+            // then -> 잠금이 빠지면 연달아 온 두 수정이 같은 직전 내용을 읽어 이력 하나가 빠진다.
+            //         안내 줄은 고칠 수 없어 말만 읽는다
             verify(chatQuery).setLockMode(LockModeType.PESSIMISTIC_WRITE);
+            verify(chatQuery).setParameter("messageType", RunningRoomChatType.MESSAGE);
             assertThat(locked).isPresent();
             RunningRoomChat chat = locked.get().chat();
             assertThat(chat.getRunningRoomChatId()).get().extracting(id -> id.value()).isEqualTo(CHAT_ID);
             assertThat(chat.getRunningRoomId().value()).isEqualTo(ROOM_ID);
             assertThat(chat.isSentBy(new UserId(SENDER))).isTrue();
-            assertThat(chat.getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(chat.getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
             assertThat(chat.isEdited()).isFalse();
             assertThat(chat.isDeleted()).isFalse();
             assertThat(locked.get().createdAt()).isEqualTo(CREATED_AT);
@@ -131,7 +136,8 @@ class RoomChatPersistenceAdapterTest {
             // given
             RunningRoomChatJpaEntity entity = savedEntity("곧 출발해요");
             when(entityManager.find(RunningRoomChatJpaEntity.class, CHAT_ID)).thenReturn(entity);
-            RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, null);
+            RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE,
+                "곧 출발해요", null, null);
             LocalDateTime editedAt = CREATED_AT.plusMinutes(2);
             chat.edit(new UserId(SENDER), "조금 늦어요", editedAt);
 
@@ -150,7 +156,8 @@ class RoomChatPersistenceAdapterTest {
             // given
             RunningRoomChatJpaEntity entity = savedEntity("곧 출발해요");
             when(entityManager.find(RunningRoomChatJpaEntity.class, CHAT_ID)).thenReturn(entity);
-            RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, null);
+            RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE,
+                "곧 출발해요", null, null);
             LocalDateTime deletedAt = CREATED_AT.plusMinutes(3);
             chat.delete(new UserId(SENDER), deletedAt);
 
@@ -170,7 +177,8 @@ class RoomChatPersistenceAdapterTest {
         // given
         RunningRoomChatJpaEntity reference = savedEntity("곧 출발해요");
         when(entityManager.getReference(RunningRoomChatJpaEntity.class, CHAT_ID)).thenReturn(reference);
-        RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, null);
+        RunningRoomChat chat = RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE,
+                "곧 출발해요", null, null);
         RunningRoomChatHistory history = chat.edit(new UserId(SENDER), "조금 늦어요", CREATED_AT.plusMinutes(2));
 
         // when

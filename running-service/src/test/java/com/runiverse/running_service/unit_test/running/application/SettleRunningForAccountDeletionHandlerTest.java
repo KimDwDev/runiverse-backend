@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.common.port.out.FlushPendingCha
 import com.runiverse.running_service.application.match.command.stream.MatchStreamCloseRequestedEvent;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchRoomPort;
@@ -103,6 +104,8 @@ class SettleRunningForAccountDeletionHandlerTest {
     @Mock
     private RoomInfoAssembler roomInfoAssembler;
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private SettleRunningForAccountDeletionHandler handler;
@@ -113,7 +116,7 @@ class SettleRunningForAccountDeletionHandlerTest {
                 lockMatchApplicationPort, loadMatchRoomPort, lockRunningRoomPort,
                 loadMatchPlayersPort, updateMatchRoomPort, flushPendingChangesPort, updateRunningPlayerPort,
                 startMatchCooldownPort, finishRunningUsecase, roomInfoAssembler,
-                MATCH_PROPERTIES, eventPublisher);
+                MATCH_PROPERTIES, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test
@@ -260,6 +263,35 @@ class SettleRunningForAccountDeletionHandlerTest {
         // then
         assertThat(updatedRoom().getAvgPace()).map(Pace::secondsPerKm).contains(AVG_PACE);
         verifyNoInteractions(loadMatchPlayersPort);
+    }
+
+    @Test
+    @DisplayName("시작 전 방에서 탈퇴하면 방 채팅에 나갔다는 줄을 남긴다")
+    void writesLeftLineBeforeStart() {
+        // given
+        RunningRoom room = room(RunningRoomStatus.MATCHING, 2);
+        givenActiveApplication(room);
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        verify(roomChatPresenceWriter).left(room, new UserId(USER_ID));
+    }
+
+    @Test
+    @DisplayName("시작된 방에서 탈퇴하면 채팅이 닫혀 줄을 남기지 않는다")
+    void noLeftLineAfterStart() {
+        // given
+        givenActiveApplication(room(RunningRoomStatus.STARTED, 2));
+        given(roomInfoAssembler.assemble(any(RunningRoom.class))).willReturn(ROOM_INFO);
+
+        // when
+        handler.handle(new SettleRunningForAccountDeletionCommand(USER_ID));
+
+        // then
+        verifyNoInteractions(roomChatPresenceWriter);
     }
 
     @Test

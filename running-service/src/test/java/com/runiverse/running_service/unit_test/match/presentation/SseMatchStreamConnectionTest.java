@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.match.port.out.MatchStreamEvent
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.presentation.match.response.InviteRoomEntranceResponse;
@@ -111,7 +112,7 @@ class SseMatchStreamConnectionTest {
     void roomChatSentCarriesChat() throws Exception {
         // given -> 고친 적 없는 새 메시지
         RoomChat chat = new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(INVITEE, "철수", "https://cdn/profile.png", false),
+                RunningRoomChatType.MESSAGE, new RoomChat.Person(INVITEE, "철수", "https://cdn/profile.png", false), null,
                 "곧 출발해요", false, null, START.minusMinutes(8));
 
         // when
@@ -128,6 +129,8 @@ class SseMatchStreamConnectionTest {
         JsonNode json = JSON.valueToTree(body);
         assertThat(json.get("chatId").asLong()).isEqualTo(3021L);
         assertThat(json.get("runningRoomId").asLong()).isEqualTo(ROOM_ID);
+        assertThat(json.get("type").asString()).isEqualTo("MESSAGE");
+        assertThat(json.get("actor").isNull()).isTrue();
         assertThat(json.get("sender").get("userId").asString()).isEqualTo(INVITEE.toString());
         assertThat(json.get("sender").get("nickname").asString()).isEqualTo("철수");
         assertThat(json.get("sender").get("isDeleted").asBoolean()).isFalse();
@@ -143,7 +146,7 @@ class SseMatchStreamConnectionTest {
     void roomChatEditedCarriesChat() throws Exception {
         // given
         RoomChat chat = new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(INVITEE, "철수", null, false),
+                RunningRoomChatType.MESSAGE, new RoomChat.Person(INVITEE, "철수", null, false), null,
                 "조금 늦어요", false, START.minusMinutes(2), START.minusMinutes(8));
 
         // when
@@ -165,7 +168,7 @@ class SseMatchStreamConnectionTest {
     void roomChatDeletedCarriesChat() throws Exception {
         // given -> 조립기가 지운 메시지의 내용을 이미 비웠다
         RoomChat chat = new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(INVITEE, "철수", null, false),
+                RunningRoomChatType.MESSAGE, new RoomChat.Person(INVITEE, "철수", null, false), null,
                 null, true, null, START.minusMinutes(8));
 
         // when

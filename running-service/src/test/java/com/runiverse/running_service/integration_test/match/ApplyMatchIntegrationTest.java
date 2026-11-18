@@ -14,6 +14,9 @@ import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
@@ -43,6 +46,7 @@ import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchCooldownStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryPlayerProfileStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRoomChatStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
 import com.runiverse.running_service.integration_test.fake.RecordingMatchStreamConnection;
 import org.junit.jupiter.api.BeforeEach;
@@ -126,6 +130,12 @@ public class ApplyMatchIntegrationTest extends IntegrationTestSupport {
                 matchStore,                                                 // LoadMatchRoomPort
                 runningStore                                                // LoadMatchRoomDetailPort
         );
+        RoomChatPresenceWriter roomChatPresenceWriter = new RoomChatPresenceWriter(
+                new InMemoryRoomChatStore(),
+                new RoomChatAssembler(new InMemoryPlayerProfileStore(userStore, onboardingStore),
+                        new FakeViewUrlGenerator()),
+                new RoomChatPushRequester(eventPublisher),
+                eventPublisher);
         MatchRoomAssigner matchRoomAssigner = new MatchRoomAssigner(
                 matchStore,    // LoadMatchCandidatesPort
                 runningStore,  // LockMatchRoomPort
@@ -145,6 +155,7 @@ public class ApplyMatchIntegrationTest extends IntegrationTestSupport {
                 matchRoomAssigner,
                 new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
+                roomChatPresenceWriter,
                 eventPublisher
         );
     }

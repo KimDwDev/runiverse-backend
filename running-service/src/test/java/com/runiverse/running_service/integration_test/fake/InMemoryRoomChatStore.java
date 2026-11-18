@@ -11,6 +11,8 @@ import com.runiverse.running_service.application.match.port.out.SavedRoomChat;
 import com.runiverse.running_service.application.match.port.out.UpdateRoomChatPort;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.RunningRoomChatHistory;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,7 +33,7 @@ public class InMemoryRoomChatStore implements CreateRoomChatPort, LoadRoomChatsP
     private long nextId = 1;
     private LocalDateTime clock = LocalDateTime.of(2026, 11, 11, 18, 0);
 
-    private record Row(Long chatId, Long runningRoomId, UUID userId, String content,
+    private record Row(Long chatId, Long runningRoomId, UUID userId, RunningRoomChatType type, String content,
                        LocalDateTime editedAt, LocalDateTime deletedAt, LocalDateTime createdAt) {
     }
 
@@ -42,8 +44,8 @@ public class InMemoryRoomChatStore implements CreateRoomChatPort, LoadRoomChatsP
     @Override
     public SavedRoomChat create(RunningRoomChat chat) {
         clock = clock.plusSeconds(1);
-        Row row = new Row(nextId++, chat.getRunningRoomId().value(), chat.getUserId().value(),
-                chat.getContent().value(), null, null, clock);
+        Row row = new Row(nextId++, chat.getRunningRoomId().value(), chat.getUserId().value(), chat.getType(),
+                contentOf(chat), null, null, clock);
         rows.put(row.chatId(), row);
         return new SavedRoomChat(row.chatId(), row.createdAt());
     }
@@ -55,27 +57,29 @@ public class InMemoryRoomChatStore implements CreateRoomChatPort, LoadRoomChatsP
                 .filter(row -> beforeId == null || row.chatId() < beforeId)
                 .sorted(Comparator.comparing(Row::chatId).reversed())
                 .limit(limit + 1L)
-                .map(row -> new RoomChatRow(row.chatId(), row.runningRoomId(), row.userId(), row.content(),
-                        row.editedAt(), row.deletedAt(), row.createdAt()))
+                .map(row -> new RoomChatRow(row.chatId(), row.runningRoomId(), row.userId(), row.type(),
+                        row.content(), row.editedAt(), row.deletedAt(), row.createdAt()))
                 .toList();
         boolean hasNext = fetched.size() > limit;
         List<RoomChatRow> page = hasNext ? fetched.subList(0, limit) : fetched;
         return new RoomChatPage(page, hasNext ? page.getLast().chatId() : null);
     }
 
+    // 어댑터처럼 안내 줄은 고칠 대상에서 뺀다
     @Override
     public Optional<LockedRoomChat> loadForUpdate(Long runningRoomId, Long chatId) {
         return Optional.ofNullable(rows.get(chatId))
                 .filter(row -> row.runningRoomId().equals(runningRoomId))
+                .filter(row -> row.type() == RunningRoomChatType.MESSAGE)
                 .map(row -> new LockedRoomChat(RunningRoomChat.restore(row.chatId(), row.runningRoomId(),
-                        row.userId(), row.content(), row.editedAt(), row.deletedAt()), row.createdAt()));
+                        row.userId(), row.type(), row.content(), row.editedAt(), row.deletedAt()), row.createdAt()));
     }
 
     @Override
     public void update(RunningRoomChat chat) {
         Row before = rows.get(chat.getRunningRoomChatId().orElseThrow().value());
-        rows.put(before.chatId(), new Row(before.chatId(), before.runningRoomId(), before.userId(),
-                chat.getContent().value(), chat.getEditedAt().orElse(null), chat.getDeletedAt().orElse(null),
+        rows.put(before.chatId(), new Row(before.chatId(), before.runningRoomId(), before.userId(), before.type(),
+                contentOf(chat), chat.getEditedAt().orElse(null), chat.getDeletedAt().orElse(null),
                 before.createdAt()));
     }
 
@@ -91,5 +95,9 @@ public class InMemoryRoomChatStore implements CreateRoomChatPort, LoadRoomChatsP
 
     public List<History> histories() {
         return List.copyOf(histories);
+    }
+
+    private static String contentOf(RunningRoomChat chat) {
+        return chat.getContent().map(RunningRoomChatContent::value).orElse(null);
     }
 }

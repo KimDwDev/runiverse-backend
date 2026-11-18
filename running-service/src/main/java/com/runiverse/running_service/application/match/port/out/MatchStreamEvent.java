@@ -48,10 +48,10 @@ public record MatchStreamEvent(MatchEventType type, Long runningRoomId,
                 ready.runningRoomId(), null, ready, null, null, null);
     }
 
-    // 보낸 사람은 채팅에서 꺼낸다 — 받지 않을 사람을 따로 받으면 둘이 어긋날 수 있다
+    // 받지 않을 사람(보낸 사람, 안내 줄은 들어오거나 나간 사람)은 채팅에서 꺼낸다 — 따로 받으면 둘이 어긋날 수 있다
     public static MatchStreamEvent roomChatSent(RoomChat chat) {
         return new MatchStreamEvent(MatchEventType.ROOM_CHAT_SENT, chat.runningRoomId(),
-                null, null, null, chat, new UserId(chat.sender().userId()));
+                null, null, null, chat, new UserId(chat.person().userId()));
     }
 
     public static MatchStreamEvent roomChatEdited(RoomChat chat) {

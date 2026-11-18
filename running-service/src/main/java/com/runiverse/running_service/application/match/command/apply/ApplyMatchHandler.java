@@ -3,6 +3,7 @@ package com.runiverse.running_service.application.match.command.apply;
 import com.runiverse.running_service.application.common.port.out.LoadUserAvgPacePort;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyInProgressException;
 import com.runiverse.running_service.application.match.exception.MatchCooldownException;
@@ -36,6 +37,7 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
     private final MatchRoomAssigner matchRoomAssigner;
     private final MatchSlotPolicy matchSlotPolicy;
     private final RoomInfoAssembler roomInfoAssembler;
+    private final RoomChatPresenceWriter roomChatPresenceWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -71,7 +73,9 @@ public class ApplyMatchHandler implements ApplyMatchUsecase {
         RunningRoom room = matchRoomAssigner.assign(
                 userId, player.getRunningPlayerId().orElseThrow(), pace,
                 command.scheduledStartAt(), command.targetDistanceMeters());
-        // 7. 기존 참가자에게 인원 변동을 알린다 — 신청자 본인은 아직 스트림을 열기 전이다.
+        // 7. 채팅에 들어왔다는 줄을 남긴다 — 1인 방을 새로 열었어도 남겨 늦게 온 사람이 본다
+        roomChatPresenceWriter.joined(room, userId);
+        // 8. 기존 참가자에게 인원 변동을 알린다 — 신청자 본인은 아직 스트림을 열기 전이다.
         //    조립은 트랜잭션 안에서 한다(자기 쓰기를 보고, 커밋 후 리스너가 DB를 다시 안 읽는다)
         eventPublisher.publishEvent(new MatchRoomChangedEvent(
                 MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));

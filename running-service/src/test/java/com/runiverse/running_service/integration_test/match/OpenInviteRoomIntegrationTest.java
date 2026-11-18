@@ -9,6 +9,9 @@ import com.runiverse.running_service.application.match.common.InviteProperties;
 import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomCommand;
 import com.runiverse.running_service.application.running.command.solo.OpenSoloRoomHandler;
 import com.runiverse.running_service.application.running.exception.AlreadyRunningException;
@@ -22,6 +25,9 @@ import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import com.runiverse.running_service.integration_test.IntegrationTestSupport;
+import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
+import com.runiverse.running_service.integration_test.fake.InMemoryPlayerProfileStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRoomChatStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,7 +95,16 @@ public class OpenInviteRoomIntegrationTest extends IntegrationTestSupport {
                 runningStore,     // CreateMatchRoomPort
                 new ScheduleJobHandler(scheduledJobStore, event -> {
                 }),               // ScheduleJobPort
-                MATCH_PROPERTIES
+                MATCH_PROPERTIES,
+                // 채팅 줄은 이 테스트의 주제가 아니다 — 혼자인 방이라 알릴 사람도 없다
+                new RoomChatPresenceWriter(
+                        new InMemoryRoomChatStore(),
+                        new RoomChatAssembler(new InMemoryPlayerProfileStore(userStore, onboardingStore),
+                                new FakeViewUrlGenerator()),
+                        new RoomChatPushRequester(event -> {
+                        }),
+                        event -> {
+                        })
         );
     }
 
