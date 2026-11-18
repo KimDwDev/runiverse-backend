@@ -55,7 +55,8 @@ public class DeleteRoomChatHandler implements DeleteRoomChatUsecase {
                 command.chatId(),
                 command.runningRoomId(),
                 command.userId(),
-                chat.getContent().value(),
+                chat.getType(),
+                chat.getContent().orElseThrow().value(),
                 chat.getEditedAt().orElse(null),
                 chat.getDeletedAt().orElseThrow(),
                 locked.createdAt()));

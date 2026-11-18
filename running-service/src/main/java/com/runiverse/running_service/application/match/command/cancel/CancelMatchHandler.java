@@ -2,6 +2,7 @@ package com.runiverse.running_service.application.match.command.cancel;
 
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
@@ -46,6 +47,7 @@ public class CancelMatchHandler implements CancelMatchUsecase {
     private final MatchCooldownPort matchCooldownPort;
     private final MatchProperties matchProperties;
     private final RoomInfoAssembler roomInfoAssembler;
+    private final RoomChatPresenceWriter roomChatPresenceWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -80,14 +82,19 @@ public class CancelMatchHandler implements CancelMatchUsecase {
         // 6. 세션을 끊고 인원을 줄인다. 0이 되면 방이 CANCELLED로 닫힌다.
         //    평균은 시작 전에만 남은 참가자로 다시 낸다(0명이면 지운다) — 시작 후에는 뛴 방의 평균으로 남긴다.
         //    나가면 방이 닫혀 상태가 바뀌므로 나가기 전에 본다
-        if (room.getStatus().isBeforeStart()) {
+        boolean beforeStart = room.getStatus().isBeforeStart();
+        if (beforeStart) {
             room.recalculateAvgPace(pacesAfterLeave(roomId, userId));
         }
         room.leave(userId, now);
 
         updateMatchApplicationPort.update(player);
         updateMatchRoomPort.update(room);
-        // 7. 남은 참가자에게 알린다. 나간 본인은 곧 스트림을 닫으므로 대상이 아니다.
+        // 7. 채팅에 나갔다는 줄을 남긴다 — 러닝이 시작되면 채팅이 닫혀 남기지 않는다
+        if (beforeStart) {
+            roomChatPresenceWriter.left(room, userId);
+        }
+        // 8. 남은 참가자에게 알린다. 나간 본인은 곧 스트림을 닫으므로 대상이 아니다.
         // 인원이 0이면 받을 사람이 없어 발행하지 않는다
         if (room.getPlayerCount().current() > 0) {
             eventPublisher.publishEvent(new MatchRoomChangedEvent(

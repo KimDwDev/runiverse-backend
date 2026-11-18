@@ -12,9 +12,9 @@ import com.runiverse.running_service.application.notification.port.out.UserNotif
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.RunningInvitedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;

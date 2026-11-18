@@ -46,13 +46,14 @@ public class AppVersionFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     // CORS 사전 요청은 브라우저가 헤더 이름만 싣고 처리도 하지 않는다 — 막으면 본 요청을 못 보낸다.
-    // 판정은 뒤의 CORS 설정에 맡기고, 본 요청은 여기서 검사한다
+    // 판정은 뒤의 CORS 설정에 맡기고, 본 요청은 여기서 검사한다.
+    // 관리자 API는 운영자가 터미널에서 불러 앱 버전 헤더를 싣지 않는다 — 관리자 키 필터가 같은 판정으로 막는다
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
         return uri.equals(contextPath + APP_VERSION_PATH) || uri.startsWith(contextPath + ACTUATOR_PATH)
-                || CorsUtils.isPreFlightRequest(request);
+                || AdminKeyFilter.isAdminPath(request) || CorsUtils.isPreFlightRequest(request);
     }
 
     @Override

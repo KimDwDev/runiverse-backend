@@ -1,6 +1,6 @@
 # Runiverse API 명세서
 
-> 구성: 엔드포인트 목록(색인) → 상세 명세 0~12. API 표면 규칙은 `api-convention.md`, 데이터 기준은 `erd.md`를 따른다.
+> 구성: 엔드포인트 목록(색인) → 상세 명세 0~13. API 표면 규칙은 `api-convention.md`, 데이터 기준은 `erd.md`를 따른다.
 
 ---
 
@@ -104,7 +104,7 @@
 | `INVITE_ROOM_ENTRANCE` | 초대 방 연결 직후 스냅샷 (`RoomInfo` + `startsInMs`) — 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 초대 방 상태 갱신 (`RoomInfo`) — 인원·초대 현황 변동. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
-| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 보내기·수정·삭제 (`Chat`) — 보낸 사람을 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
+| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 보내기·수정·삭제와 입장·퇴장 안내 줄 (`Chat`) — 그 줄의 당사자를 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
 
 **러닝 WebSocket** — `/api/v1/ws/running`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
@@ -195,7 +195,13 @@
 | 73 | PATCH | `/api/v1/users/me/settings` | 설정 변경 |
 | 74 | DELETE | `/api/v1/users/me` | 회원탈퇴 (스냅샷→하드delete, 테이블별 정책) |
 
-**합계: REST 76개 + SSE 스트림 2개(매칭 이벤트 9종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
+### 13. 관리자 (운영자 전용 — 앱은 부르지 않는다)
+
+| # | Method | Path | 설명 |
+|---|--------|------|------|
+| 75 | POST | `/api/v1/admin/push-campaigns/{pushCampaignId}/send` | 공지 푸시 발송 — SQL로 넣어 둔 캠페인을 한 번만 보낸다, 관리자 키 인증 |
+
+**합계: REST 77개 + SSE 스트림 2개(매칭 이벤트 9종 · 앱 이벤트 3종) + WebSocket 채널 1개(메시지 9종 + ack 2종 + 헬스 체크 2종)**
 
 > 번호는 표의 순서를 그대로 따른다 — 결번을 두지 않는다. 중간에 API가 생기면 이후 번호를 밀고, 번호로 상호 참조하는 노션 명세도 함께 갱신한다.
 
@@ -226,7 +232,7 @@
   - **헤더가 없거나 형식이 틀려도 같은 `403 APP_UPDATE_REQUIRED`로 거절한다** — 헤더를 싣지 않는 구버전 앱(안드로이드 `1.0.0`)을 막고, 아무 값이나 실어 검사를 건너뛰지 못하게 한다. 두 헤더 중 하나만 있어도 마찬가지다. 형식은 버전이 `x.y.z`(부분마다 숫자 1~9자리), 플랫폼이 `IOS`·`ANDROID`(대소문자 무시)다
   - **최소 버전을 읽지 못하면 통과시키지 않는다** — 다른 DB 오류와 같이 `500`이다. 통과시키면 막아야 할 요청이 들어온다
   - **토큰 검증보다 먼저 검사한다** — 업데이트가 필요하면 토큰 상태와 무관하게 이 에러가 나간다
-  - **검사하지 않는 경로**: 2-3(구버전도 업데이트가 필요하다는 답을 받아야 한다), 헬스 체크·메트릭(`/actuator/*`). 브라우저의 CORS 사전 요청(`OPTIONS`)도 검사하지 않는다 — 헤더 값 없이 이름만 싣기 때문이며, 본 요청은 검사한다
+  - **검사하지 않는 경로**: 2-3(구버전도 업데이트가 필요하다는 답을 받아야 한다), 헬스 체크·메트릭(`/actuator/*`), 관리자 API(`/admin/*` — 앱이 부르지 않는다). 브라우저의 CORS 사전 요청(`OPTIONS`)도 검사하지 않는다 — 헤더 값 없이 이름만 싣기 때문이며, 본 요청은 검사한다
   - **WebSocket은 연결할 때만 검사한다** — 이미 열린 연결은 끊지 않는다. 호환을 깨는 배포는 서버 교체로 연결이 끊기므로 다시 연결할 때 걸린다
   - 서버는 요청마다 최소 버전을 읽는다(캐시 없음) — 바꾸면 다음 요청부터 바로 반영된다
 
@@ -234,7 +240,7 @@
 
 인증 필요(`인증: 필요`) API → **401**, 모든 API → **400**·**500** 공통 발생. 등록되지 않은 경로는 **404** `NOT_FOUND`("요청한 리소스를 찾을 수 없습니다.")다. 경로는 있지만 받지 않는 메서드는 **405** `METHOD_NOT_ALLOWED`이고 `Allow` 헤더에 받는 메서드를 담는다. 받지 않는 본문 형식(`Content-Type`)은 **415** `UNSUPPORTED_MEDIA_TYPE`이다. 셋 다 공개 경로가 아니면 토큰 검증이 먼저라 토큰 없이 부르면 401이 나간다(앱 버전 검사는 그보다 먼저라, 걸리면 아래 403이다). 각 엔드포인트 명세엔 특유 에러만 표기. 검증 실패 시 `code`는 `INVALID_REQUEST` 공통이고 `message`로 사유를 구분한다.
 `인증: 불필요` API도 `Authorization` 헤더가 있으면 토큰을 검증하며, 실패하면 아래 401을 낸다 — 클라이언트는 공개 API(1-1~1-8·2-3·11-3·11-7·11-12)에 헤더를 싣지 않는다.
-앱 버전 헤더가 없거나 형식이 틀리거나 그 플랫폼의 최소 버전보다 낮으면 2-3·`/actuator/*`를 뺀 모든 경로 → **403** `APP_UPDATE_REQUIRED`(위 공통 규칙의 앱 버전 헤더). 클라이언트는 이 에러를 받으면 화면과 무관하게 업데이트 화면으로 보낸다.
+앱 버전 헤더가 없거나 형식이 틀리거나 그 플랫폼의 최소 버전보다 낮으면 2-3·`/actuator/*`·`/admin/*`를 뺀 모든 경로 → **403** `APP_UPDATE_REQUIRED`(위 공통 규칙의 앱 버전 헤더). 클라이언트는 이 에러를 받으면 화면과 무관하게 업데이트 화면으로 보낸다.
 
 검증에 실패한 필드가 둘 이상이거나 한 필드에서 제약이 둘 이상 깨지면 `message`는 각 사유를 공백으로 이어 붙인 한 문자열이며, **문장 순서는 보장하지 않는다**. 각 엔드포인트의 400 예시는 사유를 하나씩 보여주는 것이지 나올 수 있는 조합을 모두 나열한 것이 아니다. 클라이언트는 `message`를 문서 문구와 정확히 비교하거나 파싱해 어느 필드가 틀렸는지 역추적하지 않는다 — 필드 단위 안내는 클라이언트 자체 검증으로 처리하고, 서버 `message`는 그대로 노출한다.
 
@@ -1091,7 +1097,7 @@
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
 - **앱이 켜져 있는 동안 연다** — 앱 진입·포그라운드 복귀 때 연결한다. 활성 신청과 무관하게 **로그인만 하면 언제나 열린다**(매칭 스트림 5-A와 다르다 — 거절하는 경우가 없다)
-- **연결 직후 보내는 스냅샷은 없다** — 첫 바이트는 주석 라인(`:connected`)이다. 상태는 2-2로, 알림 목록과 안 읽은 수는 2-4로 받는다
+- **연결 직후 보내는 스냅샷은 없다** — 첫 바이트는 주석 라인(`:connected`)이다. 상태는 2-2로, 알림 목록과 안 읽은 수는 2-4로 받는다. 홈 공지는 다음 주기에 온다(아래 홈 공지 이벤트)
 - **앱과의 연결이라 `/app` 아래에 둔다** — 사용자 정보가 아니라 앱이 켜져 있는 동안 서버와 잇는 채널이다. 인증은 필요하다(인증 없이 열린 경로는 2-3 하나뿐이다)
 - **매칭 스트림과 별개다** — 매칭 중에는 둘 다 열려 있다. 한쪽 연결이 다른 쪽을 밀어내지 않는다
 - **keep-alive**: 15초마다 주석 라인(`:ping`)을 보낸다 — 이벤트가 아니므로 클라 이벤트 핸들러에 잡히지 않는다
@@ -1104,12 +1110,41 @@
   - **서버가 여러 대라 Redis를 거친다** — 커밋한 서버가 받는 사람과 알림 ID만 발행하고, 받는 사람이 붙은 서버만 알림을 읽어 조립해 보낸다
   - **놓칠 수 있다** — 앱이 꺼져 있었거나, 연결이 끊긴 사이이거나, Redis가 잠시 닿지 않으면 오지 않는다. 알림은 DB에 남아 다음 진입 때 2-4로 보인다
   - **`unreadCount`를 싣지 않는다** — 클라가 하나씩 올리고, 다음 진입 때 2-4 값으로 다시 맞춘다
+- **홈 공지 이벤트 2종 — 홈 화면 자리마다 이벤트 하나다**: `HOME_WAITING`(신청 버튼 위 대기 인원) · `HOME_ACTIVITY`(위쪽 공지 띠)
+  - **서버가 운영값(현재 `HOME_WAITING` 10초, `HOME_ACTIVITY` 30초)마다 붙은 연결 전부에 다시 보낸다** — 누가 보든 같은 값이라 받는 사람을 가리지 않고, 값이 바뀔 때가 아니라 주기마다 보낸다. 서버마다 자기에게 붙은 연결에만 보내고 Redis를 거치지 않는다
+  - **유효 기간을 싣지 않는다** — 클라는 이벤트마다 90초 동안 새 값이 없으면 그 자리를 숨기거나 고정 문구로 바꾼다 — 다른 이벤트나 ping은 그 90초를 늘리지 않는다. 서버 시각을 실어 폰 시계와 비교하면 시계가 어긋난 폰에서 틀린다
+  - 한쪽 계산이 실패하면 그 주기에는 그 이벤트만 오지 않는다
+  - 완주는 기록이 남은 러닝 중 목표에 닿았거나 목표 없는 솔로를 끝낸 것이다. 날짜는 기록을 저장한 서버 시각으로 KST 0시에 자른다 — 기록의 종료 시각은 단말 시계라 어긋날 수 있다. 탈퇴한 사람은 빠진다
+
+`HOME_WAITING` data
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `waitingCount` | Integer | O | 오늘·모집 마감 전·자리가 남은 방이 있는 칸(거리×시작 시각)의 대기 인원 합계. 칸은 `GET /match-rooms/slots`의 슬롯과 같다. 자리가 다 찬 칸은 신청하면 새 방이 열릴 뿐이라 세지 않는다 |
+
+`HOME_ACTIVITY` data
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningNowCount` | Integer | O | 지금 러닝 중인 사람 수. 시작 뒤 강제 종료 오프셋(현재 6시간)이 지난 러닝은 세지 않는다 — 솔로는 서버가 강제 종료하지 않아 앱이 죽으면 러닝 중으로 남는다 |
+| `todayFinishedRuns` | Array | O | 오늘 완주 최신순 최대 3건. 없으면 빈 배열 |
+| `todayFinishedRuns[].runningRecordId` | Integer | O | 기록 ID |
+| `todayFinishedRuns[].nickname` | String | O | 첫 글자 뒤를 `**`로 가린 닉네임(`철**`). 길이와 관계없이 같은 모양이다 |
+| `todayFinishedRuns[].distanceMeters` | Integer | O | 방 목표 거리. 목표가 없는 솔로는 실제 거리 |
+| `todayFinishedCount` | Integer | O | 오늘 완주한 사람 수 — 여러 번 완주해도 한 명이다 |
+| `yesterdayFinishedCount` | Integer | O | 어제 완주한 사람 수 |
 
 ```
 :connected
 
 event:FRIEND_REQUESTED
 data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","actor":{"userId":"01a0f2d4-...","nickname":"철수","profileImageUrl":null,"isDeleted":false,"relationshipType":"FRIEND_REQUEST_RECEIVED"},"invitation":null}
+
+event:HOME_WAITING
+data:{"waitingCount":4}
+
+event:HOME_ACTIVITY
+data:{"runningNowCount":3,"todayFinishedRuns":[{"runningRecordId":101,"nickname":"철**","distanceMeters":5000}],"todayFinishedCount":7,"yesterdayFinishedCount":5}
 
 :ping
 ```
@@ -1398,7 +1433,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `INVITE_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo` + `startsInMs`. 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 인원 변동·초대 현황 변동·모집 마감(초대 만료) — `data` = `RoomInfo`. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
-| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 — `data` = `Chat`. 보낸 사람 제외. 매칭·초대 방 공통 (5-E) |
+| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 — `data` = `Chat`. 그 줄의 당사자 제외. 매칭·초대 방 공통 (5-E) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 방 상태 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다. **채팅 이벤트만 변경분이다** — 놓친 채팅은 다시 연결한 뒤 채팅 목록(5-E-1)으로 맞춘다.
 - **keep-alive**: 주기적으로 주석 라인(`:ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
@@ -2117,7 +2152,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   2. 목록(5-E-1)을 `limit=50`으로 부른다
   3. 1과 2 사이에 온 채팅 이벤트는 목록에도 들어 있을 수 있다 — **`chatId`가 같으면 하나로 합친다**: 지운 쪽(`isDeleted=true`)은 되살리지 않고, 둘 다 살아 있으면 `editedAt`이 늦은 쪽을 남기고, 같으면 나중에 받은 쪽을 남긴다(`null`이 가장 이르다). 순서를 거꾸로 하면(목록 먼저) 그 사이에 생긴 메시지를 잃는다
   - 입장 이벤트(`MATCH_ROOM_ENTRANCE`·`INVITE_ROOM_ENTRANCE`)와는 무관하다 — 기다리지 않아도 된다
-- **채팅 이벤트는 보낸 사람에게 가지 않는다** — 본인 화면은 보내기·수정·삭제의 REST 응답으로 바꾼다
+- **채팅 이벤트는 그 줄의 당사자(보낸 사람, 안내 줄은 들어오거나 나간 사람)에게 가지 않는다** — 본인 화면은 보내기·수정·삭제의 REST 응답으로 바꾼다
+- **방에 들어오고 나가면 안내 줄이 남는다** — 배정될 때(매칭 배정·1인 방 생성·초대 방 개설·초대 수락) `JOINED`(나갔던 방에 다시 배정돼도 같다), 시작 전에 나가거나 탈퇴하면 `LEFT`다. 러닝이 시작된 뒤에는 채팅이 닫혀 남지 않는다
+  - 보낸 사람이 없고(`sender = null`) 들어오거나 나간 사람이 `actor`다. 화면 문구는 들어오면 "OO님이 들어왔어요", 나가면 "OO님이 나갔어요"다(`actor.isDeleted`면 "탈퇴한 사용자가 나갔어요")
+  - 고치거나 지울 수 없다 — 수정·삭제를 부르면 없는 메시지와 같은 404다
+  - **말과 들어온 줄(`JOINED`)만 방의 다른 사람 폰에 푸시된다** — 나간 줄은 푸시하지 않는다(`feature-spec.md` 알림)
 - **자동 재전송하지 않는다** — 보내기 응답을 못 받으면 "다시 보내기"만 보여준다. 서버에는 이미 저장됐을 수 있고 재전송 중복을 가리는 키가 없어서, 자동으로 다시 보내면 같은 메시지가 두 번 남는다(`erd.md` `running_room_chats`). 저장됐는지는 다음 입장 때 목록이 알려준다
 - **수정·삭제는 보낸 본인만, 횟수 제한 없이 한다. 지운 메시지는 되살리거나 고칠 수 없다**
 
@@ -2127,12 +2166,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "chatId": 3021,
   "runningRoomId": 125,
+  "type": "MESSAGE",
   "sender": {
     "userId": "01a0f2d4-6180-7000-8000-446655440013",
     "nickname": "철수",
     "profileImageUrl": "https://...",
     "isDeleted": false
   },
+  "actor": null,
   "content": "곧 출발해요",
   "isDeleted": false,
   "editedAt": null,
@@ -2144,18 +2185,22 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `chatId` | Integer | O | 메시지 ID. 생성 순서대로 커진다 — 클라는 이 값으로 정렬하고 중복을 합친다 |
 | `runningRoomId` | Integer | O | 메시지가 오간 방 |
-| `sender` | Object | O | 보낸 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
-| `content` | String | X | 내용. **지운 메시지면 `null`** — 화면에는 "삭제된 메시지"로 그린다 |
+| `type` | String | O | `MESSAGE`(말) / `JOINED`(들어옴) / `LEFT`(나감) — `erd.md` §5 |
+| `sender` | Object | X | 보낸 사람. **안내 줄이면 `null`**. 탈퇴했으면 §0 탈퇴 유저 형식 |
+| `actor` | Object | X | 들어오거나 나간 사람 — `sender`와 같은 모양. **말이면 `null`** |
+| `content` | String | X | 내용. **지운 메시지·안내 줄이면 `null`** — 지운 메시지는 화면에 "삭제된 메시지"로 그린다 |
 | `isDeleted` | Boolean | O | 보낸 사람이 지운 메시지인가. `sender.isDeleted`(보낸 사람 탈퇴)와 다르다 |
 | `editedAt` | String | X | 마지막 수정 시각. 고친 적 없으면 `null` — 값이 있으면 "수정됨"을 붙인다 |
 | `createdAt` | String | O | 보낸 시각 |
 
+- **`sender`가 `null`일 수 있게 된 것은 하위 호환 규칙(`api-convention.md`)의 예외다** — `type`·`actor` 이전 앱은 `sender` 없는 줄을 버려 안내 줄이 보이지 않을 뿐 깨지지 않는다. 최근 줄이 거의 안내 줄이면 그 앱은 화면이 차지 않아 이전 페이지를 부르지 못할 수 있다(대기 취소·재신청을 수십 번 되풀이한 방)
+
 #### 채팅 이벤트 (SSE) — `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED`
 
-- 매칭 스트림(`/match-rooms/stream`)으로 **방 참가자 중 보낸 사람을 뺀 전원에게** 보낸다. 매칭 방·초대 방이 같은 이름을 쓴다
+- 매칭 스트림(`/match-rooms/stream`)으로 **방 참가자 중 그 줄의 당사자를 뺀 전원에게** 보낸다. 매칭 방·초대 방이 같은 이름을 쓴다
   - 접두어가 `ROOM_`인 이유: 방 상태 이벤트는 `MATCH_*`(매칭 방만)·`INVITE_ROOM_*`(초대 방만)로 방 종류를 가르는데, 채팅은 두 방에 똑같이 가서 어느 쪽 접두어도 붙이지 않는다
 - `data` = `Chat` 전체 — 세 이벤트 모두 같다. 클라는 `chatId`로 찾아 **있으면 위 규칙으로 합치고 없으면 넣는다**
-  - `ROOM_CHAT_SENT`: 새 메시지
+  - `ROOM_CHAT_SENT`: 새 메시지·안내 줄
   - `ROOM_CHAT_EDITED`: 고친 뒤의 메시지(`content` 새 값, `editedAt` 채워짐)
   - `ROOM_CHAT_DELETED`: 지운 뒤의 메시지(`content = null`, `isDeleted = true`)
 - **방 상태 이벤트와 달리 변경분이다** — 놓친 이벤트는 다시 오지 않는다. 끊겼다 다시 연결하면 위 입장 순서대로 목록을 다시 받아 맞춘다
@@ -4123,7 +4168,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 매칭 확정, 러닝 시작 리마인더, 친구 요청 도착/수락, 러닝 초대 도착을 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
+- **`alertConsent` = 단일 토글** — 매칭 확정, 러닝 시작 리마인더, 친구 요청 도착/수락, 러닝 초대 도착, 대기방 채팅, 공지를 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility` 하나뿐이다. **기록 카드 공개 범위 기본값은 서버에 두지 않는다** — 카드마다 `record_cards.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
@@ -4187,3 +4232,40 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```
 
 - **인증**: 필요
+
+## 13. 관리자
+
+운영자가 터미널(curl)에서 부르는 API다. 앱은 부르지 않는다. 토큰 대신 관리자 키로 인증한다.
+
+- **관리자 키**: `X-Admin-Key` 헤더에 서버 설정 `admin.key`와 같은 값을 싣는다. 키 하나가 `/api/v1/admin/` 아래 전체를 연다. 토큰(`Authorization`)은 쓰지 않는다
+  - **키 검사가 경로 확인보다 먼저다** — 키가 없거나 틀리면 경로와 무관하게 401이고, 키가 맞고 경로가 틀리면 공통 404다
+  - 앱 버전 헤더를 검사하지 않는다
+
+```json
+{
+  "code": "INVALID_ADMIN_KEY",
+  "message": "관리자 키가 올바르지 않습니다."
+}
+```
+
+### 13-1. `POST /api/v1/admin/push-campaigns/{pushCampaignId}/send` — 공지 푸시 발송
+
+- **쓰는 순서**: ① SQL로 `push_campaigns`에 공지를 넣는다(`type='NOTICE'`, `status='DRAFT'`, `created_at=now()` — DB 기본값이 없다) ② 받는 사람을 `push_campaign_recipients`에 `INSERT … SELECT`로 고른다 — `WHERE`가 곧 대상 조건이다 ③ 이 API를 한 번 부른다
+- **Request 본문이 없다**
+- **동작**: 캠페인을 `DRAFT`→`COMPLETED`로 바꾼 뒤 받는 사람에게 한 명씩 공지 푸시(data `type`=`NOTICE`)를 보낸다. 응답은 상태를 바꾼 즉시 나가고 푸시는 뒤에서 보낸다
+  - **한 캠페인은 한 번만 보낸다** — 두 번째 호출은 409다. 키가 새어도 DB에 넣어 둔 캠페인을 한 번 보내는 것 말고는 할 수 없다
+  - 받는 사람마다 다른 푸시와 같은 기준으로 거른다 — 알림을 껐거나, 로그인 세션이 없거나, 켜진 기기가 없으면 보내지 않는다
+  - 발송부터 하루(`push-campaign.message-ttl`)가 지나면 그 뒤에 켜진 폰은 받지 않는다
+  - 문구가 공백뿐이면 500으로 거절하고 캠페인은 `DRAFT`로 남는다
+  - **누가 받았는지는 DB에 남지 않는다** — 받는 사람별 결과는 로그로 본다. 발송을 시작하기 전에 서버가 정상 종료되면(실행기가 받지 않았거나 대기 줄에 있던 경우) 캠페인을 `DRAFT`로 되돌린다 — 되돌리다 실패하면 `COMPLETED`로 남고 로그에 남는다. 프로세스가 바로 죽는 강제 종료면 되돌리지 못하고 로그도 없이 `COMPLETED`로 남는다. 그래서 204는 발송이 시작됐다는 보장이 아니다. 보내는 중 서버가 꺼지면 남은 사람은 받지 못하고 캠페인은 `COMPLETED`로 남는다. 다시 보내려면 SQL로 `status='DRAFT'`로 되돌리고 부른다(이미 받은 사람도 다시 받는다). 배포 시간을 피해 부른다
+- **Response `204 No Content`**
+- **인증**: 관리자 키(13. 관리자)
+- **에러 (404 Not Found)**: 캠페인이 없다 — 공통 `NOT_FOUND`
+- **에러 (409 Conflict)**: 이미 보낸 캠페인이다
+
+```json
+{
+  "code": "PUSH_CAMPAIGN_ALREADY_SENT",
+  "message": "이미 보낸 푸시 캠페인입니다."
+}
+```

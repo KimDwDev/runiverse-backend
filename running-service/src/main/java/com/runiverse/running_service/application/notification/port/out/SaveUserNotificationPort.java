@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.notification.port.out;
 
-import com.runiverse.running_service.domain.notification.UserNotification;
+import com.runiverse.running_service.domain.notification.user.UserNotification;
 
 public interface SaveUserNotificationPort {
 

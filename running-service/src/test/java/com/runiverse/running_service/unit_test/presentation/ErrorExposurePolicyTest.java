@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.presentation;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
+import com.runiverse.running_service.application.common.exception.PushCampaignErrorCode;
 import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
@@ -66,6 +67,22 @@ public class ErrorExposurePolicyTest {
         // 가려지면 500으로 바뀌어 클라가 업데이트 화면으로 보내지 못한다
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.FORBIDDEN, CommonErrorCode.APP_UPDATE_REQUIRED.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("관리자 키 거절은 401 그대로 노출한다")
+    void invalidAdminKeyIsExposed() {
+        // 가려지면 500으로 바뀌어 운영자가 키를 잘못 넣었는지 서버 오류인지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.UNAUTHORIZED, CommonErrorCode.INVALID_ADMIN_KEY.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 보낸 푸시 캠페인은 409 그대로 노출한다")
+    void pushCampaignAlreadySentIsExposed() {
+        // 가려지면 운영자가 이미 보낸 것인지 서버 오류인지 가를 수 없다 — 서버 오류로 보고 다시 되돌려 두 번 보낼 수 있다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT, PushCampaignErrorCode.PUSH_CAMPAIGN_ALREADY_SENT.getCode())).isTrue();
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.notification.port.out;
 
-import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationPayload;
 
 import java.time.LocalDateTime;
 

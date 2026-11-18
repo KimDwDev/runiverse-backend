@@ -1,5 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.application.match.port.out.CountJoinableWaitingPlayersPort;
 import com.runiverse.running_service.application.match.port.out.CountWaitingPlayersPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchCandidatesPort;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlayersPort, LoadMatchCandidatesPort,
-        CountWaitingPlayersPort {
+        CountWaitingPlayersPort, CountJoinableWaitingPlayersPort {
 
     private final EntityManager entityManager;
 
@@ -107,6 +108,33 @@ public class MatchPersistenceAdapter implements LoadMatchRoomPort, LoadMatchPlay
                 .setParameter("endExclusive", date.plusDays(1).atStartOfDay())
                 .getResultList();
         // 거리가 다르면 같은 방에 모이지 않으므로 거리끼리 합산하지 않는다 — 거리 아래에 시각별 인원을 묶는다.
+        // JPQL의 SUM(int)는 Long이다
+        return rows.stream().collect(Collectors.groupingBy(
+                row -> (Integer) row[0],
+                Collectors.toMap(
+                        row -> (LocalDateTime) row[1],
+                        row -> ((Long) row[2]).intValue())));
+    }
+
+    @Override
+    public Map<Integer, Map<LocalDateTime, Integer>> countJoinableWaitingPlayers(LocalDate date) {
+        List<Object[]> rows = entityManager.createQuery("""
+                        SELECT r.targetDistance, r.startAt, SUM(r.currentPlayerCount)
+                        FROM RunningRoomJpaEntity r
+                        WHERE r.deletedAt IS NULL
+                          AND r.type = :type
+                          AND r.status = :status
+                          AND r.startAt >= :startInclusive
+                          AND r.startAt < :endExclusive
+                        GROUP BY r.targetDistance, r.startAt
+                        HAVING SUM(CASE WHEN r.currentPlayerCount < r.maxPlayerCount THEN 1 ELSE 0 END) > 0
+                        """, Object[].class)
+                // 자리 판정은 신청이 붙을 방을 고르는 조건(current < max)과 같다
+                .setParameter("type", RunningRoomType.MATCH)
+                .setParameter("status", RunningRoomStatus.MATCHING)
+                .setParameter("startInclusive", date.atStartOfDay())
+                .setParameter("endExclusive", date.plusDays(1).atStartOfDay())
+                .getResultList();
         // JPQL의 SUM(int)는 Long이다
         return rows.stream().collect(Collectors.groupingBy(
                 row -> (Integer) row[0],

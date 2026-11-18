@@ -6,5 +6,8 @@ public enum PushType {
     FRIEND_ACCEPTED,
     RUNNING_INVITED,
     MATCH_CONFIRMED,
-    RUNNING_REMINDER
+    RUNNING_REMINDER,
+    ROOM_CHAT_SENT,
+    // 운영이 고른 사람에게 보내는 공지 — 갈 화면이 없어 앱은 열기만 한다
+    NOTICE
 }

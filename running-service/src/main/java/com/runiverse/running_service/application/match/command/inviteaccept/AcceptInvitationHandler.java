@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.match.port.out.ExistsActiveAppl
 import com.runiverse.running_service.application.match.port.out.LockMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
@@ -46,6 +47,7 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
     private final CreateMatchApplicationPort createMatchApplicationPort;
     private final LoadMatchPlayersPort loadMatchPlayersPort;
     private final RoomInfoAssembler roomInfoAssembler;
+    private final RoomChatPresenceWriter roomChatPresenceWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -90,7 +92,9 @@ public class AcceptInvitationHandler implements AcceptInvitationUsecase {
         room.acceptInvitation(inviteeId, player.getRunningPlayerId().orElseThrow());
         room.recalculateAvgPace(paces);
         updateMatchRoomPort.update(room);
-        // 9. 기존 참가자에게 인원·초대 현황 변동을 알린다 — 수락한 사람은 응답을 받고 스트림을 열어 스냅샷을 받는다
+        // 9. 채팅에 들어왔다는 줄을 남긴다
+        roomChatPresenceWriter.joined(room, inviteeId);
+        // 10. 기존 참가자에게 인원·초대 현황 변동을 알린다 — 수락한 사람은 응답을 받고 스트림을 열어 스냅샷을 받는다
         eventPublisher.publishEvent(new MatchRoomChangedEvent(
                 MatchStreamEvent.updated(roomInfoAssembler.assemble(room))));
         return new AcceptInvitationResult(roomId.value());

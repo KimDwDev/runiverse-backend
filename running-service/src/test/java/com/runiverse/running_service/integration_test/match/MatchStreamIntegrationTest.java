@@ -19,6 +19,9 @@ import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.RecruitmentClosePolicy;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
@@ -28,6 +31,7 @@ import com.runiverse.running_service.application.scheduling.command.schedule.Sch
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingCommand;
 import com.runiverse.running_service.application.user.command.onboarding.CompleteOnboardingHandler;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.infrastructure.sse.MatchRoomMemberRegistry;
 import com.runiverse.running_service.infrastructure.sse.MatchStreamRegistryAdapter;
@@ -37,6 +41,7 @@ import com.runiverse.running_service.integration_test.fake.FakeViewUrlGenerator;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchCooldownStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryMatchStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryPlayerProfileStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRoomChatStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryScheduledJobStore;
 import com.runiverse.running_service.integration_test.fake.RecordingMatchStreamConnection;
 import org.junit.jupiter.api.BeforeEach;
@@ -115,6 +120,12 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
                 matchStore,                                                 // LoadMatchRoomPort
                 runningStore                                                // LoadMatchRoomDetailPort
         );
+        RoomChatPresenceWriter roomChatPresenceWriter = new RoomChatPresenceWriter(
+                new InMemoryRoomChatStore(),
+                new RoomChatAssembler(new InMemoryPlayerProfileStore(userStore, onboardingStore),
+                        new FakeViewUrlGenerator()),
+                new RoomChatPushRequester(eventPublisher),
+                eventPublisher);
         MatchRoomAssigner matchRoomAssigner = new MatchRoomAssigner(
                 matchStore,    // LoadMatchCandidatesPort
                 runningStore,  // LockMatchRoomPort
@@ -134,6 +145,7 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
                 matchRoomAssigner,
                 new MatchSlotPolicy(MATCH_PROPERTIES),
                 roomInfoAssembler,
+                roomChatPresenceWriter,
                 eventPublisher
         );
         // 공용 채널은 보낸 인스턴스도 듣는다 — 인스턴스가 하나라 대체 알림은 곧바로 자기에게 돌아온다
@@ -190,13 +202,16 @@ public class MatchStreamIntegrationTest extends IntegrationTestSupport {
         // when
         apply(guestId);
 
-        // then -> 스냅샷 다음에 인원이 늘어난 방 정보가 온다
+        // then -> 스냅샷 다음에 손님이 들어왔다는 채팅 줄과 인원이 늘어난 방 정보가 온다
         List<MatchStreamEvent> received = connection.received();
-        assertThat(received).hasSize(2);
+        assertThat(received).hasSize(3);
+        assertThat(received.get(1).type()).isEqualTo(MatchEventType.ROOM_CHAT_SENT);
+        assertThat(received.get(1).chat().type()).isEqualTo(RunningRoomChatType.JOINED);
+        assertThat(received.get(1).chat().actor().userId()).isEqualTo(guestId);
         // 인원 변동은 갱신이다 — 확정(MATCH_CONFIRMED)은 마감 때만 나간다
-        assertThat(received.get(1).type()).isEqualTo(MatchEventType.MATCH_ROOM_UPDATED);
-        assertThat(received.get(1).room().runningRoomId()).isEqualTo(runningRoomId);
-        assertThat(received.get(1).room().players())
+        assertThat(received.get(2).type()).isEqualTo(MatchEventType.MATCH_ROOM_UPDATED);
+        assertThat(received.get(2).room().runningRoomId()).isEqualTo(runningRoomId);
+        assertThat(received.get(2).room().players())
                 .extracting(RoomInfo.RoomPlayer::userId)
                 .containsExactly(hostId, guestId);
     }

@@ -11,6 +11,8 @@ import com.runiverse.running_service.application.match.port.out.SavedRoomChat;
 import com.runiverse.running_service.application.match.port.out.UpdateRoomChatPort;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
 import com.runiverse.running_service.domain.running.room.RunningRoomChatHistory;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatContent;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.TypedQuery;
@@ -29,7 +31,7 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
     // c.room.runningRoomId는 FK 컬럼을 그대로 읽어 방 테이블과 조인하지 않는다
     private static final String SELECT_PAGE = """
             SELECT NEW com.runiverse.running_service.application.match.port.out.RoomChatRow(
-                c.runningRoomChatId, c.room.runningRoomId, c.userId, c.content,
+                c.runningRoomChatId, c.room.runningRoomId, c.userId, c.type, c.content,
                 c.editedAt, c.deletedAt, c.createdAt)
             FROM RunningRoomChatJpaEntity c
             WHERE c.room.runningRoomId = :runningRoomId
@@ -38,12 +40,14 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
     // 인덱스 (running_room_id, running_room_chat_id)를 역방향으로 타 최신순·커서 조건을 인덱스가 처리한다
     private static final String ORDER_BY = " ORDER BY c.runningRoomChatId DESC";
     // 고치거나 지울 메시지 한 행만 잠근다 — c.room.runningRoomId는 FK 컬럼이라 방 테이블과 조인하지 않아 방 행은 잠기지 않는다.
-    // 방 행까지 잠그면 대기방의 참가·이탈과 서로 기다린다(RunningRoomChat이 방과 다른 애그리거트인 이유)
+    // 방 행까지 잠그면 대기방의 참가·이탈과 서로 기다린다(RunningRoomChat이 방과 다른 애그리거트인 이유).
+    // 안내 줄은 고칠 수 없어 없는 메시지처럼 빠진다
     private static final String SELECT_FOR_UPDATE = """
             SELECT c
             FROM RunningRoomChatJpaEntity c
             WHERE c.runningRoomChatId = :chatId
               AND c.room.runningRoomId = :runningRoomId
+              AND c.type = :messageType
             """;
 
     private final EntityManager entityManager;
@@ -55,7 +59,8 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
         RunningRoomChatJpaEntity entity = RunningRoomChatJpaEntity.create(
                 entityManager.getReference(RunningRoomJpaEntity.class, chat.getRunningRoomId().value()),
                 chat.getUserId().value(),
-                chat.getContent().value());
+                chat.getType(),
+                chat.getContent().map(RunningRoomChatContent::value).orElse(null));
         entityManager.persist(entity);
         return new SavedRoomChat(entity.getRunningRoomChatId(), entity.getCreatedAt());
     }
@@ -84,6 +89,7 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
         return entityManager.createQuery(SELECT_FOR_UPDATE, RunningRoomChatJpaEntity.class)
                 .setParameter("chatId", chatId)
                 .setParameter("runningRoomId", runningRoomId)
+                .setParameter("messageType", RunningRoomChatType.MESSAGE)
                 // 연달아 온 두 수정이 같은 직전 내용을 읽으면 이력 하나가 빠진다 — 앞 트랜잭션의 커밋을 기다린다
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultList()
@@ -91,7 +97,7 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
                 .findFirst()
                 .map(entity -> new LockedRoomChat(
                         RunningRoomChat.restore(entity.getRunningRoomChatId(), runningRoomId, entity.getUserId(),
-                                entity.getContent(), entity.getEditedAt(), entity.getDeletedAt()),
+                                entity.getType(), entity.getContent(), entity.getEditedAt(), entity.getDeletedAt()),
                         entity.getCreatedAt()));
     }
 
@@ -100,7 +106,7 @@ public class RoomChatPersistenceAdapter implements CreateRoomChatPort, LoadRoomC
     public void update(RunningRoomChat chat) {
         RunningRoomChatJpaEntity entity = entityManager.find(RunningRoomChatJpaEntity.class,
                 chat.getRunningRoomChatId().orElseThrow().value());
-        entity.apply(chat.getContent().value(),
+        entity.apply(chat.getContent().map(RunningRoomChatContent::value).orElse(null),
                 chat.getEditedAt().orElse(null),
                 chat.getDeletedAt().orElse(null));
     }

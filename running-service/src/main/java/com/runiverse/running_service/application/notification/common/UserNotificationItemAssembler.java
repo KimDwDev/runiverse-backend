@@ -9,10 +9,10 @@ import com.runiverse.running_service.application.notification.port.out.UserNotif
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendAcceptedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.RunningInvitedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationPayload;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

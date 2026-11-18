@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.common.RoomChatAssembler;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.user.port.out.GenerateViewUrlPort;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,8 @@ class RoomChatAssemblerTest {
 
     private static RoomChatRow row(long chatId, UUID sender, String content,
                                    LocalDateTime editedAt, LocalDateTime deletedAt) {
-        return new RoomChatRow(chatId, ROOM_ID, sender, content, editedAt, deletedAt, SENT_AT);
+        return new RoomChatRow(chatId, ROOM_ID, sender, RunningRoomChatType.MESSAGE, content, editedAt, deletedAt,
+                SENT_AT);
     }
 
     @Test
@@ -66,7 +68,8 @@ class RoomChatAssemblerTest {
 
         // then
         assertThat(chat).isEqualTo(new RoomChat(3021L, ROOM_ID,
-                new RoomChat.Sender(CHULSU, "철수", "https://cdn/profiles/c.png", false),
+                RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(CHULSU, "철수", "https://cdn/profiles/c.png", false), null,
                 "곧 출발해요", false, null, SENT_AT));
     }
 
@@ -99,7 +102,7 @@ class RoomChatAssemblerTest {
         RoomChat chat = assembler.assemble(row(3021L, CHULSU, "곧 출발해요", null, null));
 
         // then -> 보낸 사람 탈퇴와 메시지 삭제는 다른 축이다
-        assertThat(chat.sender()).isEqualTo(new RoomChat.Sender(CHULSU, "탈퇴한 사용자", null, true));
+        assertThat(chat.sender()).isEqualTo(new RoomChat.Person(CHULSU, "탈퇴한 사용자", null, true));
         assertThat(chat.content()).isEqualTo("곧 출발해요");
         assertThat(chat.isDeleted()).isFalse();
         verifyNoInteractions(generateViewUrlPort);
@@ -123,6 +126,42 @@ class RoomChatAssemblerTest {
         assertThat(chats).extracting(RoomChat::chatId).containsExactly(3L, 2L, 1L);
         assertThat(chats).extracting(chat -> chat.sender().nickname()).containsExactly("철수", "영희", "철수");
         verify(loadPlayerProfilesPort, times(1)).loadProfiles(List.of(CHULSU, YOUNGHEE));
+    }
+
+    @Test
+    @DisplayName("안내 줄은 보낸 사람 없이 들어오거나 나간 사람을 actor에 싣는다")
+    void noticeCarriesActor() {
+        // given
+        given(loadPlayerProfilesPort.loadProfiles(List.of(CHULSU)))
+                .willReturn(Map.of(CHULSU, new PlayerProfile(CHULSU, "철수", "profiles/c.png", null)));
+        given(generateViewUrlPort.generate("profiles/c.png")).willReturn("https://cdn/profiles/c.png");
+
+        // when
+        RoomChat chat = assembler.assemble(new RoomChatRow(3022L, ROOM_ID, CHULSU, RunningRoomChatType.JOINED,
+                null, null, null, SENT_AT));
+
+        // then -> 보낸 사람이 없는 줄을 옛 앱은 그리지 않는다
+        assertThat(chat.type()).isEqualTo(RunningRoomChatType.JOINED);
+        assertThat(chat.sender()).isNull();
+        assertThat(chat.actor()).isEqualTo(new RoomChat.Person(CHULSU, "철수", "https://cdn/profiles/c.png", false));
+        assertThat(chat.person()).isEqualTo(chat.actor());
+        assertThat(chat.content()).isNull();
+        assertThat(chat.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 안내 줄은 actor가 탈퇴 유저 형식이다")
+    void deletedActor() {
+        // given
+        given(loadPlayerProfilesPort.loadProfiles(List.of(CHULSU))).willReturn(Map.of());
+
+        // when
+        RoomChat chat = assembler.assemble(new RoomChatRow(3022L, ROOM_ID, CHULSU, RunningRoomChatType.LEFT,
+                null, null, null, SENT_AT));
+
+        // then
+        assertThat(chat.actor()).isEqualTo(new RoomChat.Person(CHULSU, "탈퇴한 사용자", null, true));
+        assertThat(chat.sender()).isNull();
     }
 
     @Test
