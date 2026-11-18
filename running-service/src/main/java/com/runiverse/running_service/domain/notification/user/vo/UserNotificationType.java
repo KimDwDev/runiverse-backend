@@ -1,4 +1,4 @@
-package com.runiverse.running_service.domain.notification.vo;
+package com.runiverse.running_service.domain.notification.user.vo;
 
 // 받는 사람에게 무슨 일이 일어났나 — 문구와 동작은 클라가 이 값으로 정한다.
 // 값마다 payload 모양이 하나씩 정해져 있다(UserNotificationPayload 구현체)

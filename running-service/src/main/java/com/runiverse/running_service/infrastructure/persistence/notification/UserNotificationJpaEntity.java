@@ -1,6 +1,6 @@
 package com.runiverse.running_service.infrastructure.persistence.notification;
 
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.infrastructure.persistence.common.BaseTimeEntity;
 import com.runiverse.running_service.infrastructure.persistence.user.UserJpaEntity;
 import jakarta.persistence.Column;

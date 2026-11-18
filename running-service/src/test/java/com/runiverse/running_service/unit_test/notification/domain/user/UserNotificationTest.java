@@ -1,14 +1,14 @@
-package com.runiverse.running_service.unit_test.notification.domain;
+package com.runiverse.running_service.unit_test.notification.domain.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.UserNotification;
-import com.runiverse.running_service.domain.notification.exception.SelfNotificationException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationPayloadRequiredException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationRecipientRequiredException;
-import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.UserNotification;
+import com.runiverse.running_service.domain.notification.user.exception.SelfNotificationException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationPayloadRequiredException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationRecipientRequiredException;
+import com.runiverse.running_service.domain.notification.user.vo.FriendAcceptedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

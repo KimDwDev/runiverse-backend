@@ -1,8 +1,8 @@
-package com.runiverse.running_service.domain.notification.vo;
+package com.runiverse.running_service.domain.notification.user.vo;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationActorRequiredException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationRunningRoomRequiredException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationActorRequiredException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationRunningRoomRequiredException;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 // 누군가 나를 초대 방에 초대했다 — 저장 키는 request_user_id·running_room_id.

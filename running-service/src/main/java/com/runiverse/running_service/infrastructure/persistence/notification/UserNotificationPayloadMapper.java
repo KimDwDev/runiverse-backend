@@ -1,11 +1,11 @@
 package com.runiverse.running_service.infrastructure.persistence.notification;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.FriendAcceptedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.RunningInvitedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 
 import java.util.Map;

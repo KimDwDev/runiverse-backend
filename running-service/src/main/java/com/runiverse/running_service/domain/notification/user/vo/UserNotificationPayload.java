@@ -1,4 +1,4 @@
-package com.runiverse.running_service.domain.notification.vo;
+package com.runiverse.running_service.domain.notification.user.vo;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
 

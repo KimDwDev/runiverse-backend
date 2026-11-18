@@ -4,7 +4,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.app.port.out.AppStreamEvent;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.application.running.command.activity.RunningActivity;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import com.runiverse.running_service.presentation.app.sse.SseAppStreamConnection;

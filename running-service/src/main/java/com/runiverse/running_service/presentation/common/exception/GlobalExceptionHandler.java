@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.common.exception.ErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
 import com.runiverse.running_service.application.common.exception.NotificationErrorCode;
+import com.runiverse.running_service.application.common.exception.PushCampaignErrorCode;
 import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RelationshipErrorCode;
 import com.runiverse.running_service.application.common.exception.ResourceErrorCode;
@@ -268,6 +269,7 @@ public class GlobalExceptionHandler {
             case NotificationErrorCode code -> toStatus(code);
             case RoomChatErrorCode code -> toStatus(code);
             case RecordCardErrorCode code -> toStatus(code);
+            case PushCampaignErrorCode code -> toStatus(code);
         };
     }
 
@@ -388,6 +390,12 @@ public class GlobalExceptionHandler {
             case RECORD_CARD_ALREADY_EXISTS,
                  // 요청이 틀린 게 아니라 처리 중인 다른 확정과 부딪혔다
                  RECORD_CARD_DRAFT_IN_PROGRESS -> HttpStatus.CONFLICT;
+        };
+    }
+
+    private HttpStatus toStatus(PushCampaignErrorCode code) {
+        return switch (code) {
+            case PUSH_CAMPAIGN_ALREADY_SENT -> HttpStatus.CONFLICT;
         };
     }
 

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.domain.notification.exception;
+package com.runiverse.running_service.domain.notification.user.exception;
 
 import com.runiverse.running_service.domain.common.exception.BusinessException;
 import com.runiverse.running_service.domain.common.exception.UserNotificationErrorCode;

@@ -2,7 +2,7 @@ package com.runiverse.running_service.application.relationship.common;
 
 import com.runiverse.running_service.application.common.port.out.SendUserNotificationPort;
 import com.runiverse.running_service.application.relationship.port.out.SaveUserRelationshipPort;
-import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendAcceptedPayload;
 import com.runiverse.running_service.domain.relationship.UserRelationship;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import lombok.RequiredArgsConstructor;

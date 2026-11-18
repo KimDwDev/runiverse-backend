@@ -381,7 +381,8 @@ public abstract class E2eTestSupport {
         }
     }
 
-    private static String containerLogs() {
+    /** 응답·DB에 남지 않는 결과(local 프로필 발송 어댑터가 찍은 푸시)를 앱 로그에서 읽는다. */
+    protected static String containerLogs() {
         try {
             Process process = new ProcessBuilder("docker", "logs", APP_CONTAINER)
                     .redirectErrorStream(true)

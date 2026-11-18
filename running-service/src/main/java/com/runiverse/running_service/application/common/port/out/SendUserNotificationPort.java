@@ -1,7 +1,7 @@
 package com.runiverse.running_service.application.common.port.out;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationPayload;
 
 // 받는 사람에게 인앱 알림을 보낸다. 부르는 쪽은 저장·스트림 전달을 알지 않는다.
 // 친구 요청·수락이 먼저 쓰고, 러닝 초대가 같은 입구를 쓴다

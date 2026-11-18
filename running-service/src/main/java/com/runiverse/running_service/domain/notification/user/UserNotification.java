@@ -1,11 +1,11 @@
-package com.runiverse.running_service.domain.notification;
+package com.runiverse.running_service.domain.notification.user;
 
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.exception.SelfNotificationException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationPayloadRequiredException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationRecipientRequiredException;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.exception.SelfNotificationException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationPayloadRequiredException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationRecipientRequiredException;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import lombok.Getter;
 
 // 받는 사람에게 일어난 사건 하나 — 사건의 기록이라 원 상태(요청·초대)가 바뀌어도 고치지 않는다.
