@@ -3209,7 +3209,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > 1. ~~AI가 음악을 어느 S3 key에 올리는가~~ — **정했다(11-13): AI 서버가 정하고 완료 이벤트로 알려 준다. running-service는 받은 key를 그대로 저장한다**
 > 2. 완료 이벤트가 어느 음악(기본곡·어느 사진)의 결과인지 어떻게 알리는가 — 사진은 `record_card_image_id`로 찾을 수 있다. 기본곡을 어떻게 가리킬지와 완료 이벤트 모양은 AI 서버와 정한다
 > 3. 수정(9-3)으로 새 사진만 보낼 때 기본곡을 다시 만들지 말라는 것을 어떻게 알리는가
-> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가 — **제안(11-16): Kafka 헤더 `id`(아웃박스 `outbox_event_id`, UUIDv7)로 거른다.** 이벤트마다 다르고 같은 이벤트를 다시 보내도 같다. 본문 JSON은 바꾸지 않는다. AI 서버가 헤더를 읽을 수 있는지 확인 대기
+> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가 — **제안(11-16): Kafka 헤더 `id`(아웃박스 `outbox_event_id`, UUIDv7)로 거른다.** 이벤트마다 다르고 같은 이벤트를 다시 보내도 같다. 본문 JSON은 바꾸지 않는다. AI 서버 확인은 완료 구독(generated) 구현 뒤에 한다
 
 **`{env}.record-card.music.generated`** (AI → running-service)
 

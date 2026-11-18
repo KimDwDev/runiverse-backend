@@ -108,7 +108,7 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 | 토픽 (`{env}.` 생략) | 방향 | 쓰는 곳 | 코드 | 받는 쪽 중복 거르기 |
 |---|---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버 확인 대기) |
+| `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, 완료 구독 구현 뒤 AI 서버와 확인) |
 | `record-card.music.generated` | AI → running-service | — | 아직 없음 | running-service inbox (위 "정하지 않은 것" 1) + 상태 규칙 |
 
 ## 새 이벤트를 더할 때
