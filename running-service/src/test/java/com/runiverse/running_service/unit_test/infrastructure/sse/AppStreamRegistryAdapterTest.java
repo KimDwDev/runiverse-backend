@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,6 +105,23 @@ class AppStreamRegistryAdapterTest {
         // then
         assertThat(removed).isTrue();
         assertThat(appStreamRegistryAdapter.find(USER_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("붙어 있는 연결 전부를 돌려주고, 그 뒤의 등록·해제에 흔들리지 않는다")
+    void findAllReturnsSnapshotOfEveryConnection() {
+        // given
+        AppStreamConnection mine = connection("conn-1");
+        AppStreamConnection others = connection("conn-2");
+        appStreamRegistryAdapter.register(USER_ID, mine);
+        appStreamRegistryAdapter.register(OTHER_USER_ID, others);
+
+        // when
+        Collection<AppStreamConnection> connections = appStreamRegistryAdapter.findAll();
+        appStreamRegistryAdapter.remove(USER_ID, mine);
+
+        // then -> 보내는 도중 끊긴 연결이 빠져도 순회가 깨지지 않는다
+        assertThat(connections).containsExactlyInAnyOrder(mine, others);
     }
 
     // 이 테스트는 연결 수명만 다룬다 — 식별자 말고는 연결의 동작을 쓰지 않는다

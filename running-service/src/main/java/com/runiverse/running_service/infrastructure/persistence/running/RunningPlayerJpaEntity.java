@@ -23,9 +23,13 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "running_players",
-        // 내 신청 조회·중복 신청 검사. 검사가 deleted_at IS NULL을 항상 함께 보므로 복합으로 둔다
-        // (논리 참조라 FK 인덱스가 없어서 이게 유일한 진입 인덱스다)
-        indexes = @Index(name = "idx_running_player_user", columnList = "user_id, deleted_at")
+        indexes = {
+                // 내 신청 조회·중복 신청 검사. 검사가 deleted_at IS NULL을 항상 함께 보므로 복합으로 둔다
+                // (논리 참조라 FK 인덱스가 없어서 이게 유일한 진입 인덱스다)
+                @Index(name = "idx_running_player_user", columnList = "user_id, deleted_at"),
+                // 홈 공지 띠의 지금 달리는 사람 수 — status 등치 뒤 start_at 범위
+                @Index(name = "idx_running_player_status", columnList = "status, start_at")
+        }
 )
 @Check(name = "ck_running_player_status",
         constraints = "status in ('JOINED', 'RUNNING', 'COMPLETED',"

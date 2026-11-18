@@ -2,7 +2,9 @@ package com.runiverse.running_service.presentation.app.sse;
 
 import com.runiverse.running_service.application.app.port.out.AppStreamConnection;
 import com.runiverse.running_service.application.app.port.out.AppStreamEvent;
+import com.runiverse.running_service.presentation.match.response.WaitingCountEventResponse;
 import com.runiverse.running_service.presentation.notification.response.NotificationEventResponse;
+import com.runiverse.running_service.presentation.running.response.RunningActivityEventResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -14,7 +16,7 @@ public class SseAppStreamConnection implements AppStreamConnection {
 
     private final String id;
     private final SseEmitter emitter;
-    // keep-alive 스케줄러와 알림 전송(Redis 리스너 스레드)이 동시에 쓴다.
+    // keep-alive·홈 공지 스케줄러와 알림 전송(Redis 리스너 스레드)이 동시에 쓴다.
     // SseEmitter는 동시 전송을 막아주지 않아 프레임이 섞이면 스트림 전체가 깨진다
     private final Object sendLock = new Object();
 
@@ -52,6 +54,8 @@ public class SseAppStreamConnection implements AppStreamConnection {
         return switch (event.type()) {
             case FRIEND_REQUESTED, FRIEND_ACCEPTED, RUNNING_INVITED ->
                     NotificationEventResponse.from(event.notification());
+            case HOME_WAITING -> WaitingCountEventResponse.from(event.waitingCount());
+            case HOME_ACTIVITY -> RunningActivityEventResponse.from(event.runningActivity());
         };
     }
 
