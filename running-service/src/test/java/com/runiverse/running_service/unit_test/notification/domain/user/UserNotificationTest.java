@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.notification.domain;
+package com.runiverse.running_service.unit_test.notification.domain.user;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.common.vo.UserId;

@@ -1,4 +1,4 @@
-package com.runiverse.running_service.unit_test.notification.domain;
+package com.runiverse.running_service.unit_test.notification.domain.campaign;
 
 import com.runiverse.running_service.domain.notification.campaign.PushCampaign;
 import com.runiverse.running_service.domain.notification.campaign.exception.PushCampaignBodyRequiredException;
