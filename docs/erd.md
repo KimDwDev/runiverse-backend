@@ -11,7 +11,7 @@
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`(복합 PK)·`push_campaign_recipients`(복합 PK)·`user_relationships`·`scheduled_jobs`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§5](#5-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`·`record_card_histories`·`push_campaign_recipients`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`·`push_campaigns`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`), 발송 표시(`status`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말하고, 발송 시각은 로그로 본다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`·`record_card_histories`·`push_campaign_recipients`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`·`push_campaigns`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`), 발송 표시(`status` — 시작 전에 서버가 정상 종료되면 한 번 더 되돌린다)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말하고, 발송 시각은 로그로 본다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
@@ -116,7 +116,7 @@
 
 ### push_campaigns (공지 푸시)
 
-> **도메인 테이블이 아니라 운영 테이블이다** — 운영이 SQL로 공지를 넣고 받는 사람을 `push_campaign_recipients`에 고른 뒤, 관리자 API(api-spec 13-1)를 한 번 불러 보낸다. 앱은 보낼 때 문구를 읽고 `status`를 한 번 바꿀 뿐 행을 만들지 않는다. 도메인 A 아래 두는 것은 받는 곳이 `user_devices`이기 때문이다.
+> **도메인 테이블이 아니라 운영 테이블이다** — 운영이 SQL로 공지를 넣고 받는 사람을 `push_campaign_recipients`에 고른 뒤, 관리자 API(api-spec 13-1)를 한 번 불러 보낸다. 앱은 보낼 때 문구를 읽고 `status`를 바꿀 뿐 행을 만들지 않는다. 도메인 A 아래 두는 것은 받는 곳이 `user_devices`이기 때문이다.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -132,7 +132,7 @@
 > CHECK `ck_push_campaign_title_length`: `char_length(title) between 1 and 100`
 > CHECK `ck_push_campaign_body_length`: `char_length(body) between 1 and 500`
 > **`type`은 정보성 공지(`NOTICE`)만 연다** — 광고성 푸시는 수신 동의 확인과 "(광고)" 표시가 필요한데 지금 발송 경로에 없다. 값을 열면 동의 없이 광고가 나가는 길이 생긴다.
-> **한 캠페인은 한 번만 보낸다** — 관리자 API가 `status`를 `DRAFT`→`COMPLETED`로 바꾸는 조건부 UPDATE가 1행일 때만 보낸다. 이 조건이 두 번 발송을 막는 유일한 장치라, 보내는 스레드는 캠페인당 늘 하나다. `COMPLETED`는 "발송을 시작해 다시 못 보냄"이다 — 보내다 서버가 죽어도 `COMPLETED`이고, 보낸 시각과 받은 사람별 결과는 DB에 없이 로그로 본다.
+> **한 캠페인은 한 번만 보낸다** — 관리자 API가 `status`를 `DRAFT`→`COMPLETED`로 바꾸는 조건부 UPDATE가 1행일 때만 보낸다. 이 조건이 두 번 발송을 막는 유일한 장치라, 보내는 스레드는 캠페인당 늘 하나다. `COMPLETED`는 "발송을 시작해 다시 못 보냄"이다 — 보내다 서버가 죽어도 `COMPLETED`이고(시작하기 전에 정상 종료되면 앱이 `DRAFT`로 되돌린다), 보낸 시각과 받은 사람별 결과는 DB에 없이 로그로 본다.
 > 공백만 있는 문구는 DB가 막지 않는다 — 보낼 때 앱이 거절해 `DRAFT`로 남는다.
 
 ### push_campaign_recipients (공지 푸시 받는 사람)
