@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.port.in.BroadcastMatchEve
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RunningReady;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.infrastructure.redis.match.MatchEventListener;
 import com.runiverse.running_service.infrastructure.redis.match.MatchEventRedisAdapter;
 import com.runiverse.running_service.support.LogCapture;
@@ -62,8 +63,8 @@ class MatchEventListenerTest {
     @DisplayName("발행한 방 채팅이 Redis를 한 바퀴 돌아도 채팅과 받지 않을 사람이 그대로 복원된다")
     void roomChatSurvivesRoundTrip() {
         // given -> 다른 인스턴스가 발행한 메시지다. 보낸 사람이 어느 서버에 붙었는지 받는 쪽은 모른다
-        RoomChat chat = new RoomChat(3021L, 42L,
-                new RoomChat.Sender(UuidCreator.getTimeOrderedEpoch(), "철수", null, false),
+        RoomChat chat = new RoomChat(3021L, 42L, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(UuidCreator.getTimeOrderedEpoch(), "철수", null, false), null,
                 "곧 출발해요", false, null, LocalDateTime.of(2026, 11, 10, 18, 52, 10));
         MatchStreamEvent sent = MatchStreamEvent.roomChatSent(chat);
 

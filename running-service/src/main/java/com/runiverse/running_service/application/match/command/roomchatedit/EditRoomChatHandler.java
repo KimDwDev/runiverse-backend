@@ -59,7 +59,8 @@ public class EditRoomChatHandler implements EditRoomChatUsecase {
                 command.chatId(),
                 command.runningRoomId(),
                 command.userId(),
-                chat.getContent().value(),
+                chat.getType(),
+                chat.getContent().orElseThrow().value(),
                 chat.getEditedAt().orElseThrow(),
                 null,
                 locked.createdAt()));

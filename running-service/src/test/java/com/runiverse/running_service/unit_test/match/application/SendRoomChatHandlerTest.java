@@ -6,17 +6,24 @@ import com.runiverse.running_service.application.match.command.roomchatsend.Send
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
 import com.runiverse.running_service.application.match.common.RoomChatAccessPolicy;
 import com.runiverse.running_service.application.match.common.RoomChatAssembler;
+import com.runiverse.running_service.application.match.common.RoomChatPushRequester;
 import com.runiverse.running_service.application.match.exception.RoomChatClosedException;
 import com.runiverse.running_service.application.match.exception.RoomChatRoomNotFoundException;
 import com.runiverse.running_service.application.match.port.out.CreateRoomChatPort;
+import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchEventType;
+import com.runiverse.running_service.application.match.port.out.MatchPlayer;
 import com.runiverse.running_service.application.match.port.out.MatchStreamEvent;
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.match.port.out.SavedRoomChat;
+import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,8 +59,11 @@ class SendRoomChatHandlerTest {
     private static final UUID SENDER = UuidCreator.getTimeOrderedEpoch();
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2026, 11, 11, 18, 52, 10);
     private static final RoomChat ASSEMBLED = new RoomChat(CHAT_ID, ROOM_ID,
-            new RoomChat.Sender(SENDER, "철수", "https://cdn/profiles/c.png", false),
+            RunningRoomChatType.MESSAGE, new RoomChat.Person(SENDER, "철수", "https://cdn/profiles/c.png", false), null,
             "곧 출발해요", false, null, SENT_AT);
+    private static final LocalDateTime START = LocalDateTime.of(2026, 11, 11, 19, 30);
+    private static final UserStatusRow STATUS = new UserStatusRow(
+            ROOM_ID, RunningRoomType.MATCH, RunningRoomStatus.MATCHING, START, 5_000);
 
     @Mock
     private RoomChatAccessPolicy roomChatAccessPolicy;
@@ -64,13 +75,20 @@ class SendRoomChatHandlerTest {
     private RoomChatAssembler roomChatAssembler;
 
     @Mock
+    private LoadMatchPlayersPort loadMatchPlayersPort;
+
+    @Mock
+    private RoomChatPushRequester roomChatPushRequester;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private SendRoomChatHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new SendRoomChatHandler(roomChatAccessPolicy, createRoomChatPort, roomChatAssembler, eventPublisher);
+        handler = new SendRoomChatHandler(roomChatAccessPolicy, createRoomChatPort, roomChatAssembler,
+                loadMatchPlayersPort, roomChatPushRequester, eventPublisher);
     }
 
     private static SendRoomChatCommand command(String content) {
@@ -83,6 +101,7 @@ class SendRoomChatHandlerTest {
 
         @BeforeEach
         void givenSaved() {
+            given(roomChatAccessPolicy.requireOpen(new UserId(SENDER), ROOM_ID)).willReturn(STATUS);
             given(createRoomChatPort.create(any())).willReturn(new SavedRoomChat(CHAT_ID, SENT_AT));
             given(roomChatAssembler.assemble(any(RoomChatRow.class))).willReturn(ASSEMBLED);
         }
@@ -111,7 +130,8 @@ class SendRoomChatHandlerTest {
             verify(createRoomChatPort).create(saved.capture());
             assertThat(saved.getValue().getRunningRoomId()).isEqualTo(new RunningRoomId(ROOM_ID));
             assertThat(saved.getValue().getUserId()).isEqualTo(new UserId(SENDER));
-            assertThat(saved.getValue().getContent().value()).isEqualTo("곧 출발해요");
+            assertThat(saved.getValue().getType()).isEqualTo(RunningRoomChatType.MESSAGE);
+            assertThat(saved.getValue().getContent().orElseThrow().value()).isEqualTo("곧 출발해요");
             assertThat(saved.getValue().getRunningRoomChatId()).isEmpty();
         }
 
@@ -123,7 +143,7 @@ class SendRoomChatHandlerTest {
 
             // then -> ID·보낸 시각은 저장이 만들고, 새 메시지라 고친 적도 지운 적도 없다
             verify(roomChatAssembler).assemble(new RoomChatRow(
-                    CHAT_ID, ROOM_ID, SENDER, "곧 출발해요", null, null, SENT_AT));
+                    CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE, "곧 출발해요", null, null, SENT_AT));
         }
 
         @Test
@@ -140,6 +160,22 @@ class SendRoomChatHandlerTest {
             assertThat(event.runningRoomId()).isEqualTo(ROOM_ID);
             assertThat(event.chat()).isEqualTo(ASSEMBLED);
             assertThat(event.excludedUserId()).isEqualTo(new UserId(SENDER));
+        }
+
+        @Test
+        @DisplayName("방 시각·거리와 지금 배정된 사람으로 채팅 푸시를 요청한다")
+        void requestsPushToRoomMembers() {
+            // given
+            UUID other = UuidCreator.getTimeOrderedEpoch();
+            given(loadMatchPlayersPort.loadPlayers(new RunningRoomId(ROOM_ID)))
+                    .willReturn(List.of(new MatchPlayer(SENDER, 360), new MatchPlayer(other, 330)));
+
+            // when
+            handler.handle(command("곧 출발해요"));
+
+            // then -> 보낸 사람은 요청기가 뺀다
+            verify(roomChatPushRequester).request(ASSEMBLED, START, 5_000,
+                    List.of(new UserId(SENDER), new UserId(other)));
         }
     }
 

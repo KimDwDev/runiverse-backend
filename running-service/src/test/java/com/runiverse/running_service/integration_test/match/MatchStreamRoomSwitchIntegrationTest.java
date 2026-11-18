@@ -15,6 +15,7 @@ import com.runiverse.running_service.application.match.port.out.MatchStreamEvent
 import com.runiverse.running_service.application.match.port.out.RoomChat;
 import com.runiverse.running_service.application.match.port.out.RoomInfo;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.infrastructure.redis.match.MatchRoomSubscriber;
@@ -112,8 +113,8 @@ class MatchStreamRoomSwitchIntegrationTest {
     }
 
     private static MatchStreamEvent chatFrom(UUID sender, long roomId) {
-        return MatchStreamEvent.roomChatSent(new RoomChat(1L, roomId,
-                new RoomChat.Sender(sender, "영희", null, false), "보낸 말", false, null, START));
+        return MatchStreamEvent.roomChatSent(new RoomChat(1L, roomId, RunningRoomChatType.MESSAGE,
+                new RoomChat.Person(sender, "영희", null, false), null, "보낸 말", false, null, START));
     }
 
     // 입장 스냅샷을 뺀 나머지 — 연결 직후 한 번은 항상 온다

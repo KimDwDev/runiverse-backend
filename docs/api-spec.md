@@ -104,7 +104,7 @@
 | `INVITE_ROOM_ENTRANCE` | 초대 방 연결 직후 스냅샷 (`RoomInfo` + `startsInMs`) — 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 초대 방 상태 갱신 (`RoomInfo`) — 인원·초대 현황 변동. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전(리드타임은 운영값)에 서버가 한 번 보낸다. 클라의 `RUNNING_START` 발사 타이머 기준 (5-C) |
-| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 보내기·수정·삭제 (`Chat`) — 보낸 사람을 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
+| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 보내기·수정·삭제와 입장·퇴장 안내 줄 (`Chat`) — 그 줄의 당사자를 뺀 방 참가자에게. 매칭·초대 방 공통 (5-E) |
 
 **러닝 WebSocket** — `/api/v1/ws/running`, 메시지 9종. 매칭 러닝과 솔로 러닝이 같은 채널을 쓴다. 이 외에 **ack 2종**(`RUNNING_STARTED`·`RUNNING_FINISHED`)과 **헬스 체크 2종**(`HEALTH_CHECK`·`HEALTH_CHECKED`)이 있다.
 
@@ -1433,7 +1433,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `INVITE_ROOM_ENTRANCE` | 연결 직후 스냅샷 — `data` = `RoomInfo` + `startsInMs`. 초대 방만 |
 | `INVITE_ROOM_UPDATED` | 인원 변동·초대 현황 변동·모집 마감(초대 만료) — `data` = `RoomInfo`. 초대 방만 |
 | `RUNNING_READY` | 곧 시작 통지 — `start_at` 직전에 한 번 (5-C) |
-| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 — `data` = `Chat`. 보낸 사람 제외. 매칭·초대 방 공통 (5-E) |
+| `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED` | 대기방 채팅 — `data` = `Chat`. 그 줄의 당사자 제외. 매칭·초대 방 공통 (5-E) |
 
 - 연결 직후 서버가 현재 상태를 보낸다. 방 상태 이벤트는 변경분이 아니라 해당 객체의 전체 상태를 담으므로 `Last-Event-ID` 재개는 사용하지 않는다. **채팅 이벤트만 변경분이다** — 놓친 채팅은 다시 연결한 뒤 채팅 목록(5-E-1)으로 맞춘다.
 - **keep-alive**: 주기적으로 주석 라인(`:ping`)을 보내 프록시 유휴 타임아웃을 막는다. 주기는 운영값.
@@ -2152,7 +2152,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   2. 목록(5-E-1)을 `limit=50`으로 부른다
   3. 1과 2 사이에 온 채팅 이벤트는 목록에도 들어 있을 수 있다 — **`chatId`가 같으면 하나로 합친다**: 지운 쪽(`isDeleted=true`)은 되살리지 않고, 둘 다 살아 있으면 `editedAt`이 늦은 쪽을 남기고, 같으면 나중에 받은 쪽을 남긴다(`null`이 가장 이르다). 순서를 거꾸로 하면(목록 먼저) 그 사이에 생긴 메시지를 잃는다
   - 입장 이벤트(`MATCH_ROOM_ENTRANCE`·`INVITE_ROOM_ENTRANCE`)와는 무관하다 — 기다리지 않아도 된다
-- **채팅 이벤트는 보낸 사람에게 가지 않는다** — 본인 화면은 보내기·수정·삭제의 REST 응답으로 바꾼다
+- **채팅 이벤트는 그 줄의 당사자(보낸 사람, 안내 줄은 들어오거나 나간 사람)에게 가지 않는다** — 본인 화면은 보내기·수정·삭제의 REST 응답으로 바꾼다
+- **방에 들어오고 나가면 안내 줄이 남는다** — 배정될 때(매칭 배정·1인 방 생성·초대 방 개설·초대 수락) `JOINED`(나갔던 방에 다시 배정돼도 같다), 시작 전에 나가거나 탈퇴하면 `LEFT`다. 러닝이 시작된 뒤에는 채팅이 닫혀 남지 않는다
+  - 보낸 사람이 없고(`sender = null`) 들어오거나 나간 사람이 `actor`다. 화면 문구는 들어오면 "OO님이 들어왔어요", 나가면 "OO님이 나갔어요"다(`actor.isDeleted`면 "탈퇴한 사용자가 나갔어요")
+  - 고치거나 지울 수 없다 — 수정·삭제를 부르면 없는 메시지와 같은 404다
+  - **말과 들어온 줄(`JOINED`)만 방의 다른 사람 폰에 푸시된다** — 나간 줄은 푸시하지 않는다(`feature-spec.md` 알림)
 - **자동 재전송하지 않는다** — 보내기 응답을 못 받으면 "다시 보내기"만 보여준다. 서버에는 이미 저장됐을 수 있고 재전송 중복을 가리는 키가 없어서, 자동으로 다시 보내면 같은 메시지가 두 번 남는다(`erd.md` `running_room_chats`). 저장됐는지는 다음 입장 때 목록이 알려준다
 - **수정·삭제는 보낸 본인만, 횟수 제한 없이 한다. 지운 메시지는 되살리거나 고칠 수 없다**
 
@@ -2162,12 +2166,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 {
   "chatId": 3021,
   "runningRoomId": 125,
+  "type": "MESSAGE",
   "sender": {
     "userId": "01a0f2d4-6180-7000-8000-446655440013",
     "nickname": "철수",
     "profileImageUrl": "https://...",
     "isDeleted": false
   },
+  "actor": null,
   "content": "곧 출발해요",
   "isDeleted": false,
   "editedAt": null,
@@ -2179,18 +2185,22 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `chatId` | Integer | O | 메시지 ID. 생성 순서대로 커진다 — 클라는 이 값으로 정렬하고 중복을 합친다 |
 | `runningRoomId` | Integer | O | 메시지가 오간 방 |
-| `sender` | Object | O | 보낸 사람. 탈퇴했으면 §0 탈퇴 유저 형식 |
-| `content` | String | X | 내용. **지운 메시지면 `null`** — 화면에는 "삭제된 메시지"로 그린다 |
+| `type` | String | O | `MESSAGE`(말) / `JOINED`(들어옴) / `LEFT`(나감) — `erd.md` §5 |
+| `sender` | Object | X | 보낸 사람. **안내 줄이면 `null`**. 탈퇴했으면 §0 탈퇴 유저 형식 |
+| `actor` | Object | X | 들어오거나 나간 사람 — `sender`와 같은 모양. **말이면 `null`** |
+| `content` | String | X | 내용. **지운 메시지·안내 줄이면 `null`** — 지운 메시지는 화면에 "삭제된 메시지"로 그린다 |
 | `isDeleted` | Boolean | O | 보낸 사람이 지운 메시지인가. `sender.isDeleted`(보낸 사람 탈퇴)와 다르다 |
 | `editedAt` | String | X | 마지막 수정 시각. 고친 적 없으면 `null` — 값이 있으면 "수정됨"을 붙인다 |
 | `createdAt` | String | O | 보낸 시각 |
 
+- **`sender`가 `null`일 수 있게 된 것은 하위 호환 규칙(`api-convention.md`)의 예외다** — `type`·`actor` 이전 앱은 `sender` 없는 줄을 버려 안내 줄이 보이지 않을 뿐 깨지지 않는다. 최근 줄이 거의 안내 줄이면 그 앱은 화면이 차지 않아 이전 페이지를 부르지 못할 수 있다(대기 취소·재신청을 수십 번 되풀이한 방)
+
 #### 채팅 이벤트 (SSE) — `ROOM_CHAT_SENT` · `ROOM_CHAT_EDITED` · `ROOM_CHAT_DELETED`
 
-- 매칭 스트림(`/match-rooms/stream`)으로 **방 참가자 중 보낸 사람을 뺀 전원에게** 보낸다. 매칭 방·초대 방이 같은 이름을 쓴다
+- 매칭 스트림(`/match-rooms/stream`)으로 **방 참가자 중 그 줄의 당사자를 뺀 전원에게** 보낸다. 매칭 방·초대 방이 같은 이름을 쓴다
   - 접두어가 `ROOM_`인 이유: 방 상태 이벤트는 `MATCH_*`(매칭 방만)·`INVITE_ROOM_*`(초대 방만)로 방 종류를 가르는데, 채팅은 두 방에 똑같이 가서 어느 쪽 접두어도 붙이지 않는다
 - `data` = `Chat` 전체 — 세 이벤트 모두 같다. 클라는 `chatId`로 찾아 **있으면 위 규칙으로 합치고 없으면 넣는다**
-  - `ROOM_CHAT_SENT`: 새 메시지
+  - `ROOM_CHAT_SENT`: 새 메시지·안내 줄
   - `ROOM_CHAT_EDITED`: 고친 뒤의 메시지(`content` 새 값, `editedAt` 채워짐)
   - `ROOM_CHAT_DELETED`: 지운 뒤의 메시지(`content = null`, `isDeleted = true`)
 - **방 상태 이벤트와 달리 변경분이다** — 놓친 이벤트는 다시 오지 않는다. 끊겼다 다시 연결하면 위 입장 순서대로 목록을 다시 받아 맞춘다

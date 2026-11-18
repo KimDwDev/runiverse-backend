@@ -17,6 +17,7 @@ import com.runiverse.running_service.application.match.port.out.RoomChatRow;
 import com.runiverse.running_service.application.match.port.out.UpdateRoomChatPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.room.RunningRoomChat;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomChatType;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +57,7 @@ class DeleteRoomChatHandlerTest {
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2026, 11, 11, 18, 52, 10);
     private static final LocalDateTime EDITED_AT = SENT_AT.plusMinutes(1);
     private static final RoomChat ASSEMBLED = new RoomChat(CHAT_ID, ROOM_ID,
-            new RoomChat.Sender(SENDER, "철수", null, false),
+            RunningRoomChatType.MESSAGE, new RoomChat.Person(SENDER, "철수", null, false), null,
             null, true, EDITED_AT, SENT_AT);
 
     @Mock
@@ -96,7 +97,8 @@ class DeleteRoomChatHandlerTest {
     // 한 번 고친 적 있는 메시지다 — 지워도 수정 시각은 그대로 실린다
     private static LockedRoomChat locked(LocalDateTime deletedAt) {
         return new LockedRoomChat(
-                RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, "조금 늦어요", EDITED_AT, deletedAt), SENT_AT);
+                RunningRoomChat.restore(CHAT_ID, ROOM_ID, SENDER, RunningRoomChatType.MESSAGE, "조금 늦어요",
+                        EDITED_AT, deletedAt), SENT_AT);
     }
 
     @Nested
@@ -124,7 +126,7 @@ class DeleteRoomChatHandlerTest {
 
             assertThat(updated.getValue().isDeleted()).isTrue();
             // 내용은 행에 남긴다 — 신고 대응 근거다
-            assertThat(updated.getValue().getContent().value()).isEqualTo("조금 늦어요");
+            assertThat(updated.getValue().getContent().orElseThrow().value()).isEqualTo("조금 늦어요");
             assertThat(published.getValue().event().type()).isEqualTo(MatchEventType.ROOM_CHAT_DELETED);
             assertThat(published.getValue().event().chat()).isEqualTo(ASSEMBLED);
         }
@@ -144,7 +146,7 @@ class DeleteRoomChatHandlerTest {
             ArgumentCaptor<RoomChatRow> row = ArgumentCaptor.forClass(RoomChatRow.class);
             verify(roomChatAssembler).assemble(row.capture());
             assertThat(row.getValue().chatId()).isEqualTo(CHAT_ID);
-            assertThat(row.getValue().senderId()).isEqualTo(SENDER);
+            assertThat(row.getValue().userId()).isEqualTo(SENDER);
             assertThat(row.getValue().isDeleted()).isTrue();
             assertThat(row.getValue().deletedAt()).isAfterOrEqualTo(before);
             assertThat(row.getValue().editedAt()).isEqualTo(EDITED_AT);

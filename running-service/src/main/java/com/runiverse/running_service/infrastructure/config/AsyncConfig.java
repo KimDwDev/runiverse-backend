@@ -42,6 +42,36 @@ public class AsyncConfig {
         return executor;
     }
 
+    // 대기방 채팅 푸시는 따로 보낸다 — 채팅이 몰려도 매칭 확정·출발 알림의 대기 줄을 밀어내지 않는다.
+    // 종료 순서와 이름으로만 쓰는 이유는 pushExecutor와 같다
+    @Bean(defaultCandidate = false)
+    @DependsOn({"entityManagerFactory", "redisConnectionFactory"})
+    public ThreadPoolTaskExecutor chatPushExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor() {
+            // 컨텍스트가 닫히기 시작하면 바로 끊고 남은 채팅 푸시는 버린다 —
+            // 기다리면 Redis가 멈춘 뒤에 돌아 남은 건마다 오류를 낸다
+            @Override
+            protected void initiateEarlyShutdown() {
+                getThreadPoolExecutor().shutdownNow();
+            }
+        };
+        executor.setCorePoolSize(PUSH_THREADS);
+        executor.setMaxPoolSize(PUSH_THREADS);
+        executor.setQueueCapacity(PUSH_QUEUE_CAPACITY);
+        executor.setThreadNamePrefix("chat-push-");
+        executor.setRejectedExecutionHandler((task, pool) -> {
+            if (pool.isShutdown()) {
+                log.warn("[기기] 채팅 푸시 발송 건너뜀: 종료 중");
+                return;
+            }
+            log.warn("[기기] 채팅 푸시 발송 건너뜀: 발송 대기 줄 가득 참 - queueCapacity={}", PUSH_QUEUE_CAPACITY);
+        });
+        // 이 값이 false여야 위의 조기 종료가 불린다
+        executor.setWaitForTasksToCompleteOnShutdown(false);
+        executor.setAwaitTerminationSeconds(PUSH_SHUTDOWN_WAIT_SECONDS);
+        return executor;
+    }
+
     // 공지 캠페인은 받는 사람을 한 명씩 이 스레드가 보낸다 — 수천 명을 기다리는 동안 다른 푸시를 막지 않게 따로 둔다.
     // 종료 순서와 이름으로만 쓰는 이유는 pushExecutor와 같다
     @Bean(defaultCandidate = false)
