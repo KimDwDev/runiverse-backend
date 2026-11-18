@@ -4208,7 +4208,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **`alertConsent` = 단일 토글** — 매칭 확정, 러닝 시작 리마인더, 친구 요청 도착/수락, 러닝 초대 도착, 공지를 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
+- **`alertConsent` = 단일 토글** — 매칭 확정, 러닝 시작 리마인더, 친구 요청 도착/수락, 러닝 초대 도착, 대기방 채팅, 공지를 한 번에 on/off (`users.alert_consent`). **기본값 `true`**, OS 알림 권한과는 별개로 동작한다(둘 중 하나라도 꺼져 있으면 미도달)
 - **공개범위 설정**: `profileVisibility` 하나뿐이다. **기록 카드 공개 범위 기본값은 서버에 두지 않는다** — 카드마다 `record_cards.visibility`를 개별 선택하고, 기본 선택값은 클라이언트가 PUBLIC으로 고정한다
 - **인증**: 필요
 
