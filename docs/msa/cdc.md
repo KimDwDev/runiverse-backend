@@ -155,7 +155,7 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 | Connect를 멈춘 동안 만든 이벤트가 재기동 뒤 나간다 | ✅ | test와 같은 구성 |
 | 카드가 없어도 슬롯 지연이 늘지 않는다(heartbeat) | ✅ | ✅ |
 | DB `DELETE`가 Kafka로 나가지 않는다 | — | ✅ |
-| 배포된 앱으로 만든 첫 카드 | 배포 뒤 | 배포 뒤 |
+| 배포된 앱으로 만든 첫 카드 | ✅ test 서버 앱 → 9-2 → 메시지 | 배포 뒤 |
 | AI 서버가 자기 계정·그룹으로 받아 음악을 만든다 | ✅ 실제 카드(로컬 앱 → test DB) | AI 쪽 |
 | AI 서버 inbox가 헤더 `id`로 중복을 거른다 | AI 쪽 확인 대기 | AI 쪽 |
 
@@ -163,7 +163,7 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 
 ## 새 환경에 CDC를 붙이는 순서
 
-1. **DB** — 논리 복제 켜기 → `max_slot_wal_keep_size` → `outbox_events`·`cdc_heartbeats`(자동 생성이 아니면 손으로) → 커넥터 계정 → publication
+1. **DB** — 논리 복제 켜기 → `max_slot_wal_keep_size` → `outbox_events`·`cdc_heartbeats`(자동 생성이 아니면 손으로) → **앱 DB 계정에 `outbox_events` INSERT 권한**(손으로 만든 테이블은 만든 계정의 것이라, 기본 권한이 없으면 앱이 쓰지 못하고 9-2가 500으로 롤백된다. `has_table_privilege`로 확인) → 커넥터 계정 → publication
 2. **Kafka** — [kafka.md](kafka.md) 「CDC를 붙일 때 Kafka에 필요한 것」
 3. **Connect** — 플러그인, 워커 설정, 시크릿 파일, systemd, REST는 루프백만
 4. **커넥터 등록** — `infra/kafka/connectors/{env}-outbox.json`
