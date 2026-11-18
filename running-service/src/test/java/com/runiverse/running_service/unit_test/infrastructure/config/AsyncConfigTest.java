@@ -1,6 +1,13 @@
 package com.runiverse.running_service.unit_test.infrastructure.config;
 
 import ch.qos.logback.classic.Level;
+import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.campaign.command.send.PushCampaignReverter;
+import com.runiverse.running_service.application.campaign.command.send.PushCampaignSendRequestedEvent;
+import com.runiverse.running_service.application.campaign.command.send.PushCampaignSendTask;
+import com.runiverse.running_service.application.device.port.in.SendPushUsecase;
+import com.runiverse.running_service.application.device.port.out.PushMessage;
+import com.runiverse.running_service.application.device.port.out.PushType;
 import com.runiverse.running_service.infrastructure.config.AsyncConfig;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;
@@ -11,12 +18,20 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @DisplayName("푸시 발송 스레드 풀 단위 테스트")
 class AsyncConfigTest {
@@ -115,6 +130,37 @@ class AsyncConfigTest {
         assertThat(interruptedBeforeRedisStopped).isTrue();
     }
 
+    @Test
+    @DisplayName("컨텍스트가 닫히면 대기 줄의 공지를 보내지 않고 모두 되돌린다 — 앞 캠페인의 되돌림이 실패해도 뒤 캠페인은 되돌린다")
+    void campaignExecutorRevertsQueuedCampaigns() throws InterruptedException {
+        // given -> 앞 캠페인을 보내는 동안 두 캠페인이 대기 줄에서 기다린다. 8번은 되돌리다 DB 오류가 난다
+        GenericApplicationContext context = new GenericApplicationContext();
+        context.registerBean("pushCampaignExecutor", ThreadPoolTaskExecutor.class,
+                () -> new AsyncConfig().pushCampaignExecutor());
+        context.refresh();
+        ThreadPoolTaskExecutor campaignExecutor = context.getBean(ThreadPoolTaskExecutor.class);
+        CountDownLatch started = new CountDownLatch(1);
+        campaignExecutor.execute(() -> {
+            started.countDown();
+            awaitRelease();
+        });
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        SendPushUsecase sendPushUsecase = mock(SendPushUsecase.class);
+        PushCampaignReverter reverter = mock(PushCampaignReverter.class);
+        given(reverter.revert(8L)).willThrow(new IllegalStateException("DB 연결 끊김"));
+        given(reverter.revert(9L)).willReturn(true);
+        campaignExecutor.execute(queuedCampaign(8L, sendPushUsecase, reverter));
+        campaignExecutor.execute(queuedCampaign(9L, sendPushUsecase, reverter));
+
+        // when
+        context.close();
+
+        // then -> 대기 줄에서 꺼낸 작업은 실행기도 다시 돌리지 않아, 여기서 놓치면 COMPLETED로 남는다
+        verify(reverter).revert(8L);
+        verify(reverter).revert(9L);
+        verify(sendPushUsecase, never()).handle(any());
+    }
+
     // Lettuce 연결 팩토리처럼 실행기보다 늦은 단계 0에서 멈춘다
     private static final class StoppingAtPhaseZero implements SmartLifecycle {
 
@@ -145,6 +191,14 @@ class AsyncConfigTest {
         public int getPhase() {
             return 0;
         }
+    }
+
+    private static PushCampaignSendTask queuedCampaign(long pushCampaignId, SendPushUsecase sendPushUsecase,
+                                                       PushCampaignReverter reverter) {
+        PushMessage message = new PushMessage(PushType.NOTICE, "제목", "본문", Map.of(), LocalDateTime.of(2026, 11, 17, 10, 0));
+        PushCampaignSendRequestedEvent event = new PushCampaignSendRequestedEvent(pushCampaignId, message,
+                List.of(UuidCreator.getTimeOrderedEpoch()));
+        return new PushCampaignSendTask(event, sendPushUsecase, reverter);
     }
 
     private void awaitRelease() {

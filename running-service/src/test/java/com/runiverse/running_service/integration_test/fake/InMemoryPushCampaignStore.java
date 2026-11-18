@@ -3,6 +3,7 @@ package com.runiverse.running_service.integration_test.fake;
 import com.runiverse.running_service.application.campaign.port.out.CompletePushCampaignPort;
 import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignPort;
 import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignRecipientsPort;
+import com.runiverse.running_service.application.campaign.port.out.RevertPushCampaignPort;
 import com.runiverse.running_service.domain.campaign.PushCampaign;
 import com.runiverse.running_service.domain.campaign.vo.PushCampaignStatus;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 // PushCampaignPersistenceAdapter를 대신한다 — 운영이 SQL로 캠페인·명단을 넣고 상태를 되돌리는 것을 흉내 낸다
 public class InMemoryPushCampaignStore implements CompletePushCampaignPort, LoadPushCampaignPort,
-        LoadPushCampaignRecipientsPort {
+        LoadPushCampaignRecipientsPort, RevertPushCampaignPort {
 
     private final Map<Long, Row> campaigns = new HashMap<>();
 
@@ -41,6 +42,17 @@ public class InMemoryPushCampaignStore implements CompletePushCampaignPort, Load
         }
         campaigns.put(pushCampaignId,
                 new Row(row.title(), row.body(), PushCampaignStatus.COMPLETED, row.recipientIds()));
+        return true;
+    }
+
+    // 되돌리는 조건부 UPDATE와 같다 — COMPLETED일 때만 DRAFT로 바꾼다
+    @Override
+    public boolean revert(long pushCampaignId) {
+        Row row = campaigns.get(pushCampaignId);
+        if (row == null || row.status() != PushCampaignStatus.COMPLETED) {
+            return false;
+        }
+        campaigns.put(pushCampaignId, new Row(row.title(), row.body(), PushCampaignStatus.DRAFT, row.recipientIds()));
         return true;
     }
 

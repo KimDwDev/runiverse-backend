@@ -3,6 +3,7 @@ package com.runiverse.running_service.infrastructure.persistence.campaign;
 import com.runiverse.running_service.application.campaign.port.out.CompletePushCampaignPort;
 import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignPort;
 import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignRecipientsPort;
+import com.runiverse.running_service.application.campaign.port.out.RevertPushCampaignPort;
 import com.runiverse.running_service.domain.campaign.PushCampaign;
 import com.runiverse.running_service.domain.campaign.vo.PushCampaignStatus;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -17,7 +18,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class PushCampaignPersistenceAdapter implements CompletePushCampaignPort, LoadPushCampaignPort,
-        LoadPushCampaignRecipientsPort {
+        LoadPushCampaignRecipientsPort, RevertPushCampaignPort {
 
     private final EntityManager entityManager;
 
@@ -32,6 +33,20 @@ public class PushCampaignPersistenceAdapter implements CompletePushCampaignPort,
                 .setParameter("completed", PushCampaignStatus.COMPLETED)
                 .setParameter("pushCampaignId", pushCampaignId)
                 .setParameter("draft", PushCampaignStatus.DRAFT)
+                .executeUpdate();
+        return updated == 1;
+    }
+
+    @Override
+    public boolean revert(long pushCampaignId) {
+        int updated = entityManager.createQuery("""
+                        UPDATE PushCampaignJpaEntity c
+                        SET c.status = :draft
+                        WHERE c.pushCampaignId = :pushCampaignId AND c.status = :completed
+                        """)
+                .setParameter("draft", PushCampaignStatus.DRAFT)
+                .setParameter("pushCampaignId", pushCampaignId)
+                .setParameter("completed", PushCampaignStatus.COMPLETED)
                 .executeUpdate();
         return updated == 1;
     }

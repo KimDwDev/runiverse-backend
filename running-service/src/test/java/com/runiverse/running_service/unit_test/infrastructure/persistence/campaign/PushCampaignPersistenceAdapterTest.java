@@ -75,6 +75,29 @@ class PushCampaignPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("보낸 상태 행 하나를 되돌렸으면 true다")
+    void revertReturnsTrueWhenOneRowChanged() {
+        // given
+        givenUpdatedRows(1);
+
+        // when & then -> COMPLETED일 때만 DRAFT로 되돌리도록 조건을 건다
+        assertThat(adapter.revert(CAMPAIGN_ID)).isTrue();
+        verify(updateQuery).setParameter("draft", PushCampaignStatus.DRAFT);
+        verify(updateQuery).setParameter("completed", PushCampaignStatus.COMPLETED);
+        verify(updateQuery).setParameter("pushCampaignId", CAMPAIGN_ID);
+    }
+
+    @Test
+    @DisplayName("되돌린 행이 없으면 false다 — 없는 캠페인이거나 보낸 상태가 아니다")
+    void revertReturnsFalseWhenNoRowChanged() {
+        // given
+        givenUpdatedRows(0);
+
+        // when & then
+        assertThat(adapter.revert(CAMPAIGN_ID)).isFalse();
+    }
+
+    @Test
     @DisplayName("행을 도메인으로 바꿔 문구를 돌려준다")
     void loadsCampaign() {
         // given

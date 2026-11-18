@@ -3,6 +3,7 @@ package com.runiverse.running_service.integration_test.campaign;
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.campaign.command.send.PushCampaignListener;
 import com.runiverse.running_service.application.campaign.command.send.PushCampaignProperties;
+import com.runiverse.running_service.application.campaign.command.send.PushCampaignReverter;
 import com.runiverse.running_service.application.campaign.command.send.PushCampaignSendRequestedEvent;
 import com.runiverse.running_service.application.campaign.command.send.SendPushCampaignCommand;
 import com.runiverse.running_service.application.campaign.command.send.SendPushCampaignHandler;
@@ -15,6 +16,7 @@ import com.runiverse.running_service.integration_test.fake.InMemoryPushCampaignS
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.TaskRejectedException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -51,7 +53,11 @@ public class SendPushCampaignIntegrationTest {
                 },
                 new PushCampaignProperties(Duration.ofDays(1))
         );
-        listener = new PushCampaignListener(sent::add);   // SendPushUsecase — 받는 사람별 거르기는 SendPushHandler 몫
+        listener = new PushCampaignListener(
+                Runnable::run,                              // 발송 스레드가 할 일을 이 스레드에서 한다
+                sent::add,                                  // SendPushUsecase — 받는 사람별 거르기는 SendPushHandler 몫
+                new PushCampaignReverter(campaignStore)     // RevertPushCampaignPort
+        );
     }
 
     @Test
@@ -103,6 +109,28 @@ public class SendPushCampaignIntegrationTest {
 
         // then
         assertThat(sent).extracting(SendPushCommand::userId).containsExactly(CHULSU, CHULSU);
+    }
+
+    @Test
+    @DisplayName("보내기 전에 서버가 꺼지면 DRAFT로 돌아가 다시 부르면 보낸다")
+    void resendsAfterShutdownBeforeStart() {
+        // given -> 커밋 직후 서버가 꺼지기 시작해 발송 실행기가 작업을 받지 않았다
+        campaignStore.insert(CAMPAIGN_ID, "제목", "본문", List.of(CHULSU));
+        PushCampaignListener shuttingDown = new PushCampaignListener(task -> {
+            throw new TaskRejectedException("종료 중");
+        }, sent::add, new PushCampaignReverter(campaignStore));
+        handler.handle(new SendPushCampaignCommand(CAMPAIGN_ID));
+        requests.forEach(shuttingDown::send);
+        requests.clear();
+        assertThat(campaignStore.statusOf(CAMPAIGN_ID)).isEqualTo(PushCampaignStatus.DRAFT);
+
+        // when -> 운영이 새 서버에서 다시 부른다
+        handler.handle(new SendPushCampaignCommand(CAMPAIGN_ID));
+        deliverAfterCommit();
+
+        // then -> 처음엔 아무도 받지 않아 한 번만 받는다
+        assertThat(sent).extracting(SendPushCommand::userId).containsExactly(CHULSU);
+        assertThat(campaignStore.statusOf(CAMPAIGN_ID)).isEqualTo(PushCampaignStatus.COMPLETED);
     }
 
     @Test

@@ -49,16 +49,18 @@ public class AsyncConfig {
     public ThreadPoolTaskExecutor pushCampaignExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor() {
             // 컨텍스트가 닫히기 시작하면 바로 끊는다 — 기본 동작은 끊지 않고 진행 중인 발송을 기다리다,
-            // Redis가 멈춘 뒤에야 끊어 남은 사람마다 오류를 낸다
+            // Redis가 멈춘 뒤에야 끊어 남은 사람마다 오류를 낸다.
+            // 대기 줄에서 꺼낸 작업은 취소해 발송 작업이 DRAFT로 되돌리게 한다 — 종료 단계라 DB는 아직 열려 있다
             @Override
             protected void initiateEarlyShutdown() {
-                getThreadPoolExecutor().shutdownNow();
+                for (Runnable remaining : getThreadPoolExecutor().shutdownNow()) {
+                    cancelRemainingTask(remaining);
+                }
             }
         };
         executor.setCorePoolSize(PUSH_CAMPAIGN_THREADS);
         executor.setMaxPoolSize(PUSH_CAMPAIGN_THREADS);
-        // 대기 줄에 한도를 두지 않는다 — 넘쳐 버려지면 이미 COMPLETED라 그 캠페인이 아무 표시 없이 사라진다.
-        // 운영이 부를 때만 들어오는 일감이라 쌓일 일이 없다
+        // 대기 줄에 한도를 두지 않는다 — 운영이 부를 때만 들어오는 일감이라 쌓일 일이 없고, 거절은 서버가 꺼질 때만 생긴다
         executor.setThreadNamePrefix("push-campaign-");
         // 끝날 때까지 기다리지 않는다 — 수천 명이면 몇 분이 걸려 기다려도 다 보내지 못하고, 배포가 그 전에 컨테이너를 죽인다.
         // 이 값이 false여야 위의 조기 종료가 불린다. 끊긴 발송은 남은 인원을 남기고 멈춘다

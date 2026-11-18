@@ -40,7 +40,7 @@ public class SendPushCampaignHandler implements SendPushCampaignUsecase {
         long pushCampaignId = command.pushCampaignId();
         // 1. 보내기 전일 때만 바꾼다 — 같은 캠페인을 동시에 불러도 하나만 이긴다
         if (!completePushCampaignPort.complete(pushCampaignId)) {
-            // 상태는 DRAFT로 돌아가지 않으니(운영이 SQL로 되돌릴 때만) 다시 읽어도 판정이 뒤집히지 않는다
+            // 그사이 시작 전 종료로 DRAFT로 돌아가도 409를 줄 뿐이다 — 운영이 다시 부르면 보낸다
             if (loadPushCampaignPort.load(pushCampaignId).isEmpty()) {
                 log.info("[캠페인] 공지 발송 실패: 없는 캠페인 - pushCampaignId={}", pushCampaignId);
                 throw new PushCampaignNotFoundException();
@@ -59,7 +59,7 @@ public class SendPushCampaignHandler implements SendPushCampaignUsecase {
         PushMessage message = new PushMessage(PushType.NOTICE, campaign.getTitle(), campaign.getBody(),
                 Map.of(), expiresAt);
         eventPublisher.publishEvent(new PushCampaignSendRequestedEvent(pushCampaignId, message, recipientIds));
-        // 이 줄 뒤에 발송 시작 줄이 없으면 대기 줄에서 서버 종료로 버려진 캠페인이다
+        // 이 줄 뒤에 발송 시작 줄이 없으면 시작 전에 서버가 꺼진 캠페인이다 — 상태 되돌림 줄로 결과를 본다
         log.info("[캠페인] 공지 발송 요청 성공 - pushCampaignId={}, recipientCount={}",
                 pushCampaignId, recipientIds.size());
     }
