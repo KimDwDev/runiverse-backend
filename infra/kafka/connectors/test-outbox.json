@@ -1,0 +1,39 @@
+{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "tasks.max": "1",
+
+  "database.hostname": "localhost",
+  "database.port": "5432",
+  "database.dbname": "runiverse",
+  "database.user": "debezium",
+  "database.password": "${file:/opt/kafka/config/secrets/debezium-test-db.properties:database.password}",
+
+  "plugin.name": "pgoutput",
+  "slot.name": "debezium_outbox_test",
+  "publication.name": "outbox_publication",
+  "publication.autocreate.mode": "disabled",
+  "table.include.list": "public.outbox_events",
+  "snapshot.mode": "no_data",
+  "tombstones.on.delete": "false",
+
+  "topic.prefix": "outbox",
+  "topic.heartbeat.prefix": "test.debezium-heartbeat",
+  "heartbeat.interval.ms": "60000",
+  "heartbeat.action.query": "WITH expired AS (DELETE FROM public.cdc_heartbeats WHERE created_at < (now() AT TIME ZONE 'Asia/Seoul') - interval '1 day') INSERT INTO public.cdc_heartbeats (created_at) VALUES (now() AT TIME ZONE 'Asia/Seoul')",
+
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+  "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+
+  "transforms": "outbox",
+  "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+  "transforms.outbox.predicate": "isOutboxTable",
+  "transforms.outbox.table.field.event.id": "outbox_event_id",
+  "transforms.outbox.table.field.event.key": "aggregate_id",
+  "transforms.outbox.table.field.event.payload": "payload",
+  "transforms.outbox.route.by.field": "topic",
+  "transforms.outbox.route.topic.replacement": "${routedByValue}",
+
+  "predicates": "isOutboxTable",
+  "predicates.isOutboxTable.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+  "predicates.isOutboxTable.pattern": "outbox\\.public\\.outbox_events"
+}

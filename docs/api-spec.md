@@ -3149,56 +3149,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **파티션 키를 `recordCardId`로 둔다** — 한 카드의 요청·완료가 같은 파티션에 들어가 순서가 섞이지 않는다.
 - **완료 토픽은 running-service 전체가 컨슈머 그룹 하나로 구독한다** — ALB 뒤에 인스턴스가 여럿이어도 완료 이벤트 하나는 한 인스턴스만 처리한다. 상태 변경은 DB에만 쓰고 인스턴스 메모리에 두지 않으므로 어느 인스턴스가 받아도 같다.
 
-#### 환경 분리 — 이름 앞에 `{env}`
+#### 이름 · 접속 — [msa/kafka.md](msa/kafka.md)
 
-개발 서버와 테스트 서버는 **Kafka 클러스터 하나를 같이 쓴다.** 그래서 토픽·컨슈머 그룹·계정 이름 앞에 환경 이름을 붙여 서로의 이벤트를 아예 보지 못하게 한다.
-
-- **`{env}` 값은 `dev` · `test` · `prod`** 중 하나다. 운영은 클러스터가 달라도 같은 규칙으로 `prod`를 붙인다 — 환경마다 이름 짓는 법이 달라지지 않게 한다.
-- **이벤트 안에 환경 필드를 넣어 걸러 내지 않는다** — 그러면 남의 환경 이벤트를 받은 뒤에야 버리게 되고, 거르는 코드를 빠뜨린 쪽은 남의 이벤트를 그대로 처리한다. 토픽이 다르면 애초에 받지 않는다.
-- **모든 이름은 `{env}.`로 시작한다** — 토픽·그룹·계정 모두 같다. **구분자는 `.`과 `-`만 쓴다** — Kafka는 메트릭 이름에서 `.`과 `_`를 같게 보므로 `_`는 쓰지 않는다.
-
-| 대상 | 이름 | 비고 |
-|---|---|---|
-| 요청 토픽 | `{env}.record-card.music.requested` | |
-| 완료 토픽 | `{env}.record-card.music.generated` | |
-| running-service 컨슈머 그룹 | `{env}.running-service.record-card-music` | 완료 토픽을 구독한다. 인스턴스가 여럿이어도 그룹은 하나다 |
-| AI 서버 컨슈머 그룹 | `{env}.runiverse-ai.record-card-music` | 요청 토픽을 구독한다. AI 서버가 쓰고, 권한만 여기서 정한다 |
-| running-service 계정 | `{env}.running-service` | SASL 사용자 이름 |
-| AI 서버 계정 | `{env}.runiverse-ai` | SASL 사용자 이름 |
-
-- **컨슈머 그룹은 받는 쪽마다 하나다** — running-service는 완료 토픽을, AI 서버는 요청 토픽을 받으므로 그룹이 두 개다. running-service 인스턴스끼리는 같은 그룹이라 이벤트를 나눠 받는다.
-- **계정도 환경마다 따로 둔다** — 계정이 환경 사이에 같으면 권한으로 막을 수 없어, 설정을 잘못 넣은 개발 서버가 테스트 토픽을 읽어도 클러스터가 허락한다. 계정을 나누면 잘못된 설정은 접속 단계에서 권한 오류로 끝난다.
-
-#### 접속 보안 — TLS + SASL + ACL
-
-- **전송은 TLS, 인증은 SASL/SCRAM-SHA-512** — `security.protocol=SASL_SSL`, `sasl.mechanism=SCRAM-SHA-512`. SCRAM은 비밀번호를 그대로 보내지 않는다.
-- **토픽은 관리자가 미리 만든다** — 클러스터의 `auto.create.topics.enable=false`, 두 서비스 계정에는 `CREATE` 권한을 주지 않는다. 이름을 잘못 쓴 토픽이 저절로 생기지 않게 한다. 파티션 수·복제 수·보관 기간은 운영값이다.
-- **ACL은 이름 하나씩(LITERAL) 준다** — 접두어(PREFIXED)로 묶지 않는다. 토픽이 두 개뿐이라 하나씩 줘도 번거롭지 않고, 나중에 같은 접두어로 생긴 토픽에 권한이 따라가지 않는다.
-
-| 계정 | 리소스 | 허용 동작 |
-|---|---|---|
-| `{env}.running-service` | 토픽 `{env}.record-card.music.requested` | `WRITE`, `DESCRIBE` |
-| `{env}.running-service` | 토픽 `{env}.record-card.music.generated` | `READ`, `DESCRIBE` |
-| `{env}.running-service` | 그룹 `{env}.running-service.record-card-music` | `READ` |
-| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.requested` | `READ`, `DESCRIBE` |
-| `{env}.runiverse-ai` | 토픽 `{env}.record-card.music.generated` | `WRITE`, `DESCRIBE` |
-| `{env}.runiverse-ai` | 그룹 `{env}.runiverse-ai.record-card-music` | `READ` |
-
-- 브로커가 Kafka 3.0 미만이면 멱등 프로듀서에 클러스터 `IDEMPOTENT_WRITE`가 더 필요하다.
-
-#### running-service 환경 변수
-
-| 변수 | 예 | 설명 |
-|---|---|---|
-| `KAFKA_ENV` | `dev` | `{env}` 값. **토픽 두 개와 컨슈머 그룹 이름을 이 값 하나로 만든다** — 이름마다 변수를 두면 하나만 바꾸다 환경이 섞인다. `dev`·`test`·`prod`가 아니면 기동하지 않는다 |
-| `KAFKA_BOOTSTRAP_SERVERS` | `b-1.xxx:9096,b-2.xxx:9096` | 쉼표로 구분 |
-| `KAFKA_SECURITY_PROTOCOL` | `SASL_SSL` | 배포 환경은 항상 `SASL_SSL`. 로컬 Docker Kafka만 `PLAINTEXT` |
-| `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | |
-| `KAFKA_SASL_USERNAME` | `dev.running-service` | `{env}.running-service` |
-| `KAFKA_SASL_PASSWORD` | | 시크릿 — 로그·출력에 남기지 않는다 |
-| `KAFKA_SSL_CA_LOCATION` | `/app/config/kafka-ca.crt` | 브로커를 검증할 CA 인증서(PEM) 경로 — `ssl.truststore.type=PEM`으로 읽어 비밀번호가 없다. 상대 경로는 실행 디렉터리 기준이라 배포에서는 절대 경로를 쓴다 |
-
-- **호스트 검증을 켠다** — `ssl.endpoint.identification.algorithm=https`(Kafka 클라이언트 기본값, 명시해 둔다). 접속 주소가 인증서에 든 주소와 같은지 확인하므로, IP로 접속하면 인증서 SAN에 그 IP가 있어야 한다. 끄지 않는다.
+- **토픽·컨슈머 그룹·계정 이름은 `{env}.`로 시작한다** (`dev` · `test` · `prod`) — dev·test가 클러스터 하나를 같이 써서 이름으로 환경을 가른다. 이벤트 안에 환경 필드를 두지 않는다.
+- 컨슈머 그룹: running-service `{env}.running-service.record-card-music`, AI 서버 `{env}.runiverse-ai.record-card-music`
+- 환경 분리 규칙, 클러스터 구성, 토픽 설정, 접속 보안(TLS·SASL·ACL), running-service 환경 변수는 [msa/kafka.md](msa/kafka.md)에 둔다 — 이 절에는 이벤트 계약만 적는다.
 
 **`{env}.record-card.music.requested`** (running-service → AI)
 
@@ -3254,7 +3209,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > 1. ~~AI가 음악을 어느 S3 key에 올리는가~~ — **정했다(11-13): AI 서버가 정하고 완료 이벤트로 알려 준다. running-service는 받은 key를 그대로 저장한다**
 > 2. 완료 이벤트가 어느 음악(기본곡·어느 사진)의 결과인지 어떻게 알리는가 — 사진은 `record_card_image_id`로 찾을 수 있다. 기본곡을 어떻게 가리킬지와 완료 이벤트 모양은 AI 서버와 정한다
 > 3. 수정(9-3)으로 새 사진만 보낼 때 기본곡을 다시 만들지 말라는 것을 어떻게 알리는가
-> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가
+> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가 — **제안(11-16): Kafka 헤더 `id`(아웃박스 `outbox_event_id`, UUIDv7)로 거른다.** 이벤트마다 다르고 같은 이벤트를 다시 보내도 같다. 본문 JSON은 바꾸지 않는다. AI 서버가 헤더를 읽을 수 있는지 확인 대기
 
 **`{env}.record-card.music.generated`** (AI → running-service)
 
@@ -3284,14 +3239,19 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - **행이 없으면(수정에서 뺀 사진·지운 카드) 그 결과만 건너뛰고 로그를 남긴다** — 오류로 보고 재시도하지 않는다
   - **요청에 실었는데 `results`에 빠진 음악은 `GENERATING`에 남는다** — 계약 위반이라 WARN 로그를 남긴다
   - **DB 오류로 처리하지 못하면 오프셋을 커밋하지 않는다** — 다시 받아도 위 규칙으로 한 번만 바뀐다
-- **요청 이벤트는 아웃박스 + CDC로 발행한다** — 카드 저장과 같은 트랜잭션에서 요청 이벤트를 아웃박스 테이블에 쓰고, CDC가 커밋된 아웃박스 행을 읽어 요청 토픽에 발행한다
-  - 커밋 전에 Kafka로 보내면 롤백된 카드의 음악이 만들어진다. 커밋한 뒤 앱이 직접 보내면, 그 사이 발행이 실패하거나 인스턴스가 죽었을 때 음악이 `GENERATING`에 영영 머문다. 아웃박스는 카드와 이벤트를 함께 커밋해 이 두 경우를 모두 막는다
-  - CDC는 최소 한 번 발행이다 — 같은 요청 이벤트가 두 번 갈 수 있다. AI 서버가 inbox로 중복을 거른다(무엇으로 거를지는 위 요청 이벤트의 "아직 정하지 않은 것" 4)
-  - CDC 도구, 아웃박스 테이블 스키마(erd), 발행을 마친 행을 정리하는 방법은 아웃박스를 구현할 때 정한다
+- **요청 이벤트는 아웃박스 + CDC로 발행한다** — running-service는 카드 저장과 같은 트랜잭션에서 아웃박스 테이블에 쓰고, Debezium(Outbox Event Router)이 커밋된 행을 요청 토픽에 발행한다. 쓰는 규칙은 [msa/outbox-inbox.md](msa/outbox-inbox.md), 발행 경로는 [msa/cdc.md](msa/cdc.md)
+  - **최소 한 번 발행이다** — 같은 요청 이벤트가 두 번 갈 수 있다. AI 서버가 inbox로 중복을 거른다(무엇으로 거를지는 위 요청 이벤트의 "아직 정하지 않은 것" 4)
+  - **메시지 모양** — AI 서버가 받는 것:
+    | 아웃박스 컬럼 | Kafka 메시지 |
+    |---|---|
+    | `outbox_event_id` | 헤더 `id` — 받는 쪽 inbox가 중복을 거르는 키 |
+    | `aggregate_id` (`record_card_id`) | key — 파티션 키. 따옴표 없는 문자열 |
+    | `topic` | 토픽 — 앱이 `KAFKA_ENV`로 환경을 붙여 쓴 값을 그대로 쓴다 |
+    | `payload` | value — 위 요청 이벤트 JSON 그대로(문자열로 감싸지 않는다, `null` 필드도 남는다) |
 - **완료 이벤트도 inbox로 받는다(이후)** — 처리한 완료 이벤트를 기록해 같은 이벤트를 두 번 처리하지 않는다. 위의 "`GENERATING`인 행만 바꾼다"는 그대로 둔다 — inbox는 이벤트 단위로 중복을 막고, 이 규칙은 음악 상태가 한 번만 바뀌게 한다. inbox 스키마는 완료 구독을 구현할 때 정한다
 - **`FAILED`를 다시 만드는 경로는 아직 없다** — AI 서버는 스스로 재시도하지 않는다. 사용자가 다시 요청하는 API나 자동 재시도가 필요해지면 이 절에 더한다(같은 요청 토픽으로 실패한 음악만 다시 보낸다 — 사진 음악은 실패한 사진만 `photos`에 싣고, 기본곡을 다시 만들지 말라는 표시는 요청 이벤트의 "아직 정하지 않은 것" 3과 같은 방법으로 정한다)
 
-> **아직 정하지 않은 것**: 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 도입은 구현 PR에서 따로 정한다.
+> **아직 정하지 않은 것**: 음악 파일 형식(AI 서버는 wav로 만든다 — key에 확장자를 붙일지), 처리하지 못한 완료 이벤트를 따로 모을지(DLT). **Kafka는 저장소에 아직 없는 의존성이다** — 요청은 Debezium이 발행해 running-service에 Kafka 클라이언트가 필요 없다. 완료 구독을 구현할 때 들어온다.
 
 ## 10. 프로필 페이지
 

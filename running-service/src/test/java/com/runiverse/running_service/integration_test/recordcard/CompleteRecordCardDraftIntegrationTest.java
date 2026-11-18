@@ -24,6 +24,7 @@ import com.runiverse.running_service.integration_test.fake.FakeRecordCardIdGener
 import com.runiverse.running_service.integration_test.fake.FakeRecordCardObjectStore;
 import com.runiverse.running_service.integration_test.fake.FakeUploadUrlGenerator;
 import com.runiverse.running_service.integration_test.fake.InMemoryRecordCardDraftStore;
+import com.runiverse.running_service.integration_test.fake.InMemoryRecordCardMusicRequests;
 import com.runiverse.running_service.integration_test.fake.InMemoryRecordCardStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,7 @@ class CompleteRecordCardDraftIntegrationTest {
 
     private UUID userId;
     private InMemoryRecordCardStore recordCardStore;
+    private InMemoryRecordCardMusicRequests musicRequests;
     private InMemoryRecordCardDraftStore draftStore;
     private FakeRecordCardObjectStore objectStore;
     private FakeMultipartUploadStarter multipartUploads;
@@ -57,6 +59,7 @@ class CompleteRecordCardDraftIntegrationTest {
     void setUp() {
         userId = UuidCreator.getTimeOrderedEpoch();
         recordCardStore = new InMemoryRecordCardStore();
+        musicRequests = new InMemoryRecordCardMusicRequests();
         draftStore = new InMemoryRecordCardDraftStore();
         objectStore = new FakeRecordCardObjectStore();
         multipartUploads = new FakeMultipartUploadStarter();
@@ -67,7 +70,8 @@ class CompleteRecordCardDraftIntegrationTest {
                 new FakeUploadUrlGenerator(), multipartUploads, draftStore);
         completeHandler = new CompleteRecordCardDraftHandler(properties, draftStore, draftStore, draftStore,
                 objectStore, objectStore,
-                new RecordCardDraftSaver(recordCardStore, recordCardStore, recordCardStore, recordCardStore));
+                new RecordCardDraftSaver(recordCardStore, recordCardStore, recordCardStore, recordCardStore,
+                        recordCardStore, musicRequests));
         recordCardStore.addRecord(RECORD_ID, userId);
     }
 
@@ -98,6 +102,17 @@ class CompleteRecordCardDraftIntegrationTest {
         assertThat(objectStore.hasObject(draft.uploads().get(1).imageKey())).isTrue();
         assertThat(draftStore.find(draft.recordCardDraftId()).orElseThrow().confirmed()).isTrue();
         assertThat(draftStore.isLocked(draft.recordCardDraftId())).isFalse();
+        // 기본곡 + 사진 두 장의 음악을 한 번에 요청한다 — 사진은 카드 순서대로
+        assertThat(musicRequests.requests()).singleElement().satisfies(request -> {
+            assertThat(request.recordCardId()).isEqualTo(recordCardId);
+            assertThat(request.runningSummary()).isEqualTo(InMemoryRecordCardStore.SUMMARY);
+            assertThat(request.photos()).extracting(photo -> photo.recordCardImageId(), photo -> photo.imageKey())
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(draft.uploads().get(0).recordCardImageId(),
+                                    draft.uploads().get(0).imageKey()),
+                            org.assertj.core.groups.Tuple.tuple(draft.uploads().get(1).recordCardImageId(),
+                                    draft.uploads().get(1).imageKey()));
+        });
     }
 
     @Test
@@ -113,6 +128,8 @@ class CompleteRecordCardDraftIntegrationTest {
         // then
         assertThat(second).isEqualTo(first);
         assertThat(recordCardStore.cardCount()).isEqualTo(1);
+        // 재확정은 음악을 다시 요청하지 않는다 — 같은 카드의 요청이 두 번 나가지 않는다
+        assertThat(musicRequests.requests()).hasSize(1);
     }
 
     @Test
@@ -128,6 +145,7 @@ class CompleteRecordCardDraftIntegrationTest {
         assertThatThrownBy(() -> complete(draft.recordCardDraftId()))
                 .isInstanceOf(RecordCardImageNotUploadedException.class);
         assertThat(recordCardStore.cardCount()).isZero();
+        assertThat(musicRequests.requests()).isEmpty();
         assertThat(draftStore.find(draft.recordCardDraftId()).orElseThrow().images().get(0).merged()).isTrue();
         assertThat(draftStore.isLocked(draft.recordCardDraftId())).isFalse();
 
@@ -137,6 +155,7 @@ class CompleteRecordCardDraftIntegrationTest {
 
         // then
         assertThat(recordCardStore.cardOf(RECORD_ID).orElseThrow().getRecordCardId().value()).isEqualTo(recordCardId);
+        assertThat(musicRequests.requests()).hasSize(1);
     }
 
     @Test
@@ -151,6 +170,7 @@ class CompleteRecordCardDraftIntegrationTest {
         assertThatThrownBy(() -> complete(second.recordCardDraftId()))
                 .isInstanceOf(RecordCardAlreadyExistsException.class);
         assertThat(recordCardStore.cardCount()).isEqualTo(1);
+        assertThat(musicRequests.requests()).hasSize(1);
     }
 
     @Test
@@ -164,6 +184,7 @@ class CompleteRecordCardDraftIntegrationTest {
         assertThatThrownBy(() -> complete(draft.recordCardDraftId()))
                 .isInstanceOf(RecordCardDraftInProgressException.class);
         assertThat(recordCardStore.cardCount()).isZero();
+        assertThat(musicRequests.requests()).isEmpty();
     }
 
     @Test
@@ -185,6 +206,9 @@ class CompleteRecordCardDraftIntegrationTest {
 
         // then
         assertThat(recordCardStore.cardOf(RECORD_ID).orElseThrow().getDisplayOrder()).isEqualTo(new DisplayOrder(2));
+        // 409 때는 요청하지 않았다 — 카드 두 장(502·501)에 요청 두 번
+        assertThat(musicRequests.requests()).extracting(request -> request.recordCardId())
+                .doesNotHaveDuplicates().hasSize(2);
     }
 
     @Test

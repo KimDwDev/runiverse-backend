@@ -6,12 +6,12 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`·`record_cards.record_card_id`·`record_card_images.record_card_image_id`는 **UUID**(기록 카드 둘은 DB가 매기지 않는 UUIDv7 — 표 참고), 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`·`push_campaign_recipients`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`·`recordCardId`·`recordCardImageId`는 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`·`record_cards.record_card_id`·`record_card_images.record_card_image_id`·`outbox_events.outbox_event_id`는 **UUID**(모두 DB가 매기지 않고 앱이 정하는 UUIDv7 — 표 참고), 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`·`push_campaign_recipients`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`·`recordCardId`·`recordCardImageId`는 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`). (`running_room_invitations.inviter_id`/`invitee_id`도 같다). `record_cards.running_record_id`는 FK + ON DELETE CASCADE(아래 정책).
 - **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`(복합 PK)·`push_campaign_recipients`(복합 PK)·`user_relationships`·`scheduled_jobs`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§5](#5-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`·`record_card_histories`·`push_campaign_recipients`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`·`push_campaigns`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`), 발송 표시(`status` — 시작 전에 서버가 정상 종료되면 한 번 더 되돌린다)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말하고, 발송 시각은 로그로 본다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`·`record_card_histories`·`push_campaign_recipients`·`outbox_events`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`·`push_campaigns`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`), 발송 표시(`status` — 시작 전에 서버가 정상 종료되면 한 번 더 되돌린다)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말하고, 발송 시각은 로그로 본다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
@@ -571,6 +571,44 @@
 > **보관 기간은 아직 정하지 않았다** — 회고 글 원문이 남으므로 정한다(`delete_users`는 90일)
 ---
 
+### outbox_events (아웃박스 이벤트)
+
+다른 서비스로 보낼 이벤트를 **보내게 만든 저장과 같은 트랜잭션에서** 한 줄 쓰는 테이블이다. 앱은 Kafka에 직접 보내지 않는다 — Debezium(CDC)이 Postgres WAL에서 이 테이블의 INSERT를 읽어 Kafka로 발행한다(api-spec 9-5). 저장과 이벤트가 함께 커밋되거나 함께 롤백되므로, 롤백된 카드의 음악이 만들어지거나 커밋된 카드의 요청이 사라지는 일이 없다. 지금은 기록 카드 음악 생성 요청(9-2 작성 확정)만 쓴다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| outbox_event_id | UUID | PK | UUIDv7. **앱이 정한다**. 이벤트마다 다르다 — Kafka 헤더 `id`로 나가 받는 쪽(AI 서버) inbox가 같은 이벤트를 두 번 처리하지 않게 거르는 키가 된다 |
+| aggregate_type | enum | NOT NULL | 어떤 대상의 이벤트인지 — 지금은 `RECORD_CARD`뿐 |
+| aggregate_id | varchar(64) | NOT NULL | 대상의 ID(기록 카드면 `record_card_id` UUID 문자열). **Kafka 메시지 key**가 된다 — 같은 카드의 이벤트는 같은 파티션으로 가 순서가 지켜진다. 대상마다 ID 타입이 다를 수 있어 문자열로 둔다 |
+| topic | varchar(100) | NOT NULL | 발행할 Kafka 토픽 이름. **앱이 환경 변수 `KAFKA_ENV`로 앞에 환경을 붙인다**(`test.record-card.music.requested`) — 개발·테스트 서버(로컬은 `dev`)가 Kafka 하나를 같이 써서 환경마다 토픽을 나눈다. Debezium은 이 값을 그대로 토픽으로 쓴다 |
+| payload | jsonb | NOT NULL | Kafka 메시지 본문 — 토픽마다 정한 JSON 그대로다(`record-card.music.requested`는 api-spec 9-5 요청 이벤트, snake_case). 값이 없는 필드도 키를 빼지 않고 `null`로 둔다 |
+| created_at | timestamp | NOT NULL | 이벤트를 쓴 시각 |
+
+> CHECK `ck_outbox_event_aggregate_type`: `aggregate_type in ('RECORD_CARD')`
+> CHECK `ck_outbox_event_topic`: `topic ~ '^(dev|test|prod)\.record-card\.music\.requested$'`
+> **배포 DB는 그 환경 토픽만 허용한다** — 같은 이름의 CHECK를 prod는 `topic ~ '^prod\.record-card\.music\.requested$'`, test는 `^test\.`로 좁혀 손으로 만든다. 엔티티·도메인은 모든 환경에서 같은 코드라 세 환경을 허용하고(로컬은 이 엔티티로 테이블을 만든다), 배포 DB는 `KAFKA_ENV`가 잘못 들어가도 다른 환경 토픽으로 새지 않게 저장 단계에서 막는다. JPA 자동 생성(`update`)은 이미 있는 CHECK를 고치지 않으므로, 이벤트를 늘릴 때 배포 DB의 CHECK도 손으로 넓힌다
+> **write-once** — `created_at`만 둔다(§0 감사 컬럼)
+> **토픽 이름은 CHECK로 막는다** — 환경 이름 오타나 없는 토픽이 들어가면 Debezium이 엉뚱한 토픽으로 보내거나 발행에 실패한다. 이벤트 종류가 늘면 식에 더한다
+> **FK를 걸지 않는다** — 이벤트는 대상에 딸린 데이터가 아니라 보낼 메시지다. 대상(카드)을 하드 삭제해도 이미 쓴 이벤트와는 상관없다
+> **인덱스를 두지 않는다** — 앱은 이 테이블을 조회하지 않고, Debezium은 테이블이 아니라 WAL을 읽는다
+> **Kafka 토픽은 `cleanup.policy=delete`로 만든다** — key(카드 ID)가 같은 이벤트가 여러 개 나가므로 compact면 앞 이벤트가 지워진다. 파티션 수를 바꾸면 key → 파티션 배정이 바뀌어 순서가 잠깐 깨지므로 처음에 정해 두고 바꾸지 않는다
+> **행은 지우지 않고 남긴다** — 무엇을 언제 보냈는지 DB에서 본다. 보관 기간과 지난 행을 지우는 방법은 아직 정하지 않았다(정할 때 `created_at` 인덱스를 함께 둔다). 지울 때 DELETE가 Kafka로 나가지 않게 커넥터는 `tombstones.on.delete=false`다
+> **발행 상태 컬럼(status)을 두지 않는다** — Debezium은 WAL을 읽기만 하고 이 테이블에 다시 쓰지 않아, 상태를 바꿀 주체가 없다. 어디까지 보냈는지는 행마다가 아니라 복제 슬롯의 확인 위치(`pg_replication_slots.confirmed_flush_lsn`)로 본다 — 그보다 앞에 커밋된 행은 발행됐다. 슬롯 지연은 알람으로 본다
+
+### cdc_heartbeats (CDC 하트비트)
+
+**앱이 쓰지 않는다 — 엔티티가 없다.** Debezium이 1분마다 한 줄 쓰는 테이블이다(`heartbeat.action.query`). 기록 카드가 만들어지지 않는 동안에도 Debezium이 publication 안의 변경을 받아 복제 슬롯 위치를 앞으로 밀게 한다 — 이것이 없으면 다른 테이블 쓰기로 늘어난 WAL을 슬롯이 계속 붙잡는다(docs/msa/cdc.md 「복제 슬롯」).
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| created_at | timestamp | NOT NULL | 쓴 시각(KST 벽시계) |
+
+> **PK를 두지 않는다** — 조회하지 않고, 지울 때도 시각으로만 지운다. publication이 INSERT만 내보내므로(UPDATE·DELETE 없음) 복제용 키도 필요 없다
+> **publication(`outbox_publication`)에 들어 있지만 커넥터의 `table.include.list`에는 없다** — 변경은 Debezium까지 가서 슬롯을 밀고, Kafka로는 나가지 않는다
+> **하루 지난 행은 Debezium이 같은 쿼리에서 지운다** — INSERT와 DELETE를 한 문장(CTE)으로 실행한다. DELETE는 publication이 내보내지 않는다
+> **권한**: 커넥터 DB 계정(`debezium`)에 이 테이블의 `SELECT`·`INSERT`·`DELETE`만 준다
+> **test·prod 모두 손으로 만든다** — 엔티티가 없어 JPA 자동 생성이 만들지 않는다
+
 ## 4. delete_* (스냅샷/이력 테이블)
 
 FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로 FK 미설정). 컬럼은 스냅샷 당시 값 그대로, `created_at`(NOT NULL) = 스냅샷 시각. 단 `delete_users`의 `birth_year`·`bmi`는 식별성을 낮춘 가공값이다.
@@ -610,6 +648,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | record_cards.visibility | FRIENDS / PUBLIC / PRIVATE | 카드별 개별 저장 — 친구만 / 전체 / 나만 |
 | record_cards.activity_type | DAILY / TRAVEL / RACE | 일상 / 여행 / 대회 — 카드 단위. AI 음악 생성 입력 |
+| outbox_events.aggregate_type | RECORD_CARD | 이벤트를 만든 대상 — 지금은 기록 카드뿐. 대상이 늘면 값을 더한다 |
 | record_cards.base_music_status · record_card_images.music_status | GENERATING / COMPLETED / FAILED | 생성 중 / 완료(AI가 준 key가 있다) / 생성 실패. 완료 이벤트로만 바뀐다 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |

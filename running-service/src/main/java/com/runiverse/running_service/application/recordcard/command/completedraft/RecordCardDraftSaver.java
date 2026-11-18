@@ -6,8 +6,12 @@ import com.runiverse.running_service.application.recordcard.exception.RunningRec
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDraft;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
+import com.runiverse.running_service.application.recordcard.port.out.RequestRecordCardMusicPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
@@ -29,6 +33,8 @@ public class RecordCardDraftSaver {
     private final FindRecordCardIdByRunningRecordPort findRecordCardIdByRunningRecordPort;
     private final LoadMaxDisplayOrderPort loadMaxDisplayOrderPort;
     private final CreateRecordCardPort createRecordCardPort;
+    private final LoadRunningSummaryPort loadRunningSummaryPort;
+    private final RequestRecordCardMusicPort requestRecordCardMusicPort;
 
     @Transactional
     public void save(RecordCardDraft draft) {
@@ -51,12 +57,16 @@ public class RecordCardDraftSaver {
             throw new RecordCardAlreadyExistsException();
         }
 
-        // 3. 순위는 내 카드 중 최댓값 + 1 — 다른 기록으로 동시에 만들면 겹칠 수 있고, 그때는 저장이 409로 끝난다
+        // 3. 음악 생성 요청에 실을 기록 수치 — 잠근 행이라 보통은 있다. 없으면 잠금 실패와 같은 404다
+        RunningSummary runningSummary = loadRunningSummaryPort.load(runningRecordId)
+                .orElseThrow(RunningRecordNotFoundException::new);
+
+        // 4. 순위는 내 카드 중 최댓값 + 1 — 다른 기록으로 동시에 만들면 겹칠 수 있고, 그때는 저장이 409로 끝난다
         DisplayOrder displayOrder = loadMaxDisplayOrderPort.loadMax(userId)
                 .map(DisplayOrder::next)
                 .orElse(DisplayOrder.FIRST);
 
-        // 4. 도메인으로 조립한다 — 음악은 key 없이 GENERATING, 썸네일은 초안의 위치
+        // 5. 도메인으로 조립한다 — 음악은 key 없이 GENERATING, 썸네일은 초안의 위치
         RecordCard recordCard = RecordCard.create(draft.recordCardId(), draft.runningRecordId(), draft.userId(),
                 draft.visibility(), draft.activityType(), draft.memo(), displayOrder,
                 draft.images().stream()
@@ -65,10 +75,11 @@ public class RecordCardDraftSaver {
                         .toList(),
                 draft.thumbnailIndex());
 
-        // 5. 저장한다 — 제약에 걸리면 이 트랜잭션은 더 쓸 수 없으니 예외로 롤백한다
+        // 6. 저장한다 — 제약에 걸리면 이 트랜잭션은 더 쓸 수 없으니 예외로 롤백한다.
+        //    새로 만들었을 때만 음악을 요청한다 — 카드와 같은 트랜잭션에 남아 함께 커밋되거나 함께 롤백된다(아웃박스).
+        //    위 2의 재시도(이미 저장됨)는 여기까지 오지 않아 같은 카드의 요청이 두 번 쓰이지 않는다
         switch (createRecordCardPort.create(recordCard)) {
-            case CREATED -> {
-            }
+            case CREATED -> requestRecordCardMusicPort.request(RecordCardMusicRequest.of(recordCard, runningSummary));
             case DISPLAY_ORDER_TAKEN -> throw new RecordCardDraftInProgressException();
             case RECORD_ALREADY_HAS_CARD -> throw new RecordCardAlreadyExistsException();
         }
