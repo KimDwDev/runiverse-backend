@@ -195,7 +195,8 @@ class AsyncConfigTest {
 
     private static PushCampaignSendTask queuedCampaign(long pushCampaignId, SendPushUsecase sendPushUsecase,
                                                        PushCampaignReverter reverter) {
-        PushMessage message = new PushMessage(PushType.NOTICE, "제목", "본문", Map.of(), LocalDateTime.of(2026, 11, 17, 10, 0));
+        PushMessage message = new PushMessage(PushType.NOTICE, "제목", "본문", Map.of(),
+                LocalDateTime.of(2026, 11, 17, 10, 0));
         PushCampaignSendRequestedEvent event = new PushCampaignSendRequestedEvent(pushCampaignId, message,
                 List.of(UuidCreator.getTimeOrderedEpoch()));
         return new PushCampaignSendTask(event, sendPushUsecase, reverter);
