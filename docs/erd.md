@@ -645,10 +645,12 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | record_cards.(user_id, display_order) | 프로필 카드 목록(10-3) — UNIQUE `uk_record_card_user_display_order`가 겸한다. 순위 역순(최신이 위)·커서 조건을 역방향 스캔으로 처리한다. 공개 범위는 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | record_card_images.(record_card_id, sort_order) | 카드 사진 조회(8-1, 10-3 장수)와 카드 삭제 CASCADE — UNIQUE `uk_record_card_image_sort_order`(DEFERRABLE)가 겸한다. 따로 FK 인덱스를 두지 않는다 |
 | running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
+| running_records.(created_at, running_record_id) | 홈 공지 띠의 오늘·어제 완주(앱 스트림 `HOME_ACTIVITY`) — 날짜 범위(`created_at`)와 최신순 정렬(`created_at`·`running_record_id` 역순)을 인덱스가 함께 처리한다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | running_room_sessions.(user_id, is_connected) | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 타며, 현재 방 조회는 `is_connected=true`를 항상 함께 본다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다. 슬롯별 대기 인원 집계(`GET /match-rooms/slots`)도 같은 인덱스를 탄다 — 앞 세 컬럼은 등치, `start_at`은 그날 하루 범위, `target_distance`는 거르지 않고 인덱스에서 읽어 거리별로 묶으며 `current_player_count`만 테이블에서 읽는다 |
 | running_combos.(running_room_id, second_user_id, segment_number) | 방 안에서 내 콤보 구간 조회의 `second_user_id` 쪽 — UNIQUE가 `first_user_id` 방향만 커버한다. 쌍을 정렬해 저장하므로 참가자가 어느 쪽에 있을지 미리 알 수 없다. `segment_number`까지 두어 구간 순서대로 읽힌다 |
 | running_combos.(first_user_id, combo_count) · (second_user_id, combo_count) | 업적 최고 콤보 — 여러 방에 걸친 내 콤보의 최댓값. 쌍의 어느 쪽에든 있을 수 있어 둘 다 두고 Postgres가 각각 읽어 합친다 |
 | scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작 |
+| running_players.(status, start_at) | 홈 공지 띠의 지금 달리는 사람 수(`HOME_ACTIVITY`) — `status='RUNNING'` 등치 뒤 `start_at` 범위. **부분 인덱스로 두지 않는다** — 조회가 `status`를 파라미터로 넘겨, 범용 실행 계획에서는 부분 인덱스 조건을 증명하지 못해 인덱스를 쓰지 못한다 |
 | delete_users.(email, created_at) `WHERE email IS NOT NULL` | 보관 기간 만료 정리 — 아직 신원 정보가 남은 행 조회. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다. `email`이 선두라 정리가 끝난 대다수를 인덱스 단계에서 배제한다. 행을 지우지 않는 테이블이라 시간이 갈수록 `created_at` 단독으로는 거의 전부를 읽게 된다 |

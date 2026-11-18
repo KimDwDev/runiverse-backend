@@ -1097,7 +1097,7 @@
 
 - **인증**: 필요 / **Content-Type**: `text/event-stream`
 - **앱이 켜져 있는 동안 연다** — 앱 진입·포그라운드 복귀 때 연결한다. 활성 신청과 무관하게 **로그인만 하면 언제나 열린다**(매칭 스트림 5-A와 다르다 — 거절하는 경우가 없다)
-- **연결 직후 보내는 스냅샷은 없다** — 첫 바이트는 주석 라인(`:connected`)이다. 상태는 2-2로, 알림 목록과 안 읽은 수는 2-4로 받는다
+- **연결 직후 보내는 스냅샷은 없다** — 첫 바이트는 주석 라인(`:connected`)이다. 상태는 2-2로, 알림 목록과 안 읽은 수는 2-4로 받는다. 홈 공지는 다음 주기에 온다(아래 홈 공지 이벤트)
 - **앱과의 연결이라 `/app` 아래에 둔다** — 사용자 정보가 아니라 앱이 켜져 있는 동안 서버와 잇는 채널이다. 인증은 필요하다(인증 없이 열린 경로는 2-3 하나뿐이다)
 - **매칭 스트림과 별개다** — 매칭 중에는 둘 다 열려 있다. 한쪽 연결이 다른 쪽을 밀어내지 않는다
 - **keep-alive**: 15초마다 주석 라인(`:ping`)을 보낸다 — 이벤트가 아니므로 클라 이벤트 핸들러에 잡히지 않는다
@@ -1110,12 +1110,41 @@
   - **서버가 여러 대라 Redis를 거친다** — 커밋한 서버가 받는 사람과 알림 ID만 발행하고, 받는 사람이 붙은 서버만 알림을 읽어 조립해 보낸다
   - **놓칠 수 있다** — 앱이 꺼져 있었거나, 연결이 끊긴 사이이거나, Redis가 잠시 닿지 않으면 오지 않는다. 알림은 DB에 남아 다음 진입 때 2-4로 보인다
   - **`unreadCount`를 싣지 않는다** — 클라가 하나씩 올리고, 다음 진입 때 2-4 값으로 다시 맞춘다
+- **홈 공지 이벤트 2종 — 홈 화면 자리마다 이벤트 하나다**: `HOME_WAITING`(신청 버튼 위 대기 인원) · `HOME_ACTIVITY`(위쪽 공지 띠)
+  - **서버가 운영값(현재 `HOME_WAITING` 10초, `HOME_ACTIVITY` 30초)마다 붙은 연결 전부에 다시 보낸다** — 누가 보든 같은 값이라 받는 사람을 가리지 않고, 값이 바뀔 때가 아니라 주기마다 보낸다. 서버마다 자기에게 붙은 연결에만 보내고 Redis를 거치지 않는다
+  - **유효 기간을 싣지 않는다** — 클라는 이벤트마다 90초 동안 새 값이 없으면 그 자리를 숨기거나 고정 문구로 바꾼다 — 다른 이벤트나 ping은 그 90초를 늘리지 않는다. 서버 시각을 실어 폰 시계와 비교하면 시계가 어긋난 폰에서 틀린다
+  - 한쪽 계산이 실패하면 그 주기에는 그 이벤트만 오지 않는다
+  - 완주는 기록이 남은 러닝 중 목표에 닿았거나 목표 없는 솔로를 끝낸 것이다. 날짜는 기록을 저장한 서버 시각으로 KST 0시에 자른다 — 기록의 종료 시각은 단말 시계라 어긋날 수 있다. 탈퇴한 사람은 빠진다
+
+`HOME_WAITING` data
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `waitingCount` | Integer | O | 오늘·모집 마감 전·자리가 남은 방이 있는 칸(거리×시작 시각)의 대기 인원 합계. 칸은 `GET /match-rooms/slots`의 슬롯과 같다. 자리가 다 찬 칸은 신청하면 새 방이 열릴 뿐이라 세지 않는다 |
+
+`HOME_ACTIVITY` data
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runningNowCount` | Integer | O | 지금 러닝 중인 사람 수. 시작 뒤 강제 종료 오프셋(현재 6시간)이 지난 러닝은 세지 않는다 — 솔로는 서버가 강제 종료하지 않아 앱이 죽으면 러닝 중으로 남는다 |
+| `todayFinishedRuns` | Array | O | 오늘 완주 최신순 최대 3건. 없으면 빈 배열 |
+| `todayFinishedRuns[].runningRecordId` | Integer | O | 기록 ID |
+| `todayFinishedRuns[].nickname` | String | O | 첫 글자 뒤를 `**`로 가린 닉네임(`철**`). 길이와 관계없이 같은 모양이다 |
+| `todayFinishedRuns[].distanceMeters` | Integer | O | 방 목표 거리. 목표가 없는 솔로는 실제 거리 |
+| `todayFinishedCount` | Integer | O | 오늘 완주한 사람 수 — 여러 번 완주해도 한 명이다 |
+| `yesterdayFinishedCount` | Integer | O | 어제 완주한 사람 수 |
 
 ```
 :connected
 
 event:FRIEND_REQUESTED
 data:{"notificationId":912,"isRead":false,"createdAt":"2026-10-28T12:03:00","actor":{"userId":"01a0f2d4-...","nickname":"철수","profileImageUrl":null,"isDeleted":false,"relationshipType":"FRIEND_REQUEST_RECEIVED"},"invitation":null}
+
+event:HOME_WAITING
+data:{"waitingCount":4}
+
+event:HOME_ACTIVITY
+data:{"runningNowCount":3,"todayFinishedRuns":[{"runningRecordId":101,"nickname":"철**","distanceMeters":5000}],"todayFinishedCount":7,"yesterdayFinishedCount":5}
 
 :ping
 ```
