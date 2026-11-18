@@ -156,7 +156,8 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 | 카드가 없어도 슬롯 지연이 늘지 않는다(heartbeat) | ✅ | ✅ |
 | DB `DELETE`가 Kafka로 나가지 않는다 | — | ✅ |
 | 배포된 앱으로 만든 첫 카드 | 배포 뒤 | 배포 뒤 |
-| AI 서버가 자기 계정·그룹으로 받는다 | AI 쪽 확인 대기 | AI 쪽 |
+| AI 서버가 자기 계정·그룹으로 받아 음악을 만든다 | ✅ 실제 카드(로컬 앱 → test DB) | AI 쪽 |
+| AI 서버 inbox가 헤더 `id`로 중복을 거른다 | AI 쪽 확인 대기 | AI 쪽 |
 
 - 검증 메시지를 실제 토픽에 남기지 않는다 — 확인 뒤 `kafka-delete-records`로 지운다([kafka.md](kafka.md)).
 

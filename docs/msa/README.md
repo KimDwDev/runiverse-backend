@@ -92,7 +92,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | Kafka 클러스터 (개발·운영) | 됨 — 계정·토픽·ACL |
 | CDC (test·prod) | 됨 — 커넥터 동작, 발행·재기동·heartbeat 검증, prod 슬롯 지연 경보 |
 | 아웃박스 코드 배포 | test 서버·prod 배포 전 — `KAFKA_ENV`는 Parameter Store에 있다 |
-| AI 서버 연동 | AI 쪽 확인 대기 |
+| AI 서버 연동 | test 됨 — 카드 확정 → 아웃박스 → Debezium → Kafka → AI 서버 수신·음악 생성. prod와 헤더 `id` inbox는 AI 쪽 확인 대기 |
 | 완료 구독 + inbox | 구현 전 — [outbox-inbox.md](outbox-inbox.md) 「받는 쪽」 |
 
 ## 서비스나 이벤트를 더할 때
