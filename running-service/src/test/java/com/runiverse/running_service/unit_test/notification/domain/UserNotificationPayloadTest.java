@@ -2,12 +2,12 @@ package com.runiverse.running_service.unit_test.notification.domain;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationActorRequiredException;
-import com.runiverse.running_service.domain.notification.exception.UserNotificationRunningRoomRequiredException;
-import com.runiverse.running_service.domain.notification.vo.FriendAcceptedPayload;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationActorRequiredException;
+import com.runiverse.running_service.domain.notification.user.exception.UserNotificationRunningRoomRequiredException;
+import com.runiverse.running_service.domain.notification.user.vo.FriendAcceptedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.RunningInvitedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -3,7 +3,6 @@ package com.runiverse.running_service.unit_test.observability;
 import com.runiverse.running_service.observability.logging.LogTag;
 import com.runiverse.running_service.presentation.app.controller.AppController;
 import com.runiverse.running_service.presentation.auth.controller.AuthController;
-import com.runiverse.running_service.presentation.campaign.controller.PushCampaignController;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.device.controller.DeviceController;
 import com.runiverse.running_service.presentation.match.controller.MatchRoomController;
@@ -37,8 +36,7 @@ public class LogTagTest {
                 Arguments.of(RunningRoomController.class, "[러닝]"),
                 Arguments.of(UserNotificationController.class, "[알림]"),
                 Arguments.of(AppController.class, "[앱]"),
-                Arguments.of(DeviceController.class, "[기기]"),
-                Arguments.of(PushCampaignController.class, "[캠페인]")
+                Arguments.of(DeviceController.class, "[기기]")
         );
     }
 

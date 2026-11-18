@@ -20,7 +20,7 @@ import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomP
 import com.runiverse.running_service.application.running.port.out.LoadUserStatusPort;
 import com.runiverse.running_service.application.running.port.out.UserStatusRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.RunningInvitedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.RunningInvitedPayload;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;

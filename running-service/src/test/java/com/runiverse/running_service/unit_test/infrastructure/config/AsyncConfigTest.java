@@ -2,12 +2,12 @@ package com.runiverse.running_service.unit_test.infrastructure.config;
 
 import ch.qos.logback.classic.Level;
 import com.github.f4b6a3.uuid.UuidCreator;
-import com.runiverse.running_service.application.campaign.command.send.PushCampaignReverter;
-import com.runiverse.running_service.application.campaign.command.send.PushCampaignSendRequestedEvent;
-import com.runiverse.running_service.application.campaign.command.send.PushCampaignSendTask;
 import com.runiverse.running_service.application.device.port.in.SendPushUsecase;
 import com.runiverse.running_service.application.device.port.out.PushMessage;
 import com.runiverse.running_service.application.device.port.out.PushType;
+import com.runiverse.running_service.application.notification.command.campaign.PushCampaignReverter;
+import com.runiverse.running_service.application.notification.command.campaign.PushCampaignSendRequestedEvent;
+import com.runiverse.running_service.application.notification.command.campaign.PushCampaignSendTask;
 import com.runiverse.running_service.infrastructure.config.AsyncConfig;
 import com.runiverse.running_service.support.LogCapture;
 import org.junit.jupiter.api.AfterEach;

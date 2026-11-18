@@ -5,10 +5,10 @@ import com.runiverse.running_service.application.notification.command.send.SendU
 import com.runiverse.running_service.application.notification.command.send.UserNotificationCreatedEvent;
 import com.runiverse.running_service.application.notification.port.out.SaveUserNotificationPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.UserNotification;
-import com.runiverse.running_service.domain.notification.exception.SelfNotificationException;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.UserNotification;
+import com.runiverse.running_service.domain.notification.user.exception.SelfNotificationException;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

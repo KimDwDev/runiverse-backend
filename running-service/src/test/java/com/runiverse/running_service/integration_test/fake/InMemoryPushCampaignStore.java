@@ -1,12 +1,12 @@
 package com.runiverse.running_service.integration_test.fake;
 
-import com.runiverse.running_service.application.campaign.port.out.CompletePushCampaignPort;
-import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignPort;
-import com.runiverse.running_service.application.campaign.port.out.LoadPushCampaignRecipientsPort;
-import com.runiverse.running_service.application.campaign.port.out.RevertPushCampaignPort;
-import com.runiverse.running_service.domain.campaign.PushCampaign;
-import com.runiverse.running_service.domain.campaign.vo.PushCampaignStatus;
+import com.runiverse.running_service.application.notification.port.out.CompletePushCampaignPort;
+import com.runiverse.running_service.application.notification.port.out.LoadPushCampaignPort;
+import com.runiverse.running_service.application.notification.port.out.LoadPushCampaignRecipientsPort;
+import com.runiverse.running_service.application.notification.port.out.RevertPushCampaignPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
+import com.runiverse.running_service.domain.notification.campaign.PushCampaign;
+import com.runiverse.running_service.domain.notification.campaign.vo.PushCampaignStatus;
 
 import java.util.HashMap;
 import java.util.List;
