@@ -4,6 +4,7 @@ import com.google.api.core.ApiFuture;
 import com.google.firebase.messaging.AndroidConfig;
 import com.google.firebase.messaging.ApnsConfig;
 import com.google.firebase.messaging.Aps;
+import com.google.firebase.messaging.ApsAlert;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
@@ -11,6 +12,7 @@ import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.Notification;
 import com.runiverse.running_service.application.device.port.out.PushMessage;
 import com.runiverse.running_service.application.device.port.out.PushSendStatus;
+import com.runiverse.running_service.application.device.port.out.PushType;
 import com.runiverse.running_service.application.device.port.out.SendPushPort;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.device.vo.PushToken;
@@ -35,6 +37,9 @@ public class FcmPushClient implements SendPushPort {
 
     private static final String DEFAULT_SOUND = "default";
     private static final String TYPE_KEY = "type";
+    private static final String TITLE_KEY = "title";
+    private static final String BODY_KEY = "body";
+    private static final String RUNNING_ROOM_ID_KEY = "runningRoomId";
     private static final String APNS_EXPIRATION_HEADER = "apns-expiration";
     // 라이브러리는 503이면 최대 4번, 매번 최대 60초씩 기다려 다시 보낸다.
     // 발송 스레드가 한 건에 오래 묶이지 않게 전체를 이 시간으로 묶는다
@@ -103,25 +108,47 @@ public class FcmPushClient implements SendPushPort {
     private Message toMessage(PushToken pushToken, PushMessage message, Duration remaining) {
         AndroidConfig.Builder android = AndroidConfig.builder()
                 .setPriority(AndroidConfig.Priority.HIGH);
-        ApnsConfig.Builder apns = ApnsConfig.builder()
-                .setAps(Aps.builder().setSound(DEFAULT_SOUND).build());
+        Aps.Builder aps = Aps.builder().setSound(DEFAULT_SOUND);
+        ApnsConfig.Builder apns = ApnsConfig.builder();
         // 꺼져 있던 폰이 만료 시각이 지나 켜지면 받지 않는다.
         // 안드로이드는 남은 시간을, APNs는 만료 시각(epoch 초)을 받는다
         if (remaining != null) {
             android.setTtl(remaining.toMillis());
             apns.putHeader(APNS_EXPIRATION_HEADER, String.valueOf(expiryOf(message).getEpochSecond()));
         }
-        return Message.builder()
+        Message.Builder builder = Message.builder()
                 .setToken(pushToken.value())
-                .setNotification(Notification.builder()
-                        .setTitle(message.title())
-                        .setBody(message.body())
-                        .build())
                 .putAllData(message.data())
-                .putData(TYPE_KEY, message.type().name())
+                .putData(TYPE_KEY, message.type().name());
+        // 채팅은 앱이 방마다 한 알림에 쌓아 그린다 — 안드로이드는 data만 받아 직접 그리고,
+        // iOS는 방으로 묶고 알림 확장이 보낸 사람 사진을 붙인다
+        if (message.type() == PushType.ROOM_CHAT_SENT) {
+            builder.putData(TITLE_KEY, message.title())
+                    .putData(BODY_KEY, message.body());
+            aps.setAlert(ApsAlert.builder()
+                            .setTitle(message.title())
+                            .setBody(message.body())
+                            .build())
+                    .setThreadId(threadIdOf(message))
+                    .setMutableContent(true);
+        } else {
+            builder.setNotification(Notification.builder()
+                    .setTitle(message.title())
+                    .setBody(message.body())
+                    .build());
+        }
+        return builder
                 .setAndroidConfig(android.build())
-                .setApnsConfig(apns.build())
+                .setApnsConfig(apns.setAps(aps.build()).build())
                 .build();
+    }
+
+    private static String threadIdOf(PushMessage message) {
+        String runningRoomId = message.data().get(RUNNING_ROOM_ID_KEY);
+        if (runningRoomId == null) {
+            throw new IllegalStateException("채팅 푸시에 방이 없다");
+        }
+        return runningRoomId;
     }
 
     private static Duration remainingOf(PushMessage message) {

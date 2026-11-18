@@ -11,6 +11,7 @@ import com.runiverse.running_service.application.match.common.InviteStartPolicy;
 import com.runiverse.running_service.application.match.exception.InvalidInviteOptionException;
 import com.runiverse.running_service.application.match.exception.InviteStartAtOutOfRangeException;
 import com.runiverse.running_service.application.match.common.MatchProperties;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.port.out.CreateMatchApplicationPort;
 import com.runiverse.running_service.application.match.port.out.CreateMatchRoomPort;
 import com.runiverse.running_service.application.match.port.out.ExistsActiveApplicationPort;
@@ -23,6 +24,7 @@ import com.runiverse.running_service.domain.running.player.vo.RunningPlayerId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.room.RoomSession;
 import com.runiverse.running_service.domain.running.room.RunningRoom;
+import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomStatus;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomType;
 import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
@@ -44,6 +46,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -84,6 +87,9 @@ class OpenInviteRoomHandlerTest {
     @Mock
     private ScheduleJobPort scheduleJobPort;
 
+    @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
     // 실제 정책을 감싼 spy — 값 검증(validate)과 마감 계산은 실제로 타고, 시각 범위(isSelectable)만 필요할 때 고정한다.
     // 핸들러가 지금 시각을 직접 읽어 23:49 이후에 돌면 고를 시각이 없기 때문이다. 경계 자체는 InviteStartPolicyTest가 본다
     private InviteStartPolicy inviteStartPolicy;
@@ -97,7 +103,7 @@ class OpenInviteRoomHandlerTest {
                 inviteStartPolicy,
                 existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort, createMatchRoomPort,
-                scheduleJobPort, MATCH_PROPERTIES);
+                scheduleJobPort, MATCH_PROPERTIES, roomChatPresenceWriter);
         userId = UuidCreator.getTimeOrderedEpoch();
     }
 
@@ -152,6 +158,21 @@ class OpenInviteRoomHandlerTest {
 
         // then -> 클라는 이 ID를 들고 매칭 스트림을 연다
         assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
+    }
+
+    @Test
+    @DisplayName("연 방 채팅에 방을 연 사람이 들어왔다는 줄을 남긴다")
+    void writesJoinedLine() {
+        // given
+        givenOpenable(START);
+
+        // when
+        handler.handle(commandAt(userId, START));
+
+        // then
+        ArgumentCaptor<RunningRoom> room = ArgumentCaptor.forClass(RunningRoom.class);
+        verify(roomChatPresenceWriter).joined(room.capture(), eq(new UserId(userId)));
+        assertThat(room.getValue().getRunningRoomId()).contains(new RunningRoomId(ROOM_ID));
     }
 
     @Test

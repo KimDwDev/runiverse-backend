@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.match.command.cancel.CancelMatc
 import com.runiverse.running_service.application.match.command.cancel.CancelMatchHandler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.exception.ActiveMatchNotFoundException;
 import com.runiverse.running_service.application.match.exception.MatchAlreadyStartedException;
@@ -98,6 +99,9 @@ class CancelMatchHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private CancelMatchHandler cancelMatchHandler;
@@ -110,7 +114,7 @@ class CancelMatchHandlerTest {
                 new MatchProperties(CLOSE_OFFSET, Duration.ofMinutes(5), READY_OFFSET, FORCE_FINISH_OFFSET,
                         PACE_TIE_TOLERANCE, COOLDOWN,
                         LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000)),
-                roomInfoAssembler, eventPublisher);
+                roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test
@@ -298,6 +302,37 @@ class CancelMatchHandlerTest {
                 .orElseThrow();
         assertThat(session.isConnected()).isFalse();
         assertThat(session.getLeaveCount().value()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("시작 전에 나가면 방 채팅에 나갔다는 줄을 남긴다 — 마지막 사람이 나가 방이 닫혀도 남긴다")
+    void writesLeftLineBeforeStart() {
+        // given
+        RunningRoom room = room(startAfter(Duration.ofHours(2)), 1);
+        givenActiveMatch(room);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then
+        assertThat(room.getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
+        verify(roomChatPresenceWriter).left(room, new UserId(USER_ID));
+    }
+
+    @Test
+    @DisplayName("러닝이 시작된 뒤 나가면 채팅이 닫혀 줄을 남기지 않는다")
+    void noLeftLineAfterStart() {
+        // given -> 앱을 켜지 않아 JOINED로 남은 참가자다
+        RunningRoom room = room(LocalDateTime.now().minusMinutes(5), 2);
+        room.closeMatching();
+        room.start();
+        givenActiveMatch(room);
+
+        // when
+        cancelMatchHandler.handle(new CancelMatchCommand(USER_ID));
+
+        // then
+        verifyNoInteractions(roomChatPresenceWriter);
     }
 
     @Test

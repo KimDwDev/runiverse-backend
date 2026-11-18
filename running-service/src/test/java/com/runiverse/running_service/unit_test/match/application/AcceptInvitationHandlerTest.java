@@ -17,6 +17,7 @@ import com.runiverse.running_service.application.match.port.out.LockMatchRoomPor
 import com.runiverse.running_service.application.match.port.out.UpdateMatchRoomPort;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.port.out.LoadMatchPlayersPort;
 import com.runiverse.running_service.application.match.port.out.MatchPlayer;
@@ -101,6 +102,9 @@ class AcceptInvitationHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private AcceptInvitationHandler handler;
@@ -115,7 +119,7 @@ class AcceptInvitationHandlerTest {
                 lockMatchRoomPort, updateMatchRoomPort,
                 new InviteStartPolicy(INVITE_PROPERTIES, MATCH_PROPERTIES),
                 existsActiveApplicationPort, loadUserAvgPacePort, createMatchApplicationPort,
-                loadMatchPlayersPort, roomInfoAssembler, eventPublisher);
+                loadMatchPlayersPort, roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
         host = newUser();
         otherInviter = newUser();
         invitee = newUser();
@@ -213,6 +217,21 @@ class AcceptInvitationHandlerTest {
                     .containsOnly(RoomInvitationStatus.ACCEPTED);
             verify(updateMatchRoomPort).update(room);
             verify(eventPublisher).publishEvent(any(MatchRoomChangedEvent.class));
+        }
+
+        @Test
+        @DisplayName("수락하면 방 채팅에 들어왔다는 줄을 남긴다")
+        void writesJoinedLine() {
+            // given
+            RunningRoom room = pendingRoom(1);
+            givenLocked(room);
+            givenJoinable();
+
+            // when
+            accept();
+
+            // then
+            verify(roomChatPresenceWriter).joined(room, invitee);
         }
 
         @Test

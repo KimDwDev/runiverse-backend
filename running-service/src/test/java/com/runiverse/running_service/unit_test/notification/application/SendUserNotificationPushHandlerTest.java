@@ -13,7 +13,7 @@ import com.runiverse.running_service.application.notification.command.push.SendU
 import com.runiverse.running_service.application.notification.common.UserNotificationItemReader;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 import org.junit.jupiter.api.BeforeEach;

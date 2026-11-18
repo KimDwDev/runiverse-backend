@@ -1,6 +1,6 @@
 package com.runiverse.running_service.application.notification.query.list;
 
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import com.runiverse.running_service.domain.running.room.vo.RoomInvitationStatus;
 

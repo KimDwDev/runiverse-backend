@@ -3,6 +3,8 @@ package com.runiverse.running_service.unit_test.presentation;
 import com.runiverse.running_service.application.common.exception.AuthErrorCode;
 import com.runiverse.running_service.application.common.exception.InviteErrorCode;
 import com.runiverse.running_service.application.common.exception.MatchErrorCode;
+import com.runiverse.running_service.application.common.exception.PushCampaignErrorCode;
+import com.runiverse.running_service.application.common.exception.RecordCardErrorCode;
 import com.runiverse.running_service.application.common.exception.RoomChatErrorCode;
 import com.runiverse.running_service.application.common.exception.RunningErrorCode;
 import com.runiverse.running_service.application.common.exception.UserErrorCode;
@@ -68,6 +70,22 @@ public class ErrorExposurePolicyTest {
     }
 
     @Test
+    @DisplayName("관리자 키 거절은 401 그대로 노출한다")
+    void invalidAdminKeyIsExposed() {
+        // 가려지면 500으로 바뀌어 운영자가 키를 잘못 넣었는지 서버 오류인지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.UNAUTHORIZED, CommonErrorCode.INVALID_ADMIN_KEY.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 보낸 푸시 캠페인은 409 그대로 노출한다")
+    void pushCampaignAlreadySentIsExposed() {
+        // 가려지면 운영자가 이미 보낸 것인지 서버 오류인지 가를 수 없다 — 서버 오류로 보고 다시 되돌려 두 번 보낼 수 있다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT, PushCampaignErrorCode.PUSH_CAMPAIGN_ALREADY_SENT.getCode())).isTrue();
+    }
+
+    @Test
     @DisplayName("방 참가자가 아닌 조회 거부는 403 그대로 노출한다")
     void notRoomPlayerIsExposed() {
         // 6-1이 REST로 던지는 코드다 — 목록에서 빠지면 500으로 바뀌어 클라가 권한 문제인지 알 수 없다
@@ -127,6 +145,24 @@ public class ErrorExposurePolicyTest {
         assertThat(ErrorExposurePolicy.isExposed(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 MatchErrorCode.MATCH_STREAM_UNAVAILABLE.getCode())).isFalse();
+    }
+
+    @Test
+    @DisplayName("이미 카드가 있는 기록은 409 그대로 노출한다")
+    void recordCardAlreadyExistsIsExposed() {
+        // 가려지면 500으로 바뀌어, 클라가 작성 화면을 닫고 카드로 보낼지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                RecordCardErrorCode.RECORD_CARD_ALREADY_EXISTS.getCode())).isTrue();
+    }
+
+    @Test
+    @DisplayName("처리 중인 확정과 부딪힌 기록 카드 확정은 409 그대로 노출한다")
+    void recordCardDraftInProgressIsExposed() {
+        // 가려지면 500으로 바뀌어, 클라가 잠시 뒤 다시 부를지 가를 수 없다
+        assertThat(ErrorExposurePolicy.isExposed(
+                HttpStatus.CONFLICT,
+                RecordCardErrorCode.RECORD_CARD_DRAFT_IN_PROGRESS.getCode())).isTrue();
     }
 
     @Test

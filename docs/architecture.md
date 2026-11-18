@@ -35,8 +35,13 @@ application/
   <domain>/common/      한 도메인 안의 여러 유스케이스가 함께 쓰는 정책·조립기 (포트는 두지 않는다)
   common/exception/     BusinessException · ErrorCode (유스케이스용)
   common/port/out/      도메인에 매이지 않는 공통 아웃바운드 포트
+  common/               여러 도메인의 유스케이스가 함께 쓰는 정책 (포트는 두지 않는다 — 예: ImageContentType)
 
-infrastructure/         기술 단위 — persistence · redis · security · oauth · mail · storage · identifier · config 등
+infrastructure/         기술 단위 — persistence · redis · kafka · security · oauth · mail · storage · identifier · config 등
+  kafka/                서비스 사이 메시지 — Kafka 이름(환경 접두어)·outbox/·inbox/. 아웃박스·inbox 테이블은 JPA여도
+                        persistence/가 아니라 여기 둔다 — 도메인 데이터가 아니라 메시지 전달 장부다.
+                        앱이 Kafka에 직접 보내지 않아도(아웃박스는 Debezium이 발행) 여기다.
+                        규칙·Kafka 구성·CDC는 docs/msa/
 
 presentation/
   <domain>/             controller · request · response

@@ -1,5 +1,9 @@
 package com.runiverse.running_service.infrastructure.persistence.running;
 
+import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
+import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
@@ -9,6 +13,7 @@ import com.runiverse.running_service.application.running.port.out.RecentRunningP
 import com.runiverse.running_service.application.running.port.out.RecordedRoute;
 import com.runiverse.running_service.application.running.port.out.RecordedSplitTime;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
+import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.domain.running.record.RunningRecord;
@@ -16,23 +21,27 @@ import com.runiverse.running_service.domain.running.record.RunningSegment;
 import com.runiverse.running_service.domain.running.record.RunningSplit;
 import com.runiverse.running_service.domain.running.room.vo.RunningRoomId;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort, ExistsRunningRecordPort,
-        LoadRecentRunningPacesPort, LoadMyRunningRecordsPort, LoadRecordedRoutesPort {
+        LoadRecentRunningPacesPort, LoadMyRunningRecordsPort, LoadRecordedRoutesPort, ExistsOwnRunningRecordPort,
+        LockOwnRunningRecordPort, LoadRunningSummaryPort {
 
     // 방당 수천 행이라 영속성 컨텍스트를 비워가며 넣는다.
     // hibernate.jdbc.batch_size와 맞춰야 실제로 묶여 나간다
@@ -102,6 +111,61 @@ public class RunningRecordPersistenceAdapter implements CreateRunningRecordPort,
                         """, Long.class)
                 .setParameter("roomId", runningRoomId.value())
                 .getSingleResult() > 0;
+    }
+
+    @Override
+    public boolean existsOwnedBy(RunningRecordId runningRecordId, UserId userId) {
+        // PK로 한 행만 본다. 주인 대조와 숨긴 방 제외를 같은 조건에 건다 —
+        // 셋 중 무엇이 틀렸는지 가르지 않으므로(모두 404) 한 번에 묻는다.
+        // 숨긴 방 조건은 기록 목록(loadByPeriod)과 같다
+        return entityManager.createQuery("""
+                        SELECT COUNT(record)
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.runningRecordId = :runningRecordId
+                          AND record.userId = :userId
+                          AND record.room.deletedAt IS NULL
+                        """, Long.class)
+                .setParameter("runningRecordId", runningRecordId.value())
+                .setParameter("userId", userId.value())
+                .getSingleResult() > 0;
+    }
+
+    @Override
+    public boolean lockOwnedBy(RunningRecordId runningRecordId, UserId userId) {
+        // 카드 쓰기의 잠금 — 기록 행 하나만 잠근다. 숨긴 방 조건을 조인(record.room.deletedAt)으로 걸면
+        // FOR UPDATE가 방 행까지 잠가 채팅·매칭이 거는 방 잠금과 부딪힌다 — 서브쿼리로 걸어 방 행은 잠그지 않는다
+        return !entityManager.createQuery("""
+                        SELECT record.runningRecordId
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.runningRecordId = :runningRecordId
+                          AND record.userId = :userId
+                          AND NOT EXISTS (
+                              SELECT 1 FROM RunningRoomJpaEntity room
+                              WHERE room = record.room AND room.deletedAt IS NOT NULL)
+                        """, Long.class)
+                .setParameter("runningRecordId", runningRecordId.value())
+                .setParameter("userId", userId.value())
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultList()
+                .isEmpty();
+    }
+
+    @Override
+    public Optional<RunningSummary> load(RunningRecordId runningRecordId) {
+        // 음악 생성 요청에 실을 수치만 읽는다 — 작성 확정이 이 행을 잠근 같은 트랜잭션에서 부른다. PK로 한 행이다
+        return entityManager.createQuery("""
+                        SELECT record.totalDistance, record.totalDuration, record.avgPace, record.avgCadence,
+                               record.startAt, record.weatherCode, record.temperature, record.totalElevationGain
+                        FROM RunningRecordJpaEntity record
+                        WHERE record.runningRecordId = :runningRecordId
+                        """, Tuple.class)
+                .setParameter("runningRecordId", runningRecordId.value())
+                .getResultList().stream()
+                .findFirst()
+                .map(row -> new RunningSummary(
+                        row.get(0, Integer.class), row.get(1, Integer.class), row.get(2, Integer.class),
+                        row.get(3, Integer.class), row.get(4, LocalDateTime.class), row.get(5, Integer.class),
+                        row.get(6, BigDecimal.class), row.get(7, Integer.class)));
     }
 
     @Override

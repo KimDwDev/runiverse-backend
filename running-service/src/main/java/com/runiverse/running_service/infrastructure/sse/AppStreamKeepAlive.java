@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AppStreamKeepAlive {
 
-    // 포트가 아니라 구현체를 받는다 — all()은 연결 유지 전용이라 포트에 두지 않았다
+    // 연결 유지는 기술 관심사라 포트가 아니라 구현체를 받는다
     private final AppStreamRegistryAdapter appStreamRegistryAdapter;
 
     // fixedRate가 아니라 fixedDelay다 — 연결이 늘어 한 바퀴가 길어져도 실행이 밀려 쌓이지 않는다

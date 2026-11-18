@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.match.command.apply.ApplyMatchH
 import com.runiverse.running_service.application.match.command.apply.ApplyMatchResult;
 import com.runiverse.running_service.application.match.command.apply.MatchRoomAssigner;
 import com.runiverse.running_service.application.match.common.MatchRoomChangedEvent;
+import com.runiverse.running_service.application.match.common.RoomChatPresenceWriter;
 import com.runiverse.running_service.application.match.common.RoomInfoAssembler;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.match.common.MatchSlotPolicy;
@@ -103,6 +104,9 @@ class ApplyMatchHandlerTest {
     private RoomInfoAssembler roomInfoAssembler;
 
     @Mock
+    private RoomChatPresenceWriter roomChatPresenceWriter;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private ApplyMatchHandler applyMatchHandler;
@@ -117,7 +121,7 @@ class ApplyMatchHandlerTest {
         applyMatchHandler = new ApplyMatchHandler(
                 matchCooldownPort, existsActiveApplicationPort, loadUserAvgPacePort,
                 createMatchApplicationPort, matchRoomAssigner,
-                matchSlotPolicy, roomInfoAssembler, eventPublisher);
+                matchSlotPolicy, roomInfoAssembler, roomChatPresenceWriter, eventPublisher);
     }
 
     @Test
@@ -131,6 +135,21 @@ class ApplyMatchHandlerTest {
 
         // then -> 방 정보·참가자·마감 시각은 스트림이 나른다. 여기선 ID만 준다
         assertThat(result.runningRoomId()).isEqualTo(ROOM_ID);
+    }
+
+    @Test
+    @DisplayName("배정된 방 채팅에 들어왔다는 줄을 남긴다")
+    void writesJoinedLine() {
+        // given
+        givenApplicable();
+
+        // when
+        applyMatchHandler.handle(command(slotAfter(Duration.ofHours(2))));
+
+        // then -> 처음인지 다시인지는 기록기가 방 세션으로 가른다
+        ArgumentCaptor<RunningRoom> room = ArgumentCaptor.forClass(RunningRoom.class);
+        verify(roomChatPresenceWriter).joined(room.capture(), eq(new UserId(USER_ID)));
+        assertThat(room.getValue().getRunningRoomId()).contains(new RunningRoomId(ROOM_ID));
     }
 
     @Test

@@ -7,8 +7,8 @@ import com.runiverse.running_service.application.notification.port.out.LoadUserN
 import com.runiverse.running_service.application.notification.port.out.UserNotificationRow;
 import com.runiverse.running_service.application.notification.query.list.GetUserNotificationsResult;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.vo.FriendRequestedPayload;
-import com.runiverse.running_service.domain.notification.vo.UserNotificationType;
+import com.runiverse.running_service.domain.notification.user.vo.FriendRequestedPayload;
+import com.runiverse.running_service.domain.notification.user.vo.UserNotificationType;
 import com.runiverse.running_service.domain.relationship.vo.RelationshipType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -33,7 +33,9 @@ public class SecurityConfig {
             "/auth/oauth/**",
             "/auth/email/**",
             "/users/nickname/availability",
-            "/app/version"
+            "/app/version",
+            // 토큰 대신 관리자 키로 연다 — AdminKeyFilter가 이 필터 체인보다 먼저 막는다
+            "/admin/**"
     };
 
     @Bean

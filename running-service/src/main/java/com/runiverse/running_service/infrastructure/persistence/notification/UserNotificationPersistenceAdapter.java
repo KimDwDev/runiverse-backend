@@ -7,7 +7,7 @@ import com.runiverse.running_service.application.notification.port.out.SaveUserN
 import com.runiverse.running_service.application.notification.port.out.UserNotificationPage;
 import com.runiverse.running_service.application.notification.port.out.UserNotificationRow;
 import com.runiverse.running_service.domain.common.vo.UserId;
-import com.runiverse.running_service.domain.notification.UserNotification;
+import com.runiverse.running_service.domain.notification.user.UserNotification;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;

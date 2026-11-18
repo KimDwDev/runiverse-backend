@@ -6,19 +6,19 @@
 
 ## 0. 공통 규칙
 
-- **PK 타입**: `users.user_id`만 **UUID**, 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`만 UUID 문자열, 나머지 Long.
+- **PK 타입**: `users.user_id`·`record_cards.record_card_id`·`record_card_images.record_card_image_id`·`outbox_events.outbox_event_id`는 **UUID**(모두 DB가 매기지 않고 앱이 정하는 UUIDv7 — 표 참고), 그 외 자체 PK는 **bigint**(auto-increment, `running_splits`·`running_combos`만 시퀀스 — 표 참고). 연결 테이블(`running_room_sessions`·`push_campaign_recipients`)은 **복합 PK**, 유저당 1 row(`user_onboardings`·`oauth_users`·`delete_users`)는 **참조 키가 곧 PK**. → API: `userId`·`recordCardId`·`recordCardImageId`는 UUID 문자열, 나머지 Long.
 - **FK/참조 네이밍**: 참조 테이블 PK명 그대로(예: `running_records.running_room_id`). 같은 테이블 이중 참조는 역할명(`user_relationships.user_id`/`target_id`). (`running_room_invitations.inviter_id`/`invitee_id`도 같다). `record_cards.running_record_id`는 FK + ON DELETE CASCADE(아래 정책).
-- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`(복합 PK)·`user_relationships`·`scheduled_jobs`).
+- **UNIQUE 표기**: 단일 컬럼 = 제약칸, 복합 UNIQUE = 표 아래 블록쿼트(`oauth_users`·`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_invitations`(복합 PK)·`push_campaign_recipients`(복합 PK)·`user_relationships`·`scheduled_jobs`).
 - **CHECK 표기**: 표 아래 블록쿼트에 `CHECK 이름: 조건식`으로 적는다 — 이름·식은 엔티티 `@Check`와 같게 둔다. 다른 제약(NOT NULL·UNIQUE·FK)처럼 엔티티에 있는 것은 빠짐없이 옮긴다. 값 목록의 뜻은 [§5](#5-enum-사전), 조건의 이유는 비고가 설명한다.
 - **타임스탬프**: **접미사가 타입을 말한다** — 시점은 전부 `*_at`(`timestamp`, 시간대 없음, **KST 벽시계로 저장**). 앱이 JVM 기본 타임존을 `APP_TIME_ZONE`으로 고정한다(`DefaultTimeZoneInitializer` — 컨텍스트 전에 고정해 감사 컬럼도 같은 시간대로 찍힌다). DB에 저장하는 달력 날짜 컬럼은 `user_onboardings.birthday`뿐이며 API에서는 `YYYY-MM-DD`로 표현한다.
-- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말한다.
+- **감사 컬럼**: `created_at`·`updated_at`은 `NOT NULL`, 앱이 자동 세팅(Hibernate `@CreationTimestamp`/`@UpdateTimestamp`). **write-once 테이블은 `created_at`만 둔다**(`running_records`·`running_segments`·`running_splits`·`running_combos`·`running_room_chat_histories`·`record_card_histories`·`push_campaign_recipients`·`outbox_events`) — 고치지 않으므로 `updated_at`이 늘 같은 값이다. 엔티티는 `BaseCreatedAtEntity`를 상속한다. `scheduled_jobs`·`delete_users`·`push_campaigns`도 `created_at`만 두지만 갱신이 한 번 있다 — 실행 표시(`is_sent`·`sent_at`)와 90일 뒤 신원 비우기(`email`·`nickname`), 발송 표시(`status` — 시작 전에 서버가 정상 종료되면 한 번 더 되돌린다)다. 그 시각은 `sent_at`과 배치 기준(`created_at + 90일`)이 대신 말하고, 발송 시각은 로그로 본다.
 - **지표 컬럼 접두어**: 실적 합계는 `total_*`(`total_distance`·`total_duration`·`total_calories`·`total_elevation_gain`), 평균은 `avg_*`(`avg_pace`·`avg_cadence`), 목표는 `target_*`(`target_distance`). **구간(`running_splits`)은 부분값이라 접두어 없이 적는다**(`distance`·`duration`·`calories`) — 접두어의 유무가 전체와 구간을 가른다. 개수 컬럼은 `*_count`(`max_player_count`·`current_player_count`·`desired_player_count`·`leave_count`)로 예외가 없다.
 - **컬럼 순서**: `PK → FK → 분류·상태 → 조건·속성 → 결과·이력 → 감사 컬럼` 순으로 적는다. **PK와 FK는 붙여 쓰고**, FK가 여럿이면 상위 엔티티부터(`running_room_id` → `user_id`). `created_at`·`updated_at`·`deleted_at`은 **항상 맨 아래**다.
 - **단위(컬럼에 단위 미표기 — 아래로 통일)**: 거리 = **미터**, 페이스(`avg_pace`) = **초/km**, 시간(`total_duration`·`duration`) = **초**, 칼로리 = **kcal**, 케이던스(`avg_cadence`) = **spm**, 누적 상승 고도(`total_elevation_gain`)·구간 순고도차(`elevation_change`) = **미터**, 기온(`temperature`) = **섭씨**. **좌표는 컬럼으로 두지 않는다** — 경로·지점은 전부 `running_segments.route_polyline`(encoded polyline, precision 5)에서 뽑는다. PostGIS 미사용(위치 기반 기능 도입 시 검토).
 - **enum**: DB도 API와 **동일한 영문 코드를 그대로 저장**(Java enum `@Enumerated(STRING)`) — 한글 값·변환 매핑 없음. 컬럼별 값 목록은 [§5 enum 사전](#5-enum-사전).
-- **`deleted_at`**: `record_cards`·`running_room_chats`는 소프트 삭제(채팅은 되살리지 않는다), `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `delete_*` 테이블은 별도 용도다([§4](#4-delete_-스냅샷이력-테이블)).
+- **`deleted_at`**: `running_room_chats`는 소프트 삭제(되살리지 않는다), `running_rooms`는 **[MVP 제외]** 관리자 숨김에 쓴다. `record_cards`는 **하드 삭제**하고 지우기 직전 모습을 `record_card_histories`에 남긴다. `delete_*` 테이블은 별도 용도다([§4](#4-delete_-스냅샷이력-테이블)).
   - **`running_players.deleted_at`은 "신청이 끝난 시각"이다** — 활성 신청은 값의 유무로 판정하고, 값은 신청이 끝난 시각으로 남아 쿨다운 DB 폴백을 얹을 때의 기준이 된다.
-- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`user_notifications`·`running_room_invitations`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`running_records`·`record_cards`·`running_room_chats`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
+- **`user_id` FK 정책 (회원탈퇴 연동)**: 탈퇴 시 **CASCADE 삭제**되는 테이블(`user_onboardings`·`oauth_users`·`user_devices`·`user_relationships`·`user_notifications`·`running_room_invitations`)은 `user_id` **FK + ON DELETE CASCADE**. **유지**되는 테이블(`running_records`·`record_cards`·`running_room_chats`·`push_campaign_recipients`)은 `user_id`를 **논리 참조**(FK 제약 없음 — `users` 하드delete 후 값 유지, 무결성은 앱 레벨). 표기 `→ users`
   - **온보딩·로그인 수단·기기는 CASCADE에 기대지 않고 앱이 먼저 지운다** — 온보딩 값과 로그인 수단은 `delete_users`로 옮겨야 하는데 DB 연쇄 삭제는 애플리케이션을 거치지 않는다. 기존 개발 DB처럼 FK가 붙지 않은 환경도 있어 CASCADE 유무와 무관하게 동작해야 한다.
 - **`running_players`는 상태와 무관하게 유지한다.** 탈퇴 전 일반 취소·이탈·러닝 종료 처리를 적용한다(시작 전 신청도 지우지 않고 취소처럼 닫는다). 시작한 방의 참가 row와 세션은 기록 없는 참가자도 과거 결과에 남기기 위해, 그 밖의 신청 이력은 통계에 쓰기 위해 남긴다.
   - 논리 참조 `user_id` 컬럼은 전부 **NOT NULL**이다.
@@ -113,6 +113,38 @@
 > **값은 운영이 SQL로 직접 바꾼다** — 관리 API가 없어 애플리케이션 검증을 거치지 않으므로 형식·대소 관계를 DB가 막는다. 서버가 캐시 없이 요청마다 읽으므로 바꾸면 바로 반영된다 — 버전 확인 API와 구버전 요청 거절이 같은 값을 본다.
 > **행은 배포 SQL이 미리 넣는다** — 네 플랫폼 행이 항상 있다. 행을 지우거나 더하지 않고 UPDATE만 한다.
 > `minimum_version`은 스토어에서 실제로 설치할 수 있는 버전으로만 올린다 — 아직 공개되지 않은 버전을 요구하면 그 플랫폼 사용자가 전부 막힌다.
+
+### push_campaigns (공지 푸시)
+
+> **도메인 테이블이 아니라 운영 테이블이다** — 운영이 SQL로 공지를 넣고 받는 사람을 `push_campaign_recipients`에 고른 뒤, 관리자 API(api-spec 13-1)를 한 번 불러 보낸다. 앱은 보낼 때 문구를 읽고 `status`를 바꿀 뿐 행을 만들지 않는다. 도메인 A 아래 두는 것은 받는 곳이 `user_devices`이기 때문이다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| push_campaign_id | bigint | PK | |
+| type | enum | NOT NULL | 공지 종류 — [§5 enum 사전](#5-enum-사전). 앱은 읽지 않는다(보내는 푸시 종류는 `NOTICE` 고정) |
+| status | enum | NOT NULL | 발송 여부 — [§5 enum 사전](#5-enum-사전). 넣을 때 `DRAFT` |
+| title | varchar(100) | NOT NULL | 푸시 제목 |
+| body | text | NOT NULL | 푸시 본문 |
+| created_at | timestamp | NOT NULL | |
+
+> CHECK `ck_push_campaign_type`: `type in ('NOTICE')`
+> CHECK `ck_push_campaign_status`: `status in ('DRAFT', 'COMPLETED')`
+> CHECK `ck_push_campaign_title_length`: `char_length(title) between 1 and 100`
+> CHECK `ck_push_campaign_body_length`: `char_length(body) between 1 and 500`
+> **`type`은 정보성 공지(`NOTICE`)만 연다** — 광고성 푸시는 수신 동의 확인과 "(광고)" 표시가 필요한데 지금 발송 경로에 없다. 값을 열면 동의 없이 광고가 나가는 길이 생긴다.
+> **한 캠페인은 한 번만 보낸다** — 관리자 API가 `status`를 `DRAFT`→`COMPLETED`로 바꾸는 조건부 UPDATE가 1행일 때만 보낸다. 이 조건이 두 번 발송을 막는 유일한 장치라, 보내는 스레드는 캠페인당 늘 하나다. `COMPLETED`는 "발송을 시작해 다시 못 보냄"이다 — 보내다 서버가 죽어도 `COMPLETED`이고(시작하기 전에 정상 종료되면 앱이 `DRAFT`로 되돌린다), 보낸 시각과 받은 사람별 결과는 DB에 없이 로그로 본다.
+> 공백만 있는 문구는 DB가 막지 않는다 — 보낼 때 앱이 거절해 `DRAFT`로 남는다.
+
+### push_campaign_recipients (공지 푸시 받는 사람)
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| push_campaign_id | bigint | PK, FK → push_campaigns, ON DELETE CASCADE | |
+| user_id | UUID | PK, → users | 받는 사람. **논리 참조** — 탈퇴해도 명단에서 빠지지 않는다 |
+| created_at | timestamp | NOT NULL | |
+
+> PK (push_campaign_id, user_id) — 한 캠페인에 같은 사람은 한 번이다. 운영이 `INSERT … SELECT`로 고르고, 그 `WHERE`가 곧 대상 조건이다.
+> 받은 사람별 발송 결과는 두지 않는다 — 보내는 순간 알림 꺼짐·로그인 세션 없음·켜진 기기 없음이면 건너뛰고(탈퇴한 사람도 여기서 빠진다), 그 결과는 로그로 본다.
 
 ---
 
@@ -217,23 +249,27 @@
 
 ### running_room_chats (방 채팅 메시지)
 
-매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. **방 안에 있는 동안만**(배정됨 + 신청 `JOINED` + 방 `MATCHING`·`MATCHED`) 보내고 고치고 지운다 — 러닝이 시작되면 막힌다. 늦게 들어온 사람도 그 방의 메시지를 처음부터 본다. 지난 메시지는 REST 목록 조회(커서 페이지네이션)로 받고, SSE 입장 이벤트에는 싣지 않는다.
+매칭 방·초대 방의 참가자끼리 주고받는 메시지. 솔로 방에는 없다. **방 안에 있는 동안만**(배정됨 + 신청 `JOINED` + 방 `MATCHING`·`MATCHED`) 보내고 고치고 지운다 — 러닝이 시작되면 막힌다. 늦게 들어온 사람도 그 방의 메시지를 처음부터 본다. 지난 메시지는 REST 목록 조회(커서 페이지네이션)로 받고, SSE 입장 이벤트에는 싣지 않는다. 방에 들어오고 나간 것을 알리는 안내 줄도 이 표에 함께 담는다(`type`).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | running_room_chat_id | bigint | PK | API `chatId`(Long). 생성 순서대로 늘어나 정렬·커서·클라 중복 제거의 기준이다 |
 | running_room_id | bigint | FK → running_rooms, NOT NULL, ON DELETE CASCADE | 메시지가 오간 방. `running_room_sessions`와 같은 정책 |
-| user_id | UUID | → users, NOT NULL | 보낸 사람. **논리 참조** — 탈퇴해도 메시지는 남고 "탈퇴 유저"로 보인다. 탈퇴는 이 행을 건드리지 않는다(`deleted_at`을 찍지 않는다 — 탈퇴 여부는 `users`에 행이 없다는 것으로 이미 드러난다) |
-| content | text | NOT NULL | **지금 보이는 내용**, 1~200자. 수정하면 새 값으로 덮고 직전 값은 `running_room_chat_histories`로 옮긴다. 공백만 있는 글은 도메인 VO가 거른다. **지워도 남긴다** — 신고 대응 근거이며, API로는 내려주지 않는다 |
+| user_id | UUID | → users, NOT NULL | 보낸 사람, 안내 줄이면 들어오거나 나간 사람. **논리 참조** — 탈퇴해도 메시지는 남고 "탈퇴 유저"로 보인다. 탈퇴는 이 행을 건드리지 않는다(`deleted_at`을 찍지 않는다 — 탈퇴 여부는 `users`에 행이 없다는 것으로 이미 드러난다) |
+| type | enum | NOT NULL | 말인지 입장·퇴장 안내 줄인지 — [§5](#5-enum-사전). 한 번 정해지면 바뀌지 않는다 |
+| content | text | nullable | **지금 보이는 내용**, 1~200자. 수정하면 새 값으로 덮고 직전 값은 `running_room_chat_histories`로 옮긴다. 공백만 있는 글은 도메인 VO가 거른다. **지워도 남긴다** — 신고 대응 근거이며, API로는 내려주지 않는다. 안내 줄은 null이다 — 문구는 앱이 `type`과 그 사람의 지금 닉네임으로 그린다 |
 | edited_at | timestamp | nullable | 마지막 수정 시각, 수정한 적 없으면 null. "수정됨" 표시용이다 — `updated_at`은 생성 때도 `created_at`과 미세하게 다르게 찍히고 삭제로도 바뀌어 수정 여부를 가르지 못한다 |
 | created_at / updated_at | timestamp | NOT NULL | `created_at` = 보낸 시각, `updated_at` = 마지막 변경(수정·삭제) 시각 |
 | deleted_at | timestamp | nullable | **본인이 지운 시각**(소프트 삭제). **되돌리지 않는다** — 한 번 찍히면 바뀌지 않고, 지운 메시지는 수정할 수 없다. 화면에는 내용 없이 "삭제된 메시지"로 남는다 |
 
 > CHECK `ck_running_room_chat_content_length`: `char_length(content) between 1 and 200`
+> CHECK `ck_running_room_chat_type`: `type in ('MESSAGE', 'JOINED', 'LEFT')`
+> CHECK `ck_running_room_chat_shape`: `(type = 'MESSAGE' and content is not null) or (type <> 'MESSAGE' and content is null and edited_at is null and deleted_at is null)`
 
+> **안내 줄은 고치지도 지우지도 않는다** — 배정·이탈과 같은 트랜잭션에서 생기고, 수정·삭제 경로는 말(`MESSAGE`)만 읽는다.
 > **수정은 이력을 먼저 남긴다** — 메시지 행을 잠그고(`FOR UPDATE`) 직전 `content`를 이력에 INSERT한 뒤 `content`·`edited_at`을 바꾼다. 한 트랜잭션이다. 잠그지 않으면 연달아 온 두 수정이 같은 직전 값을 읽어 이력 하나가 빠진다.
 > **삭제는 이력을 남기지 않는다** — 행에 마지막 내용이 그대로 남고 시각은 `deleted_at`이 말한다. 이력을 시간순으로 읽은 뒤 이 행의 `content`를 붙이면 처음 보낸 내용부터 마지막까지 복원된다.
-> **보내기·수정·삭제는 방 안에 있는 사람만 한다**(`running_room_sessions.is_connected = true`, `running_players.status = 'JOINED'`, 방 `MATCHING`·`MATCHED`), 수정·삭제는 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
+> **보내기·수정·삭제는 방 안에 있는 사람만 한다**(`running_room_sessions.is_connected = true`, `running_players.status = 'JOINED'`, 방 `MATCHING`·`MATCHED`), 수정·삭제는 말을 보낸 본인만. 방이 닫히면 배정이 풀려 아무도 읽지 못한다 — 그 뒤 행은 신고 대응용이고, 보관 기간(운영값, 90일 제안)이 지나면 운영에서 지운다(이력도 CASCADE로 함께 지워진다).
 > **재전송 중복을 막는 키를 두지 않는다** — 클라가 자동 재전송하지 않는 것으로 막는다(api-spec 채팅 절). 중복 제보가 생기면 `client_message_id` + UNIQUE를 더한다.
 
 ### running_room_chat_histories (방 채팅 메시지 수정 이력)
@@ -455,32 +491,32 @@
 
 ### record_cards (기록 카드)
 
-러닝 기록 하나에 회고 글(메모)·활동유형·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서버가 만든다 — 카드를 저장한 뒤 Kafka로 요청하고 완료 이벤트를 구독해 상태를 바꾼다(feature-spec 기록 카드 음악 생성).
+러닝 기록 하나에 회고 글(메모)·활동유형·사진·음악을 붙인 카드. 화면은 옆으로 넘기는 캐러셀이다 — 첫 장은 기록 지도와 **기본곡**, 다음 장부터 사진 한 장마다 **그 사진의 음악**이 나온다. 음악은 AI 서버가 만든다 — 카드를 저장하는 트랜잭션에서 요청을 아웃박스에 쓰고(CDC가 Kafka로 발행) 완료 이벤트를 구독해 상태를 바꾼다(feature-spec 기록 카드 음악 생성).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| record_card_id | bigint | PK | |
-| running_record_id | bigint | FK → running_records, NOT NULL, UNIQUE, ON DELETE CASCADE | 카드가 붙은 기록. **기록과 1:1** — 지운 카드도 행이 남아 기록당 행은 평생 하나다([§0](#0-공통-규칙)) |
+| record_card_id | UUID | PK | UUIDv7. **DB가 매기지 않고 작성 요청(api-spec 9-1)이 정한다** — 사진 key가 카드 폴더(`record-cards/{userId}/{recordCardId}/…`) 아래라 업로드 URL을 주기 전에 ID가 있어야 한다. 확정(9-2)이 이 값으로 행을 넣는다. AI 서버도 이 값을 키로 저장한다 |
+| running_record_id | bigint | FK → running_records, NOT NULL, UNIQUE, ON DELETE CASCADE | 카드가 붙은 기록. **기록과 1:1** — 지우면 행이 사라져(하드 삭제) 같은 기록으로 새 카드를 만들 수 있다([§0](#0-공통-규칙)) |
 | user_id | UUID | → users, NOT NULL | 작성자. **기록 주인과 같다** — 생성 시 `running_records.user_id`와 대조한다 |
 | visibility | enum | NOT NULL | 카드별 공개 범위. 기본값을 서버에 두지 않는다 — 작성 화면 기본값은 클라가 `PUBLIC`으로 둔다 |
 | activity_type | enum | NOT NULL | 그날 러닝의 성격 — `DAILY`(일상) / `TRAVEL`(여행) / `RACE`(대회). 사용자가 고르고, AI가 기본곡·사진 음악의 맥락으로 쓴다 |
-| base_music_status | enum | NOT NULL, default `PENDING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
+| base_music_status | enum | NOT NULL, default `GENERATING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
 | memo | text | NOT NULL | **회고 글**, 1~500자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
-| display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람의 살아 있는 카드 중 최댓값 + 1(없으면 1). **지우면 `-1`**이고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 되살리면 다시 최댓값 + 1(맨 뒤). 사용자가 순서를 바꾸는 기능은 아직 없다 |
+| display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람 카드 중 최댓값 + 1(없으면 1). 지우면 행이 사라지고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
-| base_music_key | varchar(255) | NOT NULL, UNIQUE | 기본곡 S3 key. **서버가 카드를 만들 때 정해 AI에 넘긴다** — 행이 생길 때 key는 있지만 S3 객체는 `READY` 뒤에만 있다. 완료 이벤트가 이 key로 행을 찾는다 |
+| base_music_key | varchar(255) | nullable | 기본곡 S3 key. **AI 서버가 정해 완료 이벤트로 알려 준다** — 카드 행은 key 없이(null) `GENERATING`으로 생기고, `COMPLETED`가 되면서 이 값이 채워진다. `FAILED`면 null로 남는다. 완료 이벤트는 key가 아니라 `record_card_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | |
-| deleted_at | timestamp | nullable | 소프트 삭제. **카드 행은 남기고 사진 행은 지운다**(아래). 같은 기록으로 다시 만들면 이 행을 되살린다 |
 
-> UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 부분 인덱스가 아니다. 지운 카드의 행도 자리를 차지하므로 다시 만들 때는 새 행을 넣지 않고 그 행을 되살린다. 처음 만드는 요청이 동시에 두 번 오면 이 제약이 하나만 남긴다(api-spec 9-2의 409)
-> **되살리기**: 지운 카드가 있는 기록으로 다시 만들면 `deleted_at`을 비우고 `visibility`·`activity_type`·`memo`·`thumbnail_image_key`를 새 값으로, 기본곡을 새 key·`PENDING`으로, `display_order`를 최댓값 + 1(맨 뒤)로 덮고 새 사진 행을 넣는다(옛 사진 행은 삭제할 때 이미 지워졌다). **`record_card_id`·`created_at`은 그대로다.** 옛 사진·음악의 S3 객체는 남는다 — 행이 더는 가리키지 않을 뿐이다
-> **삭제**: `deleted_at`을 기록하고 `display_order`를 -1로, `thumbnail_image_key`를 null로 바꾸며 **사진 행은 하드 삭제한다.** 지운 카드의 사진은 되살릴 때도 쓰지 않아 남길 이유가 없다. `visibility`·`activity_type`·`memo`·기본곡 key와 상태는 행에 남는다. S3 객체(사진·음악)는 지우지 않는다
+> UNIQUE `uk_record_card_running_record`: `(running_record_id)` — 기록 하나에 카드 하나. 처음 만드는 요청이 동시에 두 번 와도 이 제약이 하나만 남긴다(api-spec 9-2의 409). 지운 뒤 같은 기록으로 다시 만들면 새 행(새 카드 ID)이다
+> **잠금**: 카드 쓰기(작성·수정·삭제, 이후 음악 완료 처리까지)는 모두 **`running_records` 행을 먼저 `FOR UPDATE`로 잠근다** — 기록과 카드가 1:1이라 기록 행 하나로 줄을 세운다. 처음 만들 때는 잠글 카드 행이 없고, 카드 행을 따로 잠그지 않는다(잠금 대상이 하나라 순서 문제가 없다)
+> **삭제**: 하드 삭제다. 한 트랜잭션에서 지우기 직전 모습을 `record_card_histories`에 스냅샷으로 남기고(`snapshot_reason = DELETE`) 카드 행을 지운다 — 사진 행은 CASCADE로 함께 지워진다. S3 객체(사진·음악)는 지우지 않는다
 > CHECK `ck_record_card_visibility`: `visibility in ('FRIENDS', 'PUBLIC', 'PRIVATE')`
-> CHECK `ck_record_card_base_music_status`: `base_music_status in ('PENDING', 'READY', 'FAILED')`
+> CHECK `ck_record_card_base_music_status`: `base_music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
+> CHECK `ck_record_card_base_music_key`: `(base_music_status = 'COMPLETED') = (base_music_key is not null)` — key는 AI 서버가 완료 알림으로 주므로 COMPLETED인 기본곡에만 있다
 > CHECK `ck_record_card_activity_type`: `activity_type in ('DAILY', 'TRAVEL', 'RACE')`
 > CHECK `ck_record_card_memo_length`: `char_length(memo) between 1 and 500`
-> CHECK `ck_record_card_display_order`: `(deleted_at is null and display_order >= 1) or (deleted_at is not null and display_order = -1)` — 살아 있으면 1 이상, 지웠으면 -1
-> UNIQUE `uk_record_card_user_display_order`: `(user_id, display_order) WHERE deleted_at IS NULL` — 살아 있는 카드끼리 순위가 겹치지 않는다. 지운 카드는 모두 -1이라 부분 인덱스로 뺀다. 같은 사람이 동시에 두 장을 만들어 최댓값을 같이 읽으면 하나가 이 제약에 걸린다 — 유스케이스가 순위를 다시 읽어 한 번 더 시도한다. 목록 조회(10-3) 인덱스를 겸한다
+> CHECK `ck_record_card_display_order`: `display_order >= 1`
+> UNIQUE `uk_record_card_user_display_order`: `(user_id, display_order)` — 한 사람의 카드끼리 순위가 겹치지 않는다. 같은 사람이 다른 기록 둘로 동시에 만들어 최댓값을 같이 읽으면 하나가 이 제약에 걸린다 — 걸린 쪽은 다시 시도하지 않고 409로 돌려보낸다(api-spec 9-2). 기록 행 잠금은 같은 기록끼리만 줄을 세운다. 목록 조회(10-3) 인덱스를 겸한다
 > **썸네일은 앱이 맞춘다** — `thumbnail_image_key`가 이 카드 사진 중 하나라는 것, 사진이 있으면 null이 아니라는 것은 스키마가 강제하지 않는다. 썸네일 사진을 수정에서 빼면 남은 첫 사진(없으면 null)으로 바꾼다
 > **`running_records`는 write-once라 카드가 기록을 고치지 않는다** — 거리·시간·경로·시작 시각은 조회할 때 기록에서 읽어 붙인다(목록 10-3도 기록을 JOIN한다). 카드에 수치를 복사해 두지 않는다.
 
@@ -490,25 +526,88 @@
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
-| record_card_image_id | bigint | PK | |
-| record_card_id | bigint | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드 행이 하드 삭제되는 경우는 기록이 지워질 때(위 CASCADE)뿐이다. 카드를 소프트 삭제할 때는 CASCADE가 아니라 앱이 사진 행을 지운다 |
-| music_status | enum | NOT NULL, default `PENDING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
+| record_card_image_id | UUID | PK | UUIDv7. **DB가 매기지 않고 사진 key를 발급할 때(api-spec 9-1·9-3) 정한다** — 사진 key의 사진 폴더(`…/{recordCardId}/{recordCardImageId}/…`)가 이 값이다. AI 서버가 이 값을 키로 저장하고 완료 이벤트로 돌려주므로, 받은 결과가 어느 사진의 것인지 이 값으로 찾는다 |
+| record_card_id | UUID | FK → record_cards, NOT NULL, ON DELETE CASCADE | 카드를 지우면(하드 삭제, 기록 삭제 CASCADE 모두) 사진 행도 함께 지워진다 |
+| music_status | enum | NOT NULL, default `GENERATING` | 이 사진 음악의 생성 상태. `record_cards.base_music_status`와 같은 규칙 |
 | sort_order | int | NOT NULL | 캐러셀 순서(0부터). 지도 장 다음부터 센다. 수정(9-3) 때 다시 매긴다 |
 | image_key | varchar(255) | NOT NULL | 사진 S3 key — 9-1이 발급한 키 |
 | caption | varchar(100) | nullable | 사용자가 사진에 붙이는 한 줄 설명(선택). 수정(9-3)에서 바꿀 수 있고, 바꿔도 음악은 다시 만들지 않는다. AI가 사진 음악을 만들 때 사진만으로 장면을 알기 어려우면 이 설명을 쓴다. 비우면 null(빈 문자열로 저장하지 않는다) |
-| music_key | varchar(255) | NOT NULL, UNIQUE | 이 사진 음악의 S3 key. 기본곡과 같이 서버가 정해 AI에 넘긴다 |
+| music_key | varchar(255) | nullable | 이 사진 음악의 S3 key. 기본곡과 같이 AI 서버가 완료 이벤트로 알려 준 값을 `COMPLETED`가 될 때 저장한다(그 전·`FAILED`면 null). 완료 이벤트는 `record_card_image_id`로 행을 찾는다 |
 | created_at / updated_at | timestamp | NOT NULL | `updated_at`은 음악 생성 상태·설명·순서가 바뀔 때 갱신된다 |
 
-> CHECK `ck_record_card_image_music_status`: `music_status in ('PENDING', 'READY', 'FAILED')`
-> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 9`
+> CHECK `ck_record_card_image_music_status`: `music_status in ('GENERATING', 'COMPLETED', 'FAILED')`
+> CHECK `ck_record_card_image_music_key`: `(music_status = 'COMPLETED') = (music_key is not null)` — 기본곡과 같다
+> CHECK `ck_record_card_image_sort_order`: `sort_order between 0 and 4`
 > CHECK `ck_record_card_image_caption_length`: `caption is null or char_length(caption) between 1 and 100`
-> **카드당 사진은 0~10장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
-> **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. S3 객체는 프로필 사진처럼 남긴다.
-> **`(record_card_id, sort_order)`에 UNIQUE를 두지 않는다** — 수정 때 순서를 다시 매기면 중간 상태에서 값이 겹친다. 같은 값이 생기지 않는 것은 수정 유스케이스가 보장한다.
+> **카드당 사진은 0~5장**이다 — 개수는 앱이 검증하고 스키마는 `sort_order` 범위만 강제한다. 사진이 0장이면 카드는 지도+기본곡 한 장이다.
+> **수정에서 뺀 사진과 지운 카드의 사진은 행을 지운다**(하드 삭제) — 음악은 사진에 딸려 있어 사진 없이 남길 이유가 없다. 지우기 직전 모습은 `record_card_histories`의 `images`에 남는다. S3 객체는 프로필 사진처럼 남긴다.
+> UNIQUE `uk_record_card_image_sort_order`: `(record_card_id, sort_order)` **DEFERRABLE INITIALLY DEFERRED** — 한 카드에서 같은 자리에 사진 두 장이 오지 않는다. **커밋 때 검사한다** — 수정(9-3)에서 순서를 맞바꾸면 한 행씩 UPDATE하는 중간에 값이 겹치고, Hibernate는 flush 때 INSERT를 DELETE보다 먼저 보내 "빼고 같은 자리에 넣기"도 중간에 겹친다. 즉시 검사면 정상 수정이 실패한다. 최종 결과의 중복만 막는 안전장치다 — 순서는 도메인이 0부터 다시 매기므로 정상 경로에서는 걸리지 않고, 걸리면 커밋 실패(500)다. 엔티티가 `@UniqueConstraint(options = "deferrable initially deferred")`로 선언해 로컬·E2E 스키마에도 생긴다. 같은 카드를 동시에 고치는 경쟁은 이 제약이 아니라 잠금이 막는다 — 카드 쓰기는 모두 `running_records` 행을 먼저 잠근다. 앞 열이 `record_card_id`라 카드 사진 조회 인덱스를 겸한다.
 
-> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `PENDING` → `READY`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `PENDING`이 아닌 행에 온 이벤트는 무시한다. key로 찾은 행이 없거나(수정에서 뺀 사진·되살리며 바뀐 key) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
+> **음악 생성 상태는 완료 이벤트로만 바뀐다** — AI 서버가 Kafka 완료 토픽에 발행한 이벤트를 running-service가 구독해 바꾼다(api-spec 9-5). `GENERATING` → `COMPLETED`(S3에 객체가 생김) 또는 `FAILED`, 한 번만 바뀐다. Kafka는 같은 이벤트를 두 번 줄 수 있어 `GENERATING`이 아닌 행에 온 이벤트는 무시한다. ID(`record_card_id`·`record_card_image_id`)로 찾은 행이 없거나(수정에서 뺀 사진) 카드가 지워졌으면 무시하고 로그만 남긴다. `FAILED`를 다시 생성하는 경로는 아직 없다(feature-spec 기록 카드 음악 생성).
 
+
+### record_card_histories (기록 카드 이력)
+
+카드가 **바뀌기 직전 모습**을 한 줄씩 남긴다 — 수정할 때와 지울 때마다 그 직전 카드 전체(사진 포함)를 스냅샷으로 찍는다. 작성 때는 남기지 않는다(지금 카드가 곧 첫 모습이다). 신고·분쟁 대응과 운영 확인용이라 API로 내려주지 않는다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| record_card_history_id | bigint | PK | |
+| record_card_id | UUID | NOT NULL | 이력의 카드. **FK를 걸지 않는다** — 카드를 지워도(하드 삭제) 이력은 남아야 한다 |
+| snapshot_reason | enum | NOT NULL | 이 스냅샷을 찍은 이유 — `UPDATE`(수정 직전) · `DELETE`(삭제 직전) |
+| user_id | UUID | → users, NOT NULL | 작성자. 논리 참조 |
+| running_record_id | bigint | NOT NULL | 카드가 붙어 있던 기록. 논리 참조 |
+| visibility · activity_type · memo · thumbnail_image_key | | | 그때의 값 — `record_cards`와 같은 타입·규칙 |
+| base_music_status · base_music_key | | | 그때의 기본곡 상태·key |
+| images | jsonb | NOT NULL | 그때의 사진 전체 — `[{recordCardImageId, imageKey, caption, sortOrder, musicStatus, musicKey}]`, 사진이 없으면 `[]`. 사진 단위로 조회하지 않아 테이블을 나누지 않는다 |
+| card_created_at | timestamp | NOT NULL | 원래 카드를 만든 시각 — 카드가 지워지면 `record_cards.created_at`도 사라지므로 복사해 둔다 |
+| created_at | timestamp | NOT NULL | 스냅샷을 찍은 시각 = 수정·삭제한 시각 |
+
+> CHECK `ck_record_card_history_snapshot_reason`: `snapshot_reason in ('UPDATE', 'DELETE')`
+> INDEX `idx_record_card_history_card`: `(record_card_id, created_at)` — 한 카드의 이력을 시간순으로 본다
+> **write-once** — `created_at`만 둔다(§0 감사 컬럼)
+> **스냅샷은 카드 쓰기와 같은 트랜잭션에서 찍는다** — 기록 행을 잠근 뒤 카드·사진을 다시 읽어 그 값을 남기고, 그다음 변경을 반영한다. 변경이 실패하면 스냅샷도 함께 롤백된다. 잠금 안에서 읽으므로 동시 수정에도 "직전 모습"과 순서가 어긋나지 않는다
+> **음악 완료(상태·key 변경)는 스냅샷을 찍지 않는다** — 사용자가 바꾼 것이 아니라 생성 결과가 도착한 것이다
+> **보관 기간은 아직 정하지 않았다** — 회고 글 원문이 남으므로 정한다(`delete_users`는 90일)
 ---
+
+### outbox_events (아웃박스 이벤트)
+
+다른 서비스로 보낼 이벤트를 **보내게 만든 저장과 같은 트랜잭션에서** 한 줄 쓰는 테이블이다. 앱은 Kafka에 직접 보내지 않는다 — Debezium(CDC)이 Postgres WAL에서 이 테이블의 INSERT를 읽어 Kafka로 발행한다(api-spec 9-5). 저장과 이벤트가 함께 커밋되거나 함께 롤백되므로, 롤백된 카드의 음악이 만들어지거나 커밋된 카드의 요청이 사라지는 일이 없다. 지금은 기록 카드 음악 생성 요청(9-2 작성 확정)만 쓴다.
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| outbox_event_id | UUID | PK | UUIDv7. **앱이 정한다**. 이벤트마다 다르다 — Kafka 헤더 `id`로 나가 받는 쪽(AI 서버) inbox가 같은 이벤트를 두 번 처리하지 않게 거르는 키가 된다 |
+| aggregate_type | enum | NOT NULL | 어떤 대상의 이벤트인지 — 지금은 `RECORD_CARD`뿐 |
+| aggregate_id | varchar(64) | NOT NULL | 대상의 ID(기록 카드면 `record_card_id` UUID 문자열). **Kafka 메시지 key**가 된다 — 같은 카드의 이벤트는 같은 파티션으로 가 순서가 지켜진다. 대상마다 ID 타입이 다를 수 있어 문자열로 둔다 |
+| topic | varchar(100) | NOT NULL | 발행할 Kafka 토픽 이름. **앱이 환경 변수 `KAFKA_ENV`로 앞에 환경을 붙인다**(`test.record-card.music.requested`) — 개발·테스트 서버(로컬은 `dev`)가 Kafka 하나를 같이 써서 환경마다 토픽을 나눈다. Debezium은 이 값을 그대로 토픽으로 쓴다 |
+| payload | jsonb | NOT NULL | Kafka 메시지 본문 — 토픽마다 정한 JSON 그대로다(`record-card.music.requested`는 api-spec 9-5 요청 이벤트, snake_case). 값이 없는 필드도 키를 빼지 않고 `null`로 둔다 |
+| created_at | timestamp | NOT NULL | 이벤트를 쓴 시각 |
+
+> CHECK `ck_outbox_event_aggregate_type`: `aggregate_type in ('RECORD_CARD')`
+> CHECK `ck_outbox_event_topic`: `topic ~ '^(dev|test|prod)\.record-card\.music\.requested$'`
+> **배포 DB는 그 환경 토픽만 허용한다** — 같은 이름의 CHECK를 prod는 `topic ~ '^prod\.record-card\.music\.requested$'`, test는 `^test\.`로 좁혀 손으로 만든다. 엔티티·도메인은 모든 환경에서 같은 코드라 세 환경을 허용하고(로컬은 이 엔티티로 테이블을 만든다), 배포 DB는 `KAFKA_ENV`가 잘못 들어가도 다른 환경 토픽으로 새지 않게 저장 단계에서 막는다. JPA 자동 생성(`update`)은 이미 있는 CHECK를 고치지 않으므로, 이벤트를 늘릴 때 배포 DB의 CHECK도 손으로 넓힌다
+> **write-once** — `created_at`만 둔다(§0 감사 컬럼)
+> **토픽 이름은 CHECK로 막는다** — 환경 이름 오타나 없는 토픽이 들어가면 Debezium이 엉뚱한 토픽으로 보내거나 발행에 실패한다. 이벤트 종류가 늘면 식에 더한다
+> **FK를 걸지 않는다** — 이벤트는 대상에 딸린 데이터가 아니라 보낼 메시지다. 대상(카드)을 하드 삭제해도 이미 쓴 이벤트와는 상관없다
+> **인덱스를 두지 않는다** — 앱은 이 테이블을 조회하지 않고, Debezium은 테이블이 아니라 WAL을 읽는다
+> **Kafka 토픽은 `cleanup.policy=delete`로 만든다** — key(카드 ID)가 같은 이벤트가 여러 개 나가므로 compact면 앞 이벤트가 지워진다. 파티션 수를 바꾸면 key → 파티션 배정이 바뀌어 순서가 잠깐 깨지므로 처음에 정해 두고 바꾸지 않는다
+> **행은 지우지 않고 남긴다** — 무엇을 언제 보냈는지 DB에서 본다. 보관 기간과 지난 행을 지우는 방법은 아직 정하지 않았다(정할 때 `created_at` 인덱스를 함께 둔다). 지울 때 DELETE가 Kafka로 나가지 않게 커넥터는 `tombstones.on.delete=false`다
+> **발행 상태 컬럼(status)을 두지 않는다** — Debezium은 WAL을 읽기만 하고 이 테이블에 다시 쓰지 않아, 상태를 바꿀 주체가 없다. 어디까지 보냈는지는 행마다가 아니라 복제 슬롯의 확인 위치(`pg_replication_slots.confirmed_flush_lsn`)로 본다 — 그보다 앞에 커밋된 행은 발행됐다. 슬롯 지연은 알람으로 본다
+
+### cdc_heartbeats (CDC 하트비트)
+
+**앱이 쓰지 않는다 — 엔티티가 없다.** Debezium이 1분마다 한 줄 쓰는 테이블이다(`heartbeat.action.query`). 기록 카드가 만들어지지 않는 동안에도 Debezium이 publication 안의 변경을 받아 복제 슬롯 위치를 앞으로 밀게 한다 — 이것이 없으면 다른 테이블 쓰기로 늘어난 WAL을 슬롯이 계속 붙잡는다(docs/msa/cdc.md 「복제 슬롯」).
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| created_at | timestamp | NOT NULL | 쓴 시각(KST 벽시계) |
+
+> **PK를 두지 않는다** — 조회하지 않고, 지울 때도 시각으로만 지운다. publication이 INSERT만 내보내므로(UPDATE·DELETE 없음) 복제용 키도 필요 없다
+> **publication(`outbox_publication`)에 들어 있지만 커넥터의 `table.include.list`에는 없다** — 변경은 Debezium까지 가서 슬롯을 밀고, Kafka로는 나가지 않는다
+> **하루 지난 행은 Debezium이 같은 쿼리에서 지운다** — INSERT와 DELETE를 한 문장(CTE)으로 실행한다. DELETE는 publication이 내보내지 않는다
+> **권한**: 커넥터 DB 계정(`debezium`)에 이 테이블의 `SELECT`·`INSERT`·`DELETE`만 준다
+> **test·prod 모두 손으로 만든다** — 엔티티가 없어 JPA 자동 생성이 만들지 않는다
 
 ## 4. delete_* (스냅샷/이력 테이블)
 
@@ -549,14 +648,18 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 |---|---|---|
 | record_cards.visibility | FRIENDS / PUBLIC / PRIVATE | 카드별 개별 저장 — 친구만 / 전체 / 나만 |
 | record_cards.activity_type | DAILY / TRAVEL / RACE | 일상 / 여행 / 대회 — 카드 단위. AI 음악 생성 입력 |
-| record_cards.base_music_status · record_card_images.music_status | PENDING / READY / FAILED | 생성 중 / S3에 올라옴 / 생성 실패. 완료 이벤트로만 바뀐다 |
+| outbox_events.aggregate_type | RECORD_CARD | 이벤트를 만든 대상 — 지금은 기록 카드뿐. 대상이 늘면 값을 더한다 |
+| record_cards.base_music_status · record_card_images.music_status | GENERATING / COMPLETED / FAILED | 생성 중 / 완료(AI가 준 key가 있다) / 생성 실패. 완료 이벤트로만 바뀐다 |
 | users.profile_visibility | FRIENDS / PUBLIC | 지인 마스킹 — FRIENDS는 `user_relationships`로 직접 판정 |
 | user_relationships.type | NONE / FRIEND / FRIEND_REQUEST_SENT / FRIEND_REQUEST_RECEIVED / BLOCKED | 행 주인 관점의 관계 — 관계 없음(끝난 관계) / 친구 / 보낸 요청 / 받은 요청 / 내가 차단함. API `relationshipType`과 같은 값(`BLOCKED`는 차단 구현 때 API에 추가). 행이 없어도 `NONE`이다 |
 | running_room_invitations.status | PENDING / ACCEPTED / DECLINED / LEFT / EXPIRED | 응답 대기 / 수락(지금 방에 있음) / 거절 / 수락 뒤 방을 나감 / 모집 마감·방 취소로 만료. `user_relationships`와 달리 거절을 값으로 남긴다 — 화면(`RoomInfo.invitations`)은 `PENDING`만 보여주지만, 다시 초대할 때 보낸 횟수를 이어서 세려면 행이 남아야 한다 |
+| running_room_chats.type | MESSAGE / JOINED / LEFT | 참가자가 쓴 말 / 들어옴 / 나감. 나갔던 방에 다시 들어와도 `JOINED`다 |
 | user_notifications.type | FRIEND_REQUESTED / FRIEND_ACCEPTED / RUNNING_INVITED | 친구 요청 도착 / 내 요청이 수락됨 / 러닝 초대 도착 |
 | user_onboardings.gender | MALE / FEMALE | |
 | user_devices.platform | IOS / ANDROID | |
 | app_versions.platform | IOS / ANDROID / WATCH_IOS / WATCH_ANDROID | 폰 앱 둘은 `user_devices.platform`과 같은 값. 워치는 출시 채널로 가른다 — 애플워치 / 갤럭시워치 등 Wear OS |
+| push_campaigns.type | NOTICE | 정보성 공지(서비스 변경·안전·업데이트 안내) — 광고성 값은 수신 동의를 갖춘 뒤 연다 |
+| push_campaigns.status | DRAFT / COMPLETED | 보내기 전 / 발송을 시작함(다시 못 보낸다 — 보내다 멈춰도 이 값) |
 | running_players.status | JOINED / MATCHED_LEFT_PENALTY / MATCHED_LEFT_NO_PENALTY / RUNNING / RUNNING_LEFT_PENALTY / RUNNING_LEFT_NO_PENALTY / COMPLETED | 초대 대기는 이 값이 아니라 `running_room_invitations.status`가 갖는다. 참가 / **시작 전 이탈**(제재·미제재) / 러닝 중 / 러닝 중 이탈(제재·미제재) / 완주. **`MATCHED_LEFT_*`는 대기 취소·확정 후 이탈·미출석을 함께 담는다** — 신청이 어떻게 끝났는지를 `status` 한 축으로 읽기 위해서다. 제재 여부는 `_PENALTY`/`_NO_PENALTY`가 가르며, 대기 취소는 언제나 `_NO_PENALTY`다 |
 | running_rooms.type | SOLO / MATCH / INVITE | 솔로 러닝 / 랜덤 매칭 / 친구 초대 |
 | running_rooms.status | MATCHING / MATCHED / STARTED / FINISHED / CANCELLED | 모집 중(마감 전) / 마감 시점 확정(인원 무관, 1인도 확정) / 시작 / **유효 기록을 남기고** 종료 / 남길 기록 없이 닫힘 — 시작 전이면 항상(인원이 0이 됐거나, 한 번도 시작되지 않은 방을 강제 종료가 닫을 때 — 이때는 인원을 줄이지 않는다), 시작 후면 유효 기록이 하나도 없을 때 |
@@ -569,7 +672,7 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 
 ## 6. 인덱스 (조회 성능)
 
-> 복합 PK는 첫 컬럼 조회를 커버한다(`running_room_invitations`의 방 단위 조회는 PK가 덮는다). `running_segments (running_record_id, segment_number)`·`running_splits (running_segment_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). 구간은 기록 → 조각 → 구간 순으로 찾는다 — 두 UNIQUE가 각 단계의 FK 조회와 연쇄 삭제를 커버한다.
+> 복합 PK는 첫 컬럼 조회를 커버한다(`running_room_invitations`의 방 단위 조회, `push_campaign_recipients`의 캠페인별 명단 조회는 PK가 덮는다). `running_segments (running_record_id, segment_number)`·`running_splits (running_segment_id, split_number)` UNIQUE도 마찬가지고, `running_records (running_room_id, user_id)` UNIQUE가 방 결과 조회를 커버한다. `running_combos (running_room_id, first_user_id, second_user_id, segment_number)` UNIQUE가 방 안에서 `first_user_id`로 찾는 조회를 커버하고, 아래 `(running_room_id, second_user_id, segment_number)`가 `second_user_id` 쪽을 맡는다 — 참가자는 쌍의 어느 쪽에든 있을 수 있다. 여러 방에 걸친 콤보 조회가 생기면 `first_user_id`·`second_user_id`로 시작하는 인덱스를 각각 추가한다(Postgres가 BitmapOr로 합친다). 구간은 기록 → 조각 → 구간 순으로 찾는다 — 두 UNIQUE가 각 단계의 FK 조회와 연쇄 삭제를 커버한다.
 
 | 인덱스 대상 | 용도 |
 |---|---|
@@ -583,13 +686,15 @@ FK 강제 없는 독립 테이블(원본 삭제/수정된 row를 참조하므로
 | running_room_chats.(running_room_id, running_room_chat_id) | 방 채팅 목록 조회 — 역방향 스캔으로 최신순·커서 조건까지 처리한다. 방 FK 조회와 CASCADE도 덮는다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | running_room_chat_histories.running_room_chat_id | 메시지 하나의 수정 이력 조회(신고 대응)·메시지 삭제 시 CASCADE — FK 조회 |
 | user_onboardings.avg_pace | 추천 친구의 페이스 비슷한 사람 — 본인 페이스 ± 운영값 범위 조회 |
-| record_cards.(user_id, display_order) WHERE deleted_at IS NULL | 프로필 카드 목록(10-3) — UNIQUE `uk_record_card_user_display_order`가 겸한다. 순위 역순(최신이 위)·커서 조건을 역방향 스캔으로 처리한다. 공개 범위는 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
-| record_card_images.record_card_id | 카드 사진 조회(8-1, 10-3 장수) — FK 조회. 순서(`sort_order`)는 카드당 10장 이하라 읽은 뒤 정렬한다 |
+| record_cards.(user_id, display_order) | 프로필 카드 목록(10-3) — UNIQUE `uk_record_card_user_display_order`가 겸한다. 순위 역순(최신이 위)·커서 조건을 역방향 스캔으로 처리한다. 공개 범위는 읽은 행에 거는 필터다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
+| record_card_images.(record_card_id, sort_order) | 카드 사진 조회(8-1, 10-3 장수)와 카드 삭제 CASCADE — UNIQUE `uk_record_card_image_sort_order`(DEFERRABLE)가 겸한다. 따로 FK 인덱스를 두지 않는다 |
 | running_records.(user_id, start_at) | 내 기록 조회 — 기간 조회(`start_at` 범위)와 시작 시각 정렬을 인덱스가 함께 처리한다 |
+| running_records.(created_at, running_record_id) | 홈 공지 띠의 오늘·어제 완주(앱 스트림 `HOME_ACTIVITY`) — 날짜 범위(`created_at`)와 최신순 정렬(`created_at`·`running_record_id` 역순)을 인덱스가 함께 처리한다. 역방향 스캔이라 `DESC`를 붙이지 않는다 |
 | running_room_sessions.(user_id, is_connected) | 유저의 현재 방 조회 — 복합 PK가 `running_room_id` 방향만 커버해 역방향이 미커버다. 활성 신청에서 배정된 방을 찾을 때 타며, 현재 방 조회는 `is_connected=true`를 항상 함께 본다 |
 | running_rooms.(deleted_at, type, status, start_at, target_distance, avg_pace) | 매칭 후보 방 조회 — 같은 슬롯·거리에서 모집 중이고 자리가 남은 방(`type='MATCH' AND status='MATCHING'`). 솔로 방·초대방을 인덱스 단계에서 배제한다. **`avg_pace`는 거르는 조건이 아니라 순위 재료다** — 후보 자격에 페이스 조건이 없어(feature-spec 방 배정 기준) 조회가 값만 실어 나르고 정렬은 애플리케이션이 한다. **모집 마감은 이 인덱스를 타지 않는다** — 방을 훑는 대신 `scheduled_jobs`에 예약을 걸어 그 시각에만 깬다. 슬롯별 대기 인원 집계(`GET /match-rooms/slots`)도 같은 인덱스를 탄다 — 앞 세 컬럼은 등치, `start_at`은 그날 하루 범위, `target_distance`는 거르지 않고 인덱스에서 읽어 거리별로 묶으며 `current_player_count`만 테이블에서 읽는다 |
 | running_combos.(running_room_id, second_user_id, segment_number) | 방 안에서 내 콤보 구간 조회의 `second_user_id` 쪽 — UNIQUE가 `first_user_id` 방향만 커버한다. 쌍을 정렬해 저장하므로 참가자가 어느 쪽에 있을지 미리 알 수 없다. `segment_number`까지 두어 구간 순서대로 읽힌다 |
 | running_combos.(first_user_id, combo_count) · (second_user_id, combo_count) | 업적 최고 콤보 — 여러 방에 걸친 내 콤보의 최댓값. 쌍의 어느 쪽에든 있을 수 있어 둘 다 두고 Postgres가 각각 읽어 합친다 |
 | scheduled_jobs.(is_sent, execute_at) | 부팅 복구 — 아직 실행되지 않은 예약 조회. `is_sent=false`가 선두라 실행이 끝난 대다수를 인덱스 단계에서 배제한다 |
 | running_players.(user_id, deleted_at) | 활성 신청 조회 — 중복 신청 검사·내 매칭 상태·러닝 시작 |
+| running_players.(status, start_at) | 홈 공지 띠의 지금 달리는 사람 수(`HOME_ACTIVITY`) — `status='RUNNING'` 등치 뒤 `start_at` 범위. **부분 인덱스로 두지 않는다** — 조회가 `status`를 파라미터로 넘겨, 범용 실행 계획에서는 부분 인덱스 조건을 증명하지 못해 인덱스를 쓰지 못한다 |
 | delete_users.(email, created_at) `WHERE email IS NOT NULL` | 보관 기간 만료 정리 — 아직 신원 정보가 남은 행 조회. **부분 인덱스다** — 엔티티 `@Index`로는 조건을 표현할 수 없어 운영 DDL에만 조건이 붙는다. `email`이 선두라 정리가 끝난 대다수를 인덱스 단계에서 배제한다. 행을 지우지 않는 테이블이라 시간이 갈수록 `created_at` 단독으로는 거의 전부를 읽게 된다 |

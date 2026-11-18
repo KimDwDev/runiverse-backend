@@ -69,11 +69,16 @@ public final class SseStream implements AutoCloseable {
 
     /** 기다리는 이벤트가 올 때까지 나머지는 흘려보내고, 온 이벤트의 data(JSON)를 꺼낸다. */
     public Map<String, Object> await(String event) {
-        long deadline = System.nanoTime() + DEFAULT_TIMEOUT.toNanos();
+        return await(event, DEFAULT_TIMEOUT);
+    }
+
+    /** 주기로 오는 이벤트처럼 기본 대기보다 오래 걸리는 것을 기다린다. */
+    public Map<String, Object> await(String event, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
         while (true) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0) {
-                throw new IllegalStateException("%s 를 %s 안에 받지 못했습니다".formatted(event, DEFAULT_TIMEOUT));
+                throw new IllegalStateException("%s 를 %s 안에 받지 못했습니다".formatted(event, timeout));
             }
             Map<String, Object> message = poll(remaining);
             if (message == null) {

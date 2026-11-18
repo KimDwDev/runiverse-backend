@@ -255,6 +255,48 @@ public class FcmPushClientTest {
                 .contains("timeoutMs=3000");
     }
 
+    @Test
+    @DisplayName("채팅 푸시는 알림 없이 data에 제목·본문을 싣고, APNs는 방으로 묶어 알림 확장을 깨운다")
+    void roomChatIsDrawnByApp() throws Exception {
+        // given
+        PushMessage message = new PushMessage(PushType.ROOM_CHAT_SENT, "19:30 - 5 km 러닝", "곧 출발해요",
+                Map.of("runningRoomId", "125", "chatId", "3021"), null);
+        when(firebaseMessaging.sendAsync(any())).thenReturn(ApiFutures.immediateFuture("message-id"));
+
+        // when
+        PushSendStatus status = client.send(USER_ID, TOKEN, message);
+
+        // then -> 알림 블록이 있으면 안드로이드가 앱 대신 한 건씩 띄운다
+        assertThat(status).isEqualTo(PushSendStatus.SENT);
+        String json = sentJson();
+        assertThat(json)
+                .doesNotContain("\"notification\"")
+                .contains("\"title\":\"19:30 - 5 km 러닝\"")
+                .contains("\"body\":\"곧 출발해요\"")
+                .contains("\"type\":\"ROOM_CHAT_SENT\"")
+                .contains("\"thread-id\":\"125\"")
+                .contains("\"mutable-content\":1")
+                .contains("\"sound\":\"default\"")
+                .contains("\"priority\":\"high\"");
+    }
+
+    @Test
+    @DisplayName("채팅 푸시에 방이 없으면 보내지 않고 FAILED를 돌려준다")
+    void roomChatWithoutRoomIsFailed() {
+        // given
+        PushMessage message = new PushMessage(PushType.ROOM_CHAT_SENT, "19:30 - 5 km 러닝", "곧 출발해요",
+                Map.of("chatId", "3021"), null);
+
+        // when
+        PushSendStatus status = client.send(USER_ID, TOKEN, message);
+
+        // then
+        assertThat(status).isEqualTo(PushSendStatus.FAILED);
+        verifyNoInteractions(firebaseMessaging);
+        assertThat(log.messages(Level.ERROR)).singleElement().asString()
+                .contains("[기기] 푸시 발송 실패: FCM 요청 오류");
+    }
+
     // 생성자가 공개돼 있지 않아 mock으로 만든다
     private FirebaseMessagingException fcmException(MessagingErrorCode messagingErrorCode) {
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
