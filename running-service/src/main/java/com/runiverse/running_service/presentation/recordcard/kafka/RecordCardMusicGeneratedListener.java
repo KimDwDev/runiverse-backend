@@ -17,7 +17,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 // 음악 생성 완료 이벤트를 받는다(api-spec 9-5) — 형식을 검사해 Command로 옮기고 usecase를 부른다.
@@ -113,7 +112,7 @@ public class RecordCardMusicGeneratedListener {
     private static String failureCode(RecordCardMusicGeneratedMessage message) {
         String fromResult = message.result().error() == null ? null : message.result().error().code();
         String fromInvoke = message.invoke() == null ? null : message.invoke().errorCode();
-        return Objects.requireNonNullElse(fromResult, fromInvoke);
+        return fromResult != null ? fromResult : fromInvoke;
     }
 
     // 계약 위반 — 처리하지 않고 넘어간다(오프셋은 커밋된다). 본문은 남기지 않고 위치만 남긴다(원문은 토픽에서 찾는다)
