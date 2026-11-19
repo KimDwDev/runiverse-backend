@@ -19,7 +19,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-// 음악 생성 완료를 카드에 반영한다(api-spec 9-5 완료 이벤트) — inbox 기록과 상태 변경이 한 트랜잭션이다.
+// 음악 생성 완료를 카드에 반영한다 — inbox 기록과 상태 변경이 한 트랜잭션이다.
 // 결과에 담긴 음악만 본다 — 담기지 않은 음악은 다른 요청(생성 중에 들어온 수정·다시 만들기)의 것일 수 있다.
 // GENERATING인 음악만 바꾼다 — 이미 끝난 음악에 온 결과는 늦게 온 결과라 덮지 않는다
 @Slf4j
@@ -96,7 +96,7 @@ public class CompleteRecordCardMusicHandler implements CompleteRecordCardMusicUs
                                     PhotoMusic photoMusic, CompleteRecordCardMusicCommand command) {
         RecordCardImage image = imagesById.get(photoMusic.recordCardImageId());
         if (image == null) {
-            // 수정에서 뺀 사진의 늦은 결과 — 사진 행은 확정(9-2)만 만든다
+            // 수정에서 뺀 사진의 늦은 결과 — 사진 행은 작성 확정만 만든다
             log.warn("[기록 카드] 사진 음악 반영 건너뜀: 사진 없음 - recordCardId={}, recordCardImageId={}, eventId={}",
                     command.recordCardId(), photoMusic.recordCardImageId(), command.eventId());
             return false;

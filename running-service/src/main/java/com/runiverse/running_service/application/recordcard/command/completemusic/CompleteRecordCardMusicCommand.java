@@ -5,7 +5,7 @@ import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
 import java.util.List;
 import java.util.UUID;
 
-// 음악 생성 완료 — AI 서버가 요청 하나에 최종 결과를 한 번 보낸다(api-spec 9-5 완료 이벤트).
+// 음악 생성 완료 — AI 서버가 요청 하나에 최종 결과를 한 번 보낸다.
 // 메시지 형식(헤더·JSON 필드 이름)은 받는 쪽이 읽어 이 값으로 옮긴다
 public record CompleteRecordCardMusicCommand(
         String topic,                   // 받은 토픽 — inbox 키 앞부분(토픽마다 키를 정하는 쪽이 달라서)

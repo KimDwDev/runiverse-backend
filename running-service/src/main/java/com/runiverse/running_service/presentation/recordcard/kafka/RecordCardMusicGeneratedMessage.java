@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.UUID;
 
-// 음악 생성 완료 이벤트 본문(api-spec 9-5 {env}.record-card.music.generated) — AI 서버와 맞춘 snake_case 계약이라 이름을 바꾸지 않는다.
+// 음악 생성 완료 이벤트({env}.record-card.music.generated)의 본문 — AI 서버와 맞춘 snake_case 계약이라 이름을 바꾸지 않는다.
 // 쓰는 필드만 읽는다(duration_seconds·message 원문은 읽지 않는다). 형식이 맞는지는 리스너가 본다
 public record RecordCardMusicGeneratedMessage(
         @JsonProperty("inference_id") String inferenceId,

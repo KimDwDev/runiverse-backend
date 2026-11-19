@@ -18,7 +18,7 @@ import java.io.Serializable;
 
 // 다른 서비스에서 받아 처리한 이벤트 — 처리와 같은 트랜잭션에서 한 줄 쓴다. 같은 이벤트가 다시 오면 PK로 걸러 두 번 처리하지 않는다.
 // 쓰기는 엔티티 저장이 아니라 INSERT … ON CONFLICT DO NOTHING이다(InboxEventAdapter) — 중복을 예외 없이 판정하려고.
-// 한 번 쓰고 고치지 않는다. 행은 남긴다. erd inbox_events
+// 한 번 쓰고 고치지 않는다. 행은 남긴다.
 @Getter
 @Entity
 @Table(name = "inbox_events")

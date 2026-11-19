@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 // 받은 이벤트를 inbox에 남긴다 — 이미 있으면(같은 토픽·이벤트 키) 아무것도 쓰지 않고 false.
-// 중복을 예외로 받지 않는다 — PK 충돌 예외가 나면 그 트랜잭션을 더 쓸 수 없다. erd inbox_events
+// 중복을 예외로 받지 않는다 — PK 충돌 예외가 나면 그 트랜잭션을 더 쓸 수 없다.
 @Component
 @RequiredArgsConstructor
 public class InboxEventAdapter implements RecordInboxEventPort {

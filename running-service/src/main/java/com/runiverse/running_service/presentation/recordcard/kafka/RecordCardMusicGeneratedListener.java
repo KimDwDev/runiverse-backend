@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
-// 음악 생성 완료 이벤트를 받는다(api-spec 9-5) — 형식을 검사해 Command로 옮기고 usecase를 부른다.
+// 음악 생성 완료 이벤트를 받는다 — 형식을 검사해 Command로 옮기고 usecase를 부른다.
 // 계약 위반(헤더 id 없음·본문 형식·필수 값)은 건너뛴다 — 다시 받아도 계속 실패해 파티션이 멈추기 때문이다.
 // usecase의 예외(DB 오류)는 그대로 올린다 — 오프셋을 커밋하지 않아 다시 받는다(오류 처리기는 KafkaConsumerConfig).
 // 로컬·E2E는 브로커에 닿지 않아 kafka.consumer.enabled=false로 이 빈을 만들지 않는다
