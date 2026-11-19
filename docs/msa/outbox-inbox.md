@@ -36,7 +36,7 @@
               {env}.record-card.music.requested ──▶ inbox로 중복 거름 → 음악 생성
                                                               │
  inbox로 중복 거름 → 음악 상태 변경  ◀── {env}.record-card.music.generated
- (완료 구독 — 아직 구현 전)
+ (완료 구독 — RecordCardMusicGeneratedListener)
 ```
 
 ## 보내는 쪽 — 아웃박스
@@ -70,7 +70,7 @@
 
 ## 받는 쪽 — Inbox
 
-> **구현 중이다** — running-service가 완료 토픽(`{env}.record-card.music.generated`)을 구독할 때 함께 만든다. 이벤트 모양과 경우별 처리는 api-spec 9-5가 정본이다.
+> running-service가 완료 토픽(`{env}.record-card.music.generated`)을 받을 때 쓴다. 이벤트 모양과 경우별 처리는 api-spec 9-5가 정본이다. 코드는 「지금 있는 이벤트」 표.
 
 AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** running-service는 거를 키(헤더 `id`)를 실어 보낼 뿐이다.
 
@@ -106,8 +106,9 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 | 경우 | 처리 | 로그 |
 |---|---|---|
-| DB 오류(연결·잠금 대기 초과 등) | 오프셋을 커밋하지 않고 다시 받는다 — 일시적이라 다시 받으면 처리된다 | ERROR |
-| 헤더 `id` 없음·본문을 읽지 못함·필수 필드 없음·모르는 값(계약 위반) | 건너뛰고 오프셋을 커밋한다 — 다시 받아도 계속 실패해 그 파티션이 멈추기 때문이다 | ERROR |
+| DB 오류(연결·잠금 대기 초과 등) | 오프셋을 커밋하지 않고 다시 받는다 — 일시적이라 다시 받으면 처리된다. 1초부터 두 배씩 최대 60초 간격, 횟수 제한 없이(완료 결과를 버리지 않는다) | ERROR |
+| 헤더 `id` 없음·본문을 읽지 못함·필수 필드 없음·모르는 값(계약 위반) | 건너뛰고 오프셋을 커밋한다 — 다시 받아도 계속 실패해 그 파티션이 멈추기 때문이다. 리스너가 usecase를 부르기 전에 거른다 | ERROR |
+| 업무 예외(domain·application `BusinessException`) | 다시 받지 않고 건너뛴다 — 다시 받아도 같다 | ERROR |
 
 - 계약 위반은 inbox에 넣지 않는다 — 처리하지 않은 메시지다. 원문은 로그로 찾는다(본문 전체가 아니라 토픽·파티션·오프셋·key).
 
@@ -117,6 +118,28 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 - **받은 본문을 그대로 남긴다** — 무엇을 받았는지 DB에서 본다(아웃박스가 보낸 것을 남기는 것과 짝이다). AI 서버 쪽 기록과 맞춰 볼 때 쓴다.
 - **행은 남긴다** — 보관 기간과 정리는 아웃박스와 함께 정한다.
+- **배포 DB** — prod는 손으로 만든 DDL과 앱 계정 권한(`INSERT`·`SELECT`), test는 앱이 기동할 때 만든다(`ddl-auto=update`, 앱 계정이 만들어 권한을 따로 주지 않는다).
+
+### 검증 — 테스트가 못 보는 것
+
+E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환경에 붙이거나 설정을 바꾸면 직접 확인한다. 로컬 앱으로 붙는 방법은 [kafka.md](kafka.md) 「로컬 앱으로 붙기」.
+
+| 확인 | 로컬 앱 → 개발 클러스터 | test | prod |
+|---|---|---|---|
+| 접속 — TLS·SCRAM, 그룹 가입, 파티션 배정 | ✅ | 배포 뒤 확인 | 배포 뒤 확인 |
+| 성공 이벤트 → 기본곡·사진 음악 `COMPLETED` + key, inbox 행 1줄, 컨슈머 지연 0 | ✅ | | |
+| 같은 이벤트를 다시 보냄 → inbox에서 걸러 UPDATE 없음 | ✅ | | |
+| 헤더 `id` 없는 이벤트 → ERROR를 남기고 건너뜀 | ✅ | | |
+| 이미 끝난 음악에 늦은 `FAILED` → 덮어쓰지 않음 | ✅ | | |
+| `GENERATING`인 음악에 `FAILED` → `FAILED` | ✅ | | |
+| 앱 서버 → 브로커 `9092` (보안 그룹) | — | ✅ | ✅ |
+| 앱 서버가 접속 값·CA 인증서 파라미터를 읽고 복호화한다 (IAM·KMS) | — | ✅ | ✅ |
+| 토픽 `READ` `DESCRIBE`·그룹 `READ` 권한 | ✅ | 배포 뒤 확인(파티션 배정) | ✅ |
+| `inbox_events`와 앱 계정 권한 | ✅ | 배포 뒤 확인(기동할 때 생성) | ✅ |
+| CA 인증서가 컨테이너에 읽기 전용으로 마운트된다 | — | 배포 뒤 확인 | ✅ 시작 템플릿 버전 8로 띄운 새 인스턴스 |
+| AI 서버가 보낸 완료 이벤트(헤더 `id` = `inference_id`)가 반영된다 | — | AI 서버 반영 뒤 | AI 서버 반영 뒤 |
+
+- 로컬 검증에 쓴 메시지는 확인 뒤 `kafka-delete-records`로 지웠다([kafka.md](kafka.md) 「지금 설정 때문에 지켜야 할 것」).
 
 ### 정하지 않은 것
 
@@ -128,8 +151,8 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 | 토픽 (`{env}.` 생략) | 방향 | 쓰는 곳 | 코드 | 받는 쪽 중복 거르기 |
 |---|---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, 완료 구독 구현 뒤 AI 서버와 확인) |
-| `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | 구현 중 | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
+| `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버와 확인 전) |
+| `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | `RecordCardMusicGeneratedListener` → `CompleteRecordCardMusicUsecase` → `CompleteRecordCardMusicHandler`(`RecordInboxEventPort` → `InboxEventAdapter`) | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
 
 ## 새 이벤트를 더할 때
 
@@ -156,5 +179,8 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 | 단위 | 새로 저장했을 때만 포트를 부르는가 — 재시도·409·실패 경로에서는 부르지 않는다 | `RecordCardDraftSaverTest` |
 | 통합 | 흐름 안에서 요청이 남는가 — 포트를 메모리 대역으로 바꾼다 | `InMemoryRecordCardMusicRequests` |
 | E2E | 실제 DB에 행이 남는가 — 실패한 요청은 0줄, 성공한 요청은 1줄 | `RecordCardE2eTest` |
+| 단위 (받는 쪽) | 계약 위반을 usecase 전에 거르는가 — 헤더 `id`·본문·key·status·음악 목록·성공인데 key 없음 | `RecordCardMusicGeneratedListenerTest` |
+| 단위 (받는 쪽) | 중복은 아무것도 바꾸지 않는가, 결과에 있고 `GENERATING`인 음악만 바꾸는가 | `CompleteRecordCardMusicHandlerTest` · `RecordCardMusicUpdateTest` |
+| 단위 (받는 쪽) | 처음이면 1줄, 다시 오면 0줄로 판정하는가 / 접속 값이 없으면 기동을 막고, 업무 예외는 건너뛰고 DB 오류는 다시 받는가 | `InboxEventAdapterTest` · `KafkaConsumerConfigTest` |
 
-- **테스트가 통과해도 검증되지 않는 것** — CDC가 실제로 발행하는지, 헤더·key·토픽이 컬럼대로 나가는지, 배포 DB의 CHECK. E2E 스택에는 Kafka·Debezium이 없다 — 직접 확인하는 항목은 [cdc.md](cdc.md) 「검증」.
+- **테스트가 통과해도 검증되지 않는 것** — CDC가 실제로 발행하는지, 헤더·key·토픽이 컬럼대로 나가는지, 배포 DB의 CHECK, 리스너가 실제 브로커에서 받는지와 `ON CONFLICT` SQL. E2E 스택에는 Kafka·Debezium이 없다 — 직접 확인하는 항목은 [cdc.md](cdc.md) 「검증」(보내는 쪽)과 위 「받는 쪽」 「검증」.
