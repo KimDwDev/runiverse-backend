@@ -63,7 +63,7 @@ Runiverse에서 서비스가 나뉘는 부분과, 이 백엔드(running-service)
 | 토픽 (`{env}.` 생략) | 방향 | 보내는 방식 | 받는 쪽 중복 거르기 | 상태 |
 |---|---|---|---|---|
 | `record-card.music.requested` | running-service → AI | 아웃박스 + CDC | AI 서버 inbox (헤더 `id`) | test·prod CDC 동작 중 |
-| `record-card.music.generated` | AI → running-service | AI 서버가 직접 발행 | running-service inbox + `GENERATING`인 행만 바꾸는 규칙 | 구독·inbox 구현 전 |
+| `record-card.music.generated` | AI → running-service | AI 서버가 직접 발행 | running-service inbox(헤더 `id` = `inference_id`) + `GENERATING`인 행만 바꾸는 규칙 | 구독·inbox 구현 중 |
 
 ### 흐름 — 기록 카드 음악
 
