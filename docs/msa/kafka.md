@@ -188,7 +188,7 @@ running-service는 완료 토픽만 받는다(컨슈머 하나, 프로듀서 없
 - **값을 출력하지 않는다** — SSM 명령의 출력은 Actions 로그에, 사용자 데이터의 출력은 부트스트랩 로그(`/var/log/runiverse-bootstrap.log`)·콘솔 로그에 남는다. 파일로만 쓰고 `BEGIN CERTIFICATE`가 있는지만 확인한다.
 - **`644`다** — 컨테이너 사용자가 읽어야 한다. CA 인증서는 공개 정보라 읽혀도 되고, 막을 것은 **바꿔치기**다 — 지킬 것은 그 파라미터의 쓰기 권한(`ssm:PutParameter`)이다. 비밀번호가 든 `.env`는 `600`이다.
 - **인증서를 바꾸면** — 값을 고친 뒤 test는 다시 배포, prod는 인스턴스 새로 고침(종료 전 시작, 최소 정상 100%)으로 새 인스턴스에 반영한다.
-- **시작 템플릿을 고칠 때** — 원본 버전을 지금 쓰는 버전으로 고르고, 만든 뒤 바로 앞 버전과 **사용자 데이터 말고는 같은지** CLI로 비교한다(`describe-launch-template-versions`에서 `UserData`를 뺀 비교). 콘솔은 원본 버전을 바꿔도 사용자 데이터 칸을 다시 채우지 않는 경우가 있다. 사용자 데이터만 바꿀 때는 `create-launch-template-version --source-version`으로 만들면 나머지가 그대로 복사된다.
+- **시작 템플릿을 고칠 때** — 원본 버전을 지금 쓰는 버전으로 고르고, 만든 뒤 바로 앞 버전과 **사용자 데이터 말고는 같은지** CLI로 비교한다(`describe-launch-template-versions`에서 `UserData`를 뺀 비교) — 콘솔 화면만으로는 원본 값이 모두 옮겨졌는지 알 수 없다. 사용자 데이터만 바꿀 때는 `create-launch-template-version --source-version`으로 만들면 나머지가 그대로 복사된다.
 - AI 서버의 CA 인증서는 AI 쪽에서 넣는다.
 
 ### 로컬 앱으로 붙기
