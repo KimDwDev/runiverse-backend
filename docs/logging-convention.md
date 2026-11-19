@@ -71,6 +71,7 @@
 | `relationship` | `[관계]` |
 | `match` | `[매칭]` |
 | `running` | `[러닝]` |
+| `recordcard` | `[기록 카드]` |
 | `scheduling` | `[예약]` |
 | `notification` | `[알림]` |
 | `app` | `[앱]` |
