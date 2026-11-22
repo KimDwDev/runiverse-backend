@@ -4,8 +4,10 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
+import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.query.detail.GetRecordCardDetailQuery;
 import com.runiverse.running_service.presentation.recordcard.request.CreateRecordCardDraftRequest;
@@ -19,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,6 +45,7 @@ public class RecordCardController {
     private final CreateRecordCardDraftUsecase createRecordCardDraftUsecase;
     private final CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
     private final GetRecordCardDetailUsecase getRecordCardDetailUsecase;
+    private final DeleteRecordCardUsecase deleteRecordCardUsecase;
 
     // 8-1 — 볼 수 없는 카드(없음·탈퇴·공개 범위 밖·차단)는 모두 404다
     @GetMapping("{recordCardId}")
@@ -53,6 +57,18 @@ public class RecordCardController {
         UUID viewerId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.ok(RecordCardDetailResponse.from(getRecordCardDetailUsecase.handle(
                 new GetRecordCardDetailQuery(viewerId, UUID.fromString(recordCardId)))));
+    }
+
+    // 9-4 — 하드 삭제. 없거나(이미 지운 카드 포함) 남의 카드면 404다
+    @DeleteMapping("{recordCardId}")
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Pattern(regexp = UUID_V7_FORMAT, message = "입력값이 올바르지 않습니다.")
+            String recordCardId
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        deleteRecordCardUsecase.handle(new DeleteRecordCardCommand(userId, UUID.fromString(recordCardId)));
+        return ResponseEntity.noContent().build();
     }
 
     // 9-1 — 카드는 아직 없다. 작성 내용은 Redis 초안에만 두고 200으로 업로드 URL을 준다

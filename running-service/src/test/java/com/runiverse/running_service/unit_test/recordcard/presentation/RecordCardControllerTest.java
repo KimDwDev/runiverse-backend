@@ -15,6 +15,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.application.recordcard.common.RouteArtConverter;
@@ -84,13 +85,16 @@ class RecordCardControllerTest {
     private CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
     @Mock
     private GetRecordCardDetailUsecase getRecordCardDetailUsecase;
+    @Mock
+    private DeleteRecordCardUsecase deleteRecordCardUsecase;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
-                completeRecordCardDraftUsecase, getRecordCardDetailUsecase))
+                completeRecordCardDraftUsecase, getRecordCardDetailUsecase,
+                deleteRecordCardUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))

@@ -1,6 +1,7 @@
 package com.runiverse.running_service.infrastructure.persistence.recordcard;
 
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
+import com.runiverse.running_service.application.recordcard.port.out.DeleteRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
@@ -37,7 +38,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
         CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort,
-        SnapshotRecordCardPort {
+        SnapshotRecordCardPort, DeleteRecordCardPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -232,6 +233,17 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
                 recordCard.getBaseMusicStatus(), recordCard.getBaseMusicKey().map(MusicKey::value).orElse(null),
                 recordCard.getImages().stream().map(RecordCardPersistenceAdapter::historyImage).toList(),
                 card.getCreatedAt()));
+    }
+
+    @Override
+    public void delete(RecordCardId recordCardId) {
+        // 엔티티를 지운다 — 벌크 DELETE를 쓰지 않아 앞서 남긴 이력 INSERT와 순서가 섞이지 않는다.
+        // 사진 행은 DB의 ON DELETE CASCADE가 지운다(사진 엔티티는 읽기만 해 밀린 UPDATE가 없다)
+        RecordCardJpaEntity card = entityManager.find(RecordCardJpaEntity.class, recordCardId.value());
+        if (card == null) {
+            throw new IllegalStateException("지울 카드가 없습니다 — 잠근 뒤 다시 읽은 카드로 불러야 합니다");
+        }
+        entityManager.remove(card);
     }
 
     // 이력의 사진 한 장 — 키 이름은 erd에 적은 저장 약속이다. 값이 없어도 키를 빼지 않는다(LinkedHashMap은 null을 담는다)
