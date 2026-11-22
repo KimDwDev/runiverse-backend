@@ -641,6 +641,72 @@ class RecordCardE2eTest extends E2eTestSupport {
                 .formatted(recordCardId))).containsExactly("2");
     }
 
+    @Test
+    @DisplayName("음악 다시 만들기(9-6) — 실패한 음악이 있으면 카드 음악 전체를 생성 중으로 되돌리고 사진 전부를 요청한다. 없으면 아무것도 하지 않는다")
+    @SuppressWarnings("unchecked")
+    void retryMusic() {
+        // given - 사진 두 장 카드. E2E는 AI가 없어 음악 결과를 DB에 직접 넣는다(기본곡·첫 사진 완료, 둘째 사진 실패)
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(owner);
+        Response created = post("/record-cards", draftRequest(runningRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선"),
+                image("image/png", SMALL_IMAGE_BYTES, "second.png", null)), 0), owner.accessToken());
+        List<Map<String, Object>> uploads = created.objects("uploads");
+        uploadRecordCardImage((String) uploads.get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadRecordCardImage((String) uploads.get(1).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
+        String recordCardId = post(completePath(created.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String retryPath = "/record-cards/" + recordCardId + "/retry";
+        String outboxPhotos = "SELECT jsonb_array_length(payload->'photos') FROM outbox_events WHERE aggregate_id = '%s'"
+                + " ORDER BY created_at, outbox_event_id";
+        String musicStates = """
+                SELECT 'base', base_music_status, coalesce(base_music_key, '-') FROM record_cards
+                WHERE record_card_id = '%1$s'
+                UNION ALL
+                SELECT * FROM (SELECT 'image', music_status, coalesce(music_key, '-') FROM record_card_images
+                WHERE record_card_id = '%1$s' ORDER BY sort_order) images
+                """;
+        executeSql("UPDATE record_cards SET base_music_status = 'COMPLETED', base_music_key = 'audio/base.wav'"
+                + " WHERE record_card_id = '%s'".formatted(recordCardId));
+        executeSql("UPDATE record_card_images SET music_status = 'COMPLETED', music_key = 'audio/1.wav'"
+                + " WHERE record_card_id = '%s' AND sort_order = 0".formatted(recordCardId));
+        executeSql("UPDATE record_card_images SET music_status = 'FAILED'"
+                + " WHERE record_card_id = '%s' AND sort_order = 1".formatted(recordCardId));
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("2");
+
+        // 남의 카드는 404, 형식이 틀린 ID는 400 — 둘 다 아무것도 바꾸지 않는다
+        Response others = post(retryPath, Map.of(), stranger.accessToken());
+        assertThat(others.status()).isEqualTo(404);
+        assertThat(others.text("code")).isEqualTo("NOT_FOUND");
+        assertThat(post("/record-cards/not-a-uuid/retry", Map.of(), owner.accessToken()).status()).isEqualTo(400);
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("2");
+
+        // when
+        Response retried = post(retryPath, Map.of(), owner.accessToken());
+
+        // then - 200 상세 공통 객체에서 음악이 전부 생성 중이고, DB도 key 없이 전부 GENERATING이다
+        assertThat(retried.status()).isEqualTo(200);
+        assertThat(retried.text("recordCardId")).isEqualTo(recordCardId);
+        assertThat(((Map<String, Object>) retried.body().get("baseMusic")).get("status")).isEqualTo("GENERATING");
+        assertThat((List<Map<String, Object>>) retried.body().get("images"))
+                .extracting(image -> ((Map<String, Object>) image.get("music")).get("status"))
+                .containsExactly("GENERATING", "GENERATING");
+        assertThat(querySql(musicStates.formatted(recordCardId))).containsExactly(
+                "base|GENERATING|-", "image|GENERATING|-", "image|GENERATING|-");
+        // 사진 전부를 실은 요청이 한 건 더 나가고, 이력은 남기지 않는다
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("2", "2");
+        assertThat(querySql("SELECT count(*) FROM record_card_histories WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("0");
+
+        // when - 실패한 음악이 없는 채로 다시 부른다(두 번 누름)
+        Response again = post(retryPath, Map.of(), owner.accessToken());
+
+        // then - 200이고 요청은 늘지 않는다
+        assertThat(again.status()).isEqualTo(200);
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("2", "2");
+    }
+
     private String createCardWithoutImages(TestUser user, long runningRecordId) {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(), null), user.accessToken());
         assertThat(draft.status()).isEqualTo(200);
