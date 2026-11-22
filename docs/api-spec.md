@@ -3027,7 +3027,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- **카드가 바뀌었는지는 9-3 때의 `record_cards.updated_at`과 비교한다** — 이미 올린 사진의 ID·순서가 9-3을 보낸 화면 기준이라, 그 뒤에 바뀐 카드에 덮으면 사진이 섞인다
+- **카드가 바뀌었는지는 9-3 때의 마지막 수정 이력(`record_card_histories`) ID와 비교한다** — `updated_at`은 음악 완료(9-5)도 바꿔 기준으로 쓰지 않는다. 이미 올린 사진의 ID·순서가 9-3을 보낸 화면 기준이라, 그 뒤에 바뀐 카드에 덮으면 사진이 섞인다
 - **인증**: 필요 (초안을 만든 사람)
 
 ### 9-3. `PATCH /api/v1/record-cards/{recordCardId}` — 기록 카드 수정
