@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 @DisplayName("경로 선 아트 변환 단위 테스트")
@@ -112,6 +113,43 @@ class RouteArtConverterTest {
         assertThat(art.get(0).getLast()).isEqualTo(full.get(0).getLast());
         assertThat(art.get(1).getFirst()).isEqualTo(full.get(1).getFirst());
         assertThat(art.get(1).getLast()).isEqualTo(full.get(1).getLast());
+    }
+
+    @Test
+    @DisplayName("상한을 정하면 그만큼만 남긴다 — 기록 목록의 달력 칸은 50개, 조각마다 첫·끝 점은 그대로다")
+    void reducesToGivenLimit() {
+        // given — 300점 + 100점
+        String first = encode(line(37.50, 300));
+        String second = encode(line(37.60, 100));
+        List<List<Point>> full = convertWithoutLimit(first, second);
+
+        // when
+        List<List<Point>> art = RouteArtConverter.convert(List.of(first, second), 50);
+
+        // then
+        assertThat(art.get(0)).hasSize(37);
+        assertThat(art.get(1)).hasSize(12);
+        assertThat(art.stream().mapToInt(List::size).sum()).isLessThanOrEqualTo(50);
+        assertThat(art.get(0).getFirst()).isEqualTo(full.get(0).getFirst());
+        assertThat(art.get(1).getLast()).isEqualTo(full.get(1).getLast());
+    }
+
+    @Test
+    @DisplayName("상한 아래의 경로는 상한과 상관없이 그대로다 — 기본 변환과 같다")
+    void underLimitIsSameAsDefault() {
+        // given
+        String polyline = encode(line(37.50, 40));
+
+        // when & then
+        assertThat(RouteArtConverter.convert(List.of(polyline), 50))
+                .isEqualTo(RouteArtConverter.convert(List.of(polyline)));
+    }
+
+    @Test
+    @DisplayName("상한이 2보다 작으면 조각의 첫·끝을 남길 수 없어 거부한다")
+    void rejectsTooSmallLimit() {
+        assertThatThrownBy(() -> RouteArtConverter.convert(List.of(encode(line(37.50, 10))), 1))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
