@@ -6,6 +6,8 @@ import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisp
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
+import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,7 +36,8 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
-        CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort {
+        CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort,
+        SnapshotRecordCardPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -211,6 +215,35 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
                 new RecordCardDetail.Record(record.getRunningRecordId(), record.getStartAt(),
                         record.getTotalDistance(), record.getTotalDuration(), record.getAvgPace(), segmentPolylines),
                 card.getCreatedAt(), card.getUpdatedAt()));
+    }
+
+    @Override
+    public void snapshot(RecordCard recordCard, RecordCardSnapshotReason reason) {
+        // 원래 만든 시각은 도메인에 없다 — loadForUpdate가 읽은 카드 엔티티가 이 트랜잭션에 있어 SELECT 없이 꺼낸다
+        RecordCardJpaEntity card = entityManager.find(RecordCardJpaEntity.class, recordCard.getRecordCardId().value());
+        if (card == null) {
+            throw new IllegalStateException("이력을 남길 카드가 없습니다 — 잠근 뒤 다시 읽은 카드로 불러야 합니다");
+        }
+        entityManager.persist(RecordCardHistoryJpaEntity.create(
+                recordCard.getRecordCardId().value(), reason, recordCard.getUserId().value(),
+                recordCard.getRunningRecordId().value(), recordCard.getVisibility(), recordCard.getActivityType(),
+                recordCard.getMemo().value(),
+                recordCard.getThumbnailImageKey().map(RecordCardImageKey::value).orElse(null),
+                recordCard.getBaseMusicStatus(), recordCard.getBaseMusicKey().map(MusicKey::value).orElse(null),
+                recordCard.getImages().stream().map(RecordCardPersistenceAdapter::historyImage).toList(),
+                card.getCreatedAt()));
+    }
+
+    // 이력의 사진 한 장 — 키 이름은 erd에 적은 저장 약속이다. 값이 없어도 키를 빼지 않는다(LinkedHashMap은 null을 담는다)
+    private static Map<String, Object> historyImage(RecordCardImage image) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("recordCardImageId", image.getRecordCardImageId().value().toString());
+        map.put("imageKey", image.getImageKey().value());
+        map.put("caption", image.getCaption().map(RecordCardImageCaption::value).orElse(null));
+        map.put("sortOrder", image.getSortOrder());
+        map.put("musicStatus", image.getMusicStatus().name());
+        map.put("musicKey", image.getMusicKey().map(MusicKey::value).orElse(null));
+        return map;
     }
 
     private List<RecordCardImageJpaEntity> loadImageEntities(UUID recordCardId) {
