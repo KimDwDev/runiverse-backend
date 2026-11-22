@@ -291,7 +291,7 @@ class RecordCardTest {
         }
 
         @Test
-        @DisplayName("남긴 사진의 설명을 바꾸거나 지우고, 음악은 그대로 둔다")
+        @DisplayName("남긴 사진의 설명을 바꾸거나 지우면 그 사진 음악을 다시 만들고(GENERATING), 설명이 그대로면 음악도 그대로다")
         void changeKeptCaption() {
             // given
             RecordCard card = restored(List.of(
@@ -311,8 +311,8 @@ class RecordCardTest {
                     .extracting(image -> image.getCaption().map(RecordCardImageCaption::value).orElse(null),
                             image -> image.getMusicKey().map(MusicKey::value).orElse(null), RecordCardImage::getMusicStatus)
                     .containsExactly(
-                            tuple("새 설명", musicKey("a"), MusicStatus.COMPLETED),
-                            tuple(null, null, MusicStatus.FAILED),
+                            tuple("새 설명", null, MusicStatus.GENERATING),
+                            tuple(null, null, MusicStatus.GENERATING),
                             tuple("그대로", null, MusicStatus.GENERATING));
         }
 
