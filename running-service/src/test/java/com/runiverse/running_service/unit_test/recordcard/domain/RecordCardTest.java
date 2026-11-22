@@ -525,7 +525,7 @@ class RecordCardTest {
     class CompleteMusic {
 
         @Test
-        @DisplayName("생성 중인 기본곡이 COMPLETED가 되면 AI가 준 key를 담고, 같은 알림이 다시 오면 무시한다")
+        @DisplayName("생성 중인 기본곡이 COMPLETED가 되면 AI가 준 key를 담고, 뒤에 온 실패로는 덮지 않는다")
         void completeBaseMusicOnce() {
             // given
             RecordCard card = create(List.of(), null);
@@ -536,6 +536,44 @@ class RecordCardTest {
             assertThat(card.getBaseMusicKey()).contains(new MusicKey("ai/music/base.wav"));
             assertThat(card.completeBaseMusic(MusicStatus.FAILED, null)).isFalse();
             assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("끝난 기본곡에도 성공 결과는 새 key로 반영한다 — 수정 요청의 결과가 다른 경로의 key를 담아 올 수 있다")
+        void completedBaseMusicTakesNewSuccess() {
+            // given
+            RecordCard card = create(List.of(), null);
+            card.completeBaseMusic(MusicStatus.COMPLETED, "audio/u/DAILY/c/base.wav");
+
+            // when & then
+            assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "audio/u/TRAVEL/c/base.wav")).isTrue();
+            assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+            assertThat(card.getBaseMusicKey()).contains(new MusicKey("audio/u/TRAVEL/c/base.wav"));
+        }
+
+        @Test
+        @DisplayName("같은 key로 다시 온 성공은 바뀐 게 없어 false다")
+        void sameSuccessIsNoChange() {
+            // given
+            RecordCard card = create(List.of(), null);
+            card.completeBaseMusic(MusicStatus.COMPLETED, "audio/base.wav");
+
+            // when & then
+            assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "audio/base.wav")).isFalse();
+        }
+
+        @Test
+        @DisplayName("실패로 끝난 기본곡에 성공이 오면 COMPLETED가 되고, 실패가 다시 오면 그대로다")
+        void failedBaseMusicTakesSuccessOnly() {
+            // given
+            RecordCard card = create(List.of(), null);
+            card.completeBaseMusic(MusicStatus.FAILED, null);
+
+            // when & then
+            assertThat(card.completeBaseMusic(MusicStatus.FAILED, null)).isFalse();
+            assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "audio/base.wav")).isTrue();
+            assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+            assertThat(card.getBaseMusicKey()).contains(new MusicKey("audio/base.wav"));
         }
 
         @Test
