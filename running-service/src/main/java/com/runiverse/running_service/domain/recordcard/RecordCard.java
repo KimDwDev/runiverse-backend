@@ -197,13 +197,11 @@ public class RecordCard {
     }
 
     // 기본곡 생성 완료 알림 — 바꿨으면 true. COMPLETED면 AI가 올린 key를 함께 받는다. 지운 카드는 행이 없어 여기 오지 않는다.
-    // 성공은 이미 끝난 기본곡에도 반영한다 — 수정 요청의 결과도 기본곡을 담아 오고, key 경로에 활동유형이 들어가 바뀔 수 있다.
-    // 실패는 만드는 중일 때만 반영한다 — 잘 만든 곡을 실패로 덮지 않는다. 같은 key로 다시 온 성공은 바뀐 게 없어 false
+    // 기본곡은 끝난 곡에도 온 결과를 그대로 따른다 — AI 서버는 요청마다 기본곡을 다시 만들어 같은 경로에 덮어써,
+    // 결과가 곧 지금 파일의 상태다(성공이면 새 key — 경로에 활동유형이 들어가 바뀔 수 있다, 실패면 덮어쓰다 실패한 것이다).
+    // 같은 상태·key로 다시 온 결과는 바뀐 게 없어 false
     public boolean completeBaseMusic(MusicStatus result, String musicKey) {
         MusicStatus checked = MusicStatus.result(result);
-        if (checked == MusicStatus.FAILED && !baseMusicStatus.isGenerating()) {
-            return false;
-        }
         MusicKey key = RecordCardImage.keyFor(checked, musicKey);
         if (baseMusicStatus == checked && Objects.equals(baseMusicKey, key)) {
             return false;
