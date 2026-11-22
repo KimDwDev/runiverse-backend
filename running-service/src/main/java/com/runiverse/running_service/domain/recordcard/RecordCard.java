@@ -277,6 +277,21 @@ public class RecordCard {
         this.thumbnailImageKey = new RecordCardImageKey(thumbnailKeyAt(images, thumbnailIndex));
     }
 
+    // 음악 다시 만들기(9-6) — 음악 하나라도 FAILED면 카드의 음악 전체(기본곡 + 사진 전부)를 생성 중으로 되돌리고 true.
+    // AI 결과는 요청 단위라(사진 하나라도 실패하면 요청 전체가 FAILED) 그 요청의 음악을 함께 다시 만든다.
+    // FAILED가 없으면 아무것도 바꾸지 않고 false — 두 번 눌렀거나 그사이 다른 요청으로 끝난 경우다
+    public boolean retryMusic() {
+        boolean anyFailed = baseMusicStatus.isFailed()
+                || images.stream().anyMatch(image -> image.getMusicStatus().isFailed());
+        if (!anyFailed) {
+            return false;
+        }
+        this.baseMusicStatus = MusicStatus.GENERATING;
+        this.baseMusicKey = null;
+        images.forEach(RecordCardImage::restartMusic);
+        return true;
+    }
+
     // 기본곡 생성 완료 알림 — 바꿨으면 true. COMPLETED면 AI가 올린 key를 함께 받는다. 지운 카드는 행이 없어 여기 오지 않는다.
     // 기본곡은 끝난 곡에도 온 결과를 그대로 따른다 — AI 서버는 요청마다 기본곡을 다시 만들어 같은 경로에 덮어써,
     // 결과가 곧 지금 파일의 상태다(성공이면 새 key — 경로에 활동유형이 들어가 바뀔 수 있다, 실패면 덮어쓰다 실패한 것이다).

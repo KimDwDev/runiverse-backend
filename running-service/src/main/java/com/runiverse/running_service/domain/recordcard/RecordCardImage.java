@@ -63,7 +63,8 @@ public class RecordCardImage {
         this.caption = caption;
     }
 
-    // 음악을 다시 만든다 — 재료(설명)가 바뀐 사진. 옛 key를 버리고 생성 중으로 되돌린다(완료 알림은 GENERATING에만 반영된다)
+    // 음악을 다시 만든다 — 재료(설명)가 바뀐 사진(9-3)·다시 만들기(9-6).
+    // 옛 key를 버리고 생성 중으로 되돌린다(완료 알림은 GENERATING에만 반영된다)
     void restartMusic() {
         this.musicStatus = MusicStatus.GENERATING;
         this.musicKey = null;
