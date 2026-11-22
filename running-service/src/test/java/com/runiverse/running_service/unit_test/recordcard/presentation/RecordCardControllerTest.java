@@ -423,19 +423,18 @@ class RecordCardControllerTest {
     }
 
     @Test
-    @DisplayName("다시 만들기는 토큰 주인과 경로의 카드 ID로 넘기고, 200으로 상세 공통 객체를 내려 준다")
+    @DisplayName("다시 만들기는 토큰 주인과 경로의 카드 ID로 넘기고, 204로 본문 없이 답한다")
     void retryMusic() throws Exception {
         // given
         UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
-        given(retryRecordCardMusicUsecase.handle(any())).willReturn(detailResult(cardId));
 
         // when
         MvcResult result = mockMvc.perform(post("/record-cards/{id}/retry", cardId)).andReturn();
 
         // then
-        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getStatus()).isEqualTo(204);
+        assertThat(result.getResponse().getContentAsString()).isEmpty();
         verify(retryRecordCardMusicUsecase).handle(new RetryRecordCardMusicCommand(USER_ID, cardId));
-        assertThat(body(result)).containsEntry("recordCardId", cardId.toString());
     }
 
     @Test

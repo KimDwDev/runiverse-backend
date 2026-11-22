@@ -6,7 +6,6 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardDraftSaver;
 import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardEditDraftSaver;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
-import com.runiverse.running_service.application.recordcard.command.retrymusic.RecordCardMusicRetrier;
 import com.runiverse.running_service.application.recordcard.command.retrymusic.RetryRecordCardMusicCommand;
 import com.runiverse.running_service.application.recordcard.command.retrymusic.RetryRecordCardMusicHandler;
 import com.runiverse.running_service.application.recordcard.command.update.RecordCardEditor;
@@ -44,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // 9-6 음악 다시 만들기 — 잠금·되돌림·저장·요청을 실제로 엮고, 진행 중인 수정 초안(9-3 → 9-2)과 겹쳐 본다.
-// 스프링 없이 페이크로 조립한다. 응답의 카드(상세 조회)는 8-1 통합 테스트가 본다
+// 스프링 없이 페이크로 조립한다
 @DisplayName("기록 카드 음악 다시 만들기(9-6) 통합 테스트")
 class RetryRecordCardMusicIntegrationTest {
 
@@ -70,9 +69,8 @@ class RetryRecordCardMusicIntegrationTest {
         objectStore = new FakeRecordCardObjectStore();
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
                 DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
-        retryHandler = new RetryRecordCardMusicHandler(
-                new RecordCardMusicRetrier(recordCardStore, recordCardStore, recordCardStore, musicRequests),
-                query -> null);
+        retryHandler = new RetryRecordCardMusicHandler(recordCardStore, recordCardStore, recordCardStore,
+                musicRequests);
         RecordCardEditor editor = new RecordCardEditor(recordCardStore, recordCardStore, recordCardStore,
                 recordCardStore, musicRequests, recordCardStore);
         updateHandler = new UpdateRecordCardHandler(properties, editor,

@@ -98,16 +98,17 @@ public class RecordCardController {
         return ResponseEntity.noContent().build();
     }
 
-    // 9-6 — 늘 200. 실패한 음악이 있으면 카드의 음악 전체를 다시 요청하고, 없으면 아무것도 하지 않는다
+    // 9-6 — 204, 본문 없음. 실패한 음악이 있으면 카드의 음악 전체를 다시 요청하고, 없으면 아무것도 하지 않는다.
+    // 음악은 AI가 나중에 만든다 — 카드는 8-1로 다시 읽는다
     @PostMapping("{recordCardId}/retry")
-    public ResponseEntity<RecordCardDetailResponse> retry(
+    public ResponseEntity<Void> retry(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Pattern(regexp = UUID_V7_FORMAT, message = "입력값이 올바르지 않습니다.")
             String recordCardId
     ) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return ResponseEntity.ok(RecordCardDetailResponse.from(retryRecordCardMusicUsecase.handle(
-                new RetryRecordCardMusicCommand(userId, UUID.fromString(recordCardId)))));
+        retryRecordCardMusicUsecase.handle(new RetryRecordCardMusicCommand(userId, UUID.fromString(recordCardId)));
+        return ResponseEntity.noContent().build();
     }
 
     // 9-1 — 카드는 아직 없다. 작성 내용은 Redis 초안에만 두고 200으로 업로드 URL을 준다
