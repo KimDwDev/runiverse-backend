@@ -42,8 +42,9 @@ public record RecordCardDetailResponse(
                 result.updatedAt());
     }
 
-    // 점마다 [x, y] 두 칸 배열로 내린다 — 6-1 routes처럼 키 이름을 반복하지 않는다
-    private static List<List<double[]>> routeArt(List<List<RouteArtConverter.Point>> segments) {
+    // 점마다 [x, y] 두 칸 배열로 내린다 — 6-1 routes처럼 키 이름을 반복하지 않는다.
+    // 기록 목록(7-1)의 카드 요약도 같은 모양이라 함께 쓴다
+    public static List<List<double[]>> routeArt(List<List<RouteArtConverter.Point>> segments) {
         return segments.stream()
                 .map(segment -> segment.stream()
                         .map(point -> new double[]{point.x(), point.y()})

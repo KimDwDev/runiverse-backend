@@ -23,7 +23,7 @@ public class RunningRecordsResponseTest {
         GetMyRunningRecordsResult result = new GetMyRunningRecordsResult(List.of(
                 new GetMyRunningRecordsResult.RunningRecord(
                         501L, 125L, RunningRoomType.MATCH, 3L, STARTED_AT,
-                        5020, 1800, 359, 42)));
+                        5020, 1800, 359, 42, null)));
 
         // when
         RunningRecordsResponse response = RunningRecordsResponse.from(result);
@@ -48,7 +48,7 @@ public class RunningRecordsResponseTest {
         GetMyRunningRecordsResult result = new GetMyRunningRecordsResult(List.of(
                 new GetMyRunningRecordsResult.RunningRecord(
                         501L, 125L, RunningRoomType.SOLO, 1L, STARTED_AT,
-                        5020, 1800, 359, null)));
+                        5020, 1800, 359, null, null)));
 
         // when
         RunningRecordsResponse response = RunningRecordsResponse.from(result);

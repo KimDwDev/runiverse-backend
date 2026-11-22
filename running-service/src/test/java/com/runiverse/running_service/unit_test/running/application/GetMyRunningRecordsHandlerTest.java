@@ -1,7 +1,9 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardViewUrlPort;
 import com.runiverse.running_service.application.running.port.out.LoadMyRunningRecordsPort;
+import com.runiverse.running_service.application.running.port.out.LoadSegmentPolylinesPort;
 import com.runiverse.running_service.application.running.port.out.RunningRecordRow;
 import com.runiverse.running_service.application.running.query.record.GetMyRunningRecordsHandler;
 import com.runiverse.running_service.application.running.query.record.GetMyRunningRecordsQuery;
@@ -38,12 +40,17 @@ class GetMyRunningRecordsHandlerTest {
 
     @Mock
     private LoadMyRunningRecordsPort loadMyRunningRecordsPort;
+    @Mock
+    private LoadSegmentPolylinesPort loadSegmentPolylinesPort;
+    @Mock
+    private GenerateRecordCardViewUrlPort generateRecordCardViewUrlPort;
 
     private GetMyRunningRecordsHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new GetMyRunningRecordsHandler(loadMyRunningRecordsPort);
+        handler = new GetMyRunningRecordsHandler(loadMyRunningRecordsPort, loadSegmentPolylinesPort,
+                generateRecordCardViewUrlPort);
     }
 
     @Test
@@ -84,7 +91,7 @@ class GetMyRunningRecordsHandlerTest {
         given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
                 .willReturn(List.of(new RunningRecordRow(
                         501L, 125L, RunningRoomType.MATCH, 3L, startedAt,
-                        5020, 1800, 359, 42)));
+                        5020, 1800, 359, 42, null, null)));
 
         // when
         GetMyRunningRecordsResult result = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO));
@@ -109,7 +116,7 @@ class GetMyRunningRecordsHandlerTest {
         given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
                 .willReturn(List.of(new RunningRecordRow(
                         501L, 125L, RunningRoomType.SOLO, 1L, LocalDateTime.of(2026, 9, 28, 19, 0),
-                        5020, 1800, 359, null)));
+                        5020, 1800, 359, null, null, null)));
 
         // when
         GetMyRunningRecordsResult result = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO));
@@ -154,6 +161,6 @@ class GetMyRunningRecordsHandlerTest {
     private static RunningRecordRow row(long runningRecordId, LocalDateTime startedAt) {
         return new RunningRecordRow(
                 runningRecordId, 125L, RunningRoomType.SOLO, 1L, startedAt,
-                5020, 1800, 359, 42);
+                5020, 1800, 359, 42, null, null);
     }
 }

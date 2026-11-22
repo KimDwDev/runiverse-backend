@@ -10,7 +10,7 @@ import java.util.List;
 // 카드는 남에게도 보이므로 위경도를 싣지 않는다. 보는 사람이 본인이어도 같다 — 본인의 실제 경로는 6-1이 준다
 public final class RouteArtConverter {
 
-    // 전체 조각을 합친 점 수 상한 — 칸 하나에 선 하나를 긋기에 충분하고 응답이 작다
+    // 상세(8-1)의 전체 조각을 합친 점 수 상한 — 칸 하나에 선 하나를 긋기에 충분하고 응답이 작다
     static final int MAX_POINTS = 200;
     private static final double PRECISION = 10_000.0;   // 소수점 넷째 자리
     private static final double CENTER = 0.5;
@@ -19,8 +19,17 @@ public final class RouteArtConverter {
 
     }
 
-    // 구간 순서(segment_number)대로 받은 폴리라인을 조각별 0~1 좌표로 바꾼다. 경로가 없으면 빈 목록이다
+    // 구간 순서(segment_number)대로 받은 폴리라인을 조각별 0~1 좌표로 바꾼다. 경로가 없으면 빈 목록이다.
+    // 점은 상세(8-1) 상한(200개)까지 남긴다
     public static List<List<Point>> convert(List<String> segmentPolylines) {
+        return convert(segmentPolylines, MAX_POINTS);
+    }
+
+    // 점 수 상한을 정해 바꾼다 — 기록 목록(7-1)의 달력 칸처럼 작게 그릴 때 점을 더 줄인다
+    public static List<List<Point>> convert(List<String> segmentPolylines, int maxPoints) {
+        if (maxPoints < 2) {
+            throw new IllegalArgumentException("선 아트 점 수 상한은 2 이상이어야 한다");
+        }
         List<List<RoutePoint>> segments = segmentPolylines.stream()
                 .map(PolylineDecoder::decode)
                 .filter(points -> !points.isEmpty())
@@ -53,7 +62,7 @@ public final class RouteArtConverter {
         double xOffset = (span - width) / 2;
         double yOffset = (span - height) / 2;
         List<List<Point>> art = new ArrayList<>();
-        for (List<RoutePoint> segment : reduce(segments)) {
+        for (List<RoutePoint> segment : reduce(segments, maxPoints)) {
             List<Point> points = new ArrayList<>(segment.size());
             for (RoutePoint point : segment) {
                 if (span == 0) {
@@ -72,14 +81,14 @@ public final class RouteArtConverter {
 
     // 점이 상한을 넘으면 조각마다 점 수에 비례해 고르게 남긴다 — 조각의 첫·끝 점(시작·도착·끊긴 곳)은 늘 남긴다.
     // 조각이 아주 많아 첫·끝만으로도 상한을 넘으면 첫·끝만 남긴다
-    private static List<List<RoutePoint>> reduce(List<List<RoutePoint>> segments) {
+    private static List<List<RoutePoint>> reduce(List<List<RoutePoint>> segments, int maxPoints) {
         int total = segments.stream().mapToInt(List::size).sum();
-        if (total <= MAX_POINTS) {
+        if (total <= maxPoints) {
             return segments;
         }
         List<List<RoutePoint>> reduced = new ArrayList<>(segments.size());
         for (List<RoutePoint> segment : segments) {
-            int budget = Math.max(Math.min(segment.size(), 2), segment.size() * MAX_POINTS / total);
+            int budget = Math.max(Math.min(segment.size(), 2), segment.size() * maxPoints / total);
             reduced.add(sample(segment, budget));
         }
         return reduced;
