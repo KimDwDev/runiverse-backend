@@ -14,6 +14,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageNotUploadedException;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
@@ -73,13 +74,15 @@ class RecordCardControllerTest {
 
     @Mock
     private CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
+    @Mock
+    private GetRecordCardDetailUsecase getRecordCardDetailUsecase;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
-                completeRecordCardDraftUsecase))
+                completeRecordCardDraftUsecase, getRecordCardDetailUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
