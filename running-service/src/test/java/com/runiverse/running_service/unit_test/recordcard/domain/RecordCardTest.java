@@ -461,6 +461,218 @@ class RecordCardTest {
     }
 
     @Nested
+    @DisplayName("수정 한 번(edit) — 바뀐 것과 다시 만들 음악")
+    class Edit {
+
+        @Test
+        @DisplayName("순서만 바꾸면 바뀌었지만 음악은 다시 만들지 않는다")
+        void orderOnly() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(null, null, null,
+                    List.of(keep(3, "c"), keep(1, "a"), keep(2, "b")), null);
+
+            // then
+            assertThat(edit.changed()).isTrue();
+            assertThat(edit.needsMusic()).isFalse();
+            assertThat(edit.imagesToRegenerate()).isEmpty();
+            assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus).containsOnly(MusicStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("공개 범위만 바꾸면 음악은 다시 만들지 않는다")
+        void visibilityOnly() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(null, null, RecordCardVisibility.PRIVATE, null, null);
+
+            // then
+            assertThat(edit.changed()).isTrue();
+            assertThat(edit.needsMusic()).isFalse();
+            assertThat(card.getVisibility()).isEqualTo(RecordCardVisibility.PRIVATE);
+        }
+
+        @Test
+        @DisplayName("썸네일만 바꾸면 음악은 다시 만들지 않는다")
+        void thumbnailOnly() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(null, null, null, null, 2);
+
+            // then
+            assertThat(edit.changed()).isTrue();
+            assertThat(edit.needsMusic()).isFalse();
+            assertThat(card.getThumbnailImageKey()).contains(new RecordCardImageKey(imageKey("c")));
+        }
+
+        @Test
+        @DisplayName("사진을 빼기만 하면 음악은 다시 만들지 않는다")
+        void removeOnly() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(null, null, null, List.of(keep(1, "a"), keep(3, "c")), null);
+
+            // then
+            assertThat(edit.changed()).isTrue();
+            assertThat(edit.needsMusic()).isFalse();
+            assertThat(card.getImages()).extracting(image -> image.getRecordCardImageId().value())
+                    .containsExactly(id(1), id(3));
+        }
+
+        @Test
+        @DisplayName("같은 값으로 다시 보내면 바뀐 것이 없다 — 이력도 요청도 남기지 않는다")
+        void sameValues() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(MEMO, RecordCardActivityType.DAILY, RecordCardVisibility.PUBLIC,
+                    List.of(keep(1, "a"), keep(2, "b"), keep(3, "c")), null);
+
+            // then
+            assertThat(edit.changed()).isFalse();
+            assertThat(edit.needsMusic()).isFalse();
+        }
+
+        @Test
+        @DisplayName("아무것도 보내지 않으면 바뀐 것이 없다")
+        void nothing() {
+            // when
+            RecordCard.Edit edit = captioned().edit(null, null, null, null, null);
+
+            // then
+            assertThat(edit.changed()).isFalse();
+            assertThat(edit.needsMusic()).isFalse();
+        }
+
+        @Test
+        @DisplayName("회고 글만 바꾸면 기본곡만 다시 만든다 — 사진 음악은 그대로다")
+        void memoOnly() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit("바람이 좋았던 한강", null, null, null, null);
+
+            // then
+            assertThat(edit.changed()).isTrue();
+            assertThat(edit.baseMusicIngredientChanged()).isTrue();
+            assertThat(edit.needsMusic()).isTrue();
+            assertThat(edit.imagesToRegenerate()).isEmpty();
+            assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus).containsOnly(MusicStatus.COMPLETED);
+            // 기본곡 상태는 되돌리지 않는다 — 결과가 오면 받는 쪽이 따른다
+            assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("활동유형만 바꾸면 기본곡만 다시 만든다")
+        void activityTypeOnly() {
+            // when
+            RecordCard.Edit edit = captioned().edit(null, RecordCardActivityType.RACE, null, null, null);
+
+            // then
+            assertThat(edit.baseMusicIngredientChanged()).isTrue();
+            assertThat(edit.imagesToRegenerate()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("남긴 사진의 설명이 바뀌면 그 사진만 다시 만든다 — 음악을 key 없이 GENERATING으로 되돌린다")
+        void captionChanged() {
+            // given
+            RecordCard card = captioned();
+
+            // when
+            RecordCard.Edit edit = card.edit(null, null, null,
+                    List.of(keep(1, "a2"), keep(2, "b"), keep(3, "c")), null);
+
+            // then
+            assertThat(edit.baseMusicIngredientChanged()).isFalse();
+            assertThat(edit.imagesToRegenerate()).extracting(image -> image.getRecordCardImageId().value())
+                    .containsExactly(id(1));
+            assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus)
+                    .containsExactly(MusicStatus.GENERATING, MusicStatus.COMPLETED, MusicStatus.COMPLETED);
+            assertThat(card.getImages().getFirst().getMusicKey()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("새 사진을 넣으면 그 사진만 다시 만든다")
+        void added() {
+            // when
+            RecordCard.Edit edit = captioned().edit(null, null, null,
+                    List.of(keep(1, "a"), keep(2, "b"), keep(3, "c"), add("n")), null);
+
+            // then
+            assertThat(edit.imagesToRegenerate()).extracting(image -> image.getRecordCardImageId().value())
+                    .containsExactly(imageId("n"));
+        }
+
+        @Test
+        @DisplayName("여러 가지를 한꺼번에 바꾸면 설명이 바뀐 사진과 새 사진만 캐러셀 순서로 다시 만든다 — 설명이 그대로인 사진은 넣지 않는다")
+        void mixed() {
+            // given
+            RecordCard card = captioned();
+
+            // when — 회고 글 변경, B 빼기, 순서 C·A·N, A 설명 변경, N 추가
+            RecordCard.Edit edit = card.edit("새 회고", null, null,
+                    List.of(keep(3, "c"), keep(1, "a2"), add("n")), null);
+
+            // then
+            assertThat(edit.baseMusicIngredientChanged()).isTrue();
+            assertThat(edit.imagesToRegenerate()).extracting(image -> image.getRecordCardImageId().value())
+                    .containsExactly(id(1), imageId("n"));
+            assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus)
+                    .containsExactly(MusicStatus.COMPLETED, MusicStatus.GENERATING, MusicStatus.GENERATING);
+        }
+
+        @Test
+        @DisplayName("사진 검사에 걸리면 회고 글·공개 범위도 바뀌지 않는다 — 카드는 그대로다")
+        void failureKeepsCard() {
+            // given
+            RecordCard card = captioned();
+
+            // when & then
+            assertThatThrownBy(() -> card.edit("새 회고", null, RecordCardVisibility.PRIVATE,
+                    List.of(keep(9, "x")), null)).isInstanceOf(RecordCardImageNotInCardException.class);
+            assertThat(card.getMemo().value()).isEqualTo(MEMO);
+            assertThat(card.getVisibility()).isEqualTo(RecordCardVisibility.PUBLIC);
+            assertThat(card.getImages()).hasSize(3);
+        }
+
+        @Test
+        @DisplayName("회고 글이 비어 있으면 아무것도 바꾸지 않고 거부한다")
+        void blankMemo() {
+            // given
+            RecordCard card = captioned();
+
+            // when & then
+            assertThatThrownBy(() -> card.edit("  ", null, null, List.of(keep(1, "a2")), null))
+                    .isInstanceOf(RecordCardMemoRequiredException.class);
+            assertThat(card.getImages().getFirst().getMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+        }
+
+        // a·b·c 모두 설명이 있고 음악이 끝났다(COMPLETED), 썸네일은 a
+        private RecordCard captioned() {
+            return restored(List.of(
+                    RecordCardImage.restore(id(1), imageKey("a"), "a", musicKey("a"), MusicStatus.COMPLETED, 0),
+                    RecordCardImage.restore(id(2), imageKey("b"), "b", musicKey("b"), MusicStatus.COMPLETED, 1),
+                    RecordCardImage.restore(id(3), imageKey("c"), "c", musicKey("c"), MusicStatus.COMPLETED, 2)),
+                    imageKey("a"));
+        }
+
+        private ImageSlot keep(long recordCardImageId, String caption) {
+            return new ImageSlot.Keep(id(recordCardImageId), caption);
+        }
+    }
+
+    @Nested
     @DisplayName("메모·공개 범위·썸네일")
     class Change {
 
