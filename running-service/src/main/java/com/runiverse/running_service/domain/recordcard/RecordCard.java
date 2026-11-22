@@ -196,14 +196,18 @@ public class RecordCard {
         this.thumbnailImageKey = new RecordCardImageKey(thumbnailKeyAt(images, thumbnailIndex));
     }
 
-    // 기본곡 생성 완료 알림 — 바꿨으면 true. COMPLETED면 AI가 올린 key를 함께 받는다.
-    // 이미 끝난 음악에 온 알림은 무시하고 false(Kafka는 같은 알림을 두 번 줄 수 있다). 지운 카드는 행이 없어 여기 오지 않는다
+    // 기본곡 생성 완료 알림 — 바꿨으면 true. COMPLETED면 AI가 올린 key를 함께 받는다. 지운 카드는 행이 없어 여기 오지 않는다.
+    // 성공은 이미 끝난 기본곡에도 반영한다 — 수정 요청의 결과도 기본곡을 담아 오고, key 경로에 활동유형이 들어가 바뀔 수 있다.
+    // 실패는 만드는 중일 때만 반영한다 — 잘 만든 곡을 실패로 덮지 않는다. 같은 key로 다시 온 성공은 바뀐 게 없어 false
     public boolean completeBaseMusic(MusicStatus result, String musicKey) {
         MusicStatus checked = MusicStatus.result(result);
-        if (!baseMusicStatus.isGenerating()) {
+        if (checked == MusicStatus.FAILED && !baseMusicStatus.isGenerating()) {
             return false;
         }
         MusicKey key = RecordCardImage.keyFor(checked, musicKey);
+        if (baseMusicStatus == checked && Objects.equals(baseMusicKey, key)) {
+            return false;
+        }
         this.baseMusicStatus = checked;
         this.baseMusicKey = key;
         return true;

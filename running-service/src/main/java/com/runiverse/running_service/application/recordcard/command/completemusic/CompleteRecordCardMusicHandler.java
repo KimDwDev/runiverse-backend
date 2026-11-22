@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.recordcard.port.out.LoadRecordC
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
 import com.runiverse.running_service.domain.recordcard.RecordCardImage;
+import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,8 @@ import java.util.stream.Collectors;
 
 // 음악 생성 완료를 카드에 반영한다 — inbox 기록과 상태 변경이 한 트랜잭션이다.
 // 결과에 담긴 음악만 본다 — 담기지 않은 음악은 다른 요청(생성 중에 들어온 수정·다시 만들기)의 것일 수 있다.
-// GENERATING인 음악만 바꾼다 — 이미 끝난 음악에 온 결과는 늦게 온 결과라 덮지 않는다
+// 사진 음악은 GENERATING인 것만 바꾼다 — 이미 끝난 사진 음악에 온 결과는 늦게 온 결과라 덮지 않는다.
+// 기본곡은 성공이면 끝난 곡에도 반영한다 — 수정 요청의 결과가 새 key를 담아 온다(실패는 만드는 중일 때만)
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -82,14 +84,16 @@ public class CompleteRecordCardMusicHandler implements CompleteRecordCardMusicUs
                 command.failedStage(), command.failureCode());
     }
 
+    // 기본곡은 성공이면 끝난 곡에도 반영하고, 실패는 만드는 중일 때만 반영한다(규칙은 RecordCard.completeBaseMusic)
     private boolean applyBaseMusic(RecordCard recordCard, CompleteRecordCardMusicCommand command) {
-        if (!recordCard.getBaseMusicStatus().isGenerating()) {
-            log.warn("[기록 카드] 기본곡 반영 건너뜀: 이미 끝난 음악 - recordCardId={}, eventId={}, currentStatus={}, "
-                            + "result={}",
-                    command.recordCardId(), command.eventId(), recordCard.getBaseMusicStatus(), command.result());
-            return false;
+        MusicStatus before = recordCard.getBaseMusicStatus();
+        boolean changed = recordCard.completeBaseMusic(command.result(), command.baseMusicKey());
+        if (!changed) {
+            log.warn("[기록 카드] 기본곡 반영 건너뜀: 끝난 음악에 온 실패 또는 같은 결과 - recordCardId={}, eventId={}, "
+                            + "currentStatus={}, result={}",
+                    command.recordCardId(), command.eventId(), before, command.result());
         }
-        return recordCard.completeBaseMusic(command.result(), command.baseMusicKey());
+        return changed;
     }
 
     private boolean applyPhotoMusic(RecordCard recordCard, Map<UUID, RecordCardImage> imagesById,
