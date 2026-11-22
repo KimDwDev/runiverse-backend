@@ -130,7 +130,7 @@
 
 | # | Method | Path | 설명 |
 |---|--------|------|------|
-| 28 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 사용 화면: 기록 |
+| 28 | GET | `/api/v1/users/me/running-records` | 내 러닝 기록 목록(기간 조회, 최대 31일) — 기록마다 카드 요약(썸네일·선 아트). 사용 화면: 기록, 기록 카드 달력·작성 |
 
 ### 8. 기록 카드 보기
 
@@ -148,6 +148,7 @@
 | 41 | POST | `/api/v1/record-cards/drafts/{recordCardDraftId}/complete` | 업로드 확정 — 사진을 S3에서 확인한 뒤 카드 저장(작성)·반영(수정), 음악 생성 요청 |
 | 42 | PATCH | `/api/v1/record-cards/{recordCardId}` | 기록 카드 수정 (회고 글·활동유형·공개 범위·사진) — 새 사진이 있으면 업로드 URL을 받고 41로 확정 |
 | 43 | DELETE | `/api/v1/record-cards/{recordCardId}` | 기록 카드 삭제 (하드 삭제, 직전 모습은 이력에 남김) |
+| 76 | POST | `/api/v1/record-cards/{recordCardId}/retry` | 음악 다시 만들기 — 실패한 음악이 있으면 카드의 음악 전체를 다시 요청 |
 | — | Kafka | `{env}.record-card.music.requested` / `{env}.record-card.music.generated` | 음악 생성 요청(카드 저장 후 발행)·완료(AI 서버 발행 → 구독해 상태 반영) — AI 서버와의 내부 계약(9-5) |
 
 ### 10. 프로필 페이지 (본인/타인)
@@ -2529,7 +2530,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 ### 7-1. `GET /api/v1/users/me/running-records` — 내 러닝 기록 목록
 
-- **화면**: 기록(주간 요약·주간 차트·기록 캘린더·날짜별 카드)
+- **화면**: 기록(주간 요약·주간 차트·기록 캘린더·날짜별 카드), 기록 카드 탭(월 달력), 기록 카드 작성(날짜 → 그날 러닝 고르기)
 - **Query**: `from`·`to`(`YYYY-MM-DD`) 둘 다 필수다. 양 끝을 포함한 기간의 기록을 한 번에 받으며 기간은 최대 31일이다 — 예: 이번 주는 `?from=2026-09-27&to=2026-10-03`, 한 달은 `?from=2026-09-01&to=2026-09-30`, 하루는 `from`과 `to`를 같은 날로 보낸다
 - 날짜는 `running_records.start_at`의 KST 달력 날짜 기준이다. **자정을 넘긴 러닝은 시작한 날에 속한다.** 미래 날짜도 받는다 — 이번 주를 조회하면 아직 오지 않은 요일이 들어간다
 - 정렬은 `startedAt` 오름차순이다
@@ -2547,7 +2548,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "totalDistanceMeters": 5020,
       "totalDurationSeconds": 1800,
       "averagePaceSecondsPerKm": 359,
-      "totalElevationGainMeters": 42  // 유효 표본이 부족하면 null
+      "totalElevationGainMeters": 42, // 유효 표본이 부족하면 null
+      "recordCard": {                 // 이 기록의 카드가 없으면 null
+        "recordCardId": "01a0f2d4-6180-7000-8000-4466554400c8",
+        "thumbnailUrl": "https://...",
+        "routeArt": null              // 사진이 없는 카드만 값이 있다
+      }
     }
   ]
 }
@@ -2560,7 +2566,20 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`playerCount`는 6-1 결과의 `players` 수와 같다** — 러닝 단계에 들어간 참가자(`RUNNING`·`RUNNING_LEFT_*`·`COMPLETED`)를 본인과 탈퇴자까지 포함해 센다. 확정됐지만 나타나지 않은 참가자는 세지 않으므로 `running_rooms.current_player_count`와 다를 수 있다. `MATCH`인데 `1`이면 혼자 뛴 매칭 러닝이다
 - **`totalElevationGainMeters`는 6-1의 같은 필드와 같은 값이다** — 누적 상승 고도(m)이며 유효 표본이 부족하면 null이다. 주간 요약의 누적 경사는 클라이언트가 합산한다
 - **동행자 닉네임·프로필은 싣지 않는다** — 필요하면 `runningRoomId`로 6-1을 조회한다
-- **경로는 싣지 않는다** — 카드에 경로 미리보기를 띄우지 않는다. 경로는 기록 상세(6-1·6-2)에서만 본다
+- **경로(위경도)는 싣지 않는다** — 기록 목록에 경로 미리보기를 띄우지 않는다. 경로는 기록 상세(6-1·6-2)에서만 본다. 카드의 선 아트(`recordCard.routeArt`)는 위치가 아니라 모양이다(8-1)
+- **`recordCard`는 이 기록에 붙은 기록 카드의 요약이다** — 기록 하나에 카드는 많아야 하나다. 카드가 없으면 null이다
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `recordCard` | Object | X | 기록 카드 요약. 카드가 없으면 null |
+| `recordCard.recordCardId` | String | O | 기록 카드 ID(UUID) — 탭하면 8-1로 상세, 작성 화면에서는 9-3 수정으로 간다 |
+| `recordCard.thumbnailUrl` | String | X | 썸네일 사진 URL(presigned GET, 8-1과 같은 유효 시간). **사진이 없는 카드는 null** |
+| `recordCard.routeArt` | Number[][][] | X | **사진이 없는 카드만** 선 아트를 싣는다 — 8-1 「경로 선 아트」와 같은 규칙이고 **점은 최대 50개**다(달력 칸이 작다). 사진이 있으면 null. 경로가 없으면 빈 배열 |
+
+  - **내 기록이라 공개 범위와 상관없이 카드를 싣는다** — `PRIVATE` 카드도 실린다
+  - **달력은 이 응답 하나로 그린다** — 한 달을 한 번 조회해 `startedAt` 날짜로 묶는다. 카드가 있는 날은 `thumbnailUrl` → 없으면 `routeArt` → 둘 다 비면 점, 기록은 있는데 카드가 하나도 없는 날은 "뛰었지만 카드 없음", 기록이 없는 날은 빈 칸이다. 같은 날 카드가 여러 장이면 그날 목록에서 한 장을 연다
+  - **작성 화면은 하루만 조회한다**(`from`=`to`) — `recordCard`가 있는 기록은 이미 카드가 있어 9-1 대신 9-3 수정으로 보낸다(9-1은 409)
+  - 음악·회고 글·사진 수는 싣지 않는다 — 상세(8-1)에서 본다
 - **기록 상세는 별도 API 없이 `runningRoomId`로 6-1·6-2를 조회한다** — 러닝 직후 결과 화면과 같은 화면이다
 
 - **에러 (400 Bad Request)**
@@ -2671,7 +2690,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `createdAt` · `updatedAt` | String | O | 카드 생성·수정 시각 |
 
 - **음악은 카드를 만든 직후 `GENERATING`이다** — AI가 만드는 데 시간이 걸린다. 클라는 `GENERATING`이면 생성 중으로 표시하고, 다시 보려면 8-1을 다시 조회한다. 완료를 밀어 주는 통지는 아직 없다 — **[이후]** 앱 스트림(`/app/stream`)으로 완료 이벤트를 보낼 수 있다
-- **`FAILED`면 그 장은 음악 없이 보여준다** — 다시 생성하는 경로는 아직 없다(9-5)
+- **`FAILED`면 그 장은 음악 없이 보여준다** — 작성자는 9-6으로 카드의 음악 전체를 다시 만들 수 있다
 - **URL은 전부 presigned GET이다** — `imageUrl`·`musicUrl`·`profileImageUrl`은 운영값(현재 1시간) 동안만 유효하다. 만료되면 8-1을 다시 조회한다
 - **기록 수치는 조회할 때 `running_records`에서 읽는다** — 카드가 값을 복사해 두지 않는다. 선 아트의 원본은 6-1 `routes`와 같은 구간 경로다
 - **경로 선 아트** — 카드는 남에게도 보이므로 **실제 위치를 싣지 않는다**. 서버가 경로의 모양만 남겨 보낸다. 보는 사람이 본인이어도 같다 — 본인의 실제 경로는 6-1이 준다
@@ -3361,9 +3380,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   |---|---|---|
   | 9-2 작성 확정 | 기본곡 + 사진 전부 | 사진 전부 |
   | 9-3 수정(바로 반영·9-2 확정) | 새 사진 + 설명이 바뀐 사진(기본곡은 그대로) | 새 사진 + 설명이 바뀐 사진 — 회고 글·활동유형만 바뀌면 빈 목록 |
-  | 9-6 음악 다시 만들기 (예정) | 기본곡 + `FAILED`인 사진 | `FAILED`인 사진 |
+  | 9-6 음악 다시 만들기 | 기본곡 + 사진 전부(음악 하나라도 `FAILED`일 때만) | 사진 전부 |
 
-  - 9-6은 기본곡을 `GENERATING`으로 되돌린다. 9-3 수정은 되돌리지 않는다 — AI 서버가 요청마다 기본곡을 다시 만들어 보내고, 받는 쪽은 끝난 기본곡에도 그 결과(성공·실패)를 반영한다(9-3)
+  - 9-6은 기본곡도 `GENERATING`으로 되돌린다. 9-3 수정은 되돌리지 않는다 — AI 서버가 요청마다 기본곡을 다시 만들어 보내고, 받는 쪽은 끝난 기본곡에도 그 결과(성공·실패)를 반영한다(9-3)
   - 9-6은 사진을 다시 올리지 않아 확정 단계가 없다. 9-3은 새 사진을 올리므로 9-2 확정을 거친다
 
 - **요청 이벤트는 아웃박스 + CDC로 발행한다** — running-service는 카드 저장과 같은 트랜잭션에서 아웃박스 테이블에 쓰고, Debezium(Outbox Event Router)이 커밋된 행을 요청 토픽에 발행한다. 쓰는 규칙은 [msa/outbox-inbox.md](msa/outbox-inbox.md), 발행 경로는 [msa/cdc.md](msa/cdc.md)
@@ -3375,7 +3394,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
     | `aggregate_id` (`record_card_id`) | key — 파티션 키. 따옴표 없는 문자열 |
     | `topic` | 토픽 — 앱이 `KAFKA_ENV`로 환경을 붙여 쓴 값을 그대로 쓴다 |
     | `payload` | value — 위 요청 이벤트 JSON 그대로(문자열로 감싸지 않는다, `null` 필드도 남는다) |
-- **`FAILED`는 완료 이벤트로 바뀌지 않는다** — 다시 만들려면 running-service가 새 요청을 보낸다(9-6, 예정): `FAILED` 음악을 `GENERATING`으로 되돌리고 같은 요청 토픽으로 보낸다. AI 서버는 새 `inference_id`로 결과를 준다
+- **`FAILED`는 완료 이벤트로 바뀌지 않는다** — 다시 만들려면 running-service가 새 요청을 보낸다(9-6): 카드의 음악 전체를 `GENERATING`으로 되돌리고 같은 요청 토픽으로 보낸다. AI 서버는 새 `inference_id`로 결과를 준다
 
 > **아직 정하지 않은 것**
 > - 음악 S3 key가 든 **버킷**(test·prod) — 음악 재생 URL을 줄 때 필요하다. AI 서버에 확인 중
@@ -3388,6 +3407,38 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > - 수정·다시 만들기를 위한 토픽을 따로 둔다
 > - 에러가 나면 AI 서버가 고쳐 다시 보낸다
 > - AI 서버에 아웃박스를 적용해 헤더 `id`를 아웃박스 행 ID로 바꾼다 — running-service 코드는 바뀌지 않는다
+
+### 9-6. `POST /api/v1/record-cards/{recordCardId}/retry` — 음악 다시 만들기
+
+- **화면**: 기록 카드 상세(8-1) — 음악이 `FAILED`일 때 보이는 재생성 버튼(작성자만)
+- **Request**: 본문 없음
+- **동작**
+  - **카드의 음악 중 하나라도 `FAILED`면 카드의 음악 전체를 다시 만든다** — 기본곡과 사진 음악을 모두 key 없이 `GENERATING`으로 되돌리고, 같은 트랜잭션에서 사진 전부를 실은 음악 생성 요청을 아웃박스에 쓴다(9-5). 이미 `COMPLETED`였던 음악도 다시 만든다 — AI 서버의 결과는 요청 단위라(사진 하나라도 실패하면 요청 전체가 `FAILED`) 실패한 요청의 음악을 함께 다시 만든다
+  - **`FAILED`인 음악이 없으면 아무것도 하지 않는다** — 200으로 지금 카드를 준다. 버튼을 두 번 누르거나 그사이 다른 요청으로 음악이 끝난 경우를 에러로 만들지 않는다
+  - 다시 만드는 동안 음악은 `GENERATING`이라 URL이 없다 — 이미 듣던 곡도 끝날 때까지 들을 수 없다
+  - 기록 행을 `FOR UPDATE`로 잠그고 처리한다 — 카드 쓰기 공통 잠금(9-3)
+  - **이력(`record_card_histories`)을 남기지 않는다** — 카드 내용이 바뀌지 않는다. 그래서 진행 중인 수정 초안의 확정(9-2)이 409를 받지 않는다
+  - 횟수 제한은 없다 — `FAILED`일 때만 요청이 나간다
+- **Response `200 OK`**: 기록 카드 공통 객체(8-1) — 다시 만들었으면 음악이 전부 `GENERATING`인 모습이다
+- **에러 (400 Bad Request)**: `recordCardId`가 UUIDv7 형식이 아니다
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
+}
+```
+
+- **에러 (404 Not Found — 카드가 없거나, 지워졌거나, 내 카드가 아님)**
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
+}
+```
+
+- **인증**: 필요 (작성자)
 
 ## 10. 프로필 페이지
 
