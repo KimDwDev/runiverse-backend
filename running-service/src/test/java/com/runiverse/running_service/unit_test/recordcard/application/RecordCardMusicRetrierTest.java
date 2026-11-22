@@ -1,0 +1,168 @@
+package com.runiverse.running_service.unit_test.recordcard.application;
+
+import com.github.f4b6a3.uuid.UuidCreator;
+import com.runiverse.running_service.application.recordcard.command.retrymusic.RecordCardMusicRetrier;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
+import com.runiverse.running_service.application.recordcard.port.out.RequestRecordCardMusicPort;
+import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
+import com.runiverse.running_service.domain.recordcard.RecordCard;
+import com.runiverse.running_service.domain.recordcard.RecordCardImage;
+import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("기록 카드 음악 다시 만들기(9-6) 반영 단위 테스트")
+class RecordCardMusicRetrierTest {
+
+    private static final UUID CARD_ID = UuidCreator.getTimeOrderedEpoch();
+    private static final UUID OWNER_ID = UuidCreator.getTimeOrderedEpoch();
+    private static final UUID IMAGE_A = UuidCreator.getTimeOrderedEpoch();
+    private static final UUID IMAGE_B = UuidCreator.getTimeOrderedEpoch();
+    private static final long RECORD_ID = 501L;
+    private static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, null,
+            LocalDateTime.of(2026, 11, 3, 7, 10), 61, new BigDecimal("15.0"), null);
+
+    @Mock
+    private LoadRecordCardForUpdatePort loadRecordCardForUpdatePort;
+    @Mock
+    private SaveRecordCardMusicPort saveRecordCardMusicPort;
+    @Mock
+    private LoadRunningSummaryPort loadRunningSummaryPort;
+    @Mock
+    private RequestRecordCardMusicPort requestRecordCardMusicPort;
+
+    private RecordCardMusicRetrier retrier;
+
+    @BeforeEach
+    void setUp() {
+        retrier = new RecordCardMusicRetrier(loadRecordCardForUpdatePort, saveRecordCardMusicPort,
+                loadRunningSummaryPort, requestRecordCardMusicPort);
+    }
+
+    @Test
+    @DisplayName("실패한 음악이 있으면 카드 음악 전체를 생성 중으로 저장한 뒤 사진 전부를 실어 요청한다")
+    void retriesAll() {
+        // given — 기본곡·a는 완료, b만 실패
+        RecordCard card = card(OWNER_ID, MusicStatus.COMPLETED, MusicStatus.FAILED);
+        when(loadRecordCardForUpdatePort.loadForUpdate(new RecordCardId(CARD_ID))).thenReturn(Optional.of(card));
+        when(loadRunningSummaryPort.load(card.getRunningRecordId())).thenReturn(Optional.of(SUMMARY));
+
+        // when
+        retrier.retry(OWNER_ID, CARD_ID);
+
+        // then — 상태를 먼저 쓰고 요청한다
+        InOrder order = inOrder(saveRecordCardMusicPort, requestRecordCardMusicPort);
+        order.verify(saveRecordCardMusicPort).saveMusic(card);
+        ArgumentCaptor<RecordCardMusicRequest> captor = ArgumentCaptor.forClass(RecordCardMusicRequest.class);
+        order.verify(requestRecordCardMusicPort).request(captor.capture());
+
+        assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.GENERATING);
+        assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus).containsOnly(MusicStatus.GENERATING);
+        assertThat(captor.getValue().recordCardId()).isEqualTo(CARD_ID);
+        assertThat(captor.getValue().runningSummary()).isSameAs(SUMMARY);
+        assertThat(captor.getValue().photos()).extracting(RecordCardMusicRequest.Photo::recordCardImageId)
+                .containsExactly(IMAGE_A, IMAGE_B);
+    }
+
+    @Test
+    @DisplayName("실패한 음악이 없으면 저장도 요청도 하지 않는다 — 두 번 누르거나 그사이 끝난 경우")
+    void nothingFailed() {
+        // given
+        RecordCard card = card(OWNER_ID, MusicStatus.COMPLETED, MusicStatus.GENERATING);
+        when(loadRecordCardForUpdatePort.loadForUpdate(new RecordCardId(CARD_ID))).thenReturn(Optional.of(card));
+
+        // when
+        retrier.retry(OWNER_ID, CARD_ID);
+
+        // then
+        verifyNoInteractions(saveRecordCardMusicPort, loadRunningSummaryPort, requestRecordCardMusicPort);
+        assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("없는 카드(지운 카드 포함)는 404이고 아무것도 쓰지 않는다")
+    void notFound() {
+        // given
+        when(loadRecordCardForUpdatePort.loadForUpdate(new RecordCardId(CARD_ID))).thenReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> retrier.retry(OWNER_ID, CARD_ID)).isInstanceOf(RecordCardNotFoundException.class);
+        verifyNoInteractions(saveRecordCardMusicPort, requestRecordCardMusicPort);
+    }
+
+    @Test
+    @DisplayName("남의 카드는 실패한 음악이 있어도 404이고 되돌리지 않는다")
+    void othersCard() {
+        // given
+        RecordCard card = card(UuidCreator.getTimeOrderedEpoch(), MusicStatus.FAILED, MusicStatus.FAILED);
+        when(loadRecordCardForUpdatePort.loadForUpdate(new RecordCardId(CARD_ID))).thenReturn(Optional.of(card));
+
+        // when & then
+        assertThatThrownBy(() -> retrier.retry(OWNER_ID, CARD_ID)).isInstanceOf(RecordCardNotFoundException.class);
+        verifyNoInteractions(saveRecordCardMusicPort, requestRecordCardMusicPort);
+        assertThat(card.getImages()).extracting(RecordCardImage::getMusicStatus).containsOnly(MusicStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("기록 수치가 없으면 요청을 만들지 못해 실패한다 — 트랜잭션이 롤백돼 상태도 남지 않는다")
+    void missingSummary() {
+        // given
+        RecordCard card = card(OWNER_ID, MusicStatus.FAILED, MusicStatus.FAILED);
+        when(loadRecordCardForUpdatePort.loadForUpdate(new RecordCardId(CARD_ID))).thenReturn(Optional.of(card));
+        when(loadRunningSummaryPort.load(card.getRunningRecordId())).thenReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> retrier.retry(OWNER_ID, CARD_ID)).isInstanceOf(IllegalStateException.class);
+        verify(requestRecordCardMusicPort, never()).request(any());
+    }
+
+    // 기본곡은 완료, 사진 a·b는 주어진 상태
+    private static RecordCard card(UUID ownerId, MusicStatus imageA, MusicStatus imageB) {
+        return RecordCard.restore(CARD_ID)
+                .runningRecordId(RECORD_ID)
+                .userId(ownerId)
+                .visibility(RecordCardVisibility.PUBLIC)
+                .activityType(RecordCardActivityType.DAILY)
+                .baseMusicStatus(MusicStatus.COMPLETED)
+                .baseMusicKey("audio/base.wav")
+                .memo("한강 한 바퀴")
+                .displayOrder(1)
+                .thumbnailImageKey("record-cards/u/c/a.jpg")
+                .images(List.of(image(IMAGE_A, "a", imageA, 0), image(IMAGE_B, "b", imageB, 1)))
+                .build();
+    }
+
+    private static RecordCardImage image(UUID id, String name, MusicStatus status, int sortOrder) {
+        String musicKey = status == MusicStatus.COMPLETED ? "audio/" + name + ".wav" : null;
+        return RecordCardImage.restore(id, "record-cards/u/c/" + name + ".jpg", null, musicKey, status, sortOrder);
+    }
+}

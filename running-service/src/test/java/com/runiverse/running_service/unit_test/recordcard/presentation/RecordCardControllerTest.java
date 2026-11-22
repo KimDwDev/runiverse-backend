@@ -7,6 +7,7 @@ import com.runiverse.running_service.application.recordcard.command.createdraft.
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
+import com.runiverse.running_service.application.recordcard.command.retrymusic.RetryRecordCardMusicCommand;
 import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardCommand;
 import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardResult;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
@@ -417,6 +418,37 @@ class RecordCardControllerTest {
 
         org.mockito.BDDMockito.willThrow(new RecordCardNotFoundException()).given(deleteRecordCardUsecase).handle(any());
         MvcResult notFound = mockMvc.perform(delete("/record-cards/{id}", DRAFT_ID)).andReturn();
+        assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
+        assertThat(body(notFound)).containsEntry("code", "NOT_FOUND");
+    }
+
+    @Test
+    @DisplayName("다시 만들기는 토큰 주인과 경로의 카드 ID로 넘기고, 200으로 상세 공통 객체를 내려 준다")
+    void retryMusic() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+        given(retryRecordCardMusicUsecase.handle(any())).willReturn(detailResult(cardId));
+
+        // when
+        MvcResult result = mockMvc.perform(post("/record-cards/{id}/retry", cardId)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        verify(retryRecordCardMusicUsecase).handle(new RetryRecordCardMusicCommand(USER_ID, cardId));
+        assertThat(body(result)).containsEntry("recordCardId", cardId.toString());
+    }
+
+    @Test
+    @DisplayName("다시 만들 카드 ID가 UUIDv7 형식이 아니면 400, 없거나 남의 카드면 404다")
+    void retryMusicErrors() throws Exception {
+        // when & then
+        MvcResult malformed = mockMvc.perform(post("/record-cards/{id}/retry", UUID.randomUUID())).andReturn();
+        assertThat(malformed.getResponse().getStatus()).isEqualTo(400);
+        verifyNoInteractions(retryRecordCardMusicUsecase);
+
+        org.mockito.BDDMockito.willThrow(new RecordCardNotFoundException()).given(retryRecordCardMusicUsecase)
+                .handle(any());
+        MvcResult notFound = mockMvc.perform(post("/record-cards/{id}/retry", DRAFT_ID)).andReturn();
         assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
         assertThat(body(notFound)).containsEntry("code", "NOT_FOUND");
     }
