@@ -55,6 +55,7 @@ class RecordCardS3AdapterTest {
     private static final String USER_ASSET_BUCKET = "runiverse-user-assets-test";
     private static final String GPS_TRACK_BUCKET = "runiverse-gps-tracks-test";
     private static final String RECORD_CARD_BUCKET = "runiverse-record-cards-test";
+    private static final String MUSIC_BUCKET = "runiverse-musics-test";
     private static final String KEY = "record-cards/u/c/i/image.jpg";
     private static final long PART_SIZE = 10L * 1024 * 1024;
     private static final Duration URL_TTL = Duration.ofMinutes(30);
@@ -97,7 +98,7 @@ class RecordCardS3AdapterTest {
             return CreateMultipartUploadResponse.builder().uploadId("s3-upload-id").build();
         });
 
-        adapter = new RecordCardS3Adapter(presigner, new S3Properties(REGION, USER_ASSET_BUCKET, GPS_TRACK_BUCKET, RECORD_CARD_BUCKET,
+        adapter = new RecordCardS3Adapter(presigner, new S3Properties(REGION, USER_ASSET_BUCKET, GPS_TRACK_BUCKET, RECORD_CARD_BUCKET, MUSIC_BUCKET,
                 Duration.ofMinutes(10), Duration.ofHours(1), null, null), s3Client);
     }
 
