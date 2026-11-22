@@ -127,8 +127,8 @@ class CompleteRecordCardMusicHandlerTest {
     }
 
     @Test
-    @DisplayName("끝난 기본곡은 실패 결과로 덮지 않는다 — 사진은 그대로 반영한다")
-    void keepsFinishedBaseMusic() {
+    @DisplayName("끝난 기본곡에 실패가 오면 FAILED가 된다 — 사진은 그대로 반영한다")
+    void finishedBaseMusicTakesFailure() {
         // given
         RecordCard card = card(MusicStatus.COMPLETED, OLD_KEY, image(IMAGE_A, MusicStatus.GENERATING, null, 0));
         givenFirstEvent(card);
@@ -137,8 +137,8 @@ class CompleteRecordCardMusicHandlerTest {
         handler.handle(command(MusicStatus.FAILED, null, List.of(new PhotoMusic(IMAGE_A, null))));
 
         // then
-        assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
-        assertThat(card.getBaseMusicKey()).contains(new MusicKey(OLD_KEY));
+        assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.FAILED);
+        assertThat(card.getBaseMusicKey()).isEmpty();
         assertThat(imageOf(card, IMAGE_A).getMusicStatus()).isEqualTo(MusicStatus.FAILED);
     }
 

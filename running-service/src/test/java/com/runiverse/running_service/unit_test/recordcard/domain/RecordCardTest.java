@@ -525,7 +525,7 @@ class RecordCardTest {
     class CompleteMusic {
 
         @Test
-        @DisplayName("생성 중인 기본곡이 COMPLETED가 되면 AI가 준 key를 담고, 뒤에 온 실패로는 덮지 않는다")
+        @DisplayName("생성 중인 기본곡이 COMPLETED가 되면 AI가 준 key를 담고, 같은 결과가 다시 오면 바뀐 게 없다")
         void completeBaseMusicOnce() {
             // given
             RecordCard card = create(List.of(), null);
@@ -534,8 +534,21 @@ class RecordCardTest {
             assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "ai/music/base.wav")).isTrue();
             assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
             assertThat(card.getBaseMusicKey()).contains(new MusicKey("ai/music/base.wav"));
-            assertThat(card.completeBaseMusic(MusicStatus.FAILED, null)).isFalse();
+            assertThat(card.completeBaseMusic(MusicStatus.COMPLETED, "ai/music/base.wav")).isFalse();
             assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("끝난 기본곡에 실패가 오면 FAILED가 된다 — AI가 같은 경로에 다시 만들다 실패한 결과다")
+        void completedBaseMusicTakesFailure() {
+            // given
+            RecordCard card = create(List.of(), null);
+            card.completeBaseMusic(MusicStatus.COMPLETED, "audio/base.wav");
+
+            // when & then
+            assertThat(card.completeBaseMusic(MusicStatus.FAILED, null)).isTrue();
+            assertThat(card.getBaseMusicStatus()).isEqualTo(MusicStatus.FAILED);
+            assertThat(card.getBaseMusicKey()).isEmpty();
         }
 
         @Test
