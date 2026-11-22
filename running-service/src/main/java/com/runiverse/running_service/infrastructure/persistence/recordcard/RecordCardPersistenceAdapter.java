@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.recordcard.port.out.LoadRecordC
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
 import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
+import com.runiverse.running_service.application.recordcard.port.out.UpdateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -38,7 +39,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
         CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort,
-        SnapshotRecordCardPort, DeleteRecordCardPort {
+        SnapshotRecordCardPort, DeleteRecordCardPort, UpdateRecordCardPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -219,20 +220,56 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
     }
 
     @Override
-    public void snapshot(RecordCard recordCard, RecordCardSnapshotReason reason) {
-        // 원래 만든 시각은 도메인에 없다 — loadForUpdate가 읽은 카드 엔티티가 이 트랜잭션에 있어 SELECT 없이 꺼낸다
-        RecordCardJpaEntity card = entityManager.find(RecordCardJpaEntity.class, recordCard.getRecordCardId().value());
+    public void snapshot(RecordCardId recordCardId, RecordCardSnapshotReason reason) {
+        // 엔티티의 지금 값을 남긴다 — loadForUpdate가 읽은 카드·사진이 이 트랜잭션에 있어 다시 SELECT하지 않는다.
+        // 수정 저장(update)보다 먼저 불러 엔티티가 아직 바뀌기 전이다
+        RecordCardJpaEntity card = entityManager.find(RecordCardJpaEntity.class, recordCardId.value());
         if (card == null) {
             throw new IllegalStateException("이력을 남길 카드가 없습니다 — 잠근 뒤 다시 읽은 카드로 불러야 합니다");
         }
         entityManager.persist(RecordCardHistoryJpaEntity.create(
-                recordCard.getRecordCardId().value(), reason, recordCard.getUserId().value(),
-                recordCard.getRunningRecordId().value(), recordCard.getVisibility(), recordCard.getActivityType(),
-                recordCard.getMemo().value(),
-                recordCard.getThumbnailImageKey().map(RecordCardImageKey::value).orElse(null),
-                recordCard.getBaseMusicStatus(), recordCard.getBaseMusicKey().map(MusicKey::value).orElse(null),
-                recordCard.getImages().stream().map(RecordCardPersistenceAdapter::historyImage).toList(),
+                card.getRecordCardId(), reason, card.getUserId(), card.getRunningRecord().getRunningRecordId(),
+                card.getVisibility(), card.getActivityType(), card.getMemo(), card.getThumbnailImageKey(),
+                card.getBaseMusicStatus(), card.getBaseMusicKey(),
+                loadImageEntities(card.getRecordCardId()).stream()
+                        .map(RecordCardPersistenceAdapter::historyImage).toList(),
                 card.getCreatedAt()));
+    }
+
+    @Override
+    public void update(RecordCard recordCard) {
+        // loadForUpdate가 읽은 엔티티에 도메인이 바꾼 값을 옮긴다 — 커밋 때 UPDATE된다. 순위(display_order)는 수정이 바꾸지 않는다
+        RecordCardJpaEntity card = entityManager.find(RecordCardJpaEntity.class, recordCard.getRecordCardId().value());
+        if (card == null) {
+            throw new IllegalStateException("고칠 카드가 없습니다 — 잠근 뒤 다시 읽은 카드로 불러야 합니다");
+        }
+        card.apply(recordCard.getVisibility(), recordCard.getActivityType(), recordCard.getBaseMusicStatus(),
+                recordCard.getMemo().value(), card.getDisplayOrder(),
+                recordCard.getThumbnailImageKey().map(RecordCardImageKey::value).orElse(null),
+                recordCard.getBaseMusicKey().map(MusicKey::value).orElse(null));
+
+        // 사진 — 빠진 사진은 지우고, 남긴 사진은 순서·설명·음악을 옮기고, 새 사진은 넣는다.
+        // 순서를 맞바꿔도 uk_record_card_image_sort_order가 커밋 때 검사(deferrable)라 중간에 걸리지 않는다
+        Map<UUID, RecordCardImageJpaEntity> existing = loadImageEntities(card.getRecordCardId()).stream()
+                .collect(Collectors.toMap(RecordCardImageJpaEntity::getRecordCardImageId, Function.identity()));
+        Map<UUID, RecordCardImage> next = recordCard.getImages().stream()
+                .collect(Collectors.toMap(image -> image.getRecordCardImageId().value(), Function.identity()));
+        existing.forEach((id, entity) -> {
+            if (!next.containsKey(id)) {
+                entityManager.remove(entity);
+            }
+        });
+        for (RecordCardImage image : recordCard.getImages()) {
+            String musicKey = image.getMusicKey().map(MusicKey::value).orElse(null);
+            String caption = image.getCaption().map(RecordCardImageCaption::value).orElse(null);
+            RecordCardImageJpaEntity entity = existing.get(image.getRecordCardImageId().value());
+            if (entity != null) {
+                entity.apply(image.getMusicStatus(), musicKey, image.getSortOrder(), caption);
+            } else {
+                entityManager.persist(RecordCardImageJpaEntity.create(image.getRecordCardImageId().value(), card,
+                        image.getImageKey().value(), image.getMusicStatus(), musicKey, image.getSortOrder(), caption));
+            }
+        }
     }
 
     @Override
@@ -247,14 +284,14 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
     }
 
     // 이력의 사진 한 장 — 키 이름은 erd에 적은 저장 약속이다. 값이 없어도 키를 빼지 않는다(LinkedHashMap은 null을 담는다)
-    private static Map<String, Object> historyImage(RecordCardImage image) {
+    private static Map<String, Object> historyImage(RecordCardImageJpaEntity image) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("recordCardImageId", image.getRecordCardImageId().value().toString());
-        map.put("imageKey", image.getImageKey().value());
-        map.put("caption", image.getCaption().map(RecordCardImageCaption::value).orElse(null));
+        map.put("recordCardImageId", image.getRecordCardImageId().toString());
+        map.put("imageKey", image.getImageKey());
+        map.put("caption", image.getCaption());
         map.put("sortOrder", image.getSortOrder());
         map.put("musicStatus", image.getMusicStatus().name());
-        map.put("musicKey", image.getMusicKey().map(MusicKey::value).orElse(null));
+        map.put("musicKey", image.getMusicKey());
         return map;
     }
 

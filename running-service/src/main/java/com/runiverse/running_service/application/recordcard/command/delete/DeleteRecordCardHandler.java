@@ -37,7 +37,7 @@ public class DeleteRecordCardHandler implements DeleteRecordCardUsecase {
                 .orElseThrow(RecordCardNotFoundException::new);
 
         // 2. 지우기 직전 모습을 남긴다 — 신고·분쟁 대응용. 삭제가 실패하면 함께 롤백된다
-        snapshotRecordCardPort.snapshot(recordCard, RecordCardSnapshotReason.DELETE);
+        snapshotRecordCardPort.snapshot(recordCardId, RecordCardSnapshotReason.DELETE);
 
         // 3. 지운다 — 사진 행은 CASCADE. S3 객체는 남긴다
         deleteRecordCardPort.delete(recordCardId);

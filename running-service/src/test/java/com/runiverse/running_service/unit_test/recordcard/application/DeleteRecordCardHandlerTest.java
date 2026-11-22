@@ -64,7 +64,7 @@ class DeleteRecordCardHandlerTest {
         // then
         InOrder order = inOrder(loadRecordCardForUpdatePort, snapshotRecordCardPort, deleteRecordCardPort);
         order.verify(loadRecordCardForUpdatePort).loadForUpdate(new RecordCardId(CARD_ID));
-        order.verify(snapshotRecordCardPort).snapshot(card, RecordCardSnapshotReason.DELETE);
+        order.verify(snapshotRecordCardPort).snapshot(new RecordCardId(CARD_ID), RecordCardSnapshotReason.DELETE);
         order.verify(deleteRecordCardPort).delete(new RecordCardId(CARD_ID));
     }
 
