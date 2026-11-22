@@ -19,6 +19,7 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.RetryRecordCardMusicUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.UpdateRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
@@ -95,6 +96,8 @@ class RecordCardControllerTest {
     private DeleteRecordCardUsecase deleteRecordCardUsecase;
     @Mock
     private UpdateRecordCardUsecase updateRecordCardUsecase;
+    @Mock
+    private RetryRecordCardMusicUsecase retryRecordCardMusicUsecase;
 
     private MockMvc mockMvc;
 
@@ -102,7 +105,7 @@ class RecordCardControllerTest {
     void setUp() {
         mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
                 completeRecordCardDraftUsecase, getRecordCardDetailUsecase,
-                deleteRecordCardUsecase, updateRecordCardUsecase))
+                deleteRecordCardUsecase, updateRecordCardUsecase, retryRecordCardMusicUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))

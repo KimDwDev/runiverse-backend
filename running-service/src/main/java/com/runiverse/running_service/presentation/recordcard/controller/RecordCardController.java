@@ -5,11 +5,13 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
+import com.runiverse.running_service.application.recordcard.command.retrymusic.RetryRecordCardMusicCommand;
 import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardCommand;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.RetryRecordCardMusicUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.UpdateRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.query.detail.GetRecordCardDetailQuery;
 import com.runiverse.running_service.presentation.recordcard.request.CreateRecordCardDraftRequest;
@@ -52,6 +54,7 @@ public class RecordCardController {
     private final GetRecordCardDetailUsecase getRecordCardDetailUsecase;
     private final DeleteRecordCardUsecase deleteRecordCardUsecase;
     private final UpdateRecordCardUsecase updateRecordCardUsecase;
+    private final RetryRecordCardMusicUsecase retryRecordCardMusicUsecase;
 
     // 8-1 — 볼 수 없는 카드(없음·탈퇴·공개 범위 밖·차단)는 모두 404다
     @GetMapping("{recordCardId}")
@@ -93,6 +96,18 @@ public class RecordCardController {
         UUID userId = UUID.fromString(jwt.getSubject());
         deleteRecordCardUsecase.handle(new DeleteRecordCardCommand(userId, UUID.fromString(recordCardId)));
         return ResponseEntity.noContent().build();
+    }
+
+    // 9-6 — 늘 200. 실패한 음악이 있으면 카드의 음악 전체를 다시 요청하고, 없으면 아무것도 하지 않는다
+    @PostMapping("{recordCardId}/retry")
+    public ResponseEntity<RecordCardDetailResponse> retry(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Pattern(regexp = UUID_V7_FORMAT, message = "입력값이 올바르지 않습니다.")
+            String recordCardId
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(RecordCardDetailResponse.from(retryRecordCardMusicUsecase.handle(
+                new RetryRecordCardMusicCommand(userId, UUID.fromString(recordCardId)))));
     }
 
     // 9-1 — 카드는 아직 없다. 작성 내용은 Redis 초안에만 두고 200으로 업로드 URL을 준다
