@@ -43,8 +43,8 @@
 
 ### 언제 쓰는가
 
-- **이벤트를 만든 저장과 같은 트랜잭션에서 쓴다** — 포트는 `@Transactional` 메서드 안에서 부른다. S3 확인처럼 트랜잭션 밖에서 도는 단계에서 부르지 않는다. 지금은 `RecordCardDraftSaver.save()`다.
-- **실제로 새로 저장했을 때만 쓴다** — 재시도·이미 처리된 요청·409로 끝나는 경로는 쓰지 않는다. 9-2는 카드 저장 결과가 `CREATED`일 때만 부르고, 확정된 초안을 다시 부른 재시도는 저장 전에 돌아가 이벤트를 다시 쓰지 않는다.
+- **이벤트를 만든 저장과 같은 트랜잭션에서 쓴다** — 포트는 `@Transactional` 메서드 안에서 부른다. S3 확인처럼 트랜잭션 밖에서 도는 단계에서 부르지 않는다. 지금은 `RecordCardDraftSaver.save()`(작성 확정)·`RecordCardEditor.apply()`(수정)·`RetryRecordCardMusicHandler.handle()`(다시 만들기)다.
+- **실제로 새로 저장했을 때만 쓴다** — 재시도·이미 처리된 요청·409로 끝나는 경로는 쓰지 않는다. 9-2는 카드 저장 결과가 `CREATED`일 때만 부르고, 확정된 초안을 다시 부른 재시도는 저장 전에 돌아가 이벤트를 다시 쓰지 않는다. 수정은 음악 재료가 바뀌었을 때만, 다시 만들기는 `FAILED`인 음악이 있을 때만 쓴다.
   - 이 규칙이 앱 쪽 중복을 막는다. 이벤트 ID는 막지 못한다 — 다시 쓰면 새 ID를 가진 다른 이벤트가 된다.
 - **앱은 Kafka로 직접 보내지 않는다** — 커밋 뒤 직접 발행도, 아웃박스와 직접 발행을 함께 쓰는 것도 하지 않는다. running-service에는 Kafka 프로듀서가 없다.
 
@@ -155,7 +155,7 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 
 | 토픽 (`{env}.` 생략) | 방향 | 쓰는 곳 | 코드 | 받는 쪽 중복 거르기 |
 |---|---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버와 확인 전) |
+| `record-card.music.requested` | running-service → AI | 9-2 작성 확정, 9-3 수정(바로 반영·9-2 수정 확정), 9-6 다시 만들기 | `RecordCardDraftSaver`·`RecordCardEditor`·`RetryRecordCardMusicHandler` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버와 확인 전) |
 | `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | `RecordCardMusicGeneratedListener` → `RecordCardMusicGeneratedMessageMapper`(검사·Command 변환) → `CompleteRecordCardMusicUsecase` → `CompleteRecordCardMusicHandler`(`RecordInboxEventPort` → `InboxEventAdapter`) | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
 
 ## 로컬 가짜 AI (음악 완료)
