@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.paginators.ListPartsIterable;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
@@ -42,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,7 @@ class RecordCardS3AdapterTest {
     private final List<UploadPartRequest> signedParts = new ArrayList<>();
     private CreateMultipartUploadRequest createRequest;
     private Duration signedTtl;
+    private GetObjectPresignRequest signedGet;
 
     @BeforeEach
     void setUp() {
@@ -90,6 +93,13 @@ class RecordCardS3AdapterTest {
             return realPresigner.presignPutObject(builder.build());
         });
 
+        when(presigner.presignGetObject(any(Consumer.class))).thenAnswer(invocation -> {
+            GetObjectPresignRequest.Builder builder = GetObjectPresignRequest.builder();
+            ((Consumer<GetObjectPresignRequest.Builder>) invocation.getArgument(0)).accept(builder);
+            signedGet = builder.build();
+            return realPresigner.presignGetObject(signedGet);
+        });
+
         s3Client = mock(S3Client.class);
         when(s3Client.createMultipartUpload(any(Consumer.class))).thenAnswer(invocation -> {
             CreateMultipartUploadRequest.Builder builder = CreateMultipartUploadRequest.builder();
@@ -105,6 +115,34 @@ class RecordCardS3AdapterTest {
     @AfterEach
     void tearDown() {
         realPresigner.close();
+    }
+
+    @Test
+    @DisplayName("사진 보기 URL은 기록 카드 버킷에, 보기 URL 유효 시간으로 서명한다")
+    void imageViewUrl() {
+        // when
+        String url = adapter.imageUrl(KEY);
+
+        // then
+        assertThat(signedGet.getObjectRequest().bucket()).isEqualTo(RECORD_CARD_BUCKET);
+        assertThat(signedGet.getObjectRequest().key()).isEqualTo(KEY);
+        assertThat(signedGet.signatureDuration()).isEqualTo(Duration.ofHours(1));
+        assertThat(url).contains(RECORD_CARD_BUCKET).contains("X-Amz-Signature");
+        verifyNoInteractions(s3Client);
+    }
+
+    @Test
+    @DisplayName("음악 보기 URL은 AI 서버가 올리는 음악 버킷에 서명한다 — S3를 부르지 않는다")
+    void musicViewUrl() {
+        // when
+        String url = adapter.musicUrl("Night_Walk.wav");
+
+        // then
+        assertThat(signedGet.getObjectRequest().bucket()).isEqualTo(MUSIC_BUCKET);
+        assertThat(signedGet.getObjectRequest().key()).isEqualTo("Night_Walk.wav");
+        assertThat(signedGet.signatureDuration()).isEqualTo(Duration.ofHours(1));
+        assertThat(url).contains(MUSIC_BUCKET);
+        verifyNoInteractions(s3Client);
     }
 
     @Test
