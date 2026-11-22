@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
+import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
@@ -60,6 +61,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -379,6 +381,35 @@ class RecordCardControllerTest {
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(body(result)).containsEntry("code", "NOT_FOUND")
                 .containsEntry("message", "요청한 리소스를 찾을 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("삭제는 토큰 주인과 경로의 카드 ID로 넘기고 204로 본문 없이 답한다")
+    void deleteCard() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+
+        // when
+        MvcResult result = mockMvc.perform(delete("/record-cards/{id}", cardId)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(204);
+        assertThat(result.getResponse().getContentAsByteArray()).isEmpty();
+        verify(deleteRecordCardUsecase).handle(new DeleteRecordCardCommand(USER_ID, cardId));
+    }
+
+    @Test
+    @DisplayName("삭제할 카드 ID가 UUIDv7 형식이 아니면 400, 없거나 남의 카드면 404다")
+    void deleteErrors() throws Exception {
+        // when & then
+        MvcResult malformed = mockMvc.perform(delete("/record-cards/{id}", "1-1-1-1-1")).andReturn();
+        assertThat(malformed.getResponse().getStatus()).isEqualTo(400);
+        verifyNoInteractions(deleteRecordCardUsecase);
+
+        org.mockito.BDDMockito.willThrow(new RecordCardNotFoundException()).given(deleteRecordCardUsecase).handle(any());
+        MvcResult notFound = mockMvc.perform(delete("/record-cards/{id}", DRAFT_ID)).andReturn();
+        assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
+        assertThat(body(notFound)).containsEntry("code", "NOT_FOUND");
     }
 
     private MvcResult perform() throws Exception {

@@ -1,13 +1,17 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
+import com.runiverse.running_service.application.recordcard.port.out.DeleteRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
+import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -20,6 +24,7 @@ import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +35,7 @@ import java.util.UUID;
 // 잠금은 흉내 내지 않는다(한 스레드라 줄 설 일이 없다)
 public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, LockOwnRunningRecordPort,
         FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort, LoadRunningSummaryPort,
-        LoadRecordCardDetailPort {
+        LoadRecordCardDetailPort, LoadRecordCardForUpdatePort, SnapshotRecordCardPort, DeleteRecordCardPort {
 
     // 기록마다 같은 수치를 돌려준다 — 요약 값 자체는 어댑터 단위 테스트와 E2E가 본다
     public static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
@@ -46,6 +51,12 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     private final Map<Long, UUID> foreignCardIdsByRecord = new HashMap<>();
     private final Map<Long, List<String>> segmentPolylinesByRecord = new HashMap<>();
     private boolean staleMaxOnce;
+    // 남긴 이력 — 카드 ID와 이유, 그때의 회고 글·사진 수만 본다(전체 값 매핑은 어댑터 단위 테스트가 본다)
+    private final List<Snapshot> snapshots = new ArrayList<>();
+
+    public record Snapshot(UUID recordCardId, RecordCardSnapshotReason reason, String memo, int imageCount) {
+
+    }
 
     @Override
     public boolean existsOwnedBy(RunningRecordId runningRecordId, UserId userId) {
@@ -126,7 +137,30 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
                 CREATED_AT, CREATED_AT);
     }
 
+    // 잠금은 흉내 내지 않는다 — 한 스레드라 줄 설 일이 없다
+    @Override
+    public Optional<RecordCard> loadForUpdate(RecordCardId recordCardId) {
+        return cardsByRecord.values().stream()
+                .filter(card -> card.getRecordCardId().equals(recordCardId))
+                .findFirst();
+    }
+
+    @Override
+    public void snapshot(RecordCard recordCard, RecordCardSnapshotReason reason) {
+        snapshots.add(new Snapshot(recordCard.getRecordCardId().value(), reason, recordCard.getMemo().value(),
+                recordCard.getImages().size()));
+    }
+
+    @Override
+    public void delete(RecordCardId recordCardId) {
+        cardsByRecord.values().removeIf(card -> card.getRecordCardId().equals(recordCardId));
+    }
+
     // 아래는 준비·검증 전용
+    public List<Snapshot> snapshots() {
+        return List.copyOf(snapshots);
+    }
+
     public void addSegments(long runningRecordId, List<String> segmentPolylines) {
         segmentPolylinesByRecord.put(runningRecordId, List.copyOf(segmentPolylines));
     }

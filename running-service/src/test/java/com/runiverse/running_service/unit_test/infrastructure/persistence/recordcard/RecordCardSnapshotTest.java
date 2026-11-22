@@ -5,6 +5,7 @@ import com.runiverse.running_service.domain.recordcard.RecordCard;
 import com.runiverse.running_service.domain.recordcard.RecordCardImage;
 import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import com.runiverse.running_service.infrastructure.persistence.recordcard.RecordCardHistoryJpaEntity;
 import com.runiverse.running_service.infrastructure.persistence.recordcard.RecordCardJpaEntity;
@@ -34,7 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 
 // EntityManager를 목으로 대체하므로 옮기는 값만 검증한다 — 테이블·CHECK·jsonb 저장은 E2E가 확인한다
 @ExtendWith(MockitoExtension.class)
-@DisplayName("기록 카드 이력 저장 어댑터 단위 테스트")
+@DisplayName("기록 카드 이력 저장·삭제 어댑터 단위 테스트")
 class RecordCardSnapshotTest {
 
     private static final UUID CARD_ID = UUID.fromString("01a1ee0f-4fee-7741-a7b1-7eeb86bb369f");
@@ -93,6 +94,31 @@ class RecordCardSnapshotTest {
         assertThatThrownBy(() -> adapter.snapshot(card(), RecordCardSnapshotReason.DELETE))
                 .isInstanceOf(IllegalStateException.class);
         verify(entityManager, never()).persist(any());
+    }
+
+    @Test
+    @DisplayName("삭제는 잠근 뒤 읽은 카드 엔티티를 지운다 — 사진 행은 DB CASCADE가 지운다")
+    void deletesCardEntity() {
+        // given
+        RecordCardJpaEntity cardEntity = mock(RecordCardJpaEntity.class);
+        given(entityManager.find(RecordCardJpaEntity.class, CARD_ID)).willReturn(cardEntity);
+
+        // when
+        adapter.delete(new RecordCardId(CARD_ID));
+
+        // then
+        verify(entityManager).remove(cardEntity);
+    }
+
+    @Test
+    @DisplayName("지울 카드가 없으면 아무것도 지우지 않고 실패한다")
+    void deleteFailsWithoutCard() {
+        // given
+        given(entityManager.find(RecordCardJpaEntity.class, CARD_ID)).willReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> adapter.delete(new RecordCardId(CARD_ID))).isInstanceOf(IllegalStateException.class);
+        verify(entityManager, never()).remove(any());
     }
 
     private static RecordCard card() {
