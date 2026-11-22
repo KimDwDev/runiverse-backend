@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.recordcard.command.createdraft.
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
+import com.runiverse.running_service.application.recordcard.common.RecordCardUploadIssuer;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftNotFoundException;
@@ -66,8 +67,10 @@ class CompleteRecordCardDraftIntegrationTest {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
                 DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         createHandler = new CreateRecordCardDraftHandler(properties, recordCardStore, recordCardStore,
-                new FakeRecordCardIdGenerator(1L), new FakeRecordCardIdGenerator(2L), new FakeImageIdGenerator(),
-                new FakeUploadUrlGenerator(), multipartUploads, draftStore);
+                new FakeRecordCardIdGenerator(1L), new FakeRecordCardIdGenerator(2L),
+                new RecordCardUploadIssuer(properties, new FakeImageIdGenerator(), new FakeUploadUrlGenerator(),
+                        multipartUploads),
+                draftStore);
         completeHandler = new CompleteRecordCardDraftHandler(properties, draftStore, draftStore, draftStore,
                 objectStore, objectStore,
                 new RecordCardDraftSaver(recordCardStore, recordCardStore, recordCardStore, recordCardStore,
