@@ -2,6 +2,7 @@ package com.runiverse.running_service.application.recordcard.command.update;
 
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
+import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,6 +41,7 @@ public class RecordCardEditor {
     private final UpdateRecordCardPort updateRecordCardPort;
     private final LoadRunningSummaryPort loadRunningSummaryPort;
     private final RequestRecordCardMusicPort requestRecordCardMusicPort;
+    private final LoadLastRecordCardHistoryPort loadLastRecordCardHistoryPort;
 
     // 바꿀 값 — null이면 그대로 둔다. slots가 null이면 사진·설명은 그대로다(썸네일 위치만 바꿀 수 있다)
     public record Changes(
@@ -56,6 +59,19 @@ public class RecordCardEditor {
     public void applyNow(UUID userId, UUID recordCardId, Changes changes) {
         RecordCard card = lockOwnCard(userId, recordCardId, changes.slots());
         apply(card, changes);
+    }
+
+    // 9-3 새 사진이 있을 때 초안을 만들기 전 — 내 카드인지(404)·남길 사진이 이 카드 것인지(400)를 먼저 보고,
+    // 지금의 마지막 수정 이력을 돌려준다(초안에 적어 두고 확정 때 비교한다). 카드는 바꾸지 않는다
+    @Transactional
+    public Optional<Long> checkBeforeDraft(UUID userId, UUID recordCardId, List<ImageSlot> slots) {
+        RecordCard card = lockOwnCard(userId, recordCardId, slots);
+        return loadLastRecordCardHistoryPort.loadLastId(card.getRecordCardId());
+    }
+
+    // 지금의 마지막 수정 이력 — 9-2 수정 확정이 초안의 값과 비교한다
+    public Optional<Long> lastHistoryId(RecordCard card) {
+        return loadLastRecordCardHistoryPort.loadLastId(card.getRecordCardId());
     }
 
     // 기록 행을 잠그고 내 카드를 읽는다 — 없거나(지운 카드 포함) 남의 카드면 404. 남긴다는 사진이 이 카드 것인지도 본다(400)
@@ -92,7 +108,7 @@ public class RecordCardEditor {
     }
 
     // 남긴다는 사진이 이 카드에 없으면 400 — 도메인에 넘기면 도메인 예외(500)가 된다
-    private static void requireKeptImagesInCard(RecordCard card, List<ImageSlot> slots) {
+    public void requireKeptImagesInCard(RecordCard card, List<ImageSlot> slots) {
         if (slots == null) {
             return;
         }

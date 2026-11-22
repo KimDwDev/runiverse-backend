@@ -20,17 +20,48 @@ public record RecordCardDraft(
         RecordCardVisibility visibility,
         List<DraftImage> images,        // 캐러셀 순서대로
         Integer thumbnailIndex,         // 사진이 없으면 null
-        boolean confirmed               // 확정했는지 — 확정 뒤 재시도에 같은 카드를 돌려준다
+        boolean confirmed,              // 확정했는지 — 확정 뒤 재시도에 같은 카드를 돌려준다
+        EditPlan editPlan               // 수정(UPDATE)일 때만 — 작성이면 null
 ) {
 
     public RecordCardDraft {
         images = List.copyOf(images);
     }
 
+    // 작성 초안 — 수정 계획이 없다
+    public RecordCardDraft(UUID recordCardDraftId, DraftType type, UUID recordCardId, UUID userId,
+                           Long runningRecordId, RecordCardActivityType activityType, String memo,
+                           RecordCardVisibility visibility, List<DraftImage> images, Integer thumbnailIndex,
+                           boolean confirmed) {
+        this(recordCardDraftId, type, recordCardId, userId, runningRecordId, activityType, memo, visibility, images,
+                thumbnailIndex, confirmed, null);
+    }
+
+    // 수정(9-3) 초안의 계획 — 새 사진이 있어 9-2 확정 때 반영한다. images에는 새 사진만 있다(확정이 S3에서 확인한다).
+    // 바꿀 값은 null이면 그대로 둔다. slots는 수정 뒤 사진 전체를 순서대로 — 새 사진은 images의 같은 ID를 가리킨다
+    public record EditPlan(
+            String memo,
+            RecordCardActivityType activityType,
+            RecordCardVisibility visibility,
+            List<Slot> slots,
+            Integer thumbnailIndex,
+            Long baseHistoryId          // 초안을 만들 때 카드의 마지막 수정 이력 — 없으면 null. 확정 때 달라졌으면 409
+    ) {
+
+        public EditPlan {
+            slots = List.copyOf(slots);
+        }
+
+        // 수정 뒤 캐러셀의 한 자리 — 남길 사진(설명 포함)이거나, images에 있는 새 사진
+        public record Slot(UUID recordCardImageId, String caption, boolean added) {
+
+        }
+    }
+
     // 확정한 초안 — 저장이 끝났다는 표시만 바꾼다. 재시도가 이 표시를 보고 같은 카드를 돌려받는다
     public RecordCardDraft confirm() {
         return new RecordCardDraft(recordCardDraftId, type, recordCardId, userId, runningRecordId, activityType, memo,
-                visibility, images, thumbnailIndex, true);
+                visibility, images, thumbnailIndex, true, editPlan);
     }
 
     // 사진 하나를 바꾼 초안 — 나눠 올린 사진을 합친 뒤 그 사진만 "합침"으로 바꿀 때 쓴다
@@ -38,7 +69,7 @@ public record RecordCardDraft(
         List<DraftImage> next = new ArrayList<>(images);
         next.set(index, image);
         return new RecordCardDraft(recordCardDraftId, type, recordCardId, userId, runningRecordId, activityType, memo,
-                visibility, next, thumbnailIndex, confirmed);
+                visibility, next, thumbnailIndex, confirmed, editPlan);
     }
 
     // 올릴 사진 하나 — 확정 때 S3 실물을 여기 적힌 형식·크기와 대조한다
@@ -61,7 +92,7 @@ public record RecordCardDraft(
         }
     }
 
-    // 수정(UPDATE)은 9-3을 만들 때 쓴다 — 그때 수정 당시 카드의 updated_at·남길 사진도 함께 둔다
+    // 작성(9-1)인지 수정(9-3, 새 사진이 있을 때)인지 — 확정(9-2)이 이 값으로 저장을 가른다
     public enum DraftType {
         CREATE,
         UPDATE

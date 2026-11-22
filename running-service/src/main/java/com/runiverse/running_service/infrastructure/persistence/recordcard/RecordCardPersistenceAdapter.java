@@ -3,6 +3,7 @@ package com.runiverse.running_service.infrastructure.persistence.recordcard;
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.DeleteRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
@@ -39,7 +40,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
         CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort,
-        SnapshotRecordCardPort, DeleteRecordCardPort, UpdateRecordCardPort {
+        SnapshotRecordCardPort, DeleteRecordCardPort, UpdateRecordCardPort, LoadLastRecordCardHistoryPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -234,6 +235,20 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
                 loadImageEntities(card.getRecordCardId()).stream()
                         .map(RecordCardPersistenceAdapter::historyImage).toList(),
                 card.getCreatedAt()));
+    }
+
+    @Override
+    public Optional<Long> loadLastId(RecordCardId recordCardId) {
+        // idx_record_card_history_card(record_card_id, created_at)가 카드의 이력만 좁힌다 — 카드마다 이력은 몇 줄뿐이다.
+        // ID가 IDENTITY라 클수록 나중에 남긴 이력이다
+        Long last = entityManager.createQuery("""
+                        SELECT MAX(history.recordCardHistoryId)
+                        FROM RecordCardHistoryJpaEntity history
+                        WHERE history.recordCardId = :recordCardId
+                        """, Long.class)
+                .setParameter("recordCardId", recordCardId.value())
+                .getSingleResult();
+        return Optional.ofNullable(last);
     }
 
     @Override

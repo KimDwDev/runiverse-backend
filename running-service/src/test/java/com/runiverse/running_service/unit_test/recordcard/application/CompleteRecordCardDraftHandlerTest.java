@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftHandler;
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardDraftSaver;
+import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardEditDraftSaver;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
@@ -73,6 +74,8 @@ class CompleteRecordCardDraftHandlerTest {
     private CompleteMultipartUploadPort completeMultipartUploadPort;
     @Mock
     private RecordCardDraftSaver recordCardDraftSaver;
+    @Mock
+    private RecordCardEditDraftSaver recordCardEditDraftSaver;
 
     private CompleteRecordCardDraftHandler handler;
 
@@ -81,7 +84,8 @@ class CompleteRecordCardDraftHandlerTest {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
                 DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), LOCK_TTL);
         handler = new CompleteRecordCardDraftHandler(properties, loadRecordCardDraftPort, lockRecordCardDraftPort,
-                updateRecordCardDraftPort, loadRecordCardImagePort, completeMultipartUploadPort, recordCardDraftSaver);
+                updateRecordCardDraftPort, loadRecordCardImagePort, completeMultipartUploadPort, recordCardDraftSaver,
+                recordCardEditDraftSaver);
     }
 
     @Test

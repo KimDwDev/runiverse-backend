@@ -4,6 +4,7 @@ import com.runiverse.running_service.application.recordcard.port.out.CreateRecor
 import com.runiverse.running_service.application.recordcard.port.out.DeleteRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
@@ -38,7 +39,7 @@ import java.util.UUID;
 public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, LockOwnRunningRecordPort,
         FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort, LoadRunningSummaryPort,
         LoadRecordCardDetailPort, LoadRecordCardForUpdatePort, SnapshotRecordCardPort, DeleteRecordCardPort,
-        UpdateRecordCardPort {
+        UpdateRecordCardPort, LoadLastRecordCardHistoryPort {
 
     // 기록마다 같은 수치를 돌려준다 — 요약 값 자체는 어댑터 단위 테스트와 E2E가 본다
     public static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
@@ -161,6 +162,17 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     public void snapshot(RecordCardId recordCardId, RecordCardSnapshotReason reason) {
         RecordCard stored = stored(recordCardId).orElseThrow();
         snapshots.add(new Snapshot(recordCardId.value(), reason, stored.getMemo().value(), stored.getImages().size()));
+    }
+
+    // 이력 ID는 남긴 순서(1부터) — 실제 IDENTITY처럼 나중에 남긴 이력이 크다
+    @Override
+    public Optional<Long> loadLastId(RecordCardId recordCardId) {
+        for (int i = snapshots.size() - 1; i >= 0; i--) {
+            if (snapshots.get(i).recordCardId().equals(recordCardId.value())) {
+                return Optional.of((long) i + 1);
+            }
+        }
+        return Optional.empty();
     }
 
     @Override

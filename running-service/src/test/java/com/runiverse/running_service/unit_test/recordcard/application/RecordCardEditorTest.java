@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.recordcard.command.update.Recor
 import com.runiverse.running_service.application.recordcard.command.update.RecordCardEditor.Changes;
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
+import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest;
@@ -67,13 +68,15 @@ class RecordCardEditorTest {
     private LoadRunningSummaryPort loadRunningSummaryPort;
     @Mock
     private RequestRecordCardMusicPort requestRecordCardMusicPort;
+    @Mock
+    private LoadLastRecordCardHistoryPort loadLastRecordCardHistoryPort;
 
     private RecordCardEditor editor;
 
     @BeforeEach
     void setUp() {
         editor = new RecordCardEditor(loadRecordCardForUpdatePort, snapshotRecordCardPort, updateRecordCardPort,
-                loadRunningSummaryPort, requestRecordCardMusicPort);
+                loadRunningSummaryPort, requestRecordCardMusicPort, loadLastRecordCardHistoryPort);
     }
 
     @Test

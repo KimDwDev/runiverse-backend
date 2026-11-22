@@ -4,6 +4,8 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftHandler;
 import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardDraftSaver;
+import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardEditDraftSaver;
+import com.runiverse.running_service.application.recordcard.command.update.RecordCardEditor;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftHandler;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
@@ -74,7 +76,9 @@ class CompleteRecordCardDraftIntegrationTest {
         completeHandler = new CompleteRecordCardDraftHandler(properties, draftStore, draftStore, draftStore,
                 objectStore, objectStore,
                 new RecordCardDraftSaver(recordCardStore, recordCardStore, recordCardStore, recordCardStore,
-                        recordCardStore, musicRequests));
+                        recordCardStore, musicRequests),
+                new RecordCardEditDraftSaver(new RecordCardEditor(recordCardStore, recordCardStore, recordCardStore,
+                        recordCardStore, musicRequests, recordCardStore)));
         recordCardStore.addRecord(RECORD_ID, userId);
     }
 

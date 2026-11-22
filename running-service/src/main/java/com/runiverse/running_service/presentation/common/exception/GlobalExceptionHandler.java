@@ -389,7 +389,9 @@ public class GlobalExceptionHandler {
             // 기록과 카드는 1:1이다 — 다른 요청이 먼저 만들었다
             case RECORD_CARD_ALREADY_EXISTS,
                  // 요청이 틀린 게 아니라 처리 중인 다른 확정과 부딪혔다
-                 RECORD_CARD_DRAFT_IN_PROGRESS -> HttpStatus.CONFLICT;
+                 RECORD_CARD_DRAFT_IN_PROGRESS,
+                 // 수정 초안 뒤에 카드가 다른 수정으로 바뀌었다
+                 RECORD_CARD_CHANGED -> HttpStatus.CONFLICT;
         };
     }
 
