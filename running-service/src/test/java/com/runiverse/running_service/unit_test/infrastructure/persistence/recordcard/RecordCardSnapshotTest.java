@@ -37,6 +37,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 
 // EntityManager를 목으로 대체하므로 옮기는 값만 검증한다 — 테이블·CHECK·jsonb 저장은 E2E가 확인한다
@@ -57,6 +58,8 @@ class RecordCardSnapshotTest {
     private EntityManager entityManager;
     @Mock
     private TypedQuery<RecordCardImageJpaEntity> imageQuery;
+    @Mock
+    private TypedQuery<Long> lastIdQuery;
 
     @InjectMocks
     private RecordCardPersistenceAdapter adapter;
@@ -175,6 +178,20 @@ class RecordCardSnapshotTest {
         // when & then
         assertThatThrownBy(() -> adapter.delete(new RecordCardId(CARD_ID))).isInstanceOf(IllegalStateException.class);
         verify(entityManager, never()).remove(any());
+    }
+
+    @Test
+    @DisplayName("카드의 마지막 이력 ID를 읽고, 이력이 없으면(MAX가 null) 비어 있다")
+    void loadsLastHistoryId() {
+        // given
+        given(entityManager.createQuery(contains("MAX(history.recordCardHistoryId)"), eq(Long.class)))
+                .willReturn(lastIdQuery);
+        given(lastIdQuery.setParameter("recordCardId", CARD_ID)).willReturn(lastIdQuery);
+        given(lastIdQuery.getSingleResult()).willReturn(12L, (Long) null);
+
+        // when & then
+        assertThat(adapter.loadLastId(new RecordCardId(CARD_ID))).contains(12L);
+        assertThat(adapter.loadLastId(new RecordCardId(CARD_ID))).isEmpty();
     }
 
     // 저장된 카드 엔티티 — 값은 목으로 준다(실제 엔티티의 apply 호출만 확인한다)

@@ -112,6 +112,31 @@ class CompleteRecordCardDraftHandlerTest {
     }
 
     @Test
+    @DisplayName("수정 초안은 같은 확인을 거친 뒤 수정 저장으로 보낸다 — 작성 저장은 부르지 않는다")
+    void completeEditDraft() {
+        // given
+        RecordCardDraft created = draft(singleImage(IMAGE_ID_1, "k/1/a.jpg"));
+        RecordCardDraft draft = new RecordCardDraft(DRAFT_ID, DraftType.UPDATE, CARD_ID, USER_ID, 501L, null, null,
+                null, created.images(), null, false,
+                new RecordCardDraft.EditPlan(null, null, null,
+                        List.of(new RecordCardDraft.EditPlan.Slot(IMAGE_ID_1, null, true)), null, null));
+        givenDraft(draft);
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+
+        // when
+        CompleteRecordCardDraftResult result = handler.handle(command());
+
+        // then
+        assertThat(result.recordCardId()).isEqualTo(CARD_ID);
+        InOrder order = inOrder(loadRecordCardImagePort, recordCardEditDraftSaver, updateRecordCardDraftPort);
+        order.verify(loadRecordCardImagePort).load("k/1/a.jpg");
+        order.verify(recordCardEditDraftSaver).save(draft);
+        order.verify(updateRecordCardDraftPort).update(draft.confirm());
+        verifyNoInteractions(recordCardDraftSaver);
+    }
+
+    @Test
     @DisplayName("이미 확정된 초안이면 사진도 DB도 보지 않고 같은 카드를 돌려준다 — 응답을 못 받은 재시도")
     void alreadyConfirmed() {
         // given
