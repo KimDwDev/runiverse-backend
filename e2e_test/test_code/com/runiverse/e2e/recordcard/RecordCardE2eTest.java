@@ -476,6 +476,67 @@ class RecordCardE2eTest extends E2eTestSupport {
                 .isEqualTo(404);
     }
 
+    @Test
+    @DisplayName("삭제(9-4) — 직전 모습을 이력으로 남기고 카드·사진 행을 지운다. 지운 뒤 같은 기록으로 다시 만들 수 있다")
+    void deleteCard() {
+        // given - 사진 한 장짜리 카드
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(owner);
+        Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
+        String imageKey = (String) draft.objects("uploads").get(0).get("imageKey");
+        uploadRecordCardImage(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        String recordCardId = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String cardPath = "/record-cards/" + recordCardId;
+
+        // 남의 카드는 지울 수 없고, 있는지도 드러나지 않는다
+        Response others = delete(cardPath, stranger.accessToken());
+        assertThat(others.status()).isEqualTo(404);
+        assertThat(others.text("code")).isEqualTo("NOT_FOUND");
+
+        // when
+        Response deleted = delete(cardPath, owner.accessToken());
+
+        // then - 카드·사진 행이 사라지고 상세는 404다
+        assertThat(deleted.status()).isEqualTo(204);
+        assertThat(get(cardPath, owner.accessToken()).status()).isEqualTo(404);
+        assertThat(querySql("SELECT count(*) FROM record_cards WHERE record_card_id = '%s'".formatted(recordCardId)))
+                .containsExactly("0");
+        assertThat(querySql("SELECT count(*) FROM record_card_images WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("0");
+        // 지우기 직전 모습이 이력에 남는다 — 사진은 jsonb 배열, 원래 만든 시각도 복사해 둔다
+        assertThat(querySql("""
+                SELECT snapshot_reason, user_id, running_record_id, memo, base_music_status,
+                       jsonb_array_length(images), images->0->>'imageKey', images->0->>'caption',
+                       images->0->>'musicStatus', card_created_at IS NOT NULL
+                FROM record_card_histories WHERE record_card_id = '%s'
+                """.formatted(recordCardId)))
+                .containsExactly(String.join("|", "DELETE", owner.userId(), String.valueOf(runningRecordId),
+                        "한강 한 바퀴", "GENERATING", "1", imageKey, "출발선", "GENERATING", "t"));
+
+        // 두 번 지우면 404이고 이력은 늘지 않는다
+        assertThat(delete(cardPath, owner.accessToken()).status()).isEqualTo(404);
+        assertThat(querySql("SELECT count(*) FROM record_card_histories WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("1");
+
+        // 행이 없으니 같은 기록으로 새 카드(새 카드 ID)를 만들 수 있다
+        String recreated = createCardWithoutImages(owner, runningRecordId);
+        assertThat(recreated).isNotEqualTo(recordCardId);
+    }
+
+    @Test
+    @DisplayName("이력 테이블은 스냅샷 이유를 DB에서 막는다")
+    void historyChecksRejectUnknownReason() {
+        assertThatThrownBy(() -> executeSql("""
+                INSERT INTO record_card_histories (record_card_id, snapshot_reason, user_id, running_record_id,
+                    visibility, activity_type, memo, base_music_status, images, card_created_at, created_at)
+                VALUES (gen_random_uuid(), 'CREATE', gen_random_uuid(), 1, 'PUBLIC', 'DAILY', '글', 'GENERATING',
+                    '[]'::jsonb, now(), now())
+                """)).hasMessageContaining("ck_record_card_history_snapshot_reason");
+    }
+
     private String createCardWithoutImages(TestUser user, long runningRecordId) {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(), null), user.accessToken());
         assertThat(draft.status()).isEqualTo(200);
