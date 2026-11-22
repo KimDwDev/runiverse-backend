@@ -2,6 +2,7 @@ package com.runiverse.running_service.application.recordcard.command.update;
 
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardThumbnailOutOfRangeException;
 import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
@@ -85,6 +86,7 @@ public class RecordCardEditor {
 
     // 잠그고 읽은 카드에 수정을 반영한다 — 바뀐 것이 없으면 이력·저장·요청 모두 하지 않는다
     public void apply(RecordCard card, Changes changes) {
+        requireThumbnailInRange(card, changes);
         RecordCard.Edit edit = card.edit(changes.memo(), changes.activityType(), changes.visibility(),
                 changes.slots(), changes.thumbnailIndex());
         if (!edit.changed()) {
@@ -105,6 +107,15 @@ public class RecordCardEditor {
                         + "baseMusicIngredientChanged={}",
                 card.getRecordCardId().value(), edit.needsMusic(), edit.imagesToRegenerate().size(),
                 edit.baseMusicIngredientChanged());
+    }
+
+    // 사진 목록 없이 썸네일 위치만 보냈으면 지금 사진 기준이다 — 벗어나면 400(도메인에 넘기면 500).
+    // 사진 목록을 보냈으면 그 목록 기준이라 Request DTO가 이미 봤다
+    private static void requireThumbnailInRange(RecordCard card, Changes changes) {
+        Integer index = changes.thumbnailIndex();
+        if (changes.slots() == null && index != null && (index < 0 || index >= card.getImages().size())) {
+            throw new RecordCardThumbnailOutOfRangeException();
+        }
     }
 
     // 남긴다는 사진이 이 카드에 없으면 400 — 도메인에 넘기면 도메인 예외(500)가 된다

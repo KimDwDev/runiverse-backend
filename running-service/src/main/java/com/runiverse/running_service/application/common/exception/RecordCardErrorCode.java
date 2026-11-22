@@ -13,6 +13,9 @@ public enum RecordCardErrorCode implements ErrorCode {
     // 사진이 최대 크기(record-card.draft.max-image-size)를 넘는다 — 운영값이라 Request DTO가 못 보고 유스케이스가 본다.
     // 클라에는 요청 검증 실패와 같은 코드로 보인다. 실제 문구는 예외가 운영값으로 만든다
     RECORD_CARD_IMAGE_TOO_LARGE("INVALID_REQUEST", "이미지가 업로드할 수 있는 크기를 넘었습니다."),
+    // 수정(9-3): 사진 목록 없이 썸네일 위치만 보냈는데 지금 사진 범위를 벗어났다 — 카드를 읽어야 알아 Request DTO가 못 본다.
+    // 클라에는 요청 검증 실패와 같은 코드·문구로 보인다
+    RECORD_CARD_THUMBNAIL_OUT_OF_RANGE("INVALID_REQUEST", "썸네일 위치가 사진 범위를 벗어났습니다."),
     // 확정(9-2): 초안에 적힌 사진이 S3에 없다 — 안 올렸거나, 나눠 올린 조각이 빠졌다. 앱은 빠진 것만 다시 올리고 다시 확정한다
     RECORD_CARD_IMAGE_NOT_UPLOADED("RECORD_CARD_IMAGE_NOT_UPLOADED", "업로드되지 않은 이미지입니다."),
     // 확정(9-2): 올라간 파일의 크기·형식이 작성 요청과 다르다 — 서명이 막지만 마지막으로 한 번 더 본다. 9-1부터 다시 한다

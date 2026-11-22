@@ -5,15 +5,19 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
+import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardCommand;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.UpdateRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.query.detail.GetRecordCardDetailQuery;
 import com.runiverse.running_service.presentation.recordcard.request.CreateRecordCardDraftRequest;
+import com.runiverse.running_service.presentation.recordcard.request.UpdateRecordCardRequest;
 import com.runiverse.running_service.presentation.recordcard.response.CompleteRecordCardDraftResponse;
 import com.runiverse.running_service.presentation.recordcard.response.CreateRecordCardDraftResponse;
 import com.runiverse.running_service.presentation.recordcard.response.RecordCardDetailResponse;
+import com.runiverse.running_service.presentation.recordcard.response.UpdateRecordCardResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,6 +51,7 @@ public class RecordCardController {
     private final CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
     private final GetRecordCardDetailUsecase getRecordCardDetailUsecase;
     private final DeleteRecordCardUsecase deleteRecordCardUsecase;
+    private final UpdateRecordCardUsecase updateRecordCardUsecase;
 
     // 8-1 — 볼 수 없는 카드(없음·탈퇴·공개 범위 밖·차단)는 모두 404다
     @GetMapping("{recordCardId}")
@@ -57,6 +63,24 @@ public class RecordCardController {
         UUID viewerId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.ok(RecordCardDetailResponse.from(getRecordCardDetailUsecase.handle(
                 new GetRecordCardDetailQuery(viewerId, UUID.fromString(recordCardId)))));
+    }
+
+    // 9-3 — 늘 200. 새 사진이 없으면 바로 반영(draft null), 있으면 초안과 업로드 URL(draft) — 9-2로 확정하면 반영된다
+    @PatchMapping("{recordCardId}")
+    public ResponseEntity<UpdateRecordCardResponse> update(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Pattern(regexp = UUID_V7_FORMAT, message = "입력값이 올바르지 않습니다.")
+            String recordCardId,
+            @Valid @RequestBody UpdateRecordCardRequest request
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        List<UpdateRecordCardCommand.Image> images = request.images() == null ? null : request.images().stream()
+                .map(image -> new UpdateRecordCardCommand.Image(image.recordCardImageId(), image.mimeType(),
+                        image.fileSizeBytes(), image.fileName(), image.caption()))
+                .toList();
+        return ResponseEntity.ok(UpdateRecordCardResponse.from(updateRecordCardUsecase.handle(
+                new UpdateRecordCardCommand(userId, UUID.fromString(recordCardId), request.memo(),
+                        request.activityType(), request.visibility(), images, request.thumbnailIndex()))));
     }
 
     // 9-4 — 하드 삭제. 없거나(이미 지운 카드 포함) 남의 카드면 404다
