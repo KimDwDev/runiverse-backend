@@ -142,6 +142,7 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 | CA 인증서가 컨테이너에 읽기 전용으로 마운트된다 | — | ✅ 배포 워크플로 | ✅ 시작 템플릿 버전 8 — 배포로 뜬 새 인스턴스 |
 | AI 서버가 보낸 완료 이벤트(헤더 `id` = `inference_id`)가 반영된다 | — | AI 서버 반영 뒤 | AI 서버 반영 뒤 |
 
+- **11-23 실제 왕복(로컬 앱 → test DB·test 토픽)** — 9-2 → 아웃박스 → Debezium → AI 서버 수신까지 됐다(AI가 카드 ID·사진 ID를 그대로 돌려보냈다). AI의 완료 이벤트는 헤더 이름이 `id`가 아니라 `inference_id`여서 받는 쪽이 「헤더 id 없음」으로 건너뛰는 상태이고, AI 음악 엔드포인트가 없어 결과도 `FAILED`(`INVOKE`)였다. 두 가지를 AI 쪽에 전했다 — 고쳐지면 위 표 마지막 줄을 같은 방법으로 확인한다.
 - 로컬 검증에 쓴 메시지는 확인 뒤 `kafka-delete-records`로 지웠다([kafka.md](kafka.md) 「지금 설정 때문에 지켜야 할 것」).
 
 ### 정하지 않은 것
@@ -155,7 +156,23 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 | 토픽 (`{env}.` 생략) | 방향 | 쓰는 곳 | 코드 | 받는 쪽 중복 거르기 |
 |---|---|---|---|---|
 | `record-card.music.requested` | running-service → AI | 9-2 작성 확정 (9-3 수정은 그 PR에서 더한다) | `RecordCardDraftSaver` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버와 확인 전) |
-| `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | `RecordCardMusicGeneratedListener` → `CompleteRecordCardMusicUsecase` → `CompleteRecordCardMusicHandler`(`RecordInboxEventPort` → `InboxEventAdapter`) | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
+| `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | `RecordCardMusicGeneratedListener` → `RecordCardMusicGeneratedMessageMapper`(검사·Command 변환) → `CompleteRecordCardMusicUsecase` → `CompleteRecordCardMusicHandler`(`RecordInboxEventPort` → `InboxEventAdapter`) | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
+
+## 로컬 가짜 AI (음악 완료)
+
+로컬은 Debezium·Kafka·AI 서버가 없어 음악이 계속 `GENERATING`이다. 그 자리만 가짜로 바꾼다 — 포트·usecase·Handler·도메인은 그대로다.
+
+```
+9-2 → LocalAiMusicAdapter(@Primary) ─┬→ RecordCardMusicOutboxAdapter (outbox는 운영과 같이 쓴다)
+                                      └→ 커밋 뒤 5초 → 성공 완료 메시지(9-5 형식 ConsumerRecord)를 Spring 이벤트로 발행
+                                           → LocalRecordCardMusicGeneratedListener → Mapper → usecase(inbox·음악 저장)
+```
+
+- **켜지는 조건 — 세 가지가 모두 맞을 때만 두 빈이 생긴다**: `local` 프로필 · `KAFKA_CONSUMER_ENABLED=false` · `RECORD_CARD_MUSIC_LOCAL_AI_ENABLED`(기본 `true`, 빈 값은 꺼짐). test·deploy는 앞의 두 조건에서 막힌다 — 프로필을 잘못 넣어도 구독이 켜진 서버는 만들지 않는다. E2E는 카드 생성 직후 `GENERATING`을 확인하므로 `.env.test`에서 `false`로 끈다.
+- **음악 key**: 기본곡·사진곡 모두 `RECORD_CARD_MUSIC_LOCAL_AI_MUSIC_KEY` 하나(로컬 버킷에 올려 둔 파일)를 쓴다. 서버는 AI가 준 key를 그대로 저장·조회하므로 key 규칙을 흉내 내지 않는다. 켜졌는데 비어 있으면 기동하지 않는다.
+- **결과는 성공만 보낸다.** 실패·늦은 결과·중복은 운영 리스너 단위 테스트가 본다.
+- **예약은 인스턴스 메모리에만 있다** — 5초 안에 서버를 끄면 그 카드는 `GENERATING`으로 남는다. 로컬 전용이라 다시 보내지 않는다.
+- **테스트**: `LocalAiMusicAdapterTest`(위임·커밋 뒤 예약·메시지 형식이 운영 Mapper를 통과), `LocalAiMusicWiringTest`(조건별 빈 생성·`@Primary`·요청 → 수신기 → usecase 실제 연결).
 
 ## 새 이벤트를 더할 때
 
