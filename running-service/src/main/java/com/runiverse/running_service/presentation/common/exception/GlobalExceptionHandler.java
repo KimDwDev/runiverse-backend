@@ -387,7 +387,8 @@ public class GlobalExceptionHandler {
                  RECORD_CARD_THUMBNAIL_TOO_LARGE,
                  RECORD_CARD_THUMBNAIL_OUT_OF_RANGE,
                  RECORD_CARD_IMAGE_NOT_UPLOADED,
-                 INVALID_RECORD_CARD_IMAGE -> HttpStatus.BAD_REQUEST;
+                 INVALID_RECORD_CARD_IMAGE,
+                 INVALID_RECORD_CARD_CURSOR -> HttpStatus.BAD_REQUEST;
             // 기록과 카드는 1:1이다 — 다른 요청이 먼저 만들었다
             case RECORD_CARD_ALREADY_EXISTS,
                  // 요청이 틀린 게 아니라 처리 중인 다른 확정과 부딪혔다

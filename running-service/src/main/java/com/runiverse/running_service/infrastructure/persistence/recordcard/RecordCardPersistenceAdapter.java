@@ -7,8 +7,10 @@ import com.runiverse.running_service.application.recordcard.port.out.LoadLastRec
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardSummariesPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardSummary;
 import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.UpdateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
@@ -21,6 +23,7 @@ import com.runiverse.running_service.domain.recordcard.vo.MusicKey;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageCaption;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.infrastructure.persistence.running.RunningRecordJpaEntity;
 import jakarta.persistence.EntityManager;
@@ -30,6 +33,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +46,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
         CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort,
-        SnapshotRecordCardPort, DeleteRecordCardPort, UpdateRecordCardPort, LoadLastRecordCardHistoryPort {
+        SnapshotRecordCardPort, DeleteRecordCardPort, UpdateRecordCardPort, LoadLastRecordCardHistoryPort,
+        LoadRecordCardSummariesPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -242,6 +247,31 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
                         record.getTotalDistance(), record.getTotalDuration(), record.getAvgPace(), segmentPolylines),
                 companionUserIds,
                 card.getCreatedAt(), card.getUpdatedAt()));
+    }
+
+    // 목록(10-3) — uk_record_card_user_display_order(user_id, display_order)를 역순으로 탄다. 사진 수는 행마다 센다(한 장에 많아야 5장).
+    // 커서가 없으면 맨 위(가장 큰 순위)부터다
+    @Override
+    public List<RecordCardSummary> loadSummaries(UserId ownerId, Collection<RecordCardVisibility> visibilities,
+                                                 Integer beforeDisplayOrder, int limit) {
+        return entityManager.createQuery("""
+                        SELECT NEW com.runiverse.running_service.application.recordcard.port.out.RecordCardSummary(
+                            card.recordCardId, card.thumbnailImageKey,
+                            (SELECT COUNT(image) FROM RecordCardImageJpaEntity image WHERE image.recordCard = card),
+                            record.startAt, record.totalDistance, card.displayOrder)
+                        FROM RecordCardJpaEntity card
+                        JOIN card.runningRecord record
+                        WHERE card.userId = :ownerId
+                          AND card.visibility IN :visibilities
+                          AND card.displayOrder < :before
+                          AND record.room.deletedAt IS NULL
+                        ORDER BY card.displayOrder DESC
+                        """, RecordCardSummary.class)
+                .setParameter("ownerId", ownerId.value())
+                .setParameter("visibilities", visibilities)
+                .setParameter("before", beforeDisplayOrder == null ? Integer.MAX_VALUE : beforeDisplayOrder)
+                .setMaxResults(limit)
+                .getResultList();
     }
 
     @Override
