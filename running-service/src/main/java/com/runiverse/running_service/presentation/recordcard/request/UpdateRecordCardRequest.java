@@ -17,7 +17,7 @@ import java.util.UUID;
 public record UpdateRecordCardRequest(
         // 지울 수 없다 — 보내면 공백만 있는 값은 400
         @Pattern(regexp = "(?s).*\\S.*", message = "회고 글은 비어 있을 수 없습니다.")
-        @Size(max = 500, message = "회고 글은 500자 이하여야 합니다.")
+        @Size(max = 1000, message = "회고 글은 1000자 이하여야 합니다.")
         String memo,
 
         @Pattern(regexp = "^(DAILY|TRAVEL|RACE)$", message = "활동 유형은 DAILY, TRAVEL, RACE 중 하나여야 합니다.")

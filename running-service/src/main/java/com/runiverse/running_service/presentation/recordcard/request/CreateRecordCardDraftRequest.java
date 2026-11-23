@@ -21,7 +21,7 @@ public record CreateRecordCardDraftRequest(
         String activityType,
 
         @NotBlank(message = "회고 글은 필수입니다.")
-        @Size(max = 500, message = "회고 글은 500자 이하여야 합니다.")
+        @Size(max = 1000, message = "회고 글은 1000자 이하여야 합니다.")
         String memo,
 
         @NotBlank(message = "공개 범위는 필수입니다.")
