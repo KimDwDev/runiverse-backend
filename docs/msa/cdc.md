@@ -178,6 +178,6 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 3. **test 슬롯 지연 알람** — CloudWatch가 없어 `pg_replication_slots`를 조회해 내보내야 한다([metrics-convention.md](../metrics-convention.md)와 맞춘다).
 4. ~~로컬에서 완료 이벤트 받기~~ — **정했다**: 로컬 루프백에 브로커의 VPC 주소를 별칭으로 붙이고 그 주소로 SSH 터널을 열어 개발 클러스터에 붙는다([kafka.md](kafka.md) 「로컬 앱으로 붙기」).
 5. **로컬 dev에서 음악 요청을 보내지 않기** — 메일·푸시는 `local` 프로필이면 로그만 남긴다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 아웃박스는 로컬 앱을 test DB에 붙여 CDC를 확인할 때 실제로 써야 해서, 끄는 기준을 프로필이 아니라 `KAFKA_ENV`에 둘지 함께 정한다.
-6. **prod를 Multi-AZ로 바꿀 때** — 장애 조치에서 복제 슬롯이 넘어가는지 다시 본다.
+6. **RDS를 Multi-AZ로 바꿀 때 (서비스 DB · 러닝 DB)** — 장애 조치 뒤 복제 슬롯이 남는지 켜기 전에 확인한다. test DB는 EC2에 직접 설치한 PostgreSQL이라 test에서는 볼 수 없다 — 임시 RDS(Multi-AZ)에 커넥터를 붙여 강제 장애 조치로 본다. 슬롯이 사라지면 같은 이름으로 다시 만들고, 그 사이 행을 다시 보내는 방법은 2(아직 없다)와 함께 정한다 — 받는 쪽 inbox가 중복을 거른다. 러닝 DB 커넥터는 [platform.md](platform.md) 「러닝 DB CDC」.
 7. **prod Debezium → RDS 인증서 확인** — 지금 `sslmode=require`라 암호화만 하고 RDS 서버 인증서·호스트 이름은 확인하지 않는다. Connect의 트러스트스토어는 Connect → Kafka 연결에만 쓰여 여기에 해당하지 않는다. prod Kafka EC2에 RDS CA 번들을 두고 `database.sslmode=verify-full`, `database.sslrootcert`로 바꾼다 — 접속 주소가 인증서 이름과 같아야 해서 RDS 엔드포인트 이름으로 붙는다. test는 같은 EC2의 `localhost` 연결이라 해당이 없다.
 8. **앱(running-service) → RDS 연결의 `sslmode`** — 7과 같은 기준으로 점검한다.

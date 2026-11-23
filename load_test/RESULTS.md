@@ -115,3 +115,12 @@ run 16과 같은 시나리오(400명, 5분쯤 `systemctl kill -s KILL redis-serv
   - 콤보는 14,932 → 14,774(약 1% 감소) — 콤보 상태 일부 손실로 보이나 오차 범위와 겹친다
   - 결론: EC2 직접 운영 Redis의 위험은 "멈춤"보다 "AOF 없이 1분치 상태가 조용히 사라지는 것"이다. 에러가 나지 않아 운영 중에는 알아차리기 어렵다
 - 1,000명에서도 배치 왕복이 400명과 거의 같다(med 7ms, p95 27ms). 러너 1,000명 = 초당 배치 약 100건이라 처리량으로는 아직 여유 구간이다. 한계는 이보다 위에 있다.
+
+## 정정 (11-24)
+
+> 위 본문은 고치지 않는다. 아래는 11-24에 저장소의 코드·스크립트·결과 파일로 다시 확인한 것이다 — run 14와 상태 접근 수치를 인용할 때 이 정정을 함께 따른다. 2차 캠페인은 [msa/](msa/README.md).
+
+- **run 14의 날씨 조회는 원인이 아니다** — 스텁 기본 지연이 0이고 README 절차 · `scripts/presets.sh` · `scripts/k6-run.sh` 어디에서도 `WEATHER_STUB_DELAY_MS`를 넣지 않는다. 「결론」 4 · 「메모」의 원인 중 남는 것은 S3 업로드 · 트랙 분석 · 행 잠금 대기다. 운영은 다르다 — 날씨가 같은 트랜잭션에서 최대 2초(`weather.timeout=2s`, `c5b9daec`). (근거: `stub/weather-stub.js`, `RunningFinisher`의 TODO)
+- **68%는 30초 안에 응답받지 못한 비율이다** — 「메모」의 30초 무응답 271명은 모두 k6가 FINISH를 보낸 뒤 30초에 끊은 것이다(`running_finish_timeouts` 271). 커넥션 획득 제한도 30초(Hikari 기본값)라 둘이 겹쳐, 서버에서 획득 실패로 끝났는지 30초 뒤에 확정됐는지 이 회차로는 가를 수 없다. (근거: `k6/running.js`의 `FINISH_TIMEOUT_MS`, `results/start-storm-redis-run14.json`, `application.properties`에 Hikari 풀 값 없음)
+- **상태 접근은 약 900건/초다** — 「서버 지표」의 약 500건/초는 `running write` 한 줄의 값이고, 같은 구간 `running read`가 약 400~500건/초 더 있다. 합은 「결론」 1의 "초당 배치 약 100건 × 배치당 9번"과 맞는다. 그래프 눈금으로 읽은 값이라 다시 잴 때는 `sum(rate(runiverse_running_state_access_seconds_count[1m]))`로 본다. (근거: `results/grafana-all-state-store.png`)
+- **run 14는 계획한 시나리오가 아니다** — 그때 `start-storm` 프리셋에 종료 분산이 없어 400명이 같은 순간에 끝났다(`ab2d37b9`). 같은 날 `6df79fb0`에서 `FINISH_SPREAD_SECONDS=120`을 더해 고쳤다. 한 순간 400명 종료는 이 한 번뿐이고 DB 프로필로는 재지 않았다(「한계」). (근거: `scripts/presets.sh` 이력)

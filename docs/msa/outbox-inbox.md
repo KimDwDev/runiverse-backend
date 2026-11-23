@@ -147,8 +147,8 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 
 ### 정하지 않은 것
 
-1. **처리하지 못한 메시지를 따로 모을지(DLT)** — 지금은 ERROR 로그를 남기고 건너뛴다. 모으려면 토픽·ACL이 더 필요하다.
-2. **계약 위반·건너뜀 알람** — ERROR로 남기고 건너뛴 경우를 메트릭으로 세어 알람을 건다(모니터링).
+1. ~~처리하지 못한 메시지를 따로 모을지(DLT)~~ — **정했다 → D-51** ([decisions.md](decisions.md) — 러닝 결과 이벤트를 받기 전에 만든다): 처리하지 못한 메시지를 따로 모은다. DLT 토픽으로 정하면 앱이 DLT에 쓰는 것이 「보내는 쪽 — 아웃박스」 '앱은 Kafka로 직접 보내지 않는다'의 하나뿐인 예외가 된다(보관 테이블이면 예외가 없다). **DLT 토픽(`{topic}.{group}.dlt`)인지 보관 테이블인지는 정하지 않음** — 이름 후보는 [platform.md](platform.md) 「새 이름」. 만들기 전까지는 위 「처리할 수 없는 메시지」대로 건너뛴다.
+2. ~~계약 위반·건너뜀 알람~~ — **정했다 → D-51** (러닝 결과 이벤트를 받기 전에 만든다): 건너뛰거나 따로 모은 메시지를 메트릭으로 세어 알람을 걸고([metrics-convention.md](../metrics-convention.md) `runiverse.kafka.messages`), 러닝 DB와 메인 사본의 대조를 함께 만든다([running-session-server/consistency.md](running-session-server/consistency.md) 「대조」).
 3. **inbox 행 보관 기간·지난 행 정리** — 아웃박스와 함께 정한다.
 
 ## 지금 있는 이벤트

@@ -35,6 +35,7 @@ runiverse.<프로토콜>.<대상>
 | `runiverse.http.requests` | 처리한 HTTP 요청 |
 | `runiverse.websocket.messages` | 받은 WebSocket 메시지 |
 | `runiverse.sse.events` | 보낸 SSE 이벤트 |
+| `runiverse.kafka.messages` | 받은 Kafka 메시지 (예정) |
 
 ### 핸들러 메트릭
 
@@ -68,6 +69,10 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `target=<메트릭별 목록>` — 접근한 상태의 종류 | |
 | `phase=running\|finish` — 러닝 중 배치마다 도는 접근인지, 종료 때 한 번 도는 접근인지 | |
 | `operation=read\|write` | |
+| `code=<메트릭별 목록>` — WebSocket 닫기 코드, 목록 밖은 `unknown` | |
+| `stage=<메트릭별 목록>` — 연결이 어느 단계까지 왔는지 | |
+| `step=<메트릭별 목록>` — 한 처리 안의 단계 | |
+| `trigger=<메트릭별 목록>` — 처리를 일으킨 쪽 | |
 
 - `decision`은 `result`와 섞어 쓰지 않는다. `result`는 처리가 성공했는지, `decision`은 성공한 처리가 어느 쪽으로 판정했는지다. 값 목록은 메트릭마다 아래 직접 만드는 것 표에 적는다.
 
@@ -104,6 +109,10 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.http.requests` | `domain`, `method`, `uri`, `result`, `reason` |
 | `runiverse.websocket.messages` | `domain`, `event`, `result`, `reason` |
 | `runiverse.sse.events` | `domain`, `event`, `result`, `reason` |
+| `runiverse.kafka.messages` | `domain`, `event`, `result`, `reason` |
+| `runiverse.websocket.closes` | `domain`, `code` |
+| `runiverse.websocket.connections` | `domain`, `stage` |
+| `runiverse.sse.connections` | `domain` |
 
 - `uri`는 경로 템플릿이다. 매칭된 템플릿이 없으면(없는 경로, 보안 필터 거절) `UNKNOWN`이다.
 
@@ -151,6 +160,18 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.running.finish.goalpending` | DistributionSummary (baseUnit `meters`) | `RunningFinisher`(`forced=false` 종료) → `RunningMetricAdapter` | 사용 중 — `forced=false` 종료를 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`). 화면 거리와 서버 확정 거리가 얼마나 어긋나는지 본다. 히스토그램을 켠다(1~10,000m) |
 | `runiverse.running.state.access` | Timer | 러닝 상태 어댑터 → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|distance\|status\|combo_snapshot\|combo_pair\|combo_segment`, `phase=running\|finish`, `operation=read\|write`, `result`. 러닝 상태 저장소 왕복의 횟수·시간. 같은 부하를 `store`만 바꿔 돌려 Redis와 DB를 비교한다. 히스토그램을 켠다(100µs~5s — Redis가 1ms 아래라 기본 하한이면 분포가 첫 칸에 몰린다) |
 | `runiverse.running.state.loaded` | DistributionSummary (baseUnit `items`) | 러닝 상태 어댑터(종료 집계 읽기) → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|combo_segment`. 종료 때 러닝 하나치를 통째로 읽은 개수(좌표 수, 콤보 구간 수). 저장소 물리 단위(stream 엔트리·행)가 아니라 논리 단위로 센다. `state.access`의 시간과 나눠 1,000개당 시간으로 저장소를 비교한다. 히스토그램을 켠다(1~30,000) |
+| `runiverse.websocket.connections` | Gauge | `RunningWebSocketHandler`(연결 수립·종료) · `RunningSessionRegistryAdapter`(명부 크기) | 예정 — `domain=running`, `stage=open\|started`. 인스턴스마다 지금 열린 러닝 소켓 수(`open`)와 `RUNNING_START`를 마친 세션 수(`started`). 배포 때 끊기는 인원, 계획 종료가 끝났는지, 자동 확장 신호로 본다. 이름은 정하지 않음 — `…sessions.active` 꼴과 함께 [msa/running-session-server/verification.md](msa/running-session-server/verification.md) 「정하지 않은 것」 1에서 정한다 |
+| `runiverse.sse.connections` | Gauge | `AppStreamRegistryAdapter` · `MatchStreamRegistryAdapter` | 예정 — `domain=app\|match`. 인스턴스마다 지금 열린 SSE 연결 수 |
+| `runiverse.websocket.closes` | Counter | `RunningWebSocketHandler.afterConnectionClosed` | 예정 — `domain=running`, `code=1000\|1001\|1006\|1009\|1011\|4001\|4500\|unknown`(목록 밖 코드는 `unknown`). 닫힌 러닝 연결 수 — 배포·장애 때 끊김을 close code별로 본다 |
+| `runiverse.running.start` | Counter | `StartRunningHandler` → `RunningMetricAdapter` | 예정 — `decision=first\|reconnect`. 처리한 `RUNNING_START` 중 참가자가 `JOINED`였으면 `first`, 이미 `RUNNING`이면 `reconnect`(재연결·앱 재시작). 배포·장애 뒤 재연결 몰림을 본다 |
+| `runiverse.running.location.gaps` | Counter | `UpdateRunningLocationHandler` → `RunningMetricAdapter` | 예정 — 배치의 첫 새 좌표 `sequence`가 서버가 받은 마지막 `sequence` + 1보다 클 때 1. 러닝 중 서버 트랙에 빈 순번이 생긴 횟수(재시작·장애로 잃은 좌표, 재전송 누락). 종료 때 칸 단위로 세는 `runiverse.running.finish.gaps`와 다르다 |
+| `runiverse.running.finish.step` | Timer | `RunningFinisher` → `RunningMetricAdapter` | 예정 — `step=lock_player\|lock_room\|load_weight\|load_track\|filter\|analyze\|upload_track\|load_weather\|insert_record\|update_avg_pace`, `trigger=user\|goal\|force\|account_deletion`, `result`. 종료 확정 한 건 안의 단계별 시간 — 잠금·커넥션을 쥔 채 도는 단계(S3 업로드·날씨 조회)를 가린다. 히스토그램을 켠다 |
+| `runiverse.running.combo.breaks` | Counter | `UpdateRunningComboJudge` → `RunningMetricAdapter` | 예정 — `decision=finished\|paused\|standing\|apart`. 판정이 끊은 콤보 수와 갈래(`RunningComboEvaluator` 판정 순서). 연결이 끊긴 동안은 콤보를 붙잡아 두므로, 재연결 뒤 `apart`가 느는지로 끊김이 콤보를 깼는지 본다 |
+| `runiverse.running.replica.lag` | Timer | 메인의 러닝 결과 반영(inbox) → 기록 포트 | 예정 — `event`(결과 이벤트 종류, 이름은 계약을 정할 때), `result`. 러닝 DB 커밋 시각(이벤트 발생 시각)부터 메인 사본 반영 커밋까지 — 종료 뒤 최종 일관 창의 길이다. 히스토그램을 켠다. 복제 슬롯 지연은 인프라 지표다([msa/platform.md](msa/platform.md) 「관측」). `replica`는 기능 폴더가 아직 없다 — 기능 폴더 이름은 반영 inbox 핸들러를 만들 때 맞춘다 |
+| `runiverse.running.replica.missing` | Gauge | 대조 작업 → 기록 포트 | 예정 — 마지막 대조에서 러닝 DB에는 있고 메인 사본에는 없는 기록 수(유예 시간이 지난 것만). 0이어야 한다 — 0이 아니면 알람([msa/running-session-server/consistency.md](msa/running-session-server/consistency.md) 「대조」). `replica`는 기능 폴더가 아직 없다 — 기능 폴더 이름은 대조 작업을 만들 때 맞춘다 |
+| `runiverse.kafka.messages` | Counter | Kafka 리스너(받는 쪽) | 예정 — `domain`, `event`(토픽 이름에서 `{env}.`를 뺀 것), `result`, `reason`. 받은 메시지 수 — 건너뛰거나 따로 모은 메시지는 `failure`다. 건너뜀 알람을 여기에 건다([msa/decisions.md](msa/decisions.md) D-51) |
+
+- 위 예정 행 중 `websocket.connections`부터 `kafka.messages`까지는 러닝 세션 분리 검증이 쓴다 — 어디에 쓰는지는 [msa/running-session-server/verification.md](msa/running-session-server/verification.md) 「지표」. 세션 서버가 기록하게 돼도 이름·태그는 바꾸지 않는다 — 서버는 공통 태그 `application`으로 가른다.
 
 ## 노출
 
