@@ -330,7 +330,7 @@ class RecordCardControllerTest {
                                 new RouteArtConverter.Point(0.5, 0.0)))),
                 new GetRecordCardDetailResult.Music(MusicStatus.COMPLETED, "https://base"),
                 List.of(new GetRecordCardDetailResult.Image(IMAGE_ID_1, "https://a", null, true,
-                        new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null))),
+                        new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null))), List.of(),
                 at, at));
 
         // when
@@ -368,6 +368,7 @@ class RecordCardControllerTest {
                         "routeArt", List.of(List.of(List.of(0.1234, 0.8801), List.of(0.5, 0.0))))),
                 Map.entry("baseMusic", Map.of("status", "COMPLETED", "musicUrl", "https://base")),
                 Map.entry("images", List.of(image)),
+                Map.entry("companions", List.of()),
                 Map.entry("createdAt", "2026-07-25T21:10:00"),
                 Map.entry("updatedAt", "2026-07-25T21:10:00")));
     }
@@ -537,7 +538,7 @@ class RecordCardControllerTest {
                 new GetRecordCardDetailResult.Author(USER_ID, "동완러너", null), true,
                 RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, "한강",
                 new GetRecordCardDetailResult.Record(501L, at, 5020, 1800, 359, List.of()),
-                new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null), List.of(), at, at);
+                new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null), List.of(), List.of(), at, at);
     }
 
     private MvcResult perform() throws Exception {

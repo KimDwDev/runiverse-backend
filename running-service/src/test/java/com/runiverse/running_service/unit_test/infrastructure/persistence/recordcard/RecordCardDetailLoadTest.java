@@ -41,6 +41,7 @@ class RecordCardDetailLoadTest {
     private static final UUID USER_ID = UUID.fromString("01a1e874-91e8-73b4-9680-d7f377cbd009");
     private static final UUID IMAGE_A = UUID.fromString("01a1ee0f-4fee-7d58-a7b2-925ef4d37f36");
     private static final UUID IMAGE_B = UUID.fromString("01a1ee0f-5029-7488-9b2d-c7b5d4580997");
+    private static final UUID COMPANION_ID = UUID.fromString("01a1e874-91e8-73b4-9680-d7f377cbd00a");
     private static final long RECORD_ID = 55L;
     private static final String IMAGE_KEY_A = "record-cards/u/c/a/IMG_1.jpg";
     private static final String IMAGE_KEY_B = "record-cards/u/c/b/IMG_2.jpg";
@@ -54,6 +55,8 @@ class RecordCardDetailLoadTest {
     private TypedQuery<RecordCardImageJpaEntity> imageQuery;
     @Mock
     private TypedQuery<String> segmentQuery;
+    @Mock
+    private TypedQuery<UUID> companionQuery;
 
     @InjectMocks
     private RecordCardPersistenceAdapter adapter;
@@ -88,6 +91,7 @@ class RecordCardDetailLoadTest {
                 RecordCardImageJpaEntity.create(IMAGE_B, card, IMAGE_KEY_B, MusicStatus.COMPLETED, "audio/b.wav", 1,
                         null)));
         givenSegments(List.of("_p~iF~ps|U", "_ulLnnqC"));
+        givenCompanions(List.of(COMPANION_ID));
 
         // when
         RecordCardDetail detail = adapter.loadDetail(new RecordCardId(CARD_ID)).orElseThrow();
@@ -108,6 +112,9 @@ class RecordCardDetailLoadTest {
                 RECORD_ID, STARTED_AT, 5020, 1800, 359, List.of("_p~iF~ps|U", "_ulLnnqC")));
         verify(cardQuery).setParameter("recordCardId", CARD_ID);
         verify(segmentQuery).setParameter("runningRecordId", RECORD_ID);
+        // 같이 뛴 사람 — 그 방에서 출발한 참가자 중 작성자를 뺀다
+        assertThat(detail.companionUserIds()).containsExactly(COMPANION_ID);
+        verify(companionQuery).setParameter("authorId", USER_ID);
     }
 
     private void givenCards(List<RecordCardJpaEntity> cards) {
@@ -121,6 +128,13 @@ class RecordCardDetailLoadTest {
         given(entityManager.createQuery(anyString(), eq(RecordCardImageJpaEntity.class))).willReturn(imageQuery);
         given(imageQuery.setParameter(anyString(), any())).willReturn(imageQuery);
         given(imageQuery.getResultList()).willReturn(images);
+    }
+
+    private void givenCompanions(List<UUID> userIds) {
+        given(entityManager.createQuery(contains("FROM RunningRoomSessionJpaEntity"), eq(UUID.class)))
+                .willReturn(companionQuery);
+        given(companionQuery.setParameter(anyString(), any())).willReturn(companionQuery);
+        given(companionQuery.getResultList()).willReturn(userIds);
     }
 
     private void givenSegments(List<String> polylines) {

@@ -226,7 +226,7 @@ class GetRecordCardDetailHandlerTest {
                                          List<RecordCardDetail.Image> images, List<String> polylines) {
         return new RecordCardDetail(CARD_ID, AUTHOR_ID, visibility, RecordCardActivityType.DAILY, "한강 야간 러닝",
                 images.isEmpty() ? null : KEY_A, baseStatus, baseKey, images,
-                new RecordCardDetail.Record(501L, STARTED_AT, 5020, 1800, 359, polylines),
+                new RecordCardDetail.Record(501L, STARTED_AT, 5020, 1800, 359, polylines), List.of(),
                 CREATED_AT, CREATED_AT);
     }
 

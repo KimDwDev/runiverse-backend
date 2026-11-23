@@ -20,6 +20,7 @@ public record GetRecordCardDetailResult(
         Record record,
         Music baseMusic,
         List<Image> images,
+        List<Author> companions,        // 같이 뛴 사람 — 작성자와 같은 모양. 탈퇴자·보는 사람과 차단 관계인 사람은 빠진다
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

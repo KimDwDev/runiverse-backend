@@ -18,6 +18,7 @@ public record RecordCardDetailResponse(
         Record record,
         Music baseMusic,
         List<Image> images,
+        List<Author> companions,        // 같이 뛴 사람 — 작성자와 같은 모양
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -37,6 +38,10 @@ public record RecordCardDetailResponse(
                 result.images().stream()
                         .map(image -> new Image(image.recordCardImageId(), image.imageUrl(), image.caption(),
                                 image.thumbnail(), Music.from(image.music())))
+                        .toList(),
+                result.companions().stream()
+                        .map(companion -> new Author(companion.userId(), companion.nickname(),
+                                companion.profileImageUrl()))
                         .toList(),
                 result.createdAt(),
                 result.updatedAt());

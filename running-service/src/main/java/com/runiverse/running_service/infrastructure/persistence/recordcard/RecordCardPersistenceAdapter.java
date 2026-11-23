@@ -21,6 +21,7 @@ import com.runiverse.running_service.domain.recordcard.vo.MusicKey;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageCaption;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
+import com.runiverse.running_service.domain.running.player.vo.RunningPlayerStatus;
 import com.runiverse.running_service.infrastructure.persistence.running.RunningRecordJpaEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -28,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,11 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
+
+    // 러닝을 출발한 참가자 상태 — 확정됐지만 나타나지 않은 참가자는 같이 뛴 사람이 아니다(7-1 playerCount와 같은 기준)
+    private static final List<RunningPlayerStatus> STARTED_STATUSES = Arrays.stream(RunningPlayerStatus.values())
+            .filter(RunningPlayerStatus::hasStartedRunning)
+            .toList();
 
     private final EntityManager entityManager;
 
@@ -211,12 +218,29 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
                 .setParameter("runningRecordId", record.getRunningRecordId())
                 .getResultList();
 
+        // 4. 같이 뛴 사람 — 그 방에서 러닝을 출발한 참가자(6-1 players·7-1 playerCount와 같은 기준) 중 작성자를 뺀다.
+        // 탈퇴자·차단 관계는 유스케이스가 거른다
+        List<UUID> companionUserIds = entityManager.createQuery("""
+                        SELECT player.userId
+                        FROM RunningRoomSessionJpaEntity session
+                        JOIN RunningPlayerJpaEntity player ON player.runningPlayerId = session.runningPlayerId
+                        WHERE session.room = :room
+                          AND player.status IN :startedStatuses
+                          AND player.userId <> :authorId
+                        ORDER BY player.runningPlayerId
+                        """, UUID.class)
+                .setParameter("room", record.getRoom())
+                .setParameter("startedStatuses", STARTED_STATUSES)
+                .setParameter("authorId", card.getUserId())
+                .getResultList();
+
         return Optional.of(new RecordCardDetail(
                 card.getRecordCardId(), card.getUserId(), card.getVisibility(), card.getActivityType(),
                 card.getMemo(), card.getThumbnailImageKey(), card.getBaseMusicStatus(), card.getBaseMusicKey(),
                 images,
                 new RecordCardDetail.Record(record.getRunningRecordId(), record.getStartAt(),
                         record.getTotalDistance(), record.getTotalDuration(), record.getAvgPace(), segmentPolylines),
+                companionUserIds,
                 card.getCreatedAt(), card.getUpdatedAt()));
     }
 
