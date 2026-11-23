@@ -500,7 +500,7 @@
 | user_id | UUID | → users, NOT NULL | 작성자. **기록 주인과 같다** — 생성 시 `running_records.user_id`와 대조한다 |
 | visibility | enum | NOT NULL | 카드별 공개 범위. 기본값을 서버에 두지 않는다 — 작성 화면 기본값은 클라가 `PUBLIC`으로 둔다 |
 | activity_type | enum | NOT NULL | 그날 러닝의 성격 — `DAILY`(일상) / `TRAVEL`(여행) / `RACE`(대회). 사용자가 고르고, AI가 기본곡·사진 음악의 맥락으로 쓴다 |
-| base_music_status | enum | NOT NULL, default `GENERATING` | 기본곡 생성 상태. 생성 완료 이벤트로만 바뀐다(아래) |
+| base_music_status | enum | NOT NULL, default `GENERATING` | 기본곡 생성 상태. 생성 완료 이벤트와 다시 만들기(api-spec 9-6)로 바뀐다(아래) |
 | memo | text | NOT NULL | **회고 글**, 1~1000자. AI가 감정·여운을 읽어 기본곡에 반영하므로 필수다. 공백만 있는 글은 받지 않는다 |
 | display_order | int | NOT NULL | 작성자별 카드 순위. **1이 가장 오래된 카드**다 — 만들 때 그 사람 카드 중 최댓값 + 1(없으면 1). 지우면 행이 사라지고 남은 카드의 순위는 당기지 않는다(빈칸이 생겨도 정렬에는 문제없다). 사용자가 순서를 바꾸는 기능은 아직 없다 |
 | thumbnail_image_key | varchar(255) | nullable | 썸네일 사진의 S3 key — 이 카드 사진(`record_card_images.image_key`) 중 하나를 복사해 둔다. 목록(10-3)이 사진 테이블을 읽지 않게 하려는 것이다. **기본값은 첫 사진**, 사용자가 고르면 그 사진. **사진이 없으면 null** |
