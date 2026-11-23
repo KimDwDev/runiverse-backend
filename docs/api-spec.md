@@ -212,11 +212,11 @@
 ## 0. 공통 규칙
 
 - **refreshToken**: 바디로 전달하고 클라이언트 Keychain/Keystore에 보관한다.
-- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-1은 조각별 배열, 6-2는 구간별로 잘라 `splits[].routes`에 싣는다), 기록 카드 상세(8-1)도 6-1과 같은 조각별 배열이다. 기록 목록(7-1)과 프로필 카드 목록(10-3)은 경로를 싣지 않는다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 경로는 좌표 배열 `routes` 하나로만 내린다. encoded polyline 문자열을 내리는 응답은 없다.
+- **경로**: 저장 원본은 Google Encoded Polyline, precision 5(소수점 5자리, 약 1m)다. **기록 하나를 크게 그리는 화면(6-1·6-2)은 서버가 풀어 좌표 배열 `routes`로 내리고**(6-1은 조각별 배열, 6-2는 구간별로 잘라 `splits[].routes`에 싣는다), 기록 카드 상세(8-1)는 실제 좌표 대신 모양만 남긴 0~1 좌표 `record.routeArt`로 내린다(카드는 남에게도 보여 위치를 싣지 않는다 — 8-1 「경로 선 아트」). 기록 목록(7-1)과 프로필 카드 목록(10-3)은 경로를 싣지 않는다. 어느 쪽이든 정밀도는 precision 5를 넘지 않는다. **`route`라는 단수 필드는 어디에도 두지 않는다** — 경로는 좌표 배열 `routes`(카드는 `routeArt`)로만 내린다. encoded polyline 문자열을 내리는 응답은 없다.
   - **경로는 끊긴 곳에서 조각으로 나뉘어 저장된다**(`running_segments`). 서버가 기록에서 뺀 구간(일시정지·관측하지 못한 이동·GPS 튐)이 경계다. 버튼 없이 멈춘 정지 구간은 끊지 않는다 — 제자리라 이어 그려도 모양이 틀어지지 않는다([feature-spec.md](feature-spec.md) 트랙 필터)
   - 6-1 `routes`는 조각마다 배열 하나로 내린다. 클라는 조각 안의 점만 선으로 잇고 조각 사이는 잇지 않는다
   - 6-2 `splits[].routes`는 구간이 속한 조각 하나에서 자른 배열이라 조각 사이를 걸치지 않는다. 끊긴 곳에 걸친 구간은 점 하나만 실린다
-  - 8-1 `record.routes`는 6-1 `routes`와 같다
+  - 8-1 `record.routeArt`는 6-1 `routes`와 같은 조각으로 나뉘지만 좌표가 `[x, y]`(0~1)다 — 아래 위경도 형식을 따르지 않는다
 - **좌표 배열 형식**: `[[위도, 경도], [위도, 경도], …]`. 안쪽 배열은 항상 **위도가 먼저**다 — GeoJSON은 경도가 먼저라 반대이므로 그 관례를 따르지 않는다. 단일 지점도 같은 `[위도, 경도]` 두 칸 배열이다. 키 이름을 반복하지 않아 점 수백 개를 실어도 응답이 작다.
   - **조각으로 나뉜 경로**(6-1 `routes`)는 이 배열을 한 겹 더 감싼다 — `[[[위도, 경도], …], [[위도, 경도], …]]`. 끊긴 곳이 없어도 바깥 배열은 있다(조각 하나). 조각에는 점이 하나만 있을 수 있다.
 - **친구 관계**: 토글이 아니다. **성립 전 요청은 `/users/{userId}/friend-request` 한 리소스를 메서드로 다룬다** — 요청 `POST`(10-4), 수락 `PUT`(10-5), 취소·거절 `DELETE`(10-6). 성립한 친구의 삭제만 `/users/{userId}/friend`(10-6)다.
@@ -2369,7 +2369,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`routes`는 서버가 조각별 폴리라인을 풀어서 내린다** — 저장은 `running_segments.route_polyline`(조각마다 encoded polyline)이지만 응답은 조각 번호 순의 좌표 배열이다. 클라가 디코더를 붙일 필요도, 6-2를 기다릴 필요도 없이 진입 즉시 지도를 그린다. 좌표 정밀도는 폴리라인을 따라 소수점 5자리(약 1m)이며 그보다 정밀한 값은 존재하지 않는다. **러닝 결과(6-1·6-2) 중 전체 경로를 한 번에 주는 곳은 여기뿐이다** — 6-2의 `routes`는 같은 경로를 구간별로 자른 것이다
 - **조각은 서버가 기록에서 뺀 곳에서만 나뉜다** — 일시정지 경계, 관측하지 못한 이동, GPS 튐. 클라는 조각 사이를 선으로 잇지 않고, 30m 같은 간격 규칙으로 따로 판단하지 않는다(feature-spec 트랙 필터)
 - **지도 마커용 시작·끝 좌표는 따로 싣지 않는다** — 첫 조각의 첫 원소와 끝 조각의 끝 원소가 그대로 시작·끝 지점이다
-- **기록 카드 상세(8-1)도 같은 `routes`를 쓴다** — 카드 한 장이 기록 하나라 크기가 6-1과 같다. 여러 건을 한 번에 내리는 기록 목록(7-1)·프로필 카드 목록(10-3)은 경로를 싣지 않는다
+- **기록 카드 상세(8-1)는 `routes`를 싣지 않고 모양만 남긴 `routeArt`를 쓴다** — 카드는 남에게도 보여 실제 위치를 싣지 않는다(8-1 「경로 선 아트」). 여러 건을 한 번에 내리는 기록 목록(7-1)·프로필 카드 목록(10-3)은 경로를 싣지 않는다
 
 - **에러 (404 Not Found)**: `runningRoomId`에 해당하는 방이 없다
 
@@ -2615,14 +2615,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "record": {
     "runningRecordId": 501,
-    "runningRoomId": 125,
-    "type": "MATCH",
     "startedAt": "2026-07-25T19:00:30",
     "totalDistanceMeters": 5020,
     "totalDurationSeconds": 1800,
     "averagePaceSecondsPerKm": 359,
-    "routes": [
-      [[37.52801, 126.93241], [37.52809, 126.93252]]
+    "routeArt": [
+      [[0.1234, 0.8801], [0.1302, 0.8615]]
     ]
   },
   "baseMusic": {
@@ -2654,17 +2652,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `visibility` | String | O | `FRIENDS`(친구만) · `PUBLIC`(전체) · `PRIVATE`(나만) |
 | `activityType` | String | O | `DAILY`(일상) · `TRAVEL`(여행) · `RACE`(대회) |
 | `memo` | String | O | 회고 글 |
-| `record` | Object | O | 카드가 붙은 러닝 기록 — 첫 장(지도)에 그린다 |
+| `record` | Object | O | 카드가 붙은 러닝 기록 — 첫 장(경로 선 아트·지표)에 그린다 |
 | `record.runningRecordId` | Integer | O | 러닝 기록 ID |
-| `record.runningRoomId` | Integer | O | 방 ID — 6-1·6-2로 기록 상세를 열 때 쓴다 |
-| `record.type` | String | O | `SOLO` · `MATCH` · `INVITE` (7-1과 같다) |
 | `record.startedAt` | String | O | 러닝 시작 시각 |
 | `record.totalDistanceMeters` | Integer | O | 총 이동 거리(m) |
 | `record.totalDurationSeconds` | Integer | O | 총 러닝 시간(초) — 움직인 시간(6-1과 같다) |
 | `record.averagePaceSecondsPerKm` | Integer | O | 평균 페이스(초/km) |
-| `record.routes` | Number[][][] | O | 경로 — **6-1 `routes`와 같은 형식**(조각 배열, 조각마다 `[[위도, 경도], …]`) |
+| `record.routeArt` | Number[][][] | O | 경로 선 아트 — **위경도가 아니라 모양만 남긴 0~1 좌표**다(조각 배열, 조각마다 `[[x, y], …]`). 아래 「경로 선 아트」. 경로가 없으면 빈 배열 |
 | `baseMusic` | Object | O | 기본곡 — 첫 장에서 재생 |
-| `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(지도 장 다음부터). 사진이 없으면 빈 배열 |
+| `images` | Array | O | 사진 장 — **배열 순서가 캐러셀 순서다**(경로 장 다음부터). 사진이 없으면 빈 배열 |
 | `images[].recordCardImageId` | String | O | 사진 ID(UUID) — 수정(9-3)에서 이미 올린 사진을 가리킬 때 쓴다 |
 | `images[].imageUrl` | String | O | 사진 URL |
 | `images[].caption` | String | X | 사진 설명(한 줄, 1~100자). 작성자가 붙이지 않았으면 null |
@@ -2677,8 +2673,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **음악은 카드를 만든 직후 `GENERATING`이다** — AI가 만드는 데 시간이 걸린다. 클라는 `GENERATING`이면 생성 중으로 표시하고, 다시 보려면 8-1을 다시 조회한다. 완료를 밀어 주는 통지는 아직 없다 — **[이후]** 앱 스트림(`/app/stream`)으로 완료 이벤트를 보낼 수 있다
 - **`FAILED`면 그 장은 음악 없이 보여준다** — 다시 생성하는 경로는 아직 없다(9-5)
 - **URL은 전부 presigned GET이다** — `imageUrl`·`musicUrl`·`profileImageUrl`은 운영값(현재 1시간) 동안만 유효하다. 만료되면 8-1을 다시 조회한다
-- **기록 수치는 조회할 때 `running_records`에서 읽는다** — 카드가 값을 복사해 두지 않는다. `routes`는 6-1과 같은 규칙(조각 사이를 잇지 않는다, 시작·끝 마커는 첫·끝 좌표)이다
+- **기록 수치는 조회할 때 `running_records`에서 읽는다** — 카드가 값을 복사해 두지 않는다. 선 아트의 원본은 6-1 `routes`와 같은 구간 경로다
+- **경로 선 아트** — 카드는 남에게도 보이므로 **실제 위치를 싣지 않는다**. 서버가 경로의 모양만 남겨 보낸다. 보는 사람이 본인이어도 같다 — 본인의 실제 경로는 6-1이 준다
+  - **좌표**: `x`는 동쪽으로, `y`는 **남쪽으로** 커진다(화면 좌표 — 북쪽이 위). 클라는 그릴 칸의 크기를 곱하기만 하면 된다
+  - **비율 유지**: 경로 전체를 감싸는 사각형의 긴 변이 0~1을 채우고, 짧은 변은 가운데 놓인다 — 모양이 찌그러지지 않는다. 경도 간격은 경로 중심 위도의 cos 값을 곱해 거리 비율을 맞춘 뒤 줄인다
+  - **점 수**: 전체 조각을 합쳐 **최대 200개**로 줄인다 — 조각마다 점 수에 비례해 같은 간격으로 고르고, 조각의 첫·끝 점은 늘 남긴다(조각이 아주 많으면 첫·끝만). 소수점 넷째 자리까지
+  - **조각**: 6-1과 같이 조각 사이를 잇지 않는다(일시정지 구간). 첫 조각의 첫 점이 시작, 끝 조각의 끝 점이 도착이다
+  - **경로가 없으면 빈 배열**이다(구간 기록이 없는 러닝). 한 점에 머문 경로처럼 크기가 0이면 모든 점이 `[0.5, 0.5]`다
 - **`sortOrder`는 싣지 않는다** — 배열 순서가 곧 순서다
+- **방 ID·러닝 유형(`runningRoomId`·`type`)은 싣지 않는다** — 카드 화면이 쓰지 않는다. 기록 상세(6-1)로 가는 길은 기록 목록(7-1)이 준다
 
 ### 8-1. `GET /api/v1/record-cards/{recordCardId}` — 기록 카드 상세
 
@@ -2690,6 +2693,15 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - 타인: `PUBLIC`은 누구나, `FRIENDS`는 작성자와 친구(`user_relationships.type = FRIEND`)일 때만, `PRIVATE`는 볼 수 없다
   - **차단 관계면 어느 쪽이 차단했든 볼 수 없다**(feature-spec 차단 절)
   - `users.profile_visibility`는 카드를 가리지 않는다 — 카드는 자기 공개 범위만 따른다
+
+- **에러 (400 Bad Request)**: `recordCardId`가 UUIDv7 형식이 아니다(9-2 초안 ID와 같다)
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "입력값이 올바르지 않습니다."
+}
+```
 
 - **에러 (404 Not Found)**: 카드가 없거나, 지워졌거나, 작성자가 탈퇴했거나, 볼 수 없는 카드다
 

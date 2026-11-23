@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("배포 이미지 대상 기록 카드 작성(9-1 작성 요청 → S3 업로드 → 9-2 확정) E2E 테스트")
+@DisplayName("배포 이미지 대상 기록 카드 작성(9-1 작성 요청 → S3 업로드 → 9-2 확정)·상세(8-1) E2E 테스트")
 class RecordCardE2eTest extends E2eTestSupport {
 
     // 기록으로 남으려면 최소 100m·60초를 넘겨야 한다 — SoloRunningE2eTest와 같은 트랙이다
@@ -398,6 +398,82 @@ class RecordCardE2eTest extends E2eTestSupport {
                     .hasMessageContaining("violates check constraint");
         }
         assertThat(querySql("SELECT count(*) FROM outbox_events WHERE aggregate_id = 'x'")).containsExactly("0");
+    }
+
+    @Test
+    @DisplayName("상세(8-1) — 작성자는 지표·선 아트·사진·음악 상태를 보고, 남은 공개 범위가 허락할 때만 본다")
+    @SuppressWarnings("unchecked")
+    void detail() {
+        // given - 사진 한 장짜리 전체 공개 카드
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(owner);
+        Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
+        String imageKey = (String) draft.objects("uploads").get(0).get("imageKey");
+        uploadRecordCardImage(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        String recordCardId = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String detailPath = "/record-cards/" + recordCardId;
+
+        // when
+        Response mine = get(detailPath, owner.accessToken());
+
+        // then - 수치는 running_records 값 그대로고, 경로는 위경도가 아닌 0~1 선 아트다
+        assertThat(mine.status()).isEqualTo(200);
+        assertThat(mine.text("recordCardId")).isEqualTo(recordCardId);
+        assertThat(mine.bool("isMine")).isTrue();
+        assertThat(mine.text("visibility")).isEqualTo("PUBLIC");
+        assertThat(mine.text("memo")).isEqualTo("한강 한 바퀴");
+        assertThat(((Map<String, Object>) mine.body().get("author")).get("userId")).isEqualTo(owner.userId());
+        Map<String, Object> record = (Map<String, Object>) mine.body().get("record");
+        assertThat(querySql("""
+                SELECT running_record_id, total_distance, total_duration, avg_pace
+                FROM running_records WHERE running_record_id = %d
+                """.formatted(runningRecordId)))
+                .containsExactly(String.join("|", String.valueOf(record.get("runningRecordId")),
+                        String.valueOf(record.get("totalDistanceMeters")),
+                        String.valueOf(record.get("totalDurationSeconds")),
+                        String.valueOf(record.get("averagePaceSecondsPerKm"))));
+        List<List<List<Number>>> routeArt = (List<List<List<Number>>>) record.get("routeArt");
+        assertThat(routeArt).isNotEmpty();
+        assertThat(routeArt).allSatisfy(segment -> assertThat(segment).allSatisfy(point -> {
+            assertThat(point).hasSize(2);
+            assertThat(point.get(0).doubleValue()).isBetween(0.0, 1.0);
+            assertThat(point.get(1).doubleValue()).isBetween(0.0, 1.0);
+        }));
+        // 북쪽으로 곧게 뛴 트랙이라 시작은 아래(y=1), 도착은 위(y=0)다
+        assertThat(routeArt.getFirst().getFirst().get(1).doubleValue()).isEqualTo(1.0);
+        assertThat(routeArt.getLast().getLast().get(1).doubleValue()).isEqualTo(0.0);
+        // 음악은 아직 만드는 중이라 URL이 없다 — E2E는 가짜 AI를 끈다
+        assertThat((Map<String, Object>) mine.body().get("baseMusic"))
+                .containsEntry("status", "GENERATING").containsEntry("musicUrl", null);
+        List<Map<String, Object>> images = mine.objects("images");
+        assertThat(images).singleElement().satisfies(image -> {
+            assertThat(image.get("caption")).isEqualTo("출발선");
+            assertThat(image.get("isThumbnail")).isEqualTo(true);
+            assertThat((String) image.get("imageUrl")).contains("X-Amz-Signature");
+            assertThat((Map<String, Object>) image.get("music"))
+                    .containsEntry("status", "GENERATING").containsEntry("musicUrl", null);
+        });
+
+        // 남도 전체 공개는 본다 — 내 카드가 아니다
+        Response others = get(detailPath, stranger.accessToken());
+        assertThat(others.status()).isEqualTo(200);
+        assertThat(others.bool("isMine")).isFalse();
+
+        // 비공개로 바뀌면 남에게는 없는 카드와 같은 404다(수정 API가 아직 없어 DB로 바꾼다)
+        executeSql("UPDATE record_cards SET visibility = 'PRIVATE' WHERE record_card_id = '%s'"
+                .formatted(recordCardId));
+        Response hidden = get(detailPath, stranger.accessToken());
+        assertThat(hidden.status()).isEqualTo(404);
+        assertThat(hidden.text("code")).isEqualTo("NOT_FOUND");
+        assertThat(get(detailPath, owner.accessToken()).status()).isEqualTo(200);
+
+        // 형식이 틀린 ID는 400, 없는 카드는 404다
+        assertThat(get("/record-cards/1-1-1-1-1", owner.accessToken()).status()).isEqualTo(400);
+        assertThat(get("/record-cards/01a0f2d4-6180-7000-8000-4466554400c8", owner.accessToken()).status())
+                .isEqualTo(404);
     }
 
     private String createCardWithoutImages(TestUser user, long runningRecordId) {

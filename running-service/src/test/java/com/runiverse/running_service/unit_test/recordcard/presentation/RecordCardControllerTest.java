@@ -12,9 +12,17 @@ import com.runiverse.running_service.application.recordcard.exception.RunningRec
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftNotFoundException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageNotUploadedException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
+import com.runiverse.running_service.application.recordcard.common.RouteArtConverter;
+import com.runiverse.running_service.application.recordcard.query.detail.GetRecordCardDetailQuery;
+import com.runiverse.running_service.application.recordcard.query.detail.GetRecordCardDetailResult;
+import com.runiverse.running_service.domain.recordcard.vo.MusicStatus;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
+import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
 import com.runiverse.running_service.infrastructure.config.JacksonConfig;
 import com.runiverse.running_service.presentation.common.exception.GlobalExceptionHandler;
 import com.runiverse.running_service.presentation.recordcard.controller.RecordCardController;
@@ -51,6 +59,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -73,13 +82,15 @@ class RecordCardControllerTest {
 
     @Mock
     private CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
+    @Mock
+    private GetRecordCardDetailUsecase getRecordCardDetailUsecase;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
-                completeRecordCardDraftUsecase))
+                completeRecordCardDraftUsecase, getRecordCardDetailUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
@@ -279,6 +290,91 @@ class RecordCardControllerTest {
         assertThat(notUploaded.getResponse().getStatus()).isEqualTo(400);
         assertThat(body(notUploaded)).containsEntry("code", "RECORD_CARD_IMAGE_NOT_UPLOADED")
                 .containsEntry("message", "업로드되지 않은 이미지입니다.");
+    }
+
+    @Test
+    @DisplayName("상세는 토큰 주인과 경로의 카드 ID로 넘기고, 200으로 명세의 공통 객체를 내려 준다 — 경로는 [x, y] 선 아트다")
+    void getDetail() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+        UUID authorId = UUID.fromString("01a0f2d4-6180-7000-8000-446655440015");
+        LocalDateTime at = LocalDateTime.of(2026, 7, 25, 21, 10);
+        given(getRecordCardDetailUsecase.handle(any())).willReturn(new GetRecordCardDetailResult(
+                cardId,
+                new GetRecordCardDetailResult.Author(authorId, "동완러너", null),
+                true, RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, "한강 야간 러닝",
+                new GetRecordCardDetailResult.Record(501L, LocalDateTime.of(2026, 7, 25, 19, 0, 30), 5020, 1800, 359,
+                        List.of(List.of(new RouteArtConverter.Point(0.1234, 0.8801),
+                                new RouteArtConverter.Point(0.5, 0.0)))),
+                new GetRecordCardDetailResult.Music(MusicStatus.COMPLETED, "https://base"),
+                List.of(new GetRecordCardDetailResult.Image(IMAGE_ID_1, "https://a", null, true,
+                        new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null))),
+                at, at));
+
+        // when
+        MvcResult result = mockMvc.perform(get("/record-cards/{id}", cardId)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        verify(getRecordCardDetailUsecase).handle(new GetRecordCardDetailQuery(USER_ID, cardId));
+        Map<String, Object> author = new HashMap<>();
+        author.put("userId", authorId.toString());
+        author.put("nickname", "동완러너");
+        author.put("profileImageUrl", null);
+        Map<String, Object> imageMusic = new HashMap<>();
+        imageMusic.put("status", "GENERATING");
+        imageMusic.put("musicUrl", null);
+        Map<String, Object> image = new HashMap<>();
+        image.put("recordCardImageId", IMAGE_ID_1.toString());
+        image.put("imageUrl", "https://a");
+        image.put("caption", null);
+        image.put("isThumbnail", true);
+        image.put("music", imageMusic);
+        assertThat(body(result)).isEqualTo(Map.ofEntries(
+                Map.entry("recordCardId", cardId.toString()),
+                Map.entry("author", author),
+                Map.entry("isMine", true),
+                Map.entry("visibility", "PUBLIC"),
+                Map.entry("activityType", "DAILY"),
+                Map.entry("memo", "한강 야간 러닝"),
+                Map.entry("record", Map.of(
+                        "runningRecordId", 501,
+                        "startedAt", "2026-07-25T19:00:30",
+                        "totalDistanceMeters", 5020,
+                        "totalDurationSeconds", 1800,
+                        "averagePaceSecondsPerKm", 359,
+                        "routeArt", List.of(List.of(List.of(0.1234, 0.8801), List.of(0.5, 0.0))))),
+                Map.entry("baseMusic", Map.of("status", "COMPLETED", "musicUrl", "https://base")),
+                Map.entry("images", List.of(image)),
+                Map.entry("createdAt", "2026-07-25T21:10:00"),
+                Map.entry("updatedAt", "2026-07-25T21:10:00")));
+    }
+
+    @Test
+    @DisplayName("카드 ID가 UUIDv7 형식이 아니면 400이고 유스케이스를 부르지 않는다")
+    void rejectMalformedCardId() throws Exception {
+        // when
+        MvcResult result = mockMvc.perform(get("/record-cards/{id}", "1-1-1-1-1")).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(result)).containsEntry("code", "INVALID_REQUEST");
+        verifyNoInteractions(getRecordCardDetailUsecase);
+    }
+
+    @Test
+    @DisplayName("볼 수 없는 카드는 404로 내려 준다")
+    void detailNotFound() throws Exception {
+        // given
+        given(getRecordCardDetailUsecase.handle(any())).willThrow(new RecordCardNotFoundException());
+
+        // when
+        MvcResult result = mockMvc.perform(get("/record-cards/{id}", DRAFT_ID)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(404);
+        assertThat(body(result)).containsEntry("code", "NOT_FOUND")
+                .containsEntry("message", "요청한 리소스를 찾을 수 없습니다.");
     }
 
     private MvcResult perform() throws Exception {

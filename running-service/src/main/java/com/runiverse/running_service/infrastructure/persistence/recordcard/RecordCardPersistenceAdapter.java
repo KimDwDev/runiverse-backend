@@ -3,7 +3,9 @@ package com.runiverse.running_service.infrastructure.persistence.recordcard;
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
 import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
@@ -31,7 +33,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort,
-        CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort {
+        CreateRecordCardPort, LoadRecordCardForUpdatePort, SaveRecordCardMusicPort, LoadRecordCardDetailPort {
 
     private static final String UK_RUNNING_RECORD = "uk_record_card_running_record";
     private static final String UK_USER_DISPLAY_ORDER = "uk_record_card_user_display_order";
@@ -168,6 +170,49 @@ public class RecordCardPersistenceAdapter implements FindRecordCardIdByRunningRe
     }
 
     // 카드의 사진을 캐러셀 순서대로 — uk_record_card_image_sort_order(record_card_id, sort_order)를 탄다
+    @Override
+    public Optional<RecordCardDetail> loadDetail(RecordCardId recordCardId) {
+        // 1. 카드와 붙은 기록을 한 번에 읽는다 — PK로 한 행이다. 조회라 잠그지 않는다
+        Optional<RecordCardJpaEntity> found = entityManager.createQuery("""
+                        SELECT card
+                        FROM RecordCardJpaEntity card
+                        JOIN FETCH card.runningRecord
+                        WHERE card.recordCardId = :recordCardId
+                        """, RecordCardJpaEntity.class)
+                .setParameter("recordCardId", recordCardId.value())
+                .getResultList().stream()
+                .findFirst();
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        RecordCardJpaEntity card = found.get();
+        RunningRecordJpaEntity record = card.getRunningRecord();
+
+        // 2. 사진 — sort_order 순서가 캐러셀 순서다
+        List<RecordCardDetail.Image> images = loadImageEntities(card.getRecordCardId()).stream()
+                .map(image -> new RecordCardDetail.Image(image.getRecordCardImageId(), image.getImageKey(),
+                        image.getCaption(), image.getMusicStatus(), image.getMusicKey()))
+                .toList();
+
+        // 3. 구간 경로 — uk_running_segment_record_number(running_record_id, segment_number)가 정렬을 맡는다
+        List<String> segmentPolylines = entityManager.createQuery("""
+                        SELECT segment.routePolyline
+                        FROM RunningSegmentJpaEntity segment
+                        WHERE segment.record.runningRecordId = :runningRecordId
+                        ORDER BY segment.segmentNumber
+                        """, String.class)
+                .setParameter("runningRecordId", record.getRunningRecordId())
+                .getResultList();
+
+        return Optional.of(new RecordCardDetail(
+                card.getRecordCardId(), card.getUserId(), card.getVisibility(), card.getActivityType(),
+                card.getMemo(), card.getThumbnailImageKey(), card.getBaseMusicStatus(), card.getBaseMusicKey(),
+                images,
+                new RecordCardDetail.Record(record.getRunningRecordId(), record.getStartAt(),
+                        record.getTotalDistance(), record.getTotalDuration(), record.getAvgPace(), segmentPolylines),
+                card.getCreatedAt(), card.getUpdatedAt()));
+    }
+
     private List<RecordCardImageJpaEntity> loadImageEntities(UUID recordCardId) {
         return entityManager.createQuery("""
                         SELECT image
