@@ -2573,7 +2573,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `recordCard` | Object | X | 기록 카드 요약. 카드가 없으면 null |
 | `recordCard.recordCardId` | String | O | 기록 카드 ID(UUID) — 탭하면 8-1로 상세, 작성 화면에서는 9-3 수정으로 간다 |
-| `recordCard.thumbnailUrl` | String | X | 썸네일 사진 URL(presigned GET, 8-1과 같은 유효 시간). **사진이 없는 카드는 null** |
+| `recordCard.thumbnailUrl` | String | X | 대표 사진의 **작은 버전(썸네일)** URL(presigned GET, 8-1과 같은 유효 시간) — 10-3과 같다. **사진이 없는 카드는 null** |
 | `recordCard.routeArt` | Number[][][] | X | **사진이 없는 카드만** 선 아트를 싣는다 — 8-1 「경로 선 아트」와 같은 규칙이고 **점은 최대 50개**다(달력 칸이 작다). 사진이 있으면 null. 경로가 없으면 빈 배열 |
 
   - **내 기록이라 공개 범위와 상관없이 카드를 싣는다** — `PRIVATE` 카드도 실린다
@@ -2658,6 +2658,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       }
     }
   ],
+  "companions": [
+    {
+      "userId": "01a0f2d4-6180-7000-8000-446655440016",
+      "nickname": "달리는곰",
+      "profileImageUrl": null
+    }
+  ],
   "createdAt": "2026-07-25T21:10:00",
   "updatedAt": "2026-07-25T21:10:00"
 }
@@ -2687,10 +2694,13 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `images[].music` | Object | O | 이 사진의 음악 |
 | `*.status` | String | O | 음악 생성 상태 — `GENERATING`(생성 중) · `COMPLETED`(재생 가능) · `FAILED`(생성 실패) |
 | `*.musicUrl` | String | X | 음악 URL. **`COMPLETED`일 때만 값이 있고** 나머지는 null |
+| `companions` | Array | O | **같이 뛴 사람** — 카드가 붙은 러닝을 함께 출발한 참가자(6-1 `players`와 같은 기준) 중 작성자를 뺀 사람. 솔로 러닝이면 빈 배열 |
+| `companions[]` | Object | O | `userId`·`nickname`·`profileImageUrl`(사진이 없으면 null) — 작성자(`author`)와 같은 모양 |
 | `createdAt` · `updatedAt` | String | O | 카드 생성·수정 시각 |
 
 - **음악은 카드를 만든 직후 `GENERATING`이다** — AI가 만드는 데 시간이 걸린다. 클라는 `GENERATING`이면 생성 중으로 표시하고, 다시 보려면 8-1을 다시 조회한다. 완료를 밀어 주는 통지는 아직 없다 — **[이후]** 앱 스트림(`/app/stream`)으로 완료 이벤트를 보낼 수 있다
 - **`FAILED`면 그 장은 음악 없이 보여준다** — 작성자는 9-6으로 카드의 음악 전체를 다시 만들 수 있다
+- **같이 뛴 사람에서 빠지는 사람** — 탈퇴한 사람, **보는 사람과 차단 관계인 사람**(어느 쪽이 차단했든). 그래서 같은 카드라도 보는 사람마다 목록이 다를 수 있다. 출발하지 않은 참가자(확정됐지만 나타나지 않음)는 처음부터 없다
 - **URL은 전부 presigned GET이다** — `imageUrl`·`musicUrl`·`profileImageUrl`은 운영값(현재 1시간) 동안만 유효하다. 만료되면 8-1을 다시 조회한다
 - **기록 수치는 조회할 때 `running_records`에서 읽는다** — 카드가 값을 복사해 두지 않는다. 선 아트의 원본은 6-1 `routes`와 같은 구간 경로다
 - **경로 선 아트** — 카드는 남에게도 보이므로 **실제 위치를 싣지 않는다**. 서버가 경로의 모양만 남겨 보낸다. 보는 사람이 본인이어도 같다 — 본인의 실제 경로는 6-1이 준다
@@ -2763,8 +2773,8 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "memo": "한강 야간 러닝, 바람이 좋았다",
   "visibility": "PUBLIC",
   "images": [
-    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "fileName": "IMG_2034.jpg", "caption": "다리 밑에서 본 노을" },
-    { "mimeType": "image/png", "fileSizeBytes": 512000, "fileName": "한강 야경.png" }
+    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "thumbnailFileSizeBytes": 30720, "fileName": "IMG_2034.jpg", "caption": "다리 밑에서 본 노을" },
+    { "mimeType": "image/png", "fileSizeBytes": 512000, "thumbnailFileSizeBytes": 40960, "fileName": "한강 야경.png" }
   ],
   "thumbnailIndex": 0
 }
@@ -2774,11 +2784,12 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `runningRecordId` | Integer | O | 카드를 붙일 내 러닝 기록 |
 | `activityType` | String | O | `DAILY` · `TRAVEL` · `RACE` |
-| `memo` | String | O | **회고 글**, 1~500자. 공백만 있으면 400 — AI가 기본곡을 만들 때 감정·여운을 읽는다 |
+| `memo` | String | O | **회고 글**, 1~1000자. 공백만 있으면 400 — AI가 기본곡을 만들 때 감정·여운을 읽는다 |
 | `visibility` | String | O | `FRIENDS` · `PUBLIC` · `PRIVATE`. 기본값을 서버에 두지 않는다 — 작성 화면 기본 선택은 클라가 `PUBLIC`으로 둔다 |
 | `images` | Array | X | 올릴 사진 0~5장. **배열 순서 = 캐러셀 순서**. 생략하면 빈 배열과 같다(사진 없이 지도+기본곡만) |
 | `images[].mimeType` | String | O | `image/jpeg`·`image/png`·`image/webp`만 허용(대소문자 무시) — 11-1과 같다 |
 | `images[].fileSizeBytes` | Integer | O | 1 이상 104,857,600(100MB) 이하. 실제 업로드 크기와 같아야 한다 — 한 번에 올리면 서명에 들어가고, 나눠 올리면 조각 수가 이 값으로 정해진다 |
+| `images[].thumbnailFileSizeBytes` | Integer | O | **작은 버전(썸네일)** 크기 — 1 이상 1,048,576(1MB) 이하(운영값). 앱이 원본과 **같은 형식**으로 줄여 만든 파일이고 실제 업로드 크기와 같아야 한다. 달력(7-1)·목록(10-3) 칸이 원본 대신 받는다. 상세(8-1)는 원본을 쓴다 |
 | `images[].fileName` | String | O | 사용자가 올린 파일 이름, 1~100자. **앞뒤 공백을 지운 이름이 사진 key의 마지막 부분에 들어간다**(`uploads[].imageKey`) — 앞뒤 공백은 400이 아니라 지우고 받는다. 한글·가운데 공백은 그대로다. 그래서 key의 이름이 보낸 `fileName`과 다를 수 있다 — 앱은 key가 필요하면 `uploads[].imageKey`를 쓰고, 업로드는 받은 URL로 한다. `/`·`\`·제어 문자는 쓸 수 없고, 앞뒤 공백을 지우면 `.`·`..`만 남는 이름도 받지 않는다(400). 같은 이름의 사진이 여러 장이어도 사진마다 폴더가 달라 겹치지 않는다 |
 | `images[].caption` | String | X | 사진 설명(선택), 100자 이하. **생략·빈 문자열·공백만이면 설명 없음**(null로 저장 — 400이 아니다). AI가 사진만으로 장면을 알기 어려울 때 그 사진의 음악 재료로 쓴다(9-5 `photos[].caption`) |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진의 `images` 위치(0부터). **생략하면 0(첫 사진)**. 사진이 없으면 보내지 않는다 — 보내면 400 |
@@ -2794,7 +2805,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
       "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544012d",
       "imageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/IMG_2034.jpg",
       "uploadType": "SINGLE",
-      "uploadUrl": "https://..."
+      "uploadUrl": "https://...",
+      "thumbnailImageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...2d/thumbnail/IMG_2034.jpg",
+      "thumbnailUploadUrl": "https://..."
     },
     {
       "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544013e",
@@ -2805,7 +2818,9 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
         { "partNumber": 1, "uploadUrl": "https://..." },
         { "partNumber": 2, "uploadUrl": "https://..." },
         { "partNumber": 3, "uploadUrl": "https://..." }
-      ]
+      ],
+      "thumbnailImageKey": "record-cards/01a0f2d4-.../01a0f2d4-...c8/01a0f2d4-...3e/thumbnail/한강 야경.png",
+      "thumbnailUploadUrl": "https://..."
     }
   ]
 }
@@ -2822,7 +2837,11 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | `uploads[].uploadUrl` | String | X | `SINGLE`일 때만. presigned PUT URL — 업로드 헤더 `Content-Type`(소문자 정규값)은 11-1과 같다. **유효 시간은 초안과 같다(현재 30분)** — 11-1(10분)보다 길다. 초안이 살아 있는 동안은 올릴 수 있어야 한다 |
 | `uploads[].partSizeBytes` | Integer | X | `MULTIPART`일 때만. 조각 크기(현재 10MB). 마지막 조각만 이보다 작다 |
 | `uploads[].parts` | Array | X | `MULTIPART`일 때만. 조각마다 `partNumber`(1부터)와 presigned PUT URL. 조각 수 = `fileSizeBytes ÷ partSizeBytes` 올림 |
+| `uploads[].thumbnailImageKey` | String | O | 작은 버전 S3 key — **원본과 같은 사진 폴더의 `thumbnail/` 아래에 원본 파일 이름 그대로**: `…/{recordCardImageId}/thumbnail/{fileName}`. 원본 파일 이름에는 `/`가 없어 원본 key와 겹치지 않는다. 서버는 이 key를 저장하지 않고 원본 key에서 계산한다 |
+| `uploads[].thumbnailUploadUrl` | String | O | 작은 버전 presigned PUT URL — 늘 한 번에 올린다. 헤더 `Content-Type`은 원본과 같고, 크기는 `thumbnailFileSizeBytes`와 같아야 한다. 유효 시간은 원본 URL과 같다 |
 
+- **사진 한 장에 파일이 둘이다 — 원본과 작은 버전(썸네일)** — 앱이 저장할 때 원본과 같은 형식으로 줄인 파일을 함께 만들어 올린다. 서버에 이미지 처리 과정은 없다. 둘 다 올려야 9-2가 카드를 저장한다
+  - 상세(8-1)는 원본, 달력(7-1)·목록(10-3)의 `thumbnailUrl`은 대표 사진의 작은 버전이다
 - **나눠 올리기(`MULTIPART`)**
   - 서버가 사진마다 S3 Multipart Upload를 시작하고, **S3가 준 `UploadId`는 앱에 주지 않고 초안에만 둔다** — 앱은 조각 URL로 올리기만 한다
   - 앱은 파일을 `partSizeBytes`씩 잘라 `partNumber`에 맞는 URL로 PUT한다. 병렬로 올려도 되고, 실패한 조각만 다시 올리면 된다
@@ -2866,7 +2885,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
-  "message": "회고 글은 500자 이하여야 합니다."
+  "message": "회고 글은 1000자 이하여야 합니다."
 }
 
 {
@@ -2916,6 +2935,21 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 {
   "code": "INVALID_REQUEST",
+  "message": "썸네일 크기는 필수입니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "썸네일 크기는 1바이트 이상이어야 합니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
+  "message": "썸네일은 1MB 이하만 업로드할 수 있습니다."
+}
+
+{
+  "code": "INVALID_REQUEST",
   "message": "썸네일 위치가 사진 범위를 벗어났습니다."
 }
 ```
@@ -2952,6 +2986,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   2. 새 사진마다 S3를 확인한다
      - `SINGLE`: 11-2와 같이 객체가 있는지(HEAD), 크기·`Content-Type`이 9-1(또는 9-3)에서 받은 값과 맞는지 본다
      - `MULTIPART`: `ListParts`로 조각이 전부 올라왔는지(개수·크기) 보고, `CompleteMultipartUpload`로 합친 뒤 위와 같이 HEAD로 확인한다. 합친 사진은 초안에 "합침"으로 표시해 두어, 다른 사진 때문에 확정이 실패해 다시 부를 때 다시 합치지 않는다
+     - **작은 버전(썸네일)도 사진마다 HEAD로 확인한다** — 객체가 있고 크기가 `thumbnailFileSizeBytes`, `Content-Type`이 원본과 같아야 한다. 원본·작은 버전 중 하나라도 없으면 400 `RECORD_CARD_IMAGE_NOT_UPLOADED`, 크기·형식이 다르면 400 `INVALID_RECORD_CARD_IMAGE`다. 작은 버전 key는 저장하지 않는다(원본 key에서 계산한다)
   3. DB 트랜잭션을 열고 **기록 행을 `FOR UPDATE`로 잠그며 다시 검사한다** — 잠그는 쿼리에 "내 기록이고 숨긴 방이 아님"을 함께 걸어 행이 없으면 404다(9-1 뒤에 방이 숨겨진 경우 포함). 9-1 뒤에 다른 초안이 먼저 카드를 만들었으면 409, 9-3 뒤에 카드가 다른 수정으로 바뀌었으면 409 `RECORD_CARD_CHANGED`(초안을 만들 때의 마지막 수정 이력과 지금의 마지막 수정 이력이 다르면 — 음악 완료는 이력을 남기지 않아 걸리지 않는다), 카드가 지워졌으면 404. **S3 확인(2)은 이 트랜잭션 밖에서 먼저 끝낸다** — S3를 부르는 동안 DB 연결과 잠금을 쥐지 않는다
   4. 같은 트랜잭션에서 반영한다
      - **작성(9-1에서 온 것)**: 9-1이 정한 `recordCardId`로 카드·사진 행을 새로 넣는다. 순위(`display_order`)는 내 카드 중 최댓값 + 1(맨 뒤)이다. 같은 사람이 다른 기록으로 동시에 만들어 순위가 겹치면(`uk_record_card_user_display_order`) 409로 돌려보낸다(아래)
@@ -3061,7 +3096,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   "visibility": "FRIENDS",
   "images": [
     { "recordCardImageId": "01a0f2d4-6180-7000-8000-44665544012d", "caption": "다리 밑에서 본 노을" },
-    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "fileName": "IMG_3001.jpg", "caption": "결승선 앞" }
+    { "mimeType": "image/jpeg", "fileSizeBytes": 204800, "thumbnailFileSizeBytes": 30720, "fileName": "IMG_3001.jpg", "caption": "결승선 앞" }
   ],
   "thumbnailIndex": 1
 }
@@ -3069,10 +3104,10 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `memo` | String | X | 회고 글, 1~500자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
+| `memo` | String | X | 회고 글, 1~1000자. **지울 수 없다** — 보내면 공백만 있는 값은 400 |
 | `activityType` | String | X | `DAILY` · `TRAVEL` · `RACE` |
 | `visibility` | String | X | `FRIENDS` · `PUBLIC` · `PRIVATE` |
-| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~5개). 항목마다 `recordCardImageId`(카드에 계속 둘 이미 올린 사진) **또는** `mimeType`·`fileSizeBytes`·`fileName`(새로 올릴 사진, 9-1과 같은 규칙 — 파일 이름이 사진 key에 들어간다) 중 **한 가지**. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
+| `images` | Array | X | **수정 뒤의 사진 전체를 순서대로** 보낸다(0~5개). 항목마다 `recordCardImageId`(카드에 계속 둘 이미 올린 사진) **또는** `mimeType`·`fileSizeBytes`·`thumbnailFileSizeBytes`·`fileName`(새로 올릴 사진, 9-1과 같은 규칙 — 파일 이름이 사진 key에 들어가고, 작은 버전도 함께 올린다) 중 **한 가지**. 이미 올린 사진은 작은 버전이 있어 다시 올리지 않는다 — 대표 사진(`thumbnailIndex`)을 바꿔도 업로드가 없다. **`caption`은 두 종류 모두에 넣을 수 있다**(선택, 100자 이하) |
 | `images[].caption` | String | X | **수정 뒤의 설명**이다 — 사진 목록이 수정 뒤 전체이듯 설명도 그렇다. **이미 올린 사진도 지금 설명을 그대로 다시 보낸다** — 생략·빈 문자열·공백만이면 설명을 지운다. 새 사진은 9-1과 같다 |
 | `thumbnailIndex` | Integer | X | 썸네일로 쓸 사진 위치(0부터) — `images`를 보냈으면 그 배열 기준, 생략했으면 지금 순서 기준 |
 
@@ -3121,7 +3156,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 ```json
 {
   "code": "INVALID_REQUEST",
-  "message": "회고 글은 500자 이하여야 합니다."
+  "message": "회고 글은 1000자 이하여야 합니다."
 }
 
 {
@@ -3155,7 +3190,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 }
 ```
 
-- 새 사진의 형식·크기 문구는 9-1과 같다
+- 새 사진의 형식·크기 문구(작은 버전 포함)는 9-1과 같다
 
 - **에러 (400 Bad Request — `recordCardImageId`가 이 카드의 사진이 아님)**
 
@@ -3248,7 +3283,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 |---|---|---|---|
 | `user_id` | String | O | 작성자 ID(UUID) |
 | `record_card_id` | String | O | 카드 ID(UUID). AI 서버가 이 값을 키로 저장한다 |
-| `memo` | String | O | 회고 글(1~500자). 기본곡의 감정·여운 재료 |
+| `memo` | String | O | 회고 글(1~1000자). 기본곡의 감정·여운 재료 |
 | `activity_type` | String | O | `DAILY` · `TRAVEL` · `RACE` — 카드 단위 |
 | `running_summary` | Object | O | 카드가 붙은 러닝 기록의 수치. **발행할 때 `running_records`에서 읽어 싣는다** — AI 서버는 기록을 조회하지 않는다 |
 | `running_summary.total_distance` | Integer | O | 거리(미터) |
@@ -3526,12 +3561,14 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `recordCardId` | String | O | 기록 카드 ID(UUID) |
-| `thumbnailUrl` | String | X | 썸네일 사진 URL(`record_cards.thumbnail_image_key`, presigned GET, 8-1과 같은 유효 시간) — 기본은 첫 사진, 작성자가 고르면 그 사진. **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
+| `thumbnailUrl` | String | X | 대표 사진의 **작은 버전(썸네일)** URL(presigned GET, 8-1과 같은 유효 시간) — key는 대표 사진 원본 key의 `thumbnail/` 아래(9-1). 기본은 첫 사진, 작성자가 고르면 그 사진. **사진이 없는 카드는 null** — 클라가 기본 썸네일을 그린다 |
 | `imageCount` | Integer | O | 사진 장수(0~5) |
 | `startedAt` | String | O | 카드가 붙은 러닝의 시작 시각 |
 | `totalDistanceMeters` | Integer | O | 그 러닝의 총 이동 거리(m) |
 
 - **공개 범위**: 8-1과 같다 — 본인 = 전부(`PRIVATE` 포함) / 타인 = `PUBLIC` (+친구면 `FRIENDS`). 차단 관계면 빈 목록이 아니라 404다(프로필 자체가 보이지 않는다)
+- **숨긴 방(`running_rooms.deleted_at` 있음)의 기록에 붙은 카드는 빠진다** — 7-1이 그 기록을 빼는 것과 맞춘다
+- **커서는 불투명한 문자열이다** — 마지막 항목의 순위를 담는다. 깨진 커서는 400 `INVALID_REQUEST`("입력값이 올바르지 않습니다."), `limit`이 50을 넘으면 50으로 줄인다
 - **경로·음악은 싣지 않는다** — 목록이 가벼워야 하고, 음악은 상세에서만 재생한다
 - `startedAt`·`totalDistanceMeters`는 `running_records`를 JOIN해 읽는다(카드에 복사해 두지 않는다)
 - **본인과 타인이 보는 범위가 다른 하나의 리소스라 `{userId}` 경로에 인가 규칙을 둔다**(`api-convention.md` 사용자 리소스 경로)

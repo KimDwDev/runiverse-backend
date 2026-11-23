@@ -1,6 +1,7 @@
 package com.runiverse.running_service.application.recordcard.command.completedraft;
 
 import com.runiverse.running_service.application.common.port.out.UploadedImage;
+import com.runiverse.running_service.application.recordcard.common.RecordCardStorageKeys;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
@@ -82,7 +83,10 @@ public class CompleteRecordCardDraftHandler implements CompleteRecordCardDraftUs
                 current = current.withImage(i, image.merge());
                 updateRecordCardDraftPort.update(current);
             }
-            verifyObject(image);
+            verifyObject(image.imageKey(), image.fileSizeBytes(), image.contentType());
+            // 작은 버전(썸네일)도 올라와 있어야 한다 — 형식은 원본과 같다
+            verifyObject(RecordCardStorageKeys.thumbnailKeyOf(image.imageKey()), image.thumbnailFileSizeBytes(),
+                    image.contentType());
         }
         return current;
     }
@@ -99,11 +103,10 @@ public class CompleteRecordCardDraftHandler implements CompleteRecordCardDraftUs
     }
 
     // 실물을 초안에 적힌 크기·형식과 대조한다 — 클라가 올렸다는 말을 믿지 않는다
-    private void verifyObject(DraftImage image) {
-        UploadedImage uploaded = loadRecordCardImagePort.load(image.imageKey())
+    private void verifyObject(String key, long sizeBytes, String contentType) {
+        UploadedImage uploaded = loadRecordCardImagePort.load(key)
                 .orElseThrow(RecordCardImageNotUploadedException::new);
-        if (uploaded.sizeBytes() != image.fileSizeBytes()
-                || !image.contentType().equalsIgnoreCase(uploaded.contentType())) {
+        if (uploaded.sizeBytes() != sizeBytes || !contentType.equalsIgnoreCase(uploaded.contentType())) {
             throw new InvalidRecordCardImageException();
         }
     }

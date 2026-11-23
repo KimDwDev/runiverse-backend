@@ -21,12 +21,14 @@ public record RecordCardDetail(
         String baseMusicKey,            // COMPLETED일 때만 있다
         List<Image> images,             // sort_order 순서
         Record record,
+        List<UUID> companionUserIds,    // 같이 뛴 사람 — 그 러닝을 함께 출발한 참가자 중 작성자를 뺀 사람(6-1 players와 같은 기준)
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
 
     public RecordCardDetail {
         images = List.copyOf(images);
+        companionUserIds = List.copyOf(companionUserIds);
     }
 
     public record Image(

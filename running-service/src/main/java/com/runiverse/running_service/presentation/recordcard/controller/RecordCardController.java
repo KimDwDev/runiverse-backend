@@ -79,7 +79,7 @@ public class RecordCardController {
         UUID userId = UUID.fromString(jwt.getSubject());
         List<UpdateRecordCardCommand.Image> images = request.images() == null ? null : request.images().stream()
                 .map(image -> new UpdateRecordCardCommand.Image(image.recordCardImageId(), image.mimeType(),
-                        image.fileSizeBytes(), image.fileName(), image.caption()))
+                        image.fileSizeBytes(), image.thumbnailFileSizeBytes(), image.fileName(), image.caption()))
                 .toList();
         return ResponseEntity.ok(UpdateRecordCardResponse.from(updateRecordCardUsecase.handle(
                 new UpdateRecordCardCommand(userId, UUID.fromString(recordCardId), request.memo(),
@@ -143,8 +143,8 @@ public class RecordCardController {
             return null;
         }
         return images.stream()
-                .map(image -> new CreateRecordCardDraftCommand.Image(
-                        image.mimeType(), image.fileSizeBytes(), image.fileName(), image.caption()))
+                .map(image -> new CreateRecordCardDraftCommand.Image(image.mimeType(), image.fileSizeBytes(),
+                        image.thumbnailFileSizeBytes(), image.fileName(), image.caption()))
                 .toList();
     }
 }

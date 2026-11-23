@@ -13,6 +13,8 @@ public enum RecordCardErrorCode implements ErrorCode {
     // 사진이 최대 크기(record-card.draft.max-image-size)를 넘는다 — 운영값이라 Request DTO가 못 보고 유스케이스가 본다.
     // 클라에는 요청 검증 실패와 같은 코드로 보인다. 실제 문구는 예외가 운영값으로 만든다
     RECORD_CARD_IMAGE_TOO_LARGE("INVALID_REQUEST", "이미지가 업로드할 수 있는 크기를 넘었습니다."),
+    // 사진의 작은 버전(썸네일)이 최대 크기(record-card.draft.max-thumbnail-size)를 넘는다 — 위와 같이 운영값이라 유스케이스가 본다
+    RECORD_CARD_THUMBNAIL_TOO_LARGE("INVALID_REQUEST", "썸네일이 업로드할 수 있는 크기를 넘었습니다."),
     // 수정(9-3): 사진 목록 없이 썸네일 위치만 보냈는데 지금 사진 범위를 벗어났다 — 카드를 읽어야 알아 Request DTO가 못 본다.
     // 클라에는 요청 검증 실패와 같은 코드·문구로 보인다
     RECORD_CARD_THUMBNAIL_OUT_OF_RANGE("INVALID_REQUEST", "썸네일 위치가 사진 범위를 벗어났습니다."),
@@ -25,7 +27,9 @@ public enum RecordCardErrorCode implements ErrorCode {
     RECORD_CARD_DRAFT_IN_PROGRESS("RECORD_CARD_DRAFT_IN_PROGRESS", "기록 카드를 저장하고 있습니다. 잠시 후 다시 시도해 주세요."),
     // 수정 확정(9-2): 수정 초안을 만든 뒤 카드가 다른 수정으로 바뀌었다 — 옛 모습을 기준으로 만든 초안이라 반영하지 않는다.
     // 앱은 8-1로 다시 불러와 수정한다. 음악 완료는 수정이 아니라 걸리지 않는다(마지막 수정 이력으로 가른다)
-    RECORD_CARD_CHANGED("RECORD_CARD_CHANGED", "기록 카드가 그사이 바뀌었습니다. 다시 불러와 수정해 주세요.");
+    RECORD_CARD_CHANGED("RECORD_CARD_CHANGED", "기록 카드가 그사이 바뀌었습니다. 다시 불러와 수정해 주세요."),
+    // 목록(10-3): 커서가 깨졌다 — 서버가 준 값이 아니다. 클라에는 요청 검증 실패와 같은 코드·문구로 보인다
+    INVALID_RECORD_CARD_CURSOR("INVALID_REQUEST", "입력값이 올바르지 않습니다.");
     private final String code;
     private final String message;
 }

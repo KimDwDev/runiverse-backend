@@ -44,7 +44,7 @@ import java.util.UUID;
 @Check(name = "ck_record_card_base_music_key",
         constraints = "(base_music_status = 'COMPLETED') = (base_music_key is not null)")
 @Check(name = "ck_record_card_activity_type", constraints = "activity_type in ('DAILY', 'TRAVEL', 'RACE')")
-@Check(name = "ck_record_card_memo_length", constraints = "char_length(memo) between 1 and 500")
+@Check(name = "ck_record_card_memo_length", constraints = "char_length(memo) between 1 and 1000")
 @Check(name = "ck_record_card_display_order", constraints = "display_order >= 1")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecordCardJpaEntity extends BaseTimeEntity {

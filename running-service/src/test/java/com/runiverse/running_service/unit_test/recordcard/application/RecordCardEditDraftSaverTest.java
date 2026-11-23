@@ -119,7 +119,7 @@ class RecordCardEditDraftSaverTest {
         return new RecordCardDraft(UuidCreator.getTimeOrderedEpoch(), RecordCardDraft.DraftType.UPDATE, CARD_ID,
                 OWNER_ID, 501L, null, null, null,
                 List.of(new DraftImage(ADDED, "k/new.jpg", "image/jpeg", 1024L, "결승선", UploadType.SINGLE, null, null,
-                        false)),
+                        false, 100L)),
                 null, false,
                 new EditPlan("새 회고", null, null, List.of(
                         new EditPlan.Slot(KEPT, "새 설명", false), new EditPlan.Slot(ADDED, "결승선", true)),

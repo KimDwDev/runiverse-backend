@@ -42,6 +42,8 @@ class RecordCardE2eTest extends E2eTestSupport {
     private static final int PART_SIZE_BYTES = 10 * 1024 * 1024;
     private static final long MAX_IMAGE_SIZE_BYTES = 100L * 1024 * 1024;
     private static final int SMALL_IMAGE_BYTES = 2048;
+    // 사진마다 함께 올리는 작은 버전(썸네일) 크기 — 운영 상한(record-card.draft.max-thumbnail-size, 1MB) 아래다
+    private static final int THUMBNAIL_BYTES = 512;
     private static final Pattern UPLOAD_ID = Pattern.compile("(?:^|&)uploadId=([^&]+)");
 
     private final LocalDateTime trackStartAt = LocalDateTime.now(APP_ZONE)
@@ -73,8 +75,8 @@ class RecordCardE2eTest extends E2eTestSupport {
                 .endsWith("/" + uploads.get(0).get("recordCardImageId") + "/first.jpg");
         assertThat(secondKey).endsWith("/" + uploads.get(1).get("recordCardImageId") + "/second.png");
 
-        uploadRecordCardImage(firstKey, "image/jpeg", SMALL_IMAGE_BYTES);
-        uploadRecordCardImage(secondKey, "image/png", SMALL_IMAGE_BYTES);
+        uploadPhoto(firstKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto(secondKey, "image/png", SMALL_IMAGE_BYTES);
 
         // when
         String completePath = completePath(draft.text("recordCardDraftId"));
@@ -161,6 +163,9 @@ class RecordCardE2eTest extends E2eTestSupport {
         String uploadId = uploadId((String) parts.get(0).get("uploadUrl"));
         uploadRecordCardPart(key, uploadId, 1, PART_SIZE_BYTES);
         uploadRecordCardPart(key, uploadId, 2, imageBytes - PART_SIZE_BYTES);
+        // 작은 버전은 원본 크기와 상관없이 한 번에 올린다
+        assertThat(upload.get("thumbnailImageKey")).isEqualTo(thumbnailKeyOf(key));
+        uploadRecordCardImage(thumbnailKeyOf(key), "image/jpeg", THUMBNAIL_BYTES);
 
         // when
         Response completed = post(completePath(draft.text("recordCardDraftId")), Map.of(), user.accessToken());
@@ -201,7 +206,7 @@ class RecordCardE2eTest extends E2eTestSupport {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
                 image("image/jpeg", SMALL_IMAGE_BYTES, "a.jpg", null)), null), user.accessToken());
         String key = (String) draft.objects("uploads").get(0).get("imageKey");
-        uploadRecordCardImage(key, "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto(key, "image/jpeg", SMALL_IMAGE_BYTES);
         String completePath = completePath(draft.text("recordCardDraftId"));
 
         // when - 두 요청을 같은 순간에 출발시킨다
@@ -252,7 +257,7 @@ class RecordCardE2eTest extends E2eTestSupport {
                 image("image/jpeg", SMALL_IMAGE_BYTES, "a.jpg", null),
                 image("image/jpeg", SMALL_IMAGE_BYTES, "b.jpg", null)), null), user.accessToken());
         List<Map<String, Object>> uploads = draft.objects("uploads");
-        uploadRecordCardImage((String) uploads.get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto((String) uploads.get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
         String completePath = completePath(draft.text("recordCardDraftId"));
 
         // when
@@ -269,7 +274,7 @@ class RecordCardE2eTest extends E2eTestSupport {
                 .containsExactly("0");
 
         // 빠진 것만 올리고 다시 확정한다 — 실패한 확정이 잠금을 남기지 않았다
-        uploadRecordCardImage((String) uploads.get(1).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto((String) uploads.get(1).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
         Response completed = post(completePath, Map.of(), user.accessToken());
         assertThat(completed.status()).isEqualTo(201);
         // 실패한 확정은 아무것도 남기지 않았고, 성공한 확정이 한 줄을 쓴다
@@ -286,7 +291,7 @@ class RecordCardE2eTest extends E2eTestSupport {
         long runningRecordId = finishSoloRun(user);
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
                 image("image/jpeg", SMALL_IMAGE_BYTES, "a.jpg", null)), null), user.accessToken());
-        uploadRecordCardImage((String) draft.objects("uploads").get(0).get("imageKey"), "image/png",
+        uploadPhoto((String) draft.objects("uploads").get(0).get("imageKey"), "image/png",
                 SMALL_IMAGE_BYTES);
 
         // when
@@ -411,7 +416,7 @@ class RecordCardE2eTest extends E2eTestSupport {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
                 image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
         String imageKey = (String) draft.objects("uploads").get(0).get("imageKey");
-        uploadRecordCardImage(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
         String recordCardId = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
                 .text("recordCardId");
         String detailPath = "/record-cards/" + recordCardId;
@@ -457,6 +462,9 @@ class RecordCardE2eTest extends E2eTestSupport {
                     .containsEntry("status", "GENERATING").containsEntry("musicUrl", null);
         });
 
+        // 솔로 러닝이라 같이 뛴 사람이 없다 — 실제 DB에서 참가자 쿼리를 탄다
+        assertThat(mine.objects("companions")).isEmpty();
+
         // 남도 전체 공개는 본다 — 내 카드가 아니다
         Response others = get(detailPath, stranger.accessToken());
         assertThat(others.status()).isEqualTo(200);
@@ -486,7 +494,7 @@ class RecordCardE2eTest extends E2eTestSupport {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
                 image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
         String imageKey = (String) draft.objects("uploads").get(0).get("imageKey");
-        uploadRecordCardImage(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
         String recordCardId = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
                 .text("recordCardId");
         String cardPath = "/record-cards/" + recordCardId;
@@ -548,7 +556,7 @@ class RecordCardE2eTest extends E2eTestSupport {
         Response created = post("/record-cards", draftRequest(runningRecordId, List.of(
                 image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
         String firstImageId = (String) created.objects("uploads").get(0).get("recordCardImageId");
-        uploadRecordCardImage((String) created.objects("uploads").get(0).get("imageKey"), "image/jpeg",
+        uploadPhoto((String) created.objects("uploads").get(0).get("imageKey"), "image/jpeg",
                 SMALL_IMAGE_BYTES);
         String recordCardId = post(completePath(created.text("recordCardDraftId")), Map.of(), owner.accessToken())
                 .text("recordCardId");
@@ -588,8 +596,8 @@ class RecordCardE2eTest extends E2eTestSupport {
         // when 3 - 기존 사진 설명을 바꾸고 새 사진을 넣는다
         Response withNew = patch(cardPath, Map.of("images", List.of(
                 Map.of("recordCardImageId", firstImageId, "caption", "다리 밑 노을"),
-                Map.of("mimeType", "image/png", "fileSizeBytes", SMALL_IMAGE_BYTES, "fileName", "second.png",
-                        "caption", "결승선"))), owner.accessToken());
+                Map.of("mimeType", "image/png", "fileSizeBytes", SMALL_IMAGE_BYTES, "thumbnailFileSizeBytes",
+                        THUMBNAIL_BYTES, "fileName", "second.png", "caption", "결승선"))), owner.accessToken());
 
         // then - 아직 반영하지 않는다: draft와 지금(수정 전) 카드
         assertThat(withNew.status()).isEqualTo(200);
@@ -602,7 +610,7 @@ class RecordCardE2eTest extends E2eTestSupport {
 
         // when - 올리고 9-2로 확정한다(작성과 같은 API)
         String newImageId = (String) uploads.get(0).get("recordCardImageId");
-        uploadRecordCardImage((String) uploads.get(0).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
+        uploadPhoto((String) uploads.get(0).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
         Response confirmed = post(completePath((String) draft.get("recordCardDraftId")), Map.of(),
                 owner.accessToken());
 
@@ -622,10 +630,11 @@ class RecordCardE2eTest extends E2eTestSupport {
         Response pending = patch(cardPath, Map.of("images", List.of(
                 Map.of("recordCardImageId", firstImageId, "caption", "다리 밑 노을"),
                 Map.of("recordCardImageId", newImageId, "caption", "결승선"),
-                Map.of("mimeType", "image/jpeg", "fileSizeBytes", SMALL_IMAGE_BYTES, "fileName", "third.jpg"))),
+                Map.of("mimeType", "image/jpeg", "fileSizeBytes", SMALL_IMAGE_BYTES, "thumbnailFileSizeBytes",
+                        THUMBNAIL_BYTES, "fileName", "third.jpg"))),
                 owner.accessToken());
         Map<String, Object> pendingDraft = (Map<String, Object>) pending.body().get("draft");
-        uploadRecordCardImage((String) ((List<Map<String, Object>>) pendingDraft.get("uploads")).get(0).get("imageKey"),
+        uploadPhoto((String) ((List<Map<String, Object>>) pendingDraft.get("uploads")).get(0).get("imageKey"),
                 "image/jpeg", SMALL_IMAGE_BYTES);
         assertThat(patch(cardPath, Map.of("memo", "다른 기기에서 고친 회고"), owner.accessToken()).status())
                 .isEqualTo(200);
@@ -653,8 +662,8 @@ class RecordCardE2eTest extends E2eTestSupport {
                 image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선"),
                 image("image/png", SMALL_IMAGE_BYTES, "second.png", null)), 0), owner.accessToken());
         List<Map<String, Object>> uploads = created.objects("uploads");
-        uploadRecordCardImage((String) uploads.get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
-        uploadRecordCardImage((String) uploads.get(1).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
+        uploadPhoto((String) uploads.get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
+        uploadPhoto((String) uploads.get(1).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
         String recordCardId = post(completePath(created.text("recordCardDraftId")), Map.of(), owner.accessToken())
                 .text("recordCardId");
         String retryPath = "/record-cards/" + recordCardId + "/retry";
@@ -720,7 +729,7 @@ class RecordCardE2eTest extends E2eTestSupport {
                 image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0));
         photoRequest.put("visibility", "PRIVATE");
         Response photoDraft = post("/record-cards", photoRequest, owner.accessToken());
-        uploadRecordCardImage((String) photoDraft.objects("uploads").get(0).get("imageKey"), "image/jpeg",
+        uploadPhoto((String) photoDraft.objects("uploads").get(0).get("imageKey"), "image/jpeg",
                 SMALL_IMAGE_BYTES);
         String photoCardId = post(completePath(photoDraft.text("recordCardDraftId")), Map.of(), owner.accessToken())
                 .text("recordCardId");
@@ -738,7 +747,7 @@ class RecordCardE2eTest extends E2eTestSupport {
 
         Map<String, Object> photoCard = (Map<String, Object>) items.get(0).get("recordCard");
         assertThat(photoCard.get("recordCardId")).isEqualTo(photoCardId);
-        assertThat((String) photoCard.get("thumbnailUrl")).startsWith("http");
+        assertThat((String) photoCard.get("thumbnailUrl")).startsWith("http").contains("/thumbnail/");
         assertThat(photoCard).containsEntry("routeArt", null);
 
         Map<String, Object> lineCard = (Map<String, Object>) items.get(1).get("recordCard");
@@ -754,6 +763,99 @@ class RecordCardE2eTest extends E2eTestSupport {
         }));
 
         assertThat(items.get(2)).containsKey("recordCard").containsEntry("recordCard", null);
+    }
+
+    @Test
+    @DisplayName("작은 버전(썸네일)을 올리지 않으면 확정은 400이고, 작은 버전을 올리면 같은 초안으로 확정된다 — 회고 글은 1000자까지 저장된다")
+    void thumbnailRequiredAndLongMemo() {
+        // given - 회고 글 1000자, 원본만 올린다
+        TestUser user = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(user);
+        Map<String, Object> request = new HashMap<>(draftRequest(runningRecordId, List.of(
+                image("image/png", SMALL_IMAGE_BYTES, "한강 야경.png", null)), 0));
+        request.put("memo", "가".repeat(1000));
+        Response draft = post("/record-cards", request, user.accessToken());
+        assertThat(draft.status()).isEqualTo(200);
+        Map<String, Object> upload = draft.objects("uploads").get(0);
+        String imageKey = (String) upload.get("imageKey");
+        assertThat(upload.get("thumbnailImageKey")).isEqualTo(thumbnailKeyOf(imageKey));
+        assertThat((String) upload.get("thumbnailUploadUrl")).startsWith("http");
+        uploadRecordCardImage(imageKey, "image/png", SMALL_IMAGE_BYTES);
+        String completePath = completePath(draft.text("recordCardDraftId"));
+
+        // when & then - 작은 버전이 없어 400, 카드는 없다
+        Response missing = post(completePath, Map.of(), user.accessToken());
+        assertThat(missing.status()).isEqualTo(400);
+        assertThat(missing.text("code")).isEqualTo("RECORD_CARD_IMAGE_NOT_UPLOADED");
+        assertThat(querySql("SELECT count(*) FROM record_cards WHERE running_record_id = " + runningRecordId))
+                .containsExactly("0");
+
+        // when & then - 작은 버전을 올리면 확정되고, 1000자 회고 글이 DB CHECK를 통과한다
+        uploadRecordCardImage(thumbnailKeyOf(imageKey), "image/png", THUMBNAIL_BYTES);
+        Response completed = post(completePath, Map.of(), user.accessToken());
+        assertThat(completed.status()).isEqualTo(201);
+        assertThat(querySql("SELECT char_length(memo) FROM record_cards WHERE record_card_id = '%s'"
+                .formatted(completed.text("recordCardId")))).containsExactly("1000");
+
+        // 1000자를 넘는 회고 글과 1MB를 넘는 작은 버전은 400이다
+        long otherRecordId = finishSoloRun(user);
+        Map<String, Object> tooLong = new HashMap<>(draftRequest(otherRecordId, List.of(), null));
+        tooLong.put("memo", "가".repeat(1001));
+        assertThat(post("/record-cards", tooLong, user.accessToken()).text("message"))
+                .isEqualTo("회고 글은 1000자 이하여야 합니다.");
+        Map<String, Object> bigThumbnail = new HashMap<>(image("image/jpeg", SMALL_IMAGE_BYTES, "a.jpg", null));
+        bigThumbnail.put("thumbnailFileSizeBytes", 1024 * 1024 + 1);
+        Response tooBig = post("/record-cards", draftRequest(otherRecordId, List.of(bigThumbnail), 0),
+                user.accessToken());
+        assertThat(tooBig.status()).isEqualTo(400);
+        assertThat(tooBig.text("message")).isEqualTo("썸네일은 1MB 이하만 업로드할 수 있습니다.");
+    }
+
+    @Test
+    @DisplayName("기록 카드 목록(10-3) — 순위 역순, 본인은 비공개까지·남은 공개만, 커서로 이어 읽고, 썸네일은 작은 버전이다")
+    void listCards() {
+        // given - 세 장: 첫째 공개(사진), 둘째 비공개(사진 없음), 셋째 친구 공개(사진 없음)
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long firstRecordId = finishSoloRun(owner);
+        long secondRecordId = finishSoloRun(owner);
+        long thirdRecordId = finishSoloRun(owner);
+        Response draft = post("/record-cards", draftRequest(firstRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", null)), 0), owner.accessToken());
+        uploadPhoto((String) draft.objects("uploads").get(0).get("imageKey"), "image/jpeg", SMALL_IMAGE_BYTES);
+        String first = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String second = createCardWithoutImages(owner, secondRecordId);
+        String third = createCardWithoutImages(owner, thirdRecordId);
+        executeSql("UPDATE record_cards SET visibility = 'PRIVATE' WHERE record_card_id = '%s'".formatted(second));
+        executeSql("UPDATE record_cards SET visibility = 'FRIENDS' WHERE record_card_id = '%s'".formatted(third));
+        String listPath = "/users/" + owner.userId() + "/record-cards";
+
+        // when - 본인이 두 장씩 읽는다
+        Response page1 = get(listPath + "?limit=2", owner.accessToken());
+        Response page2 = get(listPath + "?limit=2&cursor=" + page1.text("nextCursor"), owner.accessToken());
+
+        // then - 최신(순위가 큰 것)이 위다. 비공개도 보인다
+        assertThat(page1.status()).isEqualTo(200);
+        assertThat(page1.objects("items")).extracting(item -> item.get("recordCardId"))
+                .containsExactly(third, second);
+        assertThat(page2.objects("items")).extracting(item -> item.get("recordCardId")).containsExactly(first);
+        assertThat(page2.body().get("nextCursor")).isNull();
+        Map<String, Object> photoCard = page2.objects("items").getFirst();
+        assertThat((String) photoCard.get("thumbnailUrl")).contains("/thumbnail/first.jpg");
+        assertThat(photoCard.get("imageCount")).isEqualTo(1);
+        assertThat(page1.objects("items").getFirst()).containsEntry("thumbnailUrl", null)
+                .containsEntry("imageCount", 0);
+
+        // 남은 공개 카드만 본다
+        Response others = get(listPath, stranger.accessToken());
+        assertThat(others.objects("items")).extracting(item -> item.get("recordCardId")).containsExactly(first);
+
+        // 깨진 커서·형식이 틀린 사용자 ID는 400, 없는 사용자는 404다
+        assertThat(get(listPath + "?cursor=broken!", owner.accessToken()).status()).isEqualTo(400);
+        assertThat(get("/users/not-a-uuid/record-cards", owner.accessToken()).status()).isEqualTo(400);
+        assertThat(get("/users/01a0f2d4-6180-7000-8000-446655440099/record-cards", owner.accessToken()).status())
+                .isEqualTo(404);
     }
 
     private String createCardWithoutImages(TestUser user, long runningRecordId) {
@@ -779,10 +881,23 @@ class RecordCardE2eTest extends E2eTestSupport {
         return request;
     }
 
+    // 앱처럼 원본과 작은 버전(썸네일)을 함께 올린다 — 작은 버전은 원본과 같은 형식이다
+    private void uploadPhoto(String imageKey, String contentType, int sizeBytes) {
+        uploadRecordCardImage(imageKey, contentType, sizeBytes);
+        uploadRecordCardImage(thumbnailKeyOf(imageKey), contentType, THUMBNAIL_BYTES);
+    }
+
+    // 작은 버전 key — 같은 사진 폴더의 thumbnail/ 아래에 원본 파일 이름 그대로(api-spec 9-1)
+    private static String thumbnailKeyOf(String imageKey) {
+        int lastSlash = imageKey.lastIndexOf('/');
+        return imageKey.substring(0, lastSlash + 1) + "thumbnail/" + imageKey.substring(lastSlash + 1);
+    }
+
     private static Map<String, Object> image(String mimeType, long fileSizeBytes, String fileName, String caption) {
         Map<String, Object> image = new HashMap<>();
         image.put("mimeType", mimeType);
         image.put("fileSizeBytes", fileSizeBytes);
+        image.put("thumbnailFileSizeBytes", THUMBNAIL_BYTES);
         image.put("fileName", fileName);
         if (caption != null) {
             image.put("caption", caption);

@@ -18,9 +18,9 @@ public record UpdateRecordCardCommand(
         images = images == null ? null : List.copyOf(images);
     }
 
-    // 사진 한 자리 — 남길 사진(recordCardImageId)이거나 새로 올릴 사진(형식·크기·이름). caption은 수정 뒤의 설명이다
-    public record Image(UUID recordCardImageId, String mimeType, Long fileSizeBytes, String fileName,
-                        String caption) {
+    // 사진 한 자리 — 남길 사진(recordCardImageId)이거나 새로 올릴 사진(형식·크기·썸네일 크기·이름). caption은 수정 뒤의 설명이다
+    public record Image(UUID recordCardImageId, String mimeType, Long fileSizeBytes, Long thumbnailFileSizeBytes,
+                        String fileName, String caption) {
 
         public Image {
             // 9-1과 같다 — 앞뒤 공백을 지운 이름이 사진 key의 마지막 칸이 된다

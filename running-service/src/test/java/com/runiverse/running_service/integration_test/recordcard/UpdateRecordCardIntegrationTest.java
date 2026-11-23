@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+import static com.runiverse.running_service.application.recordcard.common.RecordCardStorageKeys.thumbnailKeyOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -69,7 +70,7 @@ class UpdateRecordCardIntegrationTest {
         objectStore = new FakeRecordCardObjectStore();
         FakeMultipartUploadStarter multipartUploads = new FakeMultipartUploadStarter();
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
-                DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
+                DataSize.ofMegabytes(100), DataSize.ofMegabytes(1), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         RecordCardEditor editor = new RecordCardEditor(recordCardStore, recordCardStore, recordCardStore,
                 recordCardStore, musicRequests, recordCardStore);
         updateHandler = new UpdateRecordCardHandler(properties, editor,
@@ -140,7 +141,7 @@ class UpdateRecordCardIntegrationTest {
     void newImageThroughConfirm() {
         // when — A 설명 변경, B 빼기, 새 사진 N 추가
         UpdateRecordCardResult result = update(null, List.of(kept(A, "다리 밑 노을"),
-                new UpdateRecordCardCommand.Image(null, "image/jpeg", 1_000L, "n.jpg", "결승선")));
+                new UpdateRecordCardCommand.Image(null, "image/jpeg", 1_000L, 100L, "n.jpg", "결승선")));
 
         // then — 확정 전: 카드·이력·요청 모두 그대로
         assertThat(result.draft()).isNotNull();
@@ -151,6 +152,7 @@ class UpdateRecordCardIntegrationTest {
         // when — 앱이 올리고 확정한다
         Upload upload = result.draft().uploads().getFirst();
         objectStore.putObject(upload.imageKey(), 1_000L, "image/jpeg");
+        objectStore.putObject(thumbnailKeyOf(upload.imageKey()), 100L, "image/jpeg");
         UUID confirmed = completeHandler.handle(
                 new CompleteRecordCardDraftCommand(owner, result.draft().recordCardDraftId())).recordCardId();
 
@@ -176,8 +178,9 @@ class UpdateRecordCardIntegrationTest {
     void changedBeforeConfirm() {
         // given — 새 사진 초안을 만들어 두고
         UpdateRecordCardResult draft = update(null, List.of(kept(A, "노을"), kept(B, null),
-                new UpdateRecordCardCommand.Image(null, "image/jpeg", 1_000L, "n.jpg", null)));
+                new UpdateRecordCardCommand.Image(null, "image/jpeg", 1_000L, 100L, "n.jpg", null)));
         objectStore.putObject(draft.draft().uploads().getFirst().imageKey(), 1_000L, "image/jpeg");
+        objectStore.putObject(thumbnailKeyOf(draft.draft().uploads().getFirst().imageKey()), 100L, "image/jpeg");
         // 다른 기기에서 회고 글을 바로 고친다
         update("다른 기기에서 고친 회고", null);
 
@@ -198,6 +201,6 @@ class UpdateRecordCardIntegrationTest {
     }
 
     private static UpdateRecordCardCommand.Image kept(UUID id, String caption) {
-        return new UpdateRecordCardCommand.Image(id, null, null, null, caption);
+        return new UpdateRecordCardCommand.Image(id, null, null, null, null, caption);
     }
 }

@@ -17,7 +17,7 @@ import java.util.UUID;
 public record UpdateRecordCardRequest(
         // 지울 수 없다 — 보내면 공백만 있는 값은 400
         @Pattern(regexp = "(?s).*\\S.*", message = "회고 글은 비어 있을 수 없습니다.")
-        @Size(max = 500, message = "회고 글은 500자 이하여야 합니다.")
+        @Size(max = 1000, message = "회고 글은 1000자 이하여야 합니다.")
         String memo,
 
         @Pattern(regexp = "^(DAILY|TRAVEL|RACE)$", message = "활동 유형은 DAILY, TRAVEL, RACE 중 하나여야 합니다.")
@@ -34,7 +34,8 @@ public record UpdateRecordCardRequest(
         Integer thumbnailIndex
 ) {
 
-    // 사진 한 자리 — 남길 사진(recordCardImageId) 또는 새 사진(mimeType·fileSizeBytes·fileName) 중 하나. 규칙은 9-1과 같다
+    // 사진 한 자리 — 남길 사진(recordCardImageId) 또는 새 사진(mimeType·fileSizeBytes·thumbnailFileSizeBytes·fileName) 중 하나.
+    // 규칙은 9-1과 같다 — 남길 사진은 작은 버전이 이미 있어 다시 올리지 않는다
     public record Image(
             UUID recordCardImageId,
 
@@ -45,6 +46,9 @@ public record UpdateRecordCardRequest(
             @Min(value = 1, message = "파일 크기는 1바이트 이상이어야 합니다.")
             Long fileSizeBytes,
 
+            @Min(value = 1, message = "썸네일 크기는 1바이트 이상이어야 합니다.")
+            Long thumbnailFileSizeBytes,
+
             @Size(max = 100, message = "파일 이름은 100자 이하여야 합니다.")
             @Pattern(regexp = "^(?! *\\.{1,2} *$)[^/\\\\\\p{Cntrl}]+$", message = "파일 이름에 쓸 수 없는 문자가 있습니다.")
             String fileName,
@@ -54,12 +58,19 @@ public record UpdateRecordCardRequest(
             String caption
     ) {
 
-        // 남길 사진이면 새 사진 정보가 없고, 새 사진이면 형식·크기·이름이 모두 있다
+        // 남길 사진이면 새 사진 정보가 없고, 새 사진이면 형식·크기·이름이 모두 있다(썸네일 크기는 아래가 따로 본다)
         @AssertTrue(message = "사진 항목에는 기존 사진 ID와 새 사진 정보 중 하나만 넣어야 합니다.")
         public boolean isOneKind() {
-            boolean anyNew = mimeType != null || fileSizeBytes != null || fileName != null;
+            boolean anyNew = mimeType != null || fileSizeBytes != null || thumbnailFileSizeBytes != null
+                    || fileName != null;
             boolean allNew = mimeType != null && fileSizeBytes != null && fileName != null && !fileName.isBlank();
             return recordCardImageId != null ? !anyNew : allNew;
+        }
+
+        // 새 사진은 작은 버전도 함께 올린다 — 9-1과 같이 필수다
+        @AssertTrue(message = "썸네일 크기는 필수입니다.")
+        public boolean isThumbnailGivenForNewImage() {
+            return recordCardImageId != null || thumbnailFileSizeBytes != null;
         }
     }
 

@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -208,6 +209,51 @@ class GetRecordCardDetailHandlerTest {
         verifyNoInteractions(generateRecordCardViewUrlPort, generateViewUrlPort);
     }
 
+    @Test
+    @DisplayName("같이 뛴 사람을 작성자와 같은 모양으로 싣는다 — 탈퇴자(프로필 없음)와 보는 사람과 차단 관계인 사람은 뺀다")
+    void companions() {
+        // given — 셋이 같이 뛰었다: 친구 하나, 탈퇴자 하나, 보는 사람과 차단 관계 하나
+        UUID friend = UuidCreator.getTimeOrderedEpoch();
+        UUID withdrawn = UuidCreator.getTimeOrderedEpoch();
+        UUID blocked = UuidCreator.getTimeOrderedEpoch();
+        RecordCardDetail base = card(RecordCardVisibility.PUBLIC, MusicStatus.GENERATING, null, List.of(), List.of());
+        givenCard(new RecordCardDetail(base.recordCardId(), base.userId(), base.visibility(), base.activityType(),
+                base.memo(), null, base.baseMusicStatus(), null, List.of(), base.record(),
+                List.of(friend, withdrawn, blocked), CREATED_AT, CREATED_AT));
+        when(loadPlayerProfilesPort.loadProfiles(List.of(friend, withdrawn, blocked, AUTHOR_ID))).thenReturn(Map.of(
+                AUTHOR_ID, new PlayerProfile(AUTHOR_ID, "동완러너", null, null),
+                friend, new PlayerProfile(friend, "달리는곰", "profiles/bear.jpg", null),
+                blocked, new PlayerProfile(blocked, "막힌사람", null, null)));
+        givenLevel(VIEWER_ID, RelationLevel.OTHER);
+        when(relationLevelReader.read(new UserId(VIEWER_ID), new UserId(friend))).thenReturn(RelationLevel.FRIEND);
+        when(relationLevelReader.read(new UserId(VIEWER_ID), new UserId(blocked))).thenReturn(RelationLevel.BLOCKED);
+        when(generateViewUrlPort.generate("profiles/bear.jpg")).thenReturn("https://bear");
+
+        // when
+        GetRecordCardDetailResult result = handler.handle(new GetRecordCardDetailQuery(VIEWER_ID, CARD_ID));
+
+        // then
+        assertThat(result.companions())
+                .containsExactly(new GetRecordCardDetailResult.Author(friend, "달리는곰", "https://bear"));
+    }
+
+    @Test
+    @DisplayName("솔로 러닝처럼 같이 뛴 사람이 없으면 빈 목록이고 관계를 더 읽지 않는다")
+    void noCompanions() {
+        // given
+        givenCard(card(RecordCardVisibility.PUBLIC, MusicStatus.GENERATING, null, List.of(), List.of()));
+        givenAuthor(null);
+        givenLevel(VIEWER_ID, RelationLevel.OTHER);
+
+        // when
+        GetRecordCardDetailResult result = handler.handle(new GetRecordCardDetailQuery(VIEWER_ID, CARD_ID));
+
+        // then
+        assertThat(result.companions()).isEmpty();
+        verify(relationLevelReader).read(new UserId(VIEWER_ID), new UserId(AUTHOR_ID));
+        verifyNoMoreInteractions(relationLevelReader);
+    }
+
     private void givenCard(RecordCardDetail card) {
         when(loadRecordCardDetailPort.loadDetail(new RecordCardId(CARD_ID))).thenReturn(Optional.of(card));
     }
@@ -226,7 +272,7 @@ class GetRecordCardDetailHandlerTest {
                                          List<RecordCardDetail.Image> images, List<String> polylines) {
         return new RecordCardDetail(CARD_ID, AUTHOR_ID, visibility, RecordCardActivityType.DAILY, "한강 야간 러닝",
                 images.isEmpty() ? null : KEY_A, baseStatus, baseKey, images,
-                new RecordCardDetail.Record(501L, STARTED_AT, 5020, 1800, 359, polylines),
+                new RecordCardDetail.Record(501L, STARTED_AT, 5020, 1800, 359, polylines), List.of(),
                 CREATED_AT, CREATED_AT);
     }
 

@@ -183,12 +183,12 @@ class GetMyRunningRecordsHandlerTest {
     }
 
     @Test
-    @DisplayName("사진 있는 카드는 썸네일 URL만 싣고 선 아트는 null이다 — 구간을 읽지 않는다")
+    @DisplayName("사진 있는 카드는 대표 사진 작은 버전(thumbnail/)의 URL만 싣고 선 아트는 null이다 — 구간을 읽지 않는다")
     void 사진_있는_카드는_썸네일이다() {
         // given
         given(loadMyRunningRecordsPort.loadByPeriod(ME, FROM_START, AFTER_TO_START))
                 .willReturn(List.of(cardRow(501L, CARD_A, "record-cards/u/a/thumb.jpg")));
-        given(generateRecordCardViewUrlPort.imageUrl("record-cards/u/a/thumb.jpg")).willReturn("https://thumb");
+        given(generateRecordCardViewUrlPort.imageUrl("record-cards/u/a/thumbnail/thumb.jpg")).willReturn("https://thumb");
 
         // when
         GetMyRunningRecordsResult result = handler.handle(new GetMyRunningRecordsQuery(USER_ID, FROM, TO));
@@ -209,7 +209,7 @@ class GetMyRunningRecordsHandlerTest {
                         cardRow(502L, CARD_B, null),
                         row(503L, LocalDateTime.of(2026, 9, 29, 7, 0)),
                         cardRow(504L, CARD_C, null)));
-        given(generateRecordCardViewUrlPort.imageUrl("record-cards/u/a/thumb.jpg")).willReturn("https://thumb");
+        given(generateRecordCardViewUrlPort.imageUrl("record-cards/u/a/thumbnail/thumb.jpg")).willReturn("https://thumb");
         List<RoutePoint> line = new ArrayList<>();
         for (int i = 0; i < 300; i++) {
             line.add(new RoutePoint(37.50 + i * 0.0001, 127.00));

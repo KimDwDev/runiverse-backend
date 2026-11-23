@@ -82,7 +82,7 @@ class CompleteRecordCardDraftHandlerTest {
     @BeforeEach
     void setUp() {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
-                DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), LOCK_TTL);
+                DataSize.ofMegabytes(100), DataSize.ofMegabytes(1), DataSize.ofMegabytes(10), LOCK_TTL);
         handler = new CompleteRecordCardDraftHandler(properties, loadRecordCardDraftPort, lockRecordCardDraftPort,
                 updateRecordCardDraftPort, loadRecordCardImagePort, completeMultipartUploadPort, recordCardDraftSaver,
                 recordCardEditDraftSaver);
@@ -96,6 +96,7 @@ class CompleteRecordCardDraftHandlerTest {
         givenDraft(draft);
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.of(new UploadedImage(100L, "image/jpeg")));
 
         // when
         CompleteRecordCardDraftResult result = handler.handle(command());
@@ -123,6 +124,7 @@ class CompleteRecordCardDraftHandlerTest {
         givenDraft(draft);
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.of(new UploadedImage(100L, "image/jpeg")));
 
         // when
         CompleteRecordCardDraftResult result = handler.handle(command());
@@ -214,12 +216,44 @@ class CompleteRecordCardDraftHandlerTest {
     }
 
     @Test
+    @DisplayName("원본은 있어도 작은 버전(thumbnail/)이 없으면 400이고 저장하지 않는다")
+    void thumbnailNotUploaded() {
+        // given
+        givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(RecordCardImageNotUploadedException.class);
+        verifyNoInteractions(recordCardDraftSaver);
+    }
+
+    @Test
+    @DisplayName("작은 버전의 크기가 초안과 다르거나 형식이 원본과 다르면 400(올바르지 않음)이다")
+    void thumbnailMismatch() {
+        // given — 크기가 다르다
+        givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg"))
+                .willReturn(Optional.of(new UploadedImage(101L, "image/jpeg")))
+                .willReturn(Optional.of(new UploadedImage(100L, "image/png")));
+
+        // when & then — 크기, 그다음 형식
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(InvalidRecordCardImageException.class);
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(InvalidRecordCardImageException.class);
+        verifyNoInteractions(recordCardDraftSaver);
+    }
+
+    @Test
     @DisplayName("형식은 대소문자를 가리지 않고 대조한다")
     void contentTypeCaseInsensitive() {
         // given
         givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "IMAGE/JPEG")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.of(new UploadedImage(100L, "image/jpeg")));
 
         // when & then
         assertThat(handler.handle(command()).recordCardId()).isEqualTo(CARD_ID);
@@ -235,6 +269,7 @@ class CompleteRecordCardDraftHandlerTest {
         given(completeMultipartUploadPort.complete("k/1/big.png", "upload-1", 3))
                 .willReturn(MultipartCompletion.COMPLETED);
         given(loadRecordCardImagePort.load("k/1/big.png")).willReturn(Optional.of(new UploadedImage(BIG, "image/png")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/big.png")).willReturn(Optional.of(new UploadedImage(100L, "image/png")));
 
         // when
         handler.handle(command());
@@ -257,6 +292,7 @@ class CompleteRecordCardDraftHandlerTest {
         givenDraft(draft(multipartImage(IMAGE_ID_1, "k/1/big.png", true)));
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/big.png")).willReturn(Optional.of(new UploadedImage(BIG, "image/png")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/big.png")).willReturn(Optional.of(new UploadedImage(100L, "image/png")));
 
         // when
         handler.handle(command());
@@ -290,6 +326,7 @@ class CompleteRecordCardDraftHandlerTest {
         given(completeMultipartUploadPort.complete("k/1/big.png", "upload-1", 3))
                 .willReturn(MultipartCompletion.UPLOAD_NOT_FOUND);
         given(loadRecordCardImagePort.load("k/1/big.png")).willReturn(Optional.of(new UploadedImage(BIG, "image/png")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/big.png")).willReturn(Optional.of(new UploadedImage(100L, "image/png")));
 
         // when & then
         assertThat(handler.handle(command()).recordCardId()).isEqualTo(CARD_ID);
@@ -321,6 +358,7 @@ class CompleteRecordCardDraftHandlerTest {
         given(completeMultipartUploadPort.complete("k/1/big.png", "upload-1", 3))
                 .willReturn(MultipartCompletion.COMPLETED);
         given(loadRecordCardImagePort.load("k/1/big.png")).willReturn(Optional.of(new UploadedImage(BIG, "image/png")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/big.png")).willReturn(Optional.of(new UploadedImage(100L, "image/png")));
         given(loadRecordCardImagePort.load("k/2/b.jpg")).willReturn(Optional.empty());
 
         // when & then
@@ -338,6 +376,7 @@ class CompleteRecordCardDraftHandlerTest {
         givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.of(new UploadedImage(100L, "image/jpeg")));
         willThrow(new RecordCardDraftInProgressException()).given(recordCardDraftSaver).save(any());
 
         // when & then
@@ -353,6 +392,7 @@ class CompleteRecordCardDraftHandlerTest {
         givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
         givenLocked();
         given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.of(new UploadedImage(100L, "image/jpeg")));
         given(updateRecordCardDraftPort.update(any())).willReturn(false);
 
         // when & then
@@ -377,10 +417,10 @@ class CompleteRecordCardDraftHandlerTest {
     }
 
     private static DraftImage singleImage(UUID id, String key) {
-        return new DraftImage(id, key, "image/jpeg", 10L, null, UploadType.SINGLE, null, null, false);
+        return new DraftImage(id, key, "image/jpeg", 10L, null, UploadType.SINGLE, null, null, false, 100L);
     }
 
     private static DraftImage multipartImage(UUID id, String key, boolean merged) {
-        return new DraftImage(id, key, "image/png", BIG, null, UploadType.MULTIPART, "upload-1", 3, merged);
+        return new DraftImage(id, key, "image/png", BIG, null, UploadType.MULTIPART, "upload-1", 3, merged, 100L);
     }
 }

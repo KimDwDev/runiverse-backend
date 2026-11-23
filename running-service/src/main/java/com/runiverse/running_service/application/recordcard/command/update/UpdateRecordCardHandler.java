@@ -63,7 +63,8 @@ public class UpdateRecordCardHandler implements UpdateRecordCardUsecase {
         // 2. 새 사진이 있으면 초안 — 크기(400)·내 카드(404)·남길 사진(400)을 업로드 URL을 주기 전에 본다
         List<NewImage> newImages = images.stream()
                 .filter(UpdateRecordCardCommand.Image::isNew)
-                .map(image -> new NewImage(image.mimeType(), image.fileSizeBytes(), image.fileName(), image.caption()))
+                .map(image -> new NewImage(image.mimeType(), image.fileSizeBytes(), image.thumbnailFileSizeBytes(),
+                        image.fileName(), image.caption()))
                 .toList();
         recordCardUploadIssuer.rejectTooLarge(newImages);
         List<ImageSlot> kept = images.stream()
@@ -83,7 +84,8 @@ public class UpdateRecordCardHandler implements UpdateRecordCardUsecase {
                 continue;
             }
             Issued issued = recordCardUploadIssuer.issue(command.userId(), command.recordCardId(),
-                    new NewImage(image.mimeType(), image.fileSizeBytes(), image.fileName(), image.caption()));
+                    new NewImage(image.mimeType(), image.fileSizeBytes(), image.thumbnailFileSizeBytes(),
+                            image.fileName(), image.caption()));
             draftImages.add(issued.draftImage());
             uploads.add(issued.upload());
             slots.add(new EditPlan.Slot(issued.draftImage().recordCardImageId(), issued.draftImage().caption(), true));

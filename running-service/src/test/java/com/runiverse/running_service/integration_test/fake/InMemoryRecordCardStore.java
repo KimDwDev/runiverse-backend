@@ -140,7 +140,7 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
                 card.getBaseMusicStatus(), card.getBaseMusicKey().map(MusicKey::value).orElse(null), images,
                 new RecordCardDetail.Record(runningRecordId, SUMMARY.startAt(), SUMMARY.totalDistance(),
                         SUMMARY.totalDuration(), SUMMARY.avgPace(),
-                        segmentPolylinesByRecord.getOrDefault(runningRecordId, List.of())),
+                        segmentPolylinesByRecord.getOrDefault(runningRecordId, List.of())), List.of(),
                 CREATED_AT, CREATED_AT);
     }
 
