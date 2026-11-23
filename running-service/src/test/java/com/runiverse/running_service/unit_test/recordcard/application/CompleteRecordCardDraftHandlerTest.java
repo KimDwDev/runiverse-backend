@@ -216,6 +216,37 @@ class CompleteRecordCardDraftHandlerTest {
     }
 
     @Test
+    @DisplayName("원본은 있어도 작은 버전(thumbnail/)이 없으면 400이고 저장하지 않는다")
+    void thumbnailNotUploaded() {
+        // given
+        givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(RecordCardImageNotUploadedException.class);
+        verifyNoInteractions(recordCardDraftSaver);
+    }
+
+    @Test
+    @DisplayName("작은 버전의 크기가 초안과 다르거나 형식이 원본과 다르면 400(올바르지 않음)이다")
+    void thumbnailMismatch() {
+        // given — 크기가 다르다
+        givenDraft(draft(singleImage(IMAGE_ID_1, "k/1/a.jpg")));
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+        given(loadRecordCardImagePort.load("k/1/thumbnail/a.jpg"))
+                .willReturn(Optional.of(new UploadedImage(101L, "image/jpeg")))
+                .willReturn(Optional.of(new UploadedImage(100L, "image/png")));
+
+        // when & then — 크기, 그다음 형식
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(InvalidRecordCardImageException.class);
+        assertThatThrownBy(() -> handler.handle(command())).isInstanceOf(InvalidRecordCardImageException.class);
+        verifyNoInteractions(recordCardDraftSaver);
+    }
+
+    @Test
     @DisplayName("형식은 대소문자를 가리지 않고 대조한다")
     void contentTypeCaseInsensitive() {
         // given

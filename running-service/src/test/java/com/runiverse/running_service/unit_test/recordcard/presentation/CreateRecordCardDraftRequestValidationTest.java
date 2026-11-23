@@ -122,6 +122,17 @@ class CreateRecordCardDraftRequestValidationTest {
                         "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다.", "파일 크기는 1바이트 이상이어야 합니다.");
     }
 
+    @Test
+    @DisplayName("작은 버전(썸네일) 크기가 없거나 1보다 작으면 명세 문구로 거절한다 — 1MB 상한은 운영값이라 유스케이스가 본다")
+    void rejectBadThumbnailSize() {
+        assertThat(messages(request(List.of(new Image("image/jpeg", 10L, null, "a.jpg", null)), null)))
+                .containsExactly("썸네일 크기는 필수입니다.");
+        assertThat(messages(request(List.of(new Image("image/jpeg", 10L, 0L, "a.jpg", null)), null)))
+                .containsExactly("썸네일 크기는 1바이트 이상이어야 합니다.");
+        assertThat(messages(request(List.of(new Image("image/jpeg", 10L, Long.MAX_VALUE, "a.jpg", null)), null)))
+                .isEmpty();
+    }
+
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   "})

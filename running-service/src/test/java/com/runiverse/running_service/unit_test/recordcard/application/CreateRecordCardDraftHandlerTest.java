@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.recordcard.common.RecordCardDra
 import com.runiverse.running_service.application.recordcard.common.RecordCardUploadIssuer;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
+import com.runiverse.running_service.application.recordcard.exception.RecordCardThumbnailTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
@@ -296,6 +297,25 @@ class CreateRecordCardDraftHandlerTest {
                 .hasMessage("이미지는 100MB 이하만 업로드할 수 있습니다.");
         verifyNoInteractions(existsOwnRunningRecordPort, findRecordCardIdByRunningRecordPort,
                 generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
+    }
+
+    @Test
+    @DisplayName("작은 버전(썸네일)이 최대 크기(1MB)를 넘으면 400으로 거절하고 업로드를 시작하지 않는다 — 딱 1MB는 받는다")
+    void rejectTooLargeThumbnail() {
+        // when & then
+        long max = DataSize.ofMegabytes(1).toBytes();
+        assertThatThrownBy(() -> handler.handle(command(List.of(
+                new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, max + 1, "IMG_0001.jpg", null)), null)))
+                .isInstanceOf(RecordCardThumbnailTooLargeException.class)
+                .hasMessage("썸네일은 1MB 이하만 업로드할 수 있습니다.");
+        verifyNoInteractions(existsOwnRunningRecordPort, generateImageIdPort, generateUploadUrlPort,
+                startMultipartUploadPort, saveRecordCardDraftPort);
+
+        givenOwnRecordWithoutCard();
+        when(generateImageIdPort.generate()).thenReturn(IMAGE_ID_1);
+        assertThat(handler.handle(command(List.of(
+                new CreateRecordCardDraftCommand.Image("image/jpeg", 1L, max, "IMG_0001.jpg", null)), null))
+                .uploads()).hasSize(1);
     }
 
     @Test

@@ -94,6 +94,17 @@ class UpdateRecordCardRequestValidationTest {
     }
 
     @Test
+    @DisplayName("새 사진은 작은 버전(썸네일) 크기가 필수이고, 남길 사진에 썸네일 크기를 넣으면 섞인 항목이다")
+    void thumbnailOnlyForNewImage() {
+        assertThat(messages(images(List.of(new Image(null, "image/jpeg", 10L, null, "a.jpg", null)), null)))
+                .containsExactly("썸네일 크기는 필수입니다.");
+        assertThat(messages(images(List.of(new Image(null, "image/jpeg", 10L, 0L, "a.jpg", null)), null)))
+                .containsExactly("썸네일 크기는 1바이트 이상이어야 합니다.");
+        assertThat(messages(images(List.of(new Image(KEPT, null, null, 100L, null, null)), null)))
+                .containsExactly("사진 항목에는 기존 사진 ID와 새 사진 정보 중 하나만 넣어야 합니다.");
+    }
+
+    @Test
     @DisplayName("같은 사진을 두 번 넣을 수 없다")
     void rejectsDuplicate() {
         assertThat(messages(images(List.of(kept(KEPT, null), kept(KEPT, "다시")), null)))
