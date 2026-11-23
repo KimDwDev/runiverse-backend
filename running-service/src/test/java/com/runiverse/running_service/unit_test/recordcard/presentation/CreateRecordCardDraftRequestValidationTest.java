@@ -48,7 +48,7 @@ class CreateRecordCardDraftRequestValidationTest {
     @Test
     @DisplayName("한글·공백이 든 파일 이름과 대문자 형식은 통과한다")
     void allowsKoreanFileNameAndUpperMime() {
-        assertThat(messages(request(List.of(new Image("IMAGE/PNG", 1L, "한강 야경 01.png", null)), 0)))
+        assertThat(messages(request(List.of(new Image("IMAGE/PNG", 1L, 100L, "한강 야경 01.png", null)), 0)))
                 .isEmpty();
     }
 
@@ -115,9 +115,9 @@ class CreateRecordCardDraftRequestValidationTest {
     @Test
     @DisplayName("사진 형식·크기가 없거나 틀리면 명세 문구로 거절한다")
     void rejectBadImageFormatAndSize() {
-        assertThat(messages(request(List.of(new Image(null, null, "a.jpg", null)), null)))
+        assertThat(messages(request(List.of(new Image(null, null, 100L, "a.jpg", null)), null)))
                 .containsExactlyInAnyOrder("이미지 형식은 필수입니다.", "파일 크기는 필수입니다.");
-        assertThat(messages(request(List.of(new Image("image/gif", 0L, "a.gif", null)), null)))
+        assertThat(messages(request(List.of(new Image("image/gif", 0L, 100L, "a.gif", null)), null)))
                 .containsExactlyInAnyOrder(
                         "이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다.", "파일 크기는 1바이트 이상이어야 합니다.");
     }
@@ -127,15 +127,15 @@ class CreateRecordCardDraftRequestValidationTest {
     @ValueSource(strings = {"   "})
     @DisplayName("파일 이름이 없거나 비면 필수 문구로 거절한다")
     void rejectMissingFileName(String fileName) {
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null)))
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, fileName, null)), null)))
                 .contains("파일 이름은 필수입니다.");
     }
 
     @Test
     @DisplayName("파일 이름은 100자까지 받고 넘으면 거절한다")
     void limitFileNameLength() {
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, "a".repeat(100), null)), null))).isEmpty();
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, "a".repeat(101), null)), null)))
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, "a".repeat(100), null)), null))).isEmpty();
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, "a".repeat(101), null)), null)))
                 .containsExactly("파일 이름은 100자 이하여야 합니다.");
     }
 
@@ -144,7 +144,7 @@ class CreateRecordCardDraftRequestValidationTest {
     @DisplayName("폴더를 벗어나는 문자나, 앞뒤 공백을 지우면 . · ..만 남는 이름은 거절한다")
     void rejectUnsafeFileName(String fileName) {
         // when & then -> 앞뒤 공백을 지운 이름이 사진 key의 마지막 부분에 들어간다
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null)))
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, fileName, null)), null)))
                 .containsExactly("파일 이름에 쓸 수 없는 문자가 있습니다.");
     }
 
@@ -152,21 +152,21 @@ class CreateRecordCardDraftRequestValidationTest {
     @ValueSource(strings = {"...", ".hidden.jpg", "a..b.jpg"})
     @DisplayName("점이 섞였어도 . · ..만 아니면 받는다")
     void allowDotsInName(String fileName) {
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null))).isEmpty();
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, fileName, null)), null))).isEmpty();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"photo.jpg ", " photo.jpg", "  my photo.jpg  "})
     @DisplayName("앞뒤 공백이 있는 이름도 받는다 — 거절하지 않고 Command가 지운다")
     void allowSurroundingSpaces(String fileName) {
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, fileName, null)), null))).isEmpty();
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, fileName, null)), null))).isEmpty();
     }
 
     @Test
     @DisplayName("사진 설명은 100자까지 받고, 공백뿐이어도 거절하지 않는다")
     void captionRules() {
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, "a.jpg", "   ")), null))).isEmpty();
-        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, "a.jpg", "가".repeat(101))), null)))
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, "a.jpg", "   ")), null))).isEmpty();
+        assertThat(messages(request(List.of(new Image("image/jpeg", 1L, 100L, "a.jpg", "가".repeat(101))), null)))
                 .containsExactly("사진 설명은 100자 이하여야 합니다.");
     }
 
@@ -190,6 +190,6 @@ class CreateRecordCardDraftRequestValidationTest {
     }
 
     private static Image image(long fileSizeBytes) {
-        return new Image("image/jpeg", fileSizeBytes, "IMG_0001.jpg", null);
+        return new Image("image/jpeg", fileSizeBytes, 100L, "IMG_0001.jpg", null);
     }
 }

@@ -47,7 +47,8 @@ public class CreateRecordCardDraftHandler implements CreateRecordCardDraftUsecas
     public CreateRecordCardDraftResult handle(CreateRecordCardDraftCommand command) {
         // 1. 운영값 검사(400) — 기록을 읽기 전에 거른다. 형식·개수·글자 수는 Request DTO가 이미 봤다
         List<NewImage> newImages = command.images().stream()
-                .map(image -> new NewImage(image.mimeType(), image.fileSizeBytes(), image.fileName(), image.caption()))
+                .map(image -> new NewImage(image.mimeType(), image.fileSizeBytes(), image.thumbnailFileSizeBytes(),
+                        image.fileName(), image.caption()))
                 .toList();
         recordCardUploadIssuer.rejectTooLarge(newImages);
         RecordCardActivityType activityType = RecordCardActivityType.valueOf(command.activityType());

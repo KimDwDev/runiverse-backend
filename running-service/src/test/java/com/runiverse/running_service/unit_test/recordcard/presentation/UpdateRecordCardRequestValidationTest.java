@@ -84,9 +84,9 @@ class UpdateRecordCardRequestValidationTest {
     @Test
     @DisplayName("한 항목에 기존 사진 ID와 새 사진 정보를 함께 넣거나, 둘 다 없으면 400이다")
     void rejectsMixedKindInOneItem() {
-        Image both = new Image(KEPT, "image/jpeg", 10L, "a.jpg", null);
-        Image neither = new Image(null, null, null, null, "설명만");
-        Image partialNew = new Image(null, "image/jpeg", 10L, null, null);
+        Image both = new Image(KEPT, "image/jpeg", 10L, 100L, "a.jpg", null);
+        Image neither = new Image(null, null, null, 100L, null, "설명만");
+        Image partialNew = new Image(null, "image/jpeg", 10L, 100L, null, null);
         for (Image image : List.of(both, neither, partialNew)) {
             assertThat(messages(images(List.of(image), null)))
                     .containsExactly("사진 항목에는 기존 사진 ID와 새 사진 정보 중 하나만 넣어야 합니다.");
@@ -122,7 +122,7 @@ class UpdateRecordCardRequestValidationTest {
     @Test
     @DisplayName("새 사진은 9-1과 같은 형식·크기·이름 규칙을 따른다")
     void newImageRules() {
-        assertThat(messages(images(List.of(new Image(null, "image/gif", 0L, "../a.gif", null)), null)))
+        assertThat(messages(images(List.of(new Image(null, "image/gif", 0L, 100L, "../a.gif", null)), null)))
                 .containsExactlyInAnyOrder("이미지는 JPEG, PNG, WEBP 형식만 업로드할 수 있습니다.",
                         "파일 크기는 1바이트 이상이어야 합니다.", "파일 이름에 쓸 수 없는 문자가 있습니다.");
     }
@@ -136,10 +136,10 @@ class UpdateRecordCardRequestValidationTest {
     }
 
     private static Image kept(UUID id, String caption) {
-        return new Image(id, null, null, null, caption);
+        return new Image(id, null, null, null, null, caption);
     }
 
     private static Image added(String caption) {
-        return new Image(null, "image/jpeg", 1024L, "IMG_3001.jpg", caption);
+        return new Image(null, "image/jpeg", 1024L, 100L, "IMG_3001.jpg", caption);
     }
 }

@@ -97,7 +97,7 @@ class RecordCardDraftRedisAdapterTest {
                 UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8"),
                 UUID.fromString("01a0f2d4-6180-7000-8000-446655440015"), 501L, null, null, null,
                 List.of(new DraftImage(UUID.fromString("01a0f2d4-6180-7000-8000-44665544014f"), "k/3/new.jpg",
-                        "image/jpeg", 1024L, "결승선", UploadType.SINGLE, null, null, false)),
+                        "image/jpeg", 1024L, "결승선", UploadType.SINGLE, null, null, false, 100L)),
                 null, false,
                 new RecordCardDraft.EditPlan("새 회고", null, RecordCardVisibility.PRIVATE, List.of(
                         new RecordCardDraft.EditPlan.Slot(UUID.fromString("01a0f2d4-6180-7000-8000-44665544012d"),
@@ -234,9 +234,9 @@ class RecordCardDraftRedisAdapterTest {
         return new RecordCardDraft(DRAFT_ID, RecordCardDraft.DraftType.CREATE, cardId, userId, 501L, RecordCardActivityType.TRAVEL,
                 "바람이 좋았다", RecordCardVisibility.FRIENDS, List.of(
                 new DraftImage(UUID.fromString("01a0f2d4-6180-7000-8000-44665544012d"), "k/1/image.jpg",
-                        "image/jpeg", 204800L, "노을", UploadType.SINGLE, null, null, false),
+                        "image/jpeg", 204800L, "노을", UploadType.SINGLE, null, null, false, 100L),
                 new DraftImage(UUID.fromString("01a0f2d4-6180-7000-8000-44665544013e"), "k/2/image.png",
-                        "image/png", 20_971_521L, null, UploadType.MULTIPART, "s3-upload-id", 3, false)),
+                        "image/png", 20_971_521L, null, UploadType.MULTIPART, "s3-upload-id", 3, false, 100L)),
                 1, false);
     }
 }

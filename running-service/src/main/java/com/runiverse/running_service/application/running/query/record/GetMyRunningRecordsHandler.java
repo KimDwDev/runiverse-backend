@@ -1,5 +1,6 @@
 package com.runiverse.running_service.application.running.query.record;
 
+import com.runiverse.running_service.application.recordcard.common.RecordCardStorageKeys;
 import com.runiverse.running_service.application.recordcard.common.RouteArtConverter;
 import com.runiverse.running_service.application.recordcard.port.out.GenerateRecordCardViewUrlPort;
 import com.runiverse.running_service.application.running.port.in.GetMyRunningRecordsUsecase;
@@ -64,15 +65,16 @@ public class GetMyRunningRecordsHandler implements GetMyRunningRecordsUsecase {
                 recordCardOf(row, segments));
     }
 
-    // 사진이 있으면 썸네일, 없으면 선 아트 — 내 기록이라 공개 범위를 보지 않는다(비공개 카드도 싣는다)
+    // 사진이 있으면 대표 사진의 작은 버전(썸네일), 없으면 선 아트 — 내 기록이라 공개 범위를 보지 않는다(비공개 카드도 싣는다)
     private GetMyRunningRecordsResult.RecordCard recordCardOf(RunningRecordRow row,
                                                               Map<Long, List<String>> segments) {
         if (row.recordCardId() == null) {
             return null;
         }
         if (row.thumbnailImageKey() != null) {
+            String thumbnailKey = RecordCardStorageKeys.thumbnailKeyOf(row.thumbnailImageKey());
             return new GetMyRunningRecordsResult.RecordCard(row.recordCardId(),
-                    generateRecordCardViewUrlPort.imageUrl(row.thumbnailImageKey()), null);
+                    generateRecordCardViewUrlPort.imageUrl(thumbnailKey), null);
         }
         return new GetMyRunningRecordsResult.RecordCard(row.recordCardId(), null,
                 RouteArtConverter.convert(segments.getOrDefault(row.runningRecordId(), List.of()),

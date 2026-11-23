@@ -384,6 +384,7 @@ public class GlobalExceptionHandler {
     private HttpStatus toStatus(RecordCardErrorCode code) {
         return switch (code) {
             case RECORD_CARD_IMAGE_TOO_LARGE,
+                 RECORD_CARD_THUMBNAIL_TOO_LARGE,
                  RECORD_CARD_THUMBNAIL_OUT_OF_RANGE,
                  RECORD_CARD_IMAGE_NOT_UPLOADED,
                  INVALID_RECORD_CARD_IMAGE -> HttpStatus.BAD_REQUEST;

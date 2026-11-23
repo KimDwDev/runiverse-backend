@@ -79,7 +79,7 @@ class UpdateRecordCardHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new UpdateRecordCardHandler(new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100),
+        handler = new UpdateRecordCardHandler(new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(1),
                 DataSize.ofMegabytes(10), Duration.ofSeconds(30)), recordCardEditor, recordCardUploadIssuer,
                 generateRecordCardDraftIdPort, saveRecordCardDraftPort, getRecordCardDetailUsecase);
     }
@@ -124,9 +124,10 @@ class UpdateRecordCardHandlerTest {
         when(recordCardEditor.checkBeforeDraft(USER_ID, CARD_ID, List.of(new ImageSlot.Keep(KEPT, "노을"))))
                 .thenReturn(Optional.of(7L));
         DraftImage draftImage = new DraftImage(ISSUED, "record-cards/u/c/i/IMG_3001.jpg", "image/jpeg", 1024L,
-                "결승선", UploadType.SINGLE, null, null, false);
-        Upload upload = new Upload.Single(ISSUED, draftImage.imageKey(), "https://upload");
-        NewImage newImage = new NewImage("image/jpeg", 1024L, "IMG_3001.jpg", "결승선");
+                "결승선", UploadType.SINGLE, null, null, false, 100L);
+        Upload upload = new Upload.Single(ISSUED, draftImage.imageKey(), "https://upload",
+                new Upload.Thumbnail("record-cards/u/c/i/thumbnail/IMG_3001.jpg", "https://thumb"));
+        NewImage newImage = new NewImage("image/jpeg", 1024L, 100L, "IMG_3001.jpg", "결승선");
         when(recordCardUploadIssuer.issue(USER_ID, CARD_ID, newImage)).thenReturn(new Issued(draftImage, upload));
         when(generateRecordCardDraftIdPort.generate()).thenReturn(DRAFT_ID);
         when(getRecordCardDetailUsecase.handle(new GetRecordCardDetailQuery(USER_ID, CARD_ID))).thenReturn(detail);
@@ -177,10 +178,10 @@ class UpdateRecordCardHandlerTest {
     }
 
     private static Image kept(UUID id, String caption) {
-        return new Image(id, null, null, null, caption);
+        return new Image(id, null, null, null, null, caption);
     }
 
     private static Image added(String caption) {
-        return new Image(null, "image/jpeg", 1024L, " IMG_3001.jpg ", caption);
+        return new Image(null, "image/jpeg", 1024L, 100L, " IMG_3001.jpg ", caption);
     }
 }

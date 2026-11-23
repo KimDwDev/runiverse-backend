@@ -129,10 +129,12 @@ class RecordCardControllerTest {
         // given
         given(createRecordCardDraftUsecase.handle(any())).willReturn(new CreateRecordCardDraftResult(
                 DRAFT_ID, LocalDateTime.of(2026, 11, 13, 21, 40), List.of(
-                new Upload.Single(IMAGE_ID_1, "record-cards/u/c/i1/IMG_2034.jpg", "https://single"),
+                new Upload.Single(IMAGE_ID_1, "record-cards/u/c/i1/IMG_2034.jpg", "https://single",
+                        new Upload.Thumbnail("record-cards/u/c/i1/thumbnail/IMG_2034.jpg", "https://thumb1")),
                 new Upload.Multipart(IMAGE_ID_2, "record-cards/u/c/i2/한강 야경.png", 10_485_760L, List.of(
                         new MultipartUpload.Part(1, "https://p1"),
-                        new MultipartUpload.Part(2, "https://p2"))))));
+                        new MultipartUpload.Part(2, "https://p2")),
+                        new Upload.Thumbnail("record-cards/u/c/i2/thumbnail/한강 야경.png", "https://thumb2")))));
 
         // when
         MvcResult result = mockMvc.perform(post("/record-cards")
@@ -140,9 +142,10 @@ class RecordCardControllerTest {
                         .content("""
                                 {"runningRecordId":501,"activityType":"DAILY","memo":"바람이 좋았다",
                                  "visibility":"PUBLIC","thumbnailIndex":1,"images":[
-                                  {"mimeType":"image/jpeg","fileSizeBytes":204800,"fileName":"IMG_2034.jpg",
-                                   "caption":"노을"},
-                                  {"mimeType":"image/png","fileSizeBytes":20971520,"fileName":"한강 야경.png"}]}
+                                  {"mimeType":"image/jpeg","fileSizeBytes":204800,"thumbnailFileSizeBytes":100,
+                                   "fileName":"IMG_2034.jpg","caption":"노을"},
+                                  {"mimeType":"image/png","fileSizeBytes":20971520,"thumbnailFileSizeBytes":100,
+                                   "fileName":"한강 야경.png"}]}
                                 """))
                 .andReturn();
 
@@ -153,8 +156,8 @@ class RecordCardControllerTest {
         verify(createRecordCardDraftUsecase).handle(command.capture());
         assertThat(command.getValue()).isEqualTo(new CreateRecordCardDraftCommand(USER_ID, 501L, "DAILY",
                 "바람이 좋았다", "PUBLIC", List.of(
-                new CreateRecordCardDraftCommand.Image("image/jpeg", 204800L, "IMG_2034.jpg", "노을"),
-                new CreateRecordCardDraftCommand.Image("image/png", 20971520L, "한강 야경.png", null)), 1));
+                new CreateRecordCardDraftCommand.Image("image/jpeg", 204800L, 100L, "IMG_2034.jpg", "노을"),
+                new CreateRecordCardDraftCommand.Image("image/png", 20971520L, 100L, "한강 야경.png", null)), 1));
 
         Map<String, Object> body = body(result);
         assertThat(body.keySet()).containsExactly("recordCardDraftId", "expiresAt", "uploads");
@@ -162,10 +165,12 @@ class RecordCardControllerTest {
                 .containsEntry("expiresAt", "2026-11-13T21:40:00");
         // 올리는 방식과 상관없이 키는 모두 내려가고, 해당 없는 값은 null이다
         assertThat(body.get("uploads")).isEqualTo(List.of(
-                upload(IMAGE_ID_1, "record-cards/u/c/i1/IMG_2034.jpg", "SINGLE", "https://single", null, null),
+                upload(IMAGE_ID_1, "record-cards/u/c/i1/IMG_2034.jpg", "SINGLE", "https://single", null, null,
+                        "record-cards/u/c/i1/thumbnail/IMG_2034.jpg", "https://thumb1"),
                 upload(IMAGE_ID_2, "record-cards/u/c/i2/한강 야경.png", "MULTIPART", null, 10_485_760, List.of(
                         Map.of("partNumber", 1, "uploadUrl", "https://p1"),
-                        Map.of("partNumber", 2, "uploadUrl", "https://p2")))));
+                        Map.of("partNumber", 2, "uploadUrl", "https://p2")),
+                        "record-cards/u/c/i2/thumbnail/한강 야경.png", "https://thumb2")));
     }
 
     @Test
@@ -201,7 +206,8 @@ class RecordCardControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"runningRecordId":501,"activityType":"DAILY","memo":"글","visibility":"PUBLIC",
-                                 "images":[{"mimeType":"image/jpeg","fileSizeBytes":1,"fileName":"../a.jpg"}]}
+                                 "images":[{"mimeType":"image/jpeg","fileSizeBytes":1,"thumbnailFileSizeBytes":1,
+                                            "fileName":"../a.jpg"}]}
                                 """))
                 .andReturn();
 
@@ -472,7 +478,7 @@ class RecordCardControllerTest {
         // then
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         verify(updateRecordCardUsecase).handle(new UpdateRecordCardCommand(USER_ID, cardId, "새 회고", null, "PRIVATE",
-                List.of(new UpdateRecordCardCommand.Image(IMAGE_ID_1, null, null, null, "노을")), 0));
+                List.of(new UpdateRecordCardCommand.Image(IMAGE_ID_1, null, null, null, null, "노을")), 0));
         Map<String, Object> body = body(result);
         assertThat(body).containsKey("draft").containsEntry("draft", null);
         assertThat((Map<String, Object>) body.get("recordCard")).containsEntry("recordCardId", cardId.toString());
@@ -486,13 +492,16 @@ class RecordCardControllerTest {
         UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
         given(updateRecordCardUsecase.handle(any())).willReturn(new UpdateRecordCardResult(detailResult(cardId),
                 new CreateRecordCardDraftResult(DRAFT_ID, LocalDateTime.of(2026, 11, 23, 21, 40), List.of(
-                        new Upload.Single(IMAGE_ID_2, "record-cards/u/c/i2/IMG_3001.jpg", "https://single")))));
+                        new Upload.Single(IMAGE_ID_2, "record-cards/u/c/i2/IMG_3001.jpg", "https://single",
+                                new Upload.Thumbnail("record-cards/u/c/i2/thumbnail/IMG_3001.jpg",
+                                        "https://thumb"))))));
 
         // when
         MvcResult result = mockMvc.perform(patch("/record-cards/{id}", cardId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"images":[{"mimeType":"image/jpeg","fileSizeBytes":1024,"fileName":"IMG_3001.jpg"}]}
+                                {"images":[{"mimeType":"image/jpeg","fileSizeBytes":1024,"thumbnailFileSizeBytes":100,
+                                            "fileName":"IMG_3001.jpg"}]}
                                 """))
                 .andReturn();
 
@@ -548,7 +557,7 @@ class RecordCardControllerTest {
 
     // null 값을 담아야 해서 Map.of 대신 HashMap을 쓴다
     private static Map<String, Object> upload(UUID id, String key, String type, String url, Integer partSize,
-                                              List<?> parts) {
+                                              List<?> parts, String thumbnailKey, String thumbnailUrl) {
         Map<String, Object> upload = new HashMap<>();
         upload.put("recordCardImageId", id.toString());
         upload.put("imageKey", key);
@@ -556,6 +565,8 @@ class RecordCardControllerTest {
         upload.put("uploadUrl", url);
         upload.put("partSizeBytes", partSize);
         upload.put("parts", parts);
+        upload.put("thumbnailImageKey", thumbnailKey);
+        upload.put("thumbnailUploadUrl", thumbnailUrl);
         return upload;
     }
 }
