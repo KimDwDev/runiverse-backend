@@ -59,10 +59,11 @@ class UpdateRecordCardRequestValidationTest {
     }
 
     @Test
-    @DisplayName("회고 글은 500자를 넘을 수 없다")
+    @DisplayName("회고 글은 1000자를 넘을 수 없다")
     void rejectsLongMemo() {
-        assertThat(messages(new UpdateRecordCardRequest("가".repeat(501), null, null, null, null)))
-                .containsExactly("회고 글은 500자 이하여야 합니다.");
+        assertThat(messages(new UpdateRecordCardRequest("가".repeat(1001), null, null, null, null)))
+                .containsExactly("회고 글은 1000자 이하여야 합니다.");
+        assertThat(messages(new UpdateRecordCardRequest("가".repeat(1000), null, null, null, null))).isEmpty();
     }
 
     @Test

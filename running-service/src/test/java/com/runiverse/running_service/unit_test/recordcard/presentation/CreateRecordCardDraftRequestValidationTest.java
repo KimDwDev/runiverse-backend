@@ -86,13 +86,13 @@ class CreateRecordCardDraftRequestValidationTest {
     }
 
     @Test
-    @DisplayName("회고 글이 공백뿐이면 필수, 500자를 넘으면 길이 문구로 거절한다")
+    @DisplayName("회고 글이 공백뿐이면 필수, 1000자를 넘으면 길이 문구로 거절한다")
     void rejectBadMemo() {
         assertThat(messages(new CreateRecordCardDraftRequest(1L, "DAILY", "   ", "PUBLIC", null, null)))
                 .containsExactly("회고 글은 필수입니다.");
-        assertThat(messages(new CreateRecordCardDraftRequest(1L, "DAILY", "가".repeat(501), "PUBLIC", null, null)))
-                .containsExactly("회고 글은 500자 이하여야 합니다.");
-        assertThat(messages(new CreateRecordCardDraftRequest(1L, "DAILY", "가".repeat(500), "PUBLIC", null, null)))
+        assertThat(messages(new CreateRecordCardDraftRequest(1L, "DAILY", "가".repeat(1001), "PUBLIC", null, null)))
+                .containsExactly("회고 글은 1000자 이하여야 합니다.");
+        assertThat(messages(new CreateRecordCardDraftRequest(1L, "DAILY", "가".repeat(1000), "PUBLIC", null, null)))
                 .isEmpty();
     }
 
