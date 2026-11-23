@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.recordcard.port.out.LoadRunning
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
+import com.runiverse.running_service.application.recordcard.port.out.SaveRecordCardMusicPort;
 import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.UpdateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
@@ -39,7 +40,7 @@ import java.util.UUID;
 public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, LockOwnRunningRecordPort,
         FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort, LoadRunningSummaryPort,
         LoadRecordCardDetailPort, LoadRecordCardForUpdatePort, SnapshotRecordCardPort, DeleteRecordCardPort,
-        UpdateRecordCardPort, LoadLastRecordCardHistoryPort {
+        UpdateRecordCardPort, LoadLastRecordCardHistoryPort, SaveRecordCardMusicPort {
 
     // 기록마다 같은 수치를 돌려준다 — 요약 값 자체는 어댑터 단위 테스트와 E2E가 본다
     public static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
@@ -58,6 +59,7 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     // 남긴 이력 — 카드 ID와 이유, 그때의 회고 글·사진 수만 본다(전체 값 매핑은 어댑터 단위 테스트가 본다)
     private final List<Snapshot> snapshots = new ArrayList<>();
     private int updateCount;
+    private int musicSaveCount;
 
     public record Snapshot(UUID recordCardId, RecordCardSnapshotReason reason, String memo, int imageCount) {
 
@@ -156,6 +158,13 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
         updateCount++;
     }
 
+    // 음악 상태·key만 저장한 것으로 친다 — 페이크는 카드 전체를 사본으로 바꿔 둔다(글·사진 구성은 손대지 않은 값이다)
+    @Override
+    public void saveMusic(RecordCard recordCard) {
+        cardsByRecord.put(recordCard.getRunningRecordId().value(), copy(recordCard));
+        musicSaveCount++;
+    }
+
     // 저장된(아직 고치기 전) 카드를 남긴다 — 실제 어댑터처럼 저장보다 먼저 불려야 직전 모습이다.
     // 페이크는 도메인 객체를 그대로 들고 있어, 수정 계산 전에 남긴 값과 비교하려면 storedSnapshots를 쓴다
     @Override
@@ -211,6 +220,10 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     // 아래는 준비·검증 전용
     public int updateCount() {
         return updateCount;
+    }
+
+    public int musicSaveCount() {
+        return musicSaveCount;
     }
 
     public List<Snapshot> snapshots() {
