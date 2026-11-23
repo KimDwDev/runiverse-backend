@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.recordcard.port.out.RecordCardM
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
 import com.runiverse.running_service.domain.recordcard.RecordCard.ImageDraft;
+import com.runiverse.running_service.domain.recordcard.RecordCard.ImageSlot;
 import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardActivityType;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardVisibility;
@@ -88,6 +89,66 @@ class RecordCardMusicRequestTest {
         // then
         assertThat(request.photos()).hasSize(1);
         assertThatThrownBy(() -> request.photos().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    @DisplayName("수정 요청은 도메인이 정한 사진(설명이 바뀐 사진·새 사진)만 싣는다 — 설명이 그대로인 사진은 싣지 않는다")
+    void forEditCarriesOnlyRegeneratedImages() {
+        // given — 사진 둘, 첫 사진 설명만 바꾸고 새 사진 하나를 넣는다
+        RecordCard card = card(List.of(new ImageDraft(IMAGE_ID_1, "k1", "옛 설명"), new ImageDraft(IMAGE_ID_2, "k2", null)));
+        UUID added = UUID.fromString("01a0f2d4-6180-7000-8000-44665544014f");
+        RecordCard.Edit edit = card.edit(null, null, null, List.of(
+                new ImageSlot.Keep(IMAGE_ID_1, "새 설명"), new ImageSlot.Keep(IMAGE_ID_2, null),
+                new ImageSlot.Add(new ImageDraft(added, "k3", "새 사진"))), null);
+
+        // when
+        RecordCardMusicRequest request = RecordCardMusicRequest.forEdit(card, edit, SUMMARY);
+
+        // then
+        assertThat(request.photos()).containsExactly(
+                new Photo(IMAGE_ID_1, "k1", "새 설명"), new Photo(added, "k3", "새 사진"));
+        assertThat(request.recordCardId()).isEqualTo(CARD_ID);
+    }
+
+    @Test
+    @DisplayName("회고 글만 바뀐 수정 요청은 사진 없이 기본곡만 싣는다")
+    void forEditMemoOnly() {
+        // given
+        RecordCard card = card(List.of(new ImageDraft(IMAGE_ID_1, "k1", null)));
+        RecordCard.Edit edit = card.edit("새 회고", null, null, null, null);
+
+        // when
+        RecordCardMusicRequest request = RecordCardMusicRequest.forEdit(card, edit, SUMMARY);
+
+        // then
+        assertThat(request.photos()).isEmpty();
+        assertThat(request.memo()).isEqualTo("새 회고");
+    }
+
+    @Test
+    @DisplayName("재료가 그대로인 수정으로는 요청을 만들 수 없다 — 잘 만든 기본곡을 다시 만들게 하지 않는다")
+    void forEditRejectsNoIngredientChange() {
+        // given — 순서만 바꾼다
+        RecordCard card = card(List.of(new ImageDraft(IMAGE_ID_1, "k1", null), new ImageDraft(IMAGE_ID_2, "k2", null)));
+        RecordCard.Edit edit = card.edit(null, null, null,
+                List.of(new ImageSlot.Keep(IMAGE_ID_2, null), new ImageSlot.Keep(IMAGE_ID_1, null)), null);
+
+        // when & then
+        assertThatThrownBy(() -> RecordCardMusicRequest.forEdit(card, edit, SUMMARY))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("카드에 없거나 생성 중이 아닌 사진이 섞이면 요청을 만들 수 없다")
+    void forEditRejectsForeignImages() {
+        // given — 다른 카드의 수정 결과를 섞는다
+        RecordCard card = card(List.of(new ImageDraft(IMAGE_ID_1, "k1", null)));
+        RecordCard other = card(List.of(new ImageDraft(IMAGE_ID_2, "k2", "옛")));
+        RecordCard.Edit foreign = other.edit(null, null, null, List.of(new ImageSlot.Keep(IMAGE_ID_2, "새")), null);
+
+        // when & then
+        assertThatThrownBy(() -> RecordCardMusicRequest.forEdit(card, foreign, SUMMARY))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static RecordCard card(List<ImageDraft> drafts) {

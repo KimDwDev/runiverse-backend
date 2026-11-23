@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.recordcard.command.createdraft.
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
+import com.runiverse.running_service.application.recordcard.common.RecordCardUploadIssuer;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
@@ -57,16 +58,15 @@ class CreateRecordCardDraftIntegrationTest {
         imageIds = new FakeImageIdGenerator();
         uploadUrls = new FakeUploadUrlGenerator();
         multipartUploads = new FakeMultipartUploadStarter();
+        RecordCardDraftProperties properties = new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100),
+                DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         handler = new CreateRecordCardDraftHandler(
-                new RecordCardDraftProperties(TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10),
-                        Duration.ofSeconds(30)),
+                properties,
                 recordCardStore,    // ExistsOwnRunningRecordPort
                 recordCardStore,    // FindRecordCardIdByRunningRecordPort
                 draftIds,           // GenerateRecordCardDraftIdPort
                 cardIds,            // GenerateRecordCardIdPort
-                imageIds,           // GenerateImageIdPort
-                uploadUrls,         // GenerateUploadUrlPort
-                multipartUploads,   // StartMultipartUploadPort
+                new RecordCardUploadIssuer(properties, imageIds, uploadUrls, multipartUploads),
                 draftStore          // SaveRecordCardDraftPort
         );
         recordCardStore.addRecord(RECORD_ID, userId);

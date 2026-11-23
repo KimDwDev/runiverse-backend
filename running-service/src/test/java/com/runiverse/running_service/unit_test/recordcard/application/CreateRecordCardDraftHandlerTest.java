@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.recordcard.command.createdraft.
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
+import com.runiverse.running_service.application.recordcard.common.RecordCardUploadIssuer;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
@@ -92,7 +93,9 @@ class CreateRecordCardDraftHandlerTest {
                 TTL, DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), Duration.ofSeconds(30));
         handler = new CreateRecordCardDraftHandler(properties, existsOwnRunningRecordPort,
                 findRecordCardIdByRunningRecordPort, generateRecordCardDraftIdPort, generateRecordCardIdPort,
-                generateImageIdPort, generateUploadUrlPort, startMultipartUploadPort, saveRecordCardDraftPort);
+                new RecordCardUploadIssuer(properties, generateImageIdPort, generateUploadUrlPort,
+                        startMultipartUploadPort),
+                saveRecordCardDraftPort);
     }
 
     @Test

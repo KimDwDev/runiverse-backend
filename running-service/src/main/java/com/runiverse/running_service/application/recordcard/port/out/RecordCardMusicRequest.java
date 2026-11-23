@@ -54,6 +54,30 @@ public record RecordCardMusicRequest(
                 recordCard.getImages().stream().map(RecordCardMusicRequest::photoOf).toList());
     }
 
+    // 수정(9-3)이 보내는 요청 — 다시 만들 음악은 도메인(RecordCard.Edit)이 정한 것뿐이다. 카드의 사진 전체를 받는 경로가 없다.
+    // 재료가 바뀌지 않았으면 만들 수 없다 — AI 서버가 요청마다 기본곡을 다시 만들어, 잘못 보내면 잘 만든 곡이 바뀐다
+    public static RecordCardMusicRequest forEdit(RecordCard recordCard, RecordCard.Edit edit,
+                                                 RunningSummary runningSummary) {
+        if (!edit.needsMusic()) {
+            throw new IllegalArgumentException("음악 재료가 바뀌지 않은 수정으로는 음악을 요청할 수 없다");
+        }
+        // 보낼 사진은 지금 카드에 있고 생성 중이어야 한다 — 뺀 사진·끝난 음악이 섞이면 잘못 고른 것이다
+        for (RecordCardImage image : edit.imagesToRegenerate()) {
+            boolean inCard = recordCard.getImages().stream()
+                    .anyMatch(cardImage -> cardImage.getRecordCardImageId().equals(image.getRecordCardImageId()));
+            if (!inCard || !image.getMusicStatus().isGenerating()) {
+                throw new IllegalArgumentException("다시 만들 사진은 카드에 있고 생성 중이어야 한다");
+            }
+        }
+        return new RecordCardMusicRequest(
+                recordCard.getUserId().value(),
+                recordCard.getRecordCardId().value(),
+                recordCard.getMemo().value(),
+                recordCard.getActivityType(),
+                runningSummary,
+                edit.imagesToRegenerate().stream().map(RecordCardMusicRequest::photoOf).toList());
+    }
+
     private static Photo photoOf(RecordCardImage image) {
         return new Photo(image.getRecordCardImageId().value(), image.getImageKey().value(),
                 image.getCaption().map(RecordCardImageCaption::value).orElse(null));

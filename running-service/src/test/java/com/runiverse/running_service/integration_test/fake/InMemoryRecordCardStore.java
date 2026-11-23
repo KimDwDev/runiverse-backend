@@ -1,17 +1,24 @@
 package com.runiverse.running_service.integration_test.fake;
 
 import com.runiverse.running_service.application.recordcard.port.out.CreateRecordCardPort;
+import com.runiverse.running_service.application.recordcard.port.out.DeleteRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.ExistsOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.FindRecordCardIdByRunningRecordPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadLastRecordCardHistoryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadMaxDisplayOrderPort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardDetailPort;
+import com.runiverse.running_service.application.recordcard.port.out.LoadRecordCardForUpdatePort;
 import com.runiverse.running_service.application.recordcard.port.out.LoadRunningSummaryPort;
 import com.runiverse.running_service.application.recordcard.port.out.LockOwnRunningRecordPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardDetail;
+import com.runiverse.running_service.application.recordcard.port.out.RecordCardSnapshotReason;
+import com.runiverse.running_service.application.recordcard.port.out.SnapshotRecordCardPort;
+import com.runiverse.running_service.application.recordcard.port.out.UpdateRecordCardPort;
 import com.runiverse.running_service.application.recordcard.port.out.RecordCardMusicRequest.RunningSummary;
 import com.runiverse.running_service.domain.common.vo.RunningRecordId;
 import com.runiverse.running_service.domain.common.vo.UserId;
 import com.runiverse.running_service.domain.recordcard.RecordCard;
+import com.runiverse.running_service.domain.recordcard.RecordCardImage;
 import com.runiverse.running_service.domain.recordcard.vo.DisplayOrder;
 import com.runiverse.running_service.domain.recordcard.vo.MusicKey;
 import com.runiverse.running_service.domain.recordcard.vo.RecordCardId;
@@ -20,6 +27,7 @@ import com.runiverse.running_service.domain.recordcard.vo.RecordCardImageKey;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +38,8 @@ import java.util.UUID;
 // 잠금은 흉내 내지 않는다(한 스레드라 줄 설 일이 없다)
 public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, LockOwnRunningRecordPort,
         FindRecordCardIdByRunningRecordPort, LoadMaxDisplayOrderPort, CreateRecordCardPort, LoadRunningSummaryPort,
-        LoadRecordCardDetailPort {
+        LoadRecordCardDetailPort, LoadRecordCardForUpdatePort, SnapshotRecordCardPort, DeleteRecordCardPort,
+        UpdateRecordCardPort, LoadLastRecordCardHistoryPort {
 
     // 기록마다 같은 수치를 돌려준다 — 요약 값 자체는 어댑터 단위 테스트와 E2E가 본다
     public static final RunningSummary SUMMARY = new RunningSummary(5000, 1800, 360, 168,
@@ -46,6 +55,13 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
     private final Map<Long, UUID> foreignCardIdsByRecord = new HashMap<>();
     private final Map<Long, List<String>> segmentPolylinesByRecord = new HashMap<>();
     private boolean staleMaxOnce;
+    // 남긴 이력 — 카드 ID와 이유, 그때의 회고 글·사진 수만 본다(전체 값 매핑은 어댑터 단위 테스트가 본다)
+    private final List<Snapshot> snapshots = new ArrayList<>();
+    private int updateCount;
+
+    public record Snapshot(UUID recordCardId, RecordCardSnapshotReason reason, String memo, int imageCount) {
+
+    }
 
     @Override
     public boolean existsOwnedBy(RunningRecordId runningRecordId, UserId userId) {
@@ -97,7 +113,7 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
         if (orderTaken) {
             return CreateResult.DISPLAY_ORDER_TAKEN;
         }
-        cardsByRecord.put(recordId, recordCard);
+        cardsByRecord.put(recordId, copy(recordCard));
         return CreateResult.CREATED;
     }
 
@@ -126,7 +142,81 @@ public class InMemoryRecordCardStore implements ExistsOwnRunningRecordPort, Lock
                 CREATED_AT, CREATED_AT);
     }
 
+    // 잠금은 흉내 내지 않는다 — 한 스레드라 줄 설 일이 없다.
+    // DB처럼 저장된 값의 사본을 준다 — 도메인에서 고친 값은 update를 불러야 저장된다
+    @Override
+    public Optional<RecordCard> loadForUpdate(RecordCardId recordCardId) {
+        return stored(recordCardId).map(InMemoryRecordCardStore::copy);
+    }
+
+    @Override
+    public void update(RecordCard recordCard) {
+        long recordId = recordCard.getRunningRecordId().value();
+        cardsByRecord.put(recordId, copy(recordCard));
+        updateCount++;
+    }
+
+    // 저장된(아직 고치기 전) 카드를 남긴다 — 실제 어댑터처럼 저장보다 먼저 불려야 직전 모습이다.
+    // 페이크는 도메인 객체를 그대로 들고 있어, 수정 계산 전에 남긴 값과 비교하려면 storedSnapshots를 쓴다
+    @Override
+    public void snapshot(RecordCardId recordCardId, RecordCardSnapshotReason reason) {
+        RecordCard stored = stored(recordCardId).orElseThrow();
+        snapshots.add(new Snapshot(recordCardId.value(), reason, stored.getMemo().value(), stored.getImages().size()));
+    }
+
+    // 이력 ID는 남긴 순서(1부터) — 실제 IDENTITY처럼 나중에 남긴 이력이 크다
+    @Override
+    public Optional<Long> loadLastId(RecordCardId recordCardId) {
+        for (int i = snapshots.size() - 1; i >= 0; i--) {
+            if (snapshots.get(i).recordCardId().equals(recordCardId.value())) {
+                return Optional.of((long) i + 1);
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public void delete(RecordCardId recordCardId) {
+        cardsByRecord.values().removeIf(card -> card.getRecordCardId().equals(recordCardId));
+    }
+
+    private Optional<RecordCard> stored(RecordCardId recordCardId) {
+        return cardsByRecord.values().stream()
+                .filter(card -> card.getRecordCardId().equals(recordCardId))
+                .findFirst();
+    }
+
+    // 저장 값 사본 — 꺼내 간 도메인 객체를 고쳐도 저장된 값이 바뀌지 않게 한다
+    private static RecordCard copy(RecordCard card) {
+        return RecordCard.restore(card.getRecordCardId().value())
+                .runningRecordId(card.getRunningRecordId().value())
+                .userId(card.getUserId().value())
+                .visibility(card.getVisibility())
+                .activityType(card.getActivityType())
+                .baseMusicStatus(card.getBaseMusicStatus())
+                .memo(card.getMemo().value())
+                .displayOrder(card.getDisplayOrder().value())
+                .thumbnailImageKey(card.getThumbnailImageKey().map(RecordCardImageKey::value).orElse(null))
+                .baseMusicKey(card.getBaseMusicKey().map(MusicKey::value).orElse(null))
+                .images(card.getImages().stream()
+                        .map(image -> RecordCardImage.restore(image.getRecordCardImageId().value(),
+                                image.getImageKey().value(),
+                                image.getCaption().map(RecordCardImageCaption::value).orElse(null),
+                                image.getMusicKey().map(MusicKey::value).orElse(null), image.getMusicStatus(),
+                                image.getSortOrder()))
+                        .toList())
+                .build();
+    }
+
     // 아래는 준비·검증 전용
+    public int updateCount() {
+        return updateCount;
+    }
+
+    public List<Snapshot> snapshots() {
+        return List.copyOf(snapshots);
+    }
+
     public void addSegments(long runningRecordId, List<String> segmentPolylines) {
         segmentPolylinesByRecord.put(runningRecordId, List.copyOf(segmentPolylines));
     }

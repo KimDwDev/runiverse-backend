@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftHandler;
 import com.runiverse.running_service.application.recordcard.command.completedraft.CompleteRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardDraftSaver;
+import com.runiverse.running_service.application.recordcard.command.completedraft.RecordCardEditDraftSaver;
 import com.runiverse.running_service.application.recordcard.common.RecordCardDraftProperties;
 import com.runiverse.running_service.application.recordcard.exception.InvalidRecordCardImageException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardDraftInProgressException;
@@ -73,6 +74,8 @@ class CompleteRecordCardDraftHandlerTest {
     private CompleteMultipartUploadPort completeMultipartUploadPort;
     @Mock
     private RecordCardDraftSaver recordCardDraftSaver;
+    @Mock
+    private RecordCardEditDraftSaver recordCardEditDraftSaver;
 
     private CompleteRecordCardDraftHandler handler;
 
@@ -81,7 +84,8 @@ class CompleteRecordCardDraftHandlerTest {
         RecordCardDraftProperties properties = new RecordCardDraftProperties(Duration.ofMinutes(30),
                 DataSize.ofMegabytes(100), DataSize.ofMegabytes(10), LOCK_TTL);
         handler = new CompleteRecordCardDraftHandler(properties, loadRecordCardDraftPort, lockRecordCardDraftPort,
-                updateRecordCardDraftPort, loadRecordCardImagePort, completeMultipartUploadPort, recordCardDraftSaver);
+                updateRecordCardDraftPort, loadRecordCardImagePort, completeMultipartUploadPort, recordCardDraftSaver,
+                recordCardEditDraftSaver);
     }
 
     @Test
@@ -105,6 +109,31 @@ class CompleteRecordCardDraftHandlerTest {
         order.verify(recordCardDraftSaver).save(draft);
         order.verify(updateRecordCardDraftPort).update(draft.confirm());
         order.verify(lockRecordCardDraftPort).unlock(DRAFT_ID, TOKEN);
+    }
+
+    @Test
+    @DisplayName("수정 초안은 같은 확인을 거친 뒤 수정 저장으로 보낸다 — 작성 저장은 부르지 않는다")
+    void completeEditDraft() {
+        // given
+        RecordCardDraft created = draft(singleImage(IMAGE_ID_1, "k/1/a.jpg"));
+        RecordCardDraft draft = new RecordCardDraft(DRAFT_ID, DraftType.UPDATE, CARD_ID, USER_ID, 501L, null, null,
+                null, created.images(), null, false,
+                new RecordCardDraft.EditPlan(null, null, null,
+                        List.of(new RecordCardDraft.EditPlan.Slot(IMAGE_ID_1, null, true)), null, null));
+        givenDraft(draft);
+        givenLocked();
+        given(loadRecordCardImagePort.load("k/1/a.jpg")).willReturn(Optional.of(new UploadedImage(10L, "image/jpeg")));
+
+        // when
+        CompleteRecordCardDraftResult result = handler.handle(command());
+
+        // then
+        assertThat(result.recordCardId()).isEqualTo(CARD_ID);
+        InOrder order = inOrder(loadRecordCardImagePort, recordCardEditDraftSaver, updateRecordCardDraftPort);
+        order.verify(loadRecordCardImagePort).load("k/1/a.jpg");
+        order.verify(recordCardEditDraftSaver).save(draft);
+        order.verify(updateRecordCardDraftPort).update(draft.confirm());
+        verifyNoInteractions(recordCardDraftSaver);
     }
 
     @Test

@@ -6,6 +6,9 @@ import com.runiverse.running_service.application.recordcard.command.completedraf
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftCommand;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult;
 import com.runiverse.running_service.application.recordcard.command.createdraft.CreateRecordCardDraftResult.Upload;
+import com.runiverse.running_service.application.recordcard.command.delete.DeleteRecordCardCommand;
+import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardCommand;
+import com.runiverse.running_service.application.recordcard.command.update.UpdateRecordCardResult;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardAlreadyExistsException;
 import com.runiverse.running_service.application.recordcard.exception.RecordCardImageTooLargeException;
 import com.runiverse.running_service.application.recordcard.exception.RunningRecordNotFoundException;
@@ -15,6 +18,8 @@ import com.runiverse.running_service.application.recordcard.exception.RecordCard
 import com.runiverse.running_service.application.recordcard.exception.RecordCardNotFoundException;
 import com.runiverse.running_service.application.recordcard.port.in.CompleteRecordCardDraftUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.CreateRecordCardDraftUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.DeleteRecordCardUsecase;
+import com.runiverse.running_service.application.recordcard.port.in.UpdateRecordCardUsecase;
 import com.runiverse.running_service.application.recordcard.port.in.GetRecordCardDetailUsecase;
 import com.runiverse.running_service.application.recordcard.port.out.MultipartUpload;
 import com.runiverse.running_service.application.recordcard.common.RouteArtConverter;
@@ -59,7 +64,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -84,13 +91,18 @@ class RecordCardControllerTest {
     private CompleteRecordCardDraftUsecase completeRecordCardDraftUsecase;
     @Mock
     private GetRecordCardDetailUsecase getRecordCardDetailUsecase;
+    @Mock
+    private DeleteRecordCardUsecase deleteRecordCardUsecase;
+    @Mock
+    private UpdateRecordCardUsecase updateRecordCardUsecase;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = standaloneSetup(new RecordCardController(createRecordCardDraftUsecase,
-                completeRecordCardDraftUsecase, getRecordCardDetailUsecase))
+                completeRecordCardDraftUsecase, getRecordCardDetailUsecase,
+                deleteRecordCardUsecase, updateRecordCardUsecase))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(JSON_MAPPER))
@@ -375,6 +387,114 @@ class RecordCardControllerTest {
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(body(result)).containsEntry("code", "NOT_FOUND")
                 .containsEntry("message", "요청한 리소스를 찾을 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("삭제는 토큰 주인과 경로의 카드 ID로 넘기고 204로 본문 없이 답한다")
+    void deleteCard() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+
+        // when
+        MvcResult result = mockMvc.perform(delete("/record-cards/{id}", cardId)).andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(204);
+        assertThat(result.getResponse().getContentAsByteArray()).isEmpty();
+        verify(deleteRecordCardUsecase).handle(new DeleteRecordCardCommand(USER_ID, cardId));
+    }
+
+    @Test
+    @DisplayName("삭제할 카드 ID가 UUIDv7 형식이 아니면 400, 없거나 남의 카드면 404다")
+    void deleteErrors() throws Exception {
+        // when & then
+        MvcResult malformed = mockMvc.perform(delete("/record-cards/{id}", "1-1-1-1-1")).andReturn();
+        assertThat(malformed.getResponse().getStatus()).isEqualTo(400);
+        verifyNoInteractions(deleteRecordCardUsecase);
+
+        org.mockito.BDDMockito.willThrow(new RecordCardNotFoundException()).given(deleteRecordCardUsecase).handle(any());
+        MvcResult notFound = mockMvc.perform(delete("/record-cards/{id}", DRAFT_ID)).andReturn();
+        assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
+        assertThat(body(notFound)).containsEntry("code", "NOT_FOUND");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("수정은 늘 200이다 — 새 사진이 없으면 draft가 null이고 카드는 수정 뒤다")
+    void updateApplied() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+        given(updateRecordCardUsecase.handle(any())).willReturn(new UpdateRecordCardResult(detailResult(cardId), null));
+
+        // when
+        MvcResult result = mockMvc.perform(patch("/record-cards/{id}", cardId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"memo":"새 회고","visibility":"PRIVATE",
+                                 "images":[{"recordCardImageId":"%s","caption":"노을"}],"thumbnailIndex":0}
+                                """.formatted(IMAGE_ID_1)))
+                .andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        verify(updateRecordCardUsecase).handle(new UpdateRecordCardCommand(USER_ID, cardId, "새 회고", null, "PRIVATE",
+                List.of(new UpdateRecordCardCommand.Image(IMAGE_ID_1, null, null, null, "노을")), 0));
+        Map<String, Object> body = body(result);
+        assertThat(body).containsKey("draft").containsEntry("draft", null);
+        assertThat((Map<String, Object>) body.get("recordCard")).containsEntry("recordCardId", cardId.toString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("새 사진이 있으면 200에 draft(9-1과 같은 모양)와 지금 카드를 함께 준다")
+    void updateNeedsUpload() throws Exception {
+        // given
+        UUID cardId = UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8");
+        given(updateRecordCardUsecase.handle(any())).willReturn(new UpdateRecordCardResult(detailResult(cardId),
+                new CreateRecordCardDraftResult(DRAFT_ID, LocalDateTime.of(2026, 11, 23, 21, 40), List.of(
+                        new Upload.Single(IMAGE_ID_2, "record-cards/u/c/i2/IMG_3001.jpg", "https://single")))));
+
+        // when
+        MvcResult result = mockMvc.perform(patch("/record-cards/{id}", cardId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"images":[{"mimeType":"image/jpeg","fileSizeBytes":1024,"fileName":"IMG_3001.jpg"}]}
+                                """))
+                .andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> draft = (Map<String, Object>) body(result).get("draft");
+        assertThat(draft).containsEntry("recordCardDraftId", DRAFT_ID.toString())
+                .containsEntry("expiresAt", "2026-11-23T21:40:00");
+        assertThat((List<?>) draft.get("uploads")).hasSize(1);
+        assertThat((Map<String, Object>) body(result).get("recordCard")).containsEntry("recordCardId", cardId.toString());
+    }
+
+    @Test
+    @DisplayName("수정 요청 검증에 실패하면 400으로 명세 문구를 내려 주고 유스케이스를 부르지 않는다")
+    void updateValidation() throws Exception {
+        // when
+        MvcResult result = mockMvc.perform(patch("/record-cards/{id}", DRAFT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"images":[{"recordCardImageId":"%1$s"},{"recordCardImageId":"%1$s"}]}
+                                """.formatted(IMAGE_ID_1)))
+                .andReturn();
+
+        // then
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(result)).containsEntry("message", "같은 사진을 두 번 넣을 수 없습니다.");
+        verifyNoInteractions(updateRecordCardUsecase);
+    }
+
+    private static GetRecordCardDetailResult detailResult(UUID cardId) {
+        LocalDateTime at = LocalDateTime.of(2026, 7, 25, 21, 10);
+        return new GetRecordCardDetailResult(cardId,
+                new GetRecordCardDetailResult.Author(USER_ID, "동완러너", null), true,
+                RecordCardVisibility.PUBLIC, RecordCardActivityType.DAILY, "한강",
+                new GetRecordCardDetailResult.Record(501L, at, 5020, 1800, 359, List.of()),
+                new GetRecordCardDetailResult.Music(MusicStatus.GENERATING, null), List.of(), at, at);
     }
 
     private MvcResult perform() throws Exception {

@@ -90,6 +90,44 @@ class RecordCardDraftRedisAdapterTest {
     }
 
     @Test
+    @DisplayName("수정 초안도 수정 계획(바꿀 값·사진 자리·마지막 이력)째로 다시 읽힌다")
+    void editDraftRoundTrips() {
+        // given
+        RecordCardDraft draft = new RecordCardDraft(DRAFT_ID, RecordCardDraft.DraftType.UPDATE,
+                UUID.fromString("01a0f2d4-6180-7000-8000-4466554400c8"),
+                UUID.fromString("01a0f2d4-6180-7000-8000-446655440015"), 501L, null, null, null,
+                List.of(new DraftImage(UUID.fromString("01a0f2d4-6180-7000-8000-44665544014f"), "k/3/new.jpg",
+                        "image/jpeg", 1024L, "결승선", UploadType.SINGLE, null, null, false)),
+                null, false,
+                new RecordCardDraft.EditPlan("새 회고", null, RecordCardVisibility.PRIVATE, List.of(
+                        new RecordCardDraft.EditPlan.Slot(UUID.fromString("01a0f2d4-6180-7000-8000-44665544012d"),
+                                "새 설명", false),
+                        new RecordCardDraft.EditPlan.Slot(UUID.fromString("01a0f2d4-6180-7000-8000-44665544014f"),
+                                "결승선", true)),
+                        1, 7L));
+
+        // when
+        adapter.save(draft, TTL);
+
+        // then
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(valueOperations).set(anyString(), json.capture(), any(Duration.class));
+        assertThat(JSON.readValue(json.getValue(), RecordCardDraft.class)).isEqualTo(draft);
+    }
+
+    @Test
+    @DisplayName("수정 계획이 없던 때 저장한 작성 초안도 그대로 읽힌다 — 배포 중 Redis에 남은 초안")
+    void legacyCreateDraftReads() {
+        // given — editPlan 키가 없는 JSON
+        String legacy = JSON.writeValueAsString(draft()).replace(",\"editPlan\":null", "");
+        assertThat(legacy).doesNotContain("editPlan");
+        when(valueOperations.get("record-card:draft:" + DRAFT_ID)).thenReturn(legacy);
+
+        // when & then
+        assertThat(adapter.load(DRAFT_ID)).contains(draft());
+    }
+
+    @Test
     @DisplayName("Redis 저장에 실패하면 삼키지 않고 던진다 — 저장 못 한 초안으로 업로드 URL을 주면 안 된다")
     void propagateFailure() {
         // given

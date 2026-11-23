@@ -476,6 +476,171 @@ class RecordCardE2eTest extends E2eTestSupport {
                 .isEqualTo(404);
     }
 
+    @Test
+    @DisplayName("삭제(9-4) — 직전 모습을 이력으로 남기고 카드·사진 행을 지운다. 지운 뒤 같은 기록으로 다시 만들 수 있다")
+    void deleteCard() {
+        // given - 사진 한 장짜리 카드
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(owner);
+        Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
+        String imageKey = (String) draft.objects("uploads").get(0).get("imageKey");
+        uploadRecordCardImage(imageKey, "image/jpeg", SMALL_IMAGE_BYTES);
+        String recordCardId = post(completePath(draft.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String cardPath = "/record-cards/" + recordCardId;
+
+        // 남의 카드는 지울 수 없고, 있는지도 드러나지 않는다
+        Response others = delete(cardPath, stranger.accessToken());
+        assertThat(others.status()).isEqualTo(404);
+        assertThat(others.text("code")).isEqualTo("NOT_FOUND");
+
+        // when
+        Response deleted = delete(cardPath, owner.accessToken());
+
+        // then - 카드·사진 행이 사라지고 상세는 404다
+        assertThat(deleted.status()).isEqualTo(204);
+        assertThat(get(cardPath, owner.accessToken()).status()).isEqualTo(404);
+        assertThat(querySql("SELECT count(*) FROM record_cards WHERE record_card_id = '%s'".formatted(recordCardId)))
+                .containsExactly("0");
+        assertThat(querySql("SELECT count(*) FROM record_card_images WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("0");
+        // 지우기 직전 모습이 이력에 남는다 — 사진은 jsonb 배열, 원래 만든 시각도 복사해 둔다
+        assertThat(querySql("""
+                SELECT snapshot_reason, user_id, running_record_id, memo, base_music_status,
+                       jsonb_array_length(images), images->0->>'imageKey', images->0->>'caption',
+                       images->0->>'musicStatus', card_created_at IS NOT NULL
+                FROM record_card_histories WHERE record_card_id = '%s'
+                """.formatted(recordCardId)))
+                .containsExactly(String.join("|", "DELETE", owner.userId(), String.valueOf(runningRecordId),
+                        "한강 한 바퀴", "GENERATING", "1", imageKey, "출발선", "GENERATING", "t"));
+
+        // 두 번 지우면 404이고 이력은 늘지 않는다
+        assertThat(delete(cardPath, owner.accessToken()).status()).isEqualTo(404);
+        assertThat(querySql("SELECT count(*) FROM record_card_histories WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("1");
+
+        // 행이 없으니 같은 기록으로 새 카드(새 카드 ID)를 만들 수 있다
+        String recreated = createCardWithoutImages(owner, runningRecordId);
+        assertThat(recreated).isNotEqualTo(recordCardId);
+    }
+
+    @Test
+    @DisplayName("이력 테이블은 스냅샷 이유를 DB에서 막는다")
+    void historyChecksRejectUnknownReason() {
+        assertThatThrownBy(() -> executeSql("""
+                INSERT INTO record_card_histories (record_card_id, snapshot_reason, user_id, running_record_id,
+                    visibility, activity_type, memo, base_music_status, images, card_created_at, created_at)
+                VALUES (gen_random_uuid(), 'CREATE', gen_random_uuid(), 1, 'PUBLIC', 'DAILY', '글', 'GENERATING',
+                    '[]'::jsonb, now(), now())
+                """)).hasMessageContaining("ck_record_card_history_snapshot_reason");
+    }
+
+    @Test
+    @DisplayName("수정(9-3) — 재료가 바뀔 때만 음악을 요청하고, 새 사진은 초안 → 업로드 → 9-2로 반영하며, 초안 뒤 다른 수정은 409다")
+    @SuppressWarnings("unchecked")
+    void updateCard() {
+        // given - 사진 한 장(설명 "출발선") 카드
+        TestUser owner = signUpAndOnboard();
+        TestUser stranger = signUpAndOnboard();
+        long runningRecordId = finishSoloRun(owner);
+        Response created = post("/record-cards", draftRequest(runningRecordId, List.of(
+                image("image/jpeg", SMALL_IMAGE_BYTES, "first.jpg", "출발선")), 0), owner.accessToken());
+        String firstImageId = (String) created.objects("uploads").get(0).get("recordCardImageId");
+        uploadRecordCardImage((String) created.objects("uploads").get(0).get("imageKey"), "image/jpeg",
+                SMALL_IMAGE_BYTES);
+        String recordCardId = post(completePath(created.text("recordCardDraftId")), Map.of(), owner.accessToken())
+                .text("recordCardId");
+        String cardPath = "/record-cards/" + recordCardId;
+        String outboxPhotos = "SELECT jsonb_array_length(payload->'photos') FROM outbox_events WHERE aggregate_id = '%s'"
+                + " ORDER BY created_at, outbox_event_id";
+        String historyCount = "SELECT count(*) FROM record_card_histories WHERE record_card_id = '%s'"
+                + " AND snapshot_reason = 'UPDATE'";
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("1");
+
+        // 남의 카드는 고칠 수 없다(404), 요청 검증은 400
+        assertThat(patch(cardPath, Map.of("memo", "남이 고침"), stranger.accessToken()).status()).isEqualTo(404);
+        Response invalid = patch(cardPath, Map.of("memo", "  "), owner.accessToken());
+        assertThat(invalid.status()).isEqualTo(400);
+        assertThat(invalid.text("message")).isEqualTo("회고 글은 비어 있을 수 없습니다.");
+
+        // when 1 - 회고 글만 바꾼다
+        Response memoOnly = patch(cardPath, Map.of("memo", "바람이 좋았던 한강"), owner.accessToken());
+
+        // then - 바로 반영(draft null), 사진 없는 음악 요청 한 건(기본곡만), 이력 한 줄
+        assertThat(memoOnly.status()).isEqualTo(200);
+        assertThat(memoOnly.body().get("draft")).isNull();
+        assertThat(((Map<String, Object>) memoOnly.body().get("recordCard")).get("memo")).isEqualTo("바람이 좋았던 한강");
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("1", "0");
+        assertThat(querySql(historyCount.formatted(recordCardId))).containsExactly("1");
+
+        // when 2 - 공개 범위만 바꾼다 / 같은 값으로 다시 보낸다
+        assertThat(patch(cardPath, Map.of("visibility", "PRIVATE"), owner.accessToken()).status()).isEqualTo(200);
+        assertThat(patch(cardPath, Map.of("visibility", "PRIVATE", "images",
+                List.of(Map.of("recordCardImageId", firstImageId, "caption", "출발선"))), owner.accessToken())
+                .status()).isEqualTo(200);
+
+        // then - 공개 범위는 이력만 남기고 음악은 요청하지 않는다. 같은 값은 아무것도 남기지 않는다
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("1", "0");
+        assertThat(querySql(historyCount.formatted(recordCardId))).containsExactly("2");
+
+        // when 3 - 기존 사진 설명을 바꾸고 새 사진을 넣는다
+        Response withNew = patch(cardPath, Map.of("images", List.of(
+                Map.of("recordCardImageId", firstImageId, "caption", "다리 밑 노을"),
+                Map.of("mimeType", "image/png", "fileSizeBytes", SMALL_IMAGE_BYTES, "fileName", "second.png",
+                        "caption", "결승선"))), owner.accessToken());
+
+        // then - 아직 반영하지 않는다: draft와 지금(수정 전) 카드
+        assertThat(withNew.status()).isEqualTo(200);
+        Map<String, Object> draft = (Map<String, Object>) withNew.body().get("draft");
+        List<Map<String, Object>> uploads = (List<Map<String, Object>>) draft.get("uploads");
+        assertThat(uploads).hasSize(1);
+        assertThat(((List<?>) ((Map<String, Object>) withNew.body().get("recordCard")).get("images"))).hasSize(1);
+        assertThat(querySql("SELECT count(*) FROM record_card_images WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("1");
+
+        // when - 올리고 9-2로 확정한다(작성과 같은 API)
+        String newImageId = (String) uploads.get(0).get("recordCardImageId");
+        uploadRecordCardImage((String) uploads.get(0).get("imageKey"), "image/png", SMALL_IMAGE_BYTES);
+        Response confirmed = post(completePath((String) draft.get("recordCardDraftId")), Map.of(),
+                owner.accessToken());
+
+        // then - 같은 카드가 고쳐지고, 설명이 바뀐 사진과 새 사진만 음악을 요청한다
+        assertThat(confirmed.status()).isEqualTo(201);
+        assertThat(confirmed.text("recordCardId")).isEqualTo(recordCardId);
+        assertThat(querySql("""
+                SELECT record_card_image_id, sort_order, coalesce(caption, '-'), music_status
+                FROM record_card_images WHERE record_card_id = '%s' ORDER BY sort_order
+                """.formatted(recordCardId))).containsExactly(
+                String.join("|", firstImageId, "0", "다리 밑 노을", "GENERATING"),
+                String.join("|", newImageId, "1", "결승선", "GENERATING"));
+        assertThat(querySql(outboxPhotos.formatted(recordCardId))).containsExactly("1", "0", "2");
+        assertThat(querySql(historyCount.formatted(recordCardId))).containsExactly("3");
+
+        // when 4 - 새 사진 초안을 만든 뒤, 확정 전에 회고 글을 바로 고친다
+        Response pending = patch(cardPath, Map.of("images", List.of(
+                Map.of("recordCardImageId", firstImageId, "caption", "다리 밑 노을"),
+                Map.of("recordCardImageId", newImageId, "caption", "결승선"),
+                Map.of("mimeType", "image/jpeg", "fileSizeBytes", SMALL_IMAGE_BYTES, "fileName", "third.jpg"))),
+                owner.accessToken());
+        Map<String, Object> pendingDraft = (Map<String, Object>) pending.body().get("draft");
+        uploadRecordCardImage((String) ((List<Map<String, Object>>) pendingDraft.get("uploads")).get(0).get("imageKey"),
+                "image/jpeg", SMALL_IMAGE_BYTES);
+        assertThat(patch(cardPath, Map.of("memo", "다른 기기에서 고친 회고"), owner.accessToken()).status())
+                .isEqualTo(200);
+        Response conflict = post(completePath((String) pendingDraft.get("recordCardDraftId")), Map.of(),
+                owner.accessToken());
+
+        // then - 409이고, 끼어든 수정은 그대로 남는다
+        assertThat(conflict.status()).isEqualTo(409);
+        assertThat(conflict.text("code")).isEqualTo("RECORD_CARD_CHANGED");
+        assertThat(querySql("SELECT memo FROM record_cards WHERE record_card_id = '%s'".formatted(recordCardId)))
+                .containsExactly("다른 기기에서 고친 회고");
+        assertThat(querySql("SELECT count(*) FROM record_card_images WHERE record_card_id = '%s'"
+                .formatted(recordCardId))).containsExactly("2");
+    }
+
     private String createCardWithoutImages(TestUser user, long runningRecordId) {
         Response draft = post("/record-cards", draftRequest(runningRecordId, List.of(), null), user.accessToken());
         assertThat(draft.status()).isEqualTo(200);
