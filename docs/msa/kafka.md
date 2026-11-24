@@ -45,7 +45,7 @@ Debezium ────────┘   (Connect는 같은 EC2)                  
 ### 노드가 하나라서
 
 - **노드가 내려가면 Kafka 전체가 멈춘다** — 넘겨받을 복제본이 없다.
-  - 요청 이벤트는 잃지 않는다 — 아웃박스 행이 DB에 있고 Debezium이 슬롯 위치부터 이어서 보낸다. 대신 그동안 Postgres에 WAL이 쌓인다([cdc.md](cdc.md) 「복제 슬롯」).
+  - 요청 이벤트는 잃지 않는다 — 아웃박스 행이 DB에 있고 Debezium이 슬롯 위치부터 이어서 보낸다. 대신 그동안 Postgres에 WAL이 쌓인다([cdc.md](cdc.md) 「복제 슬롯 — 가장 조심할 것」).
   - 완료 이벤트는 AI 서버가 보내지 못한다 — 다시 보내는 책임은 AI 서버에 있다.
 - **디스크를 잃으면 보관 중인 메시지를 잃는다.** 요청 이벤트는 아웃박스 행이 남지만 다시 보내는 절차는 없다.
 - 노드를 늘릴 때는 복제 계수·min ISR·내부 토픽 복제 계수를 함께 올리고, 새 노드마다 자기 주소로 서버 인증서를 발급한다(같은 CA로 서명하면 클라이언트는 그대로).
@@ -150,7 +150,7 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 | `{env}.debezium` | 그룹 `{env}.debezium-connect` | `READ` |
 | `{env}.debezium` | 토픽 `{env}.debezium-heartbeat.outbox` | `WRITE` `DESCRIBE` |
 
-- ⚠️ **`test`·`dev`의 running-service에는 요청 토픽 `WRITE` `DESCRIBE`가 아직 남아 있다**(앱이 직접 발행하던 설계의 권한, `prod`는 뺐다). 남아 있는 동안은 실수로 넣은 직접 발행 코드가 권한 오류 없이 동작한다 — 리뷰에서 running-service에 Kafka 프로듀서가 들어오지 않는지 본다(outbox-inbox.md 「앱은 Kafka로 직접 보내지 않는다」).
+- ⚠️ **`test`·`dev`의 running-service에는 요청 토픽 `WRITE` `DESCRIBE`가 아직 남아 있다**(앱이 직접 발행하던 설계의 권한, `prod`는 뺐다). 남아 있는 동안은 실수로 넣은 직접 발행 코드가 권한 오류 없이 동작한다 — 리뷰에서 running-service에 Kafka 프로듀서가 들어오지 않는지 본다([outbox-inbox.md](outbox-inbox.md) 「보내는 쪽 — 아웃박스」).
 
 ## 보내는 쪽은 중복 방지를 켠다
 

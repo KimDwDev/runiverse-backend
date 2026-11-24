@@ -248,7 +248,7 @@
 | WS `/api/v1/ws/running` | **바뀜** — 확정 직후부터 붙는다. 대기 멤버 변화 · 시작 카운트다운 · (정하면) 이탈 메시지가 더해진다. 같은 JWT · `X-App-Version`, ALB가 세션으로 보낸다 | 정함 (D-26, D-73) — 메시지 이름은 정하지 않음 |
 | 6-1 · 6-2 | **그대로** — 세션이 응답 | 정함 (D-58) |
 | `POST /running-rooms/solo` | **그대로** — 메인 | 정함 (D-27) |
-| `DELETE /users/me` (12-4) | **그대로** — 정산 실패는 지금의 503 `ACCOUNT_DELETION_UNAVAILABLE` | 정함 (D-43) · 단계는 제안 (D-44) |
+| `DELETE /users/me` (12-4) | **그대로** — 정산 실패는 지금의 503 `ACCOUNT_DELETION_UNAVAILABLE` | 정함 (D-43, D-44, D-70) |
 | `/running-matches` (legacy) | **그대로** — ALB 404, 메인 | 운영 중 |
 | `RUNNING_START` 오류 `RUNNING_SESSION_UNAVAILABLE` | 모양 그대로, 원인 하나 더(넘기기를 당겨 오지 못함) — 앱은 지금처럼 다시 보낸다 | 제안 |
 | `/users/me/status` (2-2) | 모양 그대로, 뜻이 바뀜 — 끝낸 뒤 반영 전 `RUNNING`, `cooldownUntil`이 늦게 보인다 | 제안 (D-31) |
@@ -257,7 +257,7 @@
 | 9-1 ~ 9-6 · 9-5 이벤트 | 본문 그대로 — `weather_code`는 지금처럼 기록에 이미 있다 (D-63) | 정함 |
 | `POST /match-rooms/leave` | **바뀜** — 모집 중 방만 받는다. 확정된 방이면 409 새 코드(이름 정하지 않음) — 도메인별 `*ErrorCode` enum · `GlobalExceptionHandler.toStatus()` · `ErrorExposurePolicy.EXPOSED_CODES`에 함께 넣는다 | 정함 (D-73) |
 | 확정 뒤 이탈 (새) | 세션이 받는다 — 러닝 WS 메시지 또는 `POST /running-rooms/{runningRoomId}/leave` | 정함 (D-73) — 형식은 정하지 않음 |
-| 최소 버전 | iOS · 안드로이드 모두 세션 엔진을 켜기(M4) 전에 올리고 ALB 차단을 건다 | 정함 (D-74) |
+| 최소 버전 | iOS · 안드로이드 모두 M4에서 올리고 ALB 차단을 건다 — 운영 전환(M7) 전 | 정함 (D-74, D-78) |
 | JWT HS256 → ES256 | 서버만 — 두 키 기간 | 제안 (D-30) |
 | `RUNNING_READY` (5-C) · 확정 뒤 `MATCH_ROOM_UPDATED` (5-B) | 매칭 SSE에서 러닝 WS로 옮긴다 | 정함 (D-73) |
 
@@ -279,7 +279,7 @@ ALB 경로 규칙의 단일 집이다. 순위 1 · 2 · 10은 운영 중인 규�
 - **세션 규칙을 `/api/v1/running-rooms/*`로 넓히지 않는다** — 넓히면 `/running-rooms/solo`가 세션으로 간다. 넓혀야 하면 solo 규칙을 더 앞 순위로 메인에 둔다.
 - **메인은 REST + SSE만, WS는 세션만** 받는다.
 - **대가** — 주소 배치가 서비스 주인에 묶인다. 받아들였다(D-58).
-- 엔진을 방 단위로 고르는 라우팅(ALB 가중치 금지)은 옮기는 동안의 일이라 [migration.md](migration.md) 「라우팅」.
+- 옮기는 동안의 전환(메인 엔진 스위치 하나 · ALB 가중치 금지, D-78)은 [migration.md](migration.md) 「라우팅」.
 
 ## 정하지 않은 것
 
@@ -289,6 +289,6 @@ ALB 경로 규칙의 단일 집이다. 순위 1 · 2 · 10은 운영 중인 규�
 4. **세션 핸드셰이크의 최소 버전 관문** — 지금 `AppVersionFilter`는 WS 업그레이드도 막고(`shouldNotFilter`가 빼는 것은 앱 버전·actuator·관리자·preflight뿐) 요청마다 `app_versions`를 캐시 없이 읽는다. (가) 세션에 복제(이벤트·주기 당겨 오기) (나) 공유 라이브러리 (다) 스플래시(2-3)에서 메인이 이미 막은 것에 기댄다고 명시.
 5. **폐기된 토큰** — 서비스마다 Redis가 하나라(D-49) 세션이 메인 블랙리스트를 바로 못 읽는다. (가) 메인 블랙리스트 키 읽기 전용 계약(저장소 사이 계약 테스트) (나) 짧은 access 토큰 수명 (다) 토큰 폐기 이벤트·사용자 변경 이벤트(삭제)로 세션 자기 폐기 캐시. ES256과 함께 정한다 (D-30).
 6. ~~`RUNNING_READY`가 메인 SSE를 탄다~~ — **정했다 → D-73 · D-74**: 러닝 WS로 옮기고 최소 버전을 올린다.
-9. **확정 뒤 이탈 요청의 형식** — 러닝 WS 메시지 vs `POST /running-rooms/{runningRoomId}/leave`(「공개 경로」 22), 메인 옛 경로가 확정된 방에 답할 409 코드 이름, 세션이 못 받을 때의 오류 — api-spec을 쓸 때 정한다 (D-73).
 7. **관리자 방 숨김** — `running_rooms.deleted_at`(손 SQL)이 7-1·함께 뛴 사람·카드 잠금을 거른다. 분리 뒤 두 DB에 있다: 두 DB를 모두 고치는 절차 vs 관리자 방 숨김 이벤트.
 8. **결과 이벤트 계약이 저장소를 나눈 뒤 사는 곳** — 메인 저장소의 api-spec 14장 하나에 두고 세션 저장소는 공개 픽스처로 따를지, 양쪽에 둘지.
+9. **확정 뒤 이탈 요청의 형식** — 러닝 WS 메시지 vs `POST /running-rooms/{runningRoomId}/leave`(「공개 경로」 22), 메인 옛 경로가 확정된 방에 답할 409 코드 이름, 세션이 못 받을 때의 오류 — api-spec을 쓸 때 정한다 (D-73).

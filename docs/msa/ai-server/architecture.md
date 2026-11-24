@@ -2,7 +2,7 @@
 
 메인 서버(running-service)에서 본 메인 ↔ AI 경계를 적는다 — 누가 어떤 데이터를 갖는지, 함께 쓰는 것, 음악 흐름, 완료 발행의 지금과 도표, AI가 도는 곳, 러닝 세션 분리가 이 경로에 주는 영향. 계약은 [api-spec.md](../../api-spec.md) 9-5가 정본이라 옮기지 않고 링크한다.
 
-> 상태: 절마다 적는다 — 「경계」「함께 쓰는 것」「흐름 — 기록 카드 음악」「계약」은 운영 중, 「완료 발행 — 지금과 그림」은 지금 운영 중 · 도표 쪽 정하지 않음, 「실행 환경」은 AI 쪽 · 제안, 「러닝 세션 분리의 영향」은 정함 (D-24) · 세부 정하지 않음. 계약이 바뀌면 api-spec 9-5를 먼저 고치고, 이 문서는 AI 쪽 확인 뒤에 고친다.
+> 상태: 절마다 적는다 — 「경계」「함께 쓰는 것」「흐름 — 기록 카드 음악」「계약」은 운영 중, 「완료 발행 — 지금과 그림」은 지금 운영 중 · 도표 쪽 정하지 않음, 「실행 환경」은 AI 쪽 · 제안, 「러닝 세션 분리의 영향」은 정함 (D-24, D-63, D-68). 계약이 바뀌면 api-spec 9-5를 먼저 고치고, 이 문서는 AI 쪽 확인 뒤에 고친다.
 
 | 무엇 | 어디 |
 |---|---|
@@ -59,7 +59,7 @@
 | 계약에서 아직 정하지 않은 것 | api-spec 9-5 「아직 정하지 않은 것」 |
 | 보내기 · 받기 코드 규칙, 처리할 수 없는 메시지 | [outbox-inbox.md](../outbox-inbox.md) 「보내는 쪽 — 아웃박스」 「받는 쪽 — Inbox」 |
 | 이벤트를 더할 때 | [outbox-inbox.md](../outbox-inbox.md) 「새 이벤트를 더할 때」 |
-| 토픽 · 계정 · 그룹 이름과 권한 | [kafka.md](../kafka.md) 「이름」 「ACL」 |
+| 토픽 · 계정 · 그룹 이름과 권한 | [kafka.md](../kafka.md) 「이름 — 환경 접두어 `{env}`」 「ACL」 |
 | 로컬에서 AI 없이 돌리기 | [outbox-inbox.md](../outbox-inbox.md) 「로컬 가짜 AI (음악 완료)」 (D-13) |
 
 ## 완료 발행 — 지금과 그림
@@ -90,21 +90,20 @@ AI 쪽이 정한다. 메인이 아는 것과 플랫폼 설계에서 권한 것�
 
 ## 러닝 세션 분리의 영향
 
-**상태** — 정함 ([decisions.md](../decisions.md) D-24) — 러닝 기록의 정본은 러닝 DB이고 메인은 사본을 갖는다. 사본 모양과 날씨 자리는 정하지 않음.
+**상태** — 정함 ([decisions.md](../decisions.md) D-24, D-63, D-68) — 러닝 기록의 정본은 러닝 DB이고 메인은 지금 `running_records` · `running_segments`를 사본으로 쓴다(D-68). 날씨는 세션이 끝낼 때 조회한다(D-63).
 
 - **9-5 계약은 그대로다** — AI는 계속 `running_summary`를 이벤트로 받고, 러닝 DB도 읽지 않는다.
-- **메인이 기록을 읽는 곳이 메인 사본 테이블로 바뀐다** — 지금은 `running_records`를 직접 읽는다(`RunningRecordPersistenceAdapter`).
+- **메인이 기록을 읽는 테이블은 그대로다** — 지금처럼 `running_records`를 읽고(`RunningRecordPersistenceAdapter`), 행을 채우는 쪽만 메인 inbox로 바뀐다(D-68). 달라지는 것은 반영 시점이다.
 
   | 메인 코드 | 지금 읽는 것 | 분리 뒤 |
   |---|---|---|
   | 9-1 `CreateRecordCardDraftHandler` → `ExistsOwnRunningRecordPort` | 기록이 있고, 내 것이고, 숨긴 방의 기록이 아니다 | 사본에 반영된 뒤에만 통과한다 — 그 전에는 없는 기록(404) |
-  | 9-2 `RecordCardDraftSaver` → `LockOwnRunningRecordPort` · `LoadRunningSummaryPort` | 기록 행을 `PESSIMISTIC_WRITE`로 잠그고 `running_summary` 여덟 값을 읽는다 | 사본 행을 잠그고 읽는다 — 잠글 대상은 사본 모양과 함께 정한다 |
+  | 9-2 `RecordCardDraftSaver` → `LockOwnRunningRecordPort` · `LoadRunningSummaryPort` | 기록 행을 `PESSIMISTIC_WRITE`로 잠그고 `running_summary` 여덟 값을 읽는다 | 사본 행(지금 `running_records` 그대로, D-68)을 지금처럼 잠그고 읽는다 |
   | 9-3 `RecordCardEditor` · 9-6 `RetryRecordCardMusicHandler` → `LoadRunningSummaryPort` | `running_summary` 여덟 값 | 사본에서 읽는다 |
 
 - **사본에 있어야 하는 것** — `running_summary` 여덟 값(api-spec 9-5 요청 이벤트)과 숨긴 방 여부(9-1 · 9-2가 본다). 사본 행이 없으면 9-2는 404, 9-3 · 9-6은 `IllegalStateException`(500)으로 끝나 음악 요청이 나가지 않는다. 빠진 행은 대조로 잡는다([running-session-server/consistency.md](../running-session-server/consistency.md) 「대조」).
 - **끝낸 직후에는 카드를 만들 수 없다** — 메인 사본에 반영되기 전까지다. 기록과 카드는 반영 뒤에 보인다(D-58). 같은 창의 다른 영향은 [running-session-server/consistency.md](../running-session-server/consistency.md) 「종료 뒤 최종 일관 창」(D-31 제안).
-- **날씨 값이 바뀔 수 있다** — 지금은 끝내기 안에서 채운다(`RunningFinisher` → `LoadWeatherPort`). 끝내기 경로에서 빼는 것은 제안(D-32)이고, (가) 세션이 시작 때 받기와 (나) 메인이 반영 뒤 채우기 중 (나)면 날씨가 비어 있는 동안 9-2가 올 수 있다. `weather_code` · `temperature`는 9-5의 필수 필드이고, 지금 `RecordCardMusicRequest.RunningSummary.weatherCode`는 `int`라 빈 값을 받지 못한다.
-- 사본 모양(지금 테이블 그대로, D-68)과 날씨 자리(D-63)는 정했다 — 근거는 [running-session-server/architecture.md](../running-session-server/architecture.md) 「메인 사본과 반영」 「정하지 않은 것」. 이 절은 그것이 정해지는 단계에서 고친다([running-session-server/migration.md](../running-session-server/migration.md) 「단계마다 고칠 문서」).
+- **날씨 값은 바뀌지 않는다** — 세션이 끝낼 때 잠금 밖에서 지금과 같은 기준(출발 좌표 · 출발 시각, 실패하면 기본값)으로 조회해 기록에 넣고, 메인은 사본으로 받는다(D-63, [running-session-server/architecture.md](../running-session-server/architecture.md) 「메인 사본과 반영」). 9-5의 `weather_code` · `temperature`와 `RecordCardMusicRequest.RunningSummary.weatherCode`는 지금처럼 채워져 온다.
 
 ## 정하지 않은 것
 

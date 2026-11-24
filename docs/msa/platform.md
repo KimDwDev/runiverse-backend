@@ -22,14 +22,14 @@
 
 | 무엇 | 지금 (11-24) | 목표 | 상태 |
 |---|---|---|---|
-| 서비스 DB | prod RDS PostgreSQL 18 단일 AZ · test는 Kafka EC2에 직접 설치한 PostgreSQL 17 · dev 로컬 | 그대로 + 메인 사본 테이블. 메인만 붙는다 | 정함 (D-24, D-48) |
+| 서비스 DB | prod RDS PostgreSQL 18 단일 AZ · test는 Kafka EC2에 직접 설치한 PostgreSQL 17 · dev 로컬 | 그대로 — 메인 사본은 지금 `running_records` · `running_segments`(D-68). 메인만 붙는다 | 정함 (D-24, D-48, D-68) |
 | 러닝 DB | 없음 | 새 RDS PostgreSQL — 러닝 세션 서버만 붙는다 | 정함 (D-24, D-48) · 사양 제안 |
 | AI DB | AI 쪽 (도표: MySQL) | RDS가 둘뿐이라 자리가 없다 | 정하지 않음 |
 | Redis | EC2 한 대, AOF `everysec` — 모든 키·채널 | 메인 Redis(지금 서버) + 세션 Redis(새 EC2), 각 한 대 | 정함 (D-49) |
 | Kafka + Connect | 클러스터마다 EC2 한 대(노드 1), Connect 같은 EC2, 커넥터 하나 | 그대로 + 러닝 DB 커넥터 하나(같은 Connect) | 정함 (D-50) · 브로커 셋·Strimzi·MSK 정하지 않음 |
 | S3 | 버킷 넷 — 앱 하나가 모두 다룬다 | 같은 버킷, 서비스마다 쓰기·읽기와 IAM을 나눈다 | 제안 |
 | SageMaker (음악 생성) | AI 쪽 | AI 쪽 — [ai-server/architecture.md](ai-server/architecture.md) 「실행 환경」 | AI 쪽 |
-| 앱 | test EC2 한 대 (SSM 배포) · prod Auto Scaling 그룹(t3.small) | EKS — [eks.md](eks.md) | 정함 (D-23, D-48) · 세부 제안 (D-41) |
+| 앱 | test EC2 한 대 (SSM 배포) · prod Auto Scaling 그룹(t3.small 한 대 — 11-25, [RESULTS](../../load_test/msa/RESULTS.md) 「0. 운영 증거」) | prod는 EKS 클러스터 하나(Auto Mode) — [eks.md](eks.md) · test는 compose — 「test 환경」 | 정함 (D-23, D-48, D-75, D-76, D-77) · 세부 제안 (D-41) |
 | 모니터링 | 다른 VPC의 모니터링 서버 (Prometheus·Grafana·ES·Kibana) | 계속 쓴다 — 붙이는 법은 eks.md | 제안 |
 
 - **데이터·인프라는 클러스터 밖에 둔다** — 이미 운영으로 검증한 자리이고, 노드 교체가 기록·실시간 상태를 건드리지 않는다.
@@ -60,13 +60,13 @@
 |---|---|---|
 | 엔진 · 크기 | RDS PostgreSQL 18, 단일 AZ, 스토리지 100 GiB(자동 조정) — 그대로 | RDS PostgreSQL 18, `db.t4g.small`, gp3 20 GiB, 단일 AZ — 제안 |
 | 붙는 쪽 | 메인 + Debezium | 러닝 세션 서버 + Debezium. 메인은 붙지 않는다 |
-| 더하는 것 | 메인 사본 테이블 — 모양은 정하지 않음 ([architecture](running-session-server/architecture.md) 「메인 사본과 반영」). 결과는 지금 `inbox_events`로 거른다 | 세션 테이블 전부([architecture](running-session-server/architecture.md) 「데이터 주인」), `outbox_events`, inbox, `cdc_heartbeats` |
+| 더하는 것 | 메인 사본 — 지금 `running_records` · `running_segments`를 그대로 쓴다 (D-68, [architecture](running-session-server/architecture.md) 「메인 사본과 반영」). 결과는 지금 `inbox_events`로 거른다 | 세션 테이블 전부([architecture](running-session-server/architecture.md) 「데이터 주인」), `outbox_events`, inbox, `cdc_heartbeats` |
 | 스키마 | 손으로 쓴 SQL — 지금처럼 | Flyway — 정함 (D-56). 언제 들일지는 migration 「정하지 않은 것」 |
 | 파라미터 그룹 | `runiverse-backend-deploy-postgres18` (논리 복제 켬) | 새 사용자 정의 그룹 — 논리 복제, `rds.force_ssl=1` |
 | Multi-AZ | 정하지 않음 — [cdc.md](cdc.md) 「정하지 않은 것」 6 | 같음 |
 
 - **연결 예산** — 세션 인스턴스 수 × Hikari 풀 + Debezium 1 + Flyway·관리 몇 개가 `max_connections` 아래여야 한다. `micro`가 아니라 `small`을 제안하는 이유다. 실제 `max_connections`는 만든 뒤 읽어 「확인할 운영 값」에 적고, 풀 크기는 선행 수정 F5에서 명시한다.
-- **세션 계정을 서비스 DB에 만들지 않는다** — 세션이 메인 테이블을 읽는 길을 처음부터 막는다. 모놀리스 안에 있는 동안 별도 DB로 둘지 스키마로 둘지는 migration 「정하지 않은 것」.
+- **세션 계정을 서비스 DB에 만들지 않는다** — 세션이 메인 테이블을 읽는 길을 처음부터 막는다.
 
 ## Redis
 
@@ -98,8 +98,8 @@
 | 채널 `match:room:{방}` · `match:stream:supersede` · `notification:user` | `MatchEventRedisAdapter` · `MatchSupersedeRedisAdapter` · `UserNotificationRedisAdapter` | 메인 | 정함 (D-49) |
 
 - **pub/sub은 서비스를 넘지 않는다** — 채널은 그 서비스 Redis에만 있다. 서비스 사이는 Kafka다([README.md](README.md) 「통신 — 어디로 무엇이 지나가는가」). 새 채널도 같은 인스턴스 갈아타기·다른 인스턴스 재연결·늦은 종료를 따진다 — 레이어 규칙 ([docs/architecture.md](../architecture.md)) 「다중 인스턴스」.
-- **세션 키·채널에는 접두어를 붙인다**(이름은 「새 이름」) — 모놀리스 안에 있는 동안 로컬·test에서 옛 엔진의 `running:*`와 한 Redis를 써도 갈린다. 세션은 자기 연결 팩토리와 리스너 컨테이너를 쓴다 — [migration](running-session-server/migration.md) 「원격처럼」.
-- **키를 옮기지 않는다** — 엔진은 방마다 정해지고(D-36) 새 엔진 방은 처음부터 세션 Redis에 쓴다. 옛 엔진 방의 `running:*`는 방과 함께 끝나고 TTL(`running-track.ttl=7h`)로 사라진다. 옛 엔진을 지우기 전(M8)에 메인 Redis에 `running:*`가 남지 않았는지 본다.
+- **세션 키·채널에는 접두어를 붙인다**(이름은 「새 이름」) — 세션 Redis는 dev compose부터 따로 두지만(D-78) 옛 엔진의 `running:*`와 이름이 겹치지 않게 한다. 세션은 자기 연결 팩토리와 리스너 컨테이너를 쓴다 — [migration](running-session-server/migration.md) 「원격처럼」.
+- **키를 옮기지 않는다** — 전환은 진행 중 방이 0인 조용한 시간에 하고(D-78) 새 엔진 방은 처음부터 세션 Redis에 쓴다. 옛 엔진 방의 `running:*`는 방과 함께 끝나고 TTL(`running-track.ttl=7h`)로 사라진다. 옛 엔진을 지우기 전(M8)에 메인 Redis에 `running:*`가 남지 않았는지 본다.
 - **Redis 서버를 바꿔 끼울 때는 SQL로 활성 방 0을 확인한 때에만 한다** — 매칭 마지막 슬롯(22:00)의 강제 종료는 04:00(`match.force-finish-offset=6h`)이지만 초대 방은 23:59까지 시작해 05:59까지 갈 수 있다(`OpenInviteRoomHandler`) — 시간대로 정하지 않는다. 메인 Redis는 데이터를 옮긴다(AOF·RDB 복사) — 비우면 리프레시 토큰이 사라져 다시 로그인해야 하고, 블랙리스트가 사라져 폐기한 토큰이 만료까지 통한다.
 - **해시 태그는 붙이지 않는다** — 클러스터 모드로 갈 때만 필요하다(트랙 Lua가 키 둘을 쓴다, D-49).
 
@@ -125,7 +125,7 @@
 2. 옛 커넥터를 지운다 — 슬롯은 DB에 남는다(`slot.drop.on.stop` 기본 `false`). 두 커넥터가 한 슬롯을 잡으면 하나는 실패한다.
 3. 새 Connect에 같은 `slot.name`·`publication.name`, `snapshot.mode=no_data`로 커넥터를 만든다 — 오프셋이 없으면 슬롯이 확인한 위치부터 읽는다. 마지막 오프셋 기록 뒤의 행은 다시 나갈 수 있고, 받는 쪽 inbox가 거른다.
 4. 브로커가 바뀌었으면 받는 쪽 접속 주소·CA를 바꾸고, 옛 브로커는 보관 기간(7일) 동안 남겨 둔다.
-5. cdc.md 「검증」 표를 다시 돌리고, 옮기는 동안 만든 행이 나갔는지 본다.
+5. cdc.md 「검증 — 테스트가 못 보는 것」 표를 다시 돌리고, 옮기는 동안 만든 행이 나갔는지 본다.
 
 ## S3
 
@@ -176,16 +176,16 @@
 
 **상태** — 지금 구성은 정함 (D-10) — [cdc.md](cdc.md) 「환경」, [kafka.md](kafka.md) 「클러스터와 환경」. 여기는 러닝 DB와 두 번째 슬롯을 더할 때 따질 것만 적는다. test를 먼저 끝내고 prod로 간다(D-10).
 
-- **러닝 DB 자리는 정하지 않음** — (가) 같은 test PostgreSQL에 데이터베이스 하나 더: 새 EC2가 없고 논리 복제가 이미 켜져 있다. WAL은 클러스터 하나라 슬롯이 둘이어도 상한(5GB)이 디스크를 지킨다. 대신 디스크·메모리를 Kafka와 나누고 절차가 prod(RDS)와 다르다. (나) test RDS: prod와 절차가 같고 비용이 든다. 모놀리스 안에서 스키마로 둘지와 함께 정한다.
+- **러닝 DB 자리는 정하지 않음** — (가) 같은 test PostgreSQL에 데이터베이스 하나 더: 새 EC2가 없고 논리 복제가 이미 켜져 있다. WAL은 클러스터 하나라 슬롯이 둘이어도 상한(5GB)이 디스크를 지킨다. 대신 디스크·메모리를 Kafka와 나누고 절차가 prod(RDS)와 다르다. (나) test RDS: prod와 절차가 같고 비용이 든다.
 - **(가)면 먼저 볼 것** — 남은 메모리(Connect 힙 최대 1GB가 이미 올라가 있다), 루트 디스크 남은 양, 두 슬롯의 지연(test는 알람이 없다).
-- **세션 Redis 자리도 정하지 않음** — 따로 두면 prod와 같고, 같은 서버면 접두어로만 갈린다.
-- **dev(로컬)에는 CDC가 없다** — 로컬에서 결과 이벤트를 받는 방법은 정하지 않음(음악 완료처럼 로컬 가짜를 둘지 — [outbox-inbox.md](outbox-inbox.md) 「로컬 가짜 AI (음악 완료)」).
+- **세션 Redis는 compose에 따로 둔다** — 정함 (D-75, D-76): 메인 · 세션 Redis 둘.
+- **dev는 루트 compose에 Kafka + Debezium을 둔다** — 정함 (D-78). 방 확정 · 참가자 결과가 로컬에서도 실제로 오간다([running-session-server/migration.md](running-session-server/migration.md) 「앱 모양」).
 - **앱도 compose로 같은 EC2에 둔다** — 정함 (D-75, D-76). test EC2를 `t3.large`(8GB)로 키우고 메인 · 세션 · Redis 둘을 compose로 더한다(AI 서버는 넣지 않는다). docker compose 플러그인을 설치하고, 키운 뒤 남는 메모리 · 디스크를 확인한다.
 - **부하 시험 구성** — [load_test/msa/RUNBOOK.md](../../load_test/msa/RUNBOOK.md) 「1. 준비」.
 
 ## 새 이름
 
-**상태** — 제안 · 정하지 않음. 계획 중인 이름은 여기에만 둔다. 만들면 그 PR에서 [kafka.md](kafka.md) 「이름」·「ACL」 표(또는 cdc.md)로 옮기고 이 행을 지운다. 규칙은 지금과 같다 — `KAFKA_ENV` 하나로 만들고, 구분자는 `.`·`-`, ACL은 이름 하나씩(D-04).
+**상태** — 제안 · 정하지 않음. 계획 중인 이름은 여기에만 둔다. 만들면 그 PR에서 [kafka.md](kafka.md) 「이름 — 환경 접두어 `{env}`」·「ACL」 표(또는 cdc.md)로 옮기고 이 행을 지운다. 규칙은 지금과 같다 — `KAFKA_ENV` 하나로 만들고, 구분자는 `.`·`-`, ACL은 이름 하나씩(D-04).
 
 | 대상 | 후보 | 상태 |
 |---|---|---|
@@ -203,20 +203,19 @@
 | Connect 시크릿 파일 · prod 슬롯 경보 | `debezium-{env}-running-db.properties` · `prod-cdc-running-replication-slot-lag` | 제안 |
 | 세션 Redis 키·채널 접두어 | `running-session:` — 옛 엔진의 `running:*`와 갈린다 | 제안 |
 | 러닝 DB 데이터베이스 · 앱 역할 · 파라미터 그룹 | `running_session` · `runiverse_session` · `runiverse-running-session-deploy-postgres18` | 제안 |
-| 모놀리스 안 스키마 (스키마로 둘 때) | `running_session` | 정하지 않음 (migration 「정하지 않은 것」) |
 | Parameter Store | `/runiverse/session/{test\|deploy}/*` | 제안 (「설정 · 비밀값」) |
 
 ## 확인할 운영 값
 
-**상태** — 값은 아직 비어 있다. 0단계 운영 증거와 부하 시험 전에 읽어, 날짜와 함께 「값」 칸에 적는다. 주소·키·비밀값은 적지 않고, 시작 템플릿 사용자 데이터는 출력하지 않은 채 항목만 본다.
+**상태** — 11-25 0단계 운영 증거 때 ASG 값만 읽었다. 나머지는 비어 있고, 부하 시험 전에 읽어 날짜와 함께 「값」 칸에 적는다. 주소·키·비밀값은 적지 않고, 시작 템플릿 사용자 데이터는 출력하지 않은 채 항목만 본다.
 
 | 무엇 | 읽는 법 | 쓰는 곳 | 값 (날짜) |
 |---|---|---|---|
 | ALB 유휴 시간 제한 | `aws elbv2 describe-load-balancer-attributes` | [runtime.md](running-session-server/runtime.md) (연결 시간 제한) | — |
 | 대상 그룹 등록 취소 지연 · health 검사 경로·주기·임계 · 분산 방식 | `describe-target-groups` · `describe-target-group-attributes` | 선행 수정 F6·F9, [eks.md](eks.md) 「계획 종료」 | — |
 | 리스너 규칙 (health 허용·actuator 403·옛 경로 404) | `describe-rules` | [architecture](running-session-server/architecture.md) 「공개 경로」 | — |
-| ASG health 종류(ELB·EC2)·유예·최소/원하는/최대·조정 정책 | `aws autoscaling describe-auto-scaling-groups` · `describe-policies` | F9, 비교군 A | — |
-| 배포 기록 (약 6주 보관) | `describe-scaling-activities` | RUNBOOK 「0. 운영 증거」 | — |
+| ASG health 종류(ELB·EC2)·유예·최소/원하는/최대·조정 정책 | `aws autoscaling describe-auto-scaling-groups` · `describe-policies` | F9, 비교군 A | EC2 + ELB, 유예 600초, 원하는 1 · 최소–최대 1–2, 조정 정책은 읽지 않음 (11-25) |
+| 배포 기록 (약 6주 보관) | `describe-scaling-activities` | RUNBOOK 「0. 운영 증거」 | [RESULTS](../../load_test/msa/RESULTS.md) 「0. 운영 증거」 (11-25) |
 | 시작 템플릿 — `docker run` 정지 시간·로그 마운트, env 파일을 만드는 방식 | `describe-launch-template-versions` | F9, 「설정 · 비밀값」 | — |
 | 서비스 DB 클래스 · `max_connections` · `rds.force_ssl` | `aws rds describe-db-instances` · `describe-db-parameters` | 「RDS」 연결 예산, cdc.md 「정하지 않은 것」 8 | — |
 | prod Hikari·Tomcat을 덮어쓴 변수가 있는지 (이름만) | Parameter Store 이름 목록 | F5, 비교군 A | — |
@@ -231,9 +230,9 @@
 1. **AI DB 자리** — RDS를 둘로 정해(D-48) 도표의 AI DB(MySQL)가 들어갈 자리가 없다. 후보는 AI 쪽이 운영하는 EC2 MySQL과 AI 쪽 소유 관리형 DB다. AI 쪽 CDC를 쓰면 binlog `ROW`·보관 시간과 Connect 정지 알람이 따라온다. [ai-server/architecture.md](ai-server/architecture.md)가 이 항목을 링크한다.
 2. **Kafka 브로커 셋 · Strimzi · MSK** (D-50) — 지금 노드 한 대(복제 1)가 단일 장애점이다. 결과 이벤트가 실제로 흐른 뒤, 파티션을 늘려 소비를 병렬로 해야 할 때, 서버 인증서 SAN이 주소 하나라 노드를 바꾸기 어려울 때 다시 본다. [kafka.md](kafka.md) 「정하지 않은 것」이 이 항목을 링크한다.
 3. **Multi-AZ** (두 RDS) — [cdc.md](cdc.md) 「정하지 않은 것」 6. 슬롯이 장애 조치를 넘는지 임시 RDS로 확인한 뒤 정한다.
-4. **test에 더할 것의 자리** — 러닝 DB(같은 PostgreSQL vs test RDS)와 세션 Redis(「test 환경」).
+4. **test 러닝 DB 자리** — 같은 PostgreSQL vs test RDS(「test 환경」). 세션 Redis는 compose로 정했다(D-75, D-76).
 5. **러닝 DB WAL 상한 · 스토리지** — 20 GiB에 맞는 `max_slot_wal_keep_size` 값과 스토리지 자동 조정을 켤지.
 6. **토픽 셋의 이름 · 파티션 수** (D-72) — 「새 이름」의 후보에서 고른다. 파티션은 만든 뒤 바꾸지 않는다.
-7. **로컬에서 결과 이벤트 받기** — 「test 환경」.
+7. ~~로컬에서 결과 이벤트 받기~~ — **정했다 → D-78**: 루트 compose에 Kafka + Debezium.
 8. **세션이 메인 블랙리스트를 읽을지** — [architecture](running-session-server/architecture.md) 「인증」에서 정한다. 정하면 「Redis」의 접근 행과 키 표의 블랙리스트 행을 고친다.
 9. **세션 inbox(방 확정 · 사용자 변경)도 DLT를 둘지** — D-51은 메인이 받는 결과 이벤트만 정했다. 두면 「새 이름」의 세션 ACL에 자기 DLT `WRITE`가 붙는다.

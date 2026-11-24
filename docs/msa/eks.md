@@ -1,6 +1,6 @@
 # EKS — 앱 워크로드
 
-메인 서버(running-service), 러닝 세션 서버, AI 전용 서버의 앱 워크로드를 EKS에서 어떻게 돌릴지 정리한다. 클러스터·노드·워크로드·계획 종료·배포·비용·도입 단계를 다룬다. 데이터와 인프라(RDS 둘, Redis EC2 둘, Kafka·Connect EC2, S3)는 클러스터 밖에 두고, 클러스터에서 붙는다. EKS를 목표로 두는 것과 앱 워크로드만 올리는 것은 정했다(D-23, D-48). 나머지 선택은 제안이다(D-41).
+메인 서버(running-service), 러닝 세션 서버, AI 전용 서버의 앱 워크로드를 EKS에서 어떻게 돌릴지 정리한다. 클러스터·노드·워크로드·계획 종료·배포·비용·도입 단계를 다룬다. 데이터와 인프라(RDS 둘, Redis EC2 둘, Kafka·Connect EC2, S3)는 클러스터 밖에 두고, 클러스터에서 붙는다. EKS를 목표로 두는 것과 앱 워크로드만 올리는 것(D-23, D-48), 클러스터는 prod 하나(D-75), 노드는 Auto Mode(D-77)로 정했다. 나머지 선택은 제안이다(D-41).
 
 > 상태: 제안. 클러스터는 아직 없다. E단계 진행 상태는 이 문서에 두지 않고 running-session-server/README 「진행 단계」 한 곳에만 둔다. main-api와 ai-server의 단계도 거기에 둔다.
 
@@ -13,7 +13,7 @@
 | 플랫폼 검증 R1–R9 | [running-session-server/verification.md](running-session-server/verification.md) 「플랫폼 검증 R1–R9」 |
 | 통과 기준 (`K-R*`·`K-SC*`) | [load_test/msa/PREREG.md](../../load_test/msa/PREREG.md) 「시나리오별 기준」 「후보 기준」 |
 | 단계 진행 상태 (E0–E7 포함) | [running-session-server/README.md](running-session-server/README.md) 「진행 단계」 |
-| 왜 이렇게 골랐나 | [decisions.md](decisions.md) D-23 · D-40 · D-41 · D-42 · D-48 |
+| 왜 이렇게 골랐나 | [decisions.md](decisions.md) D-23 · D-40 · D-41 · D-42 · D-48 · D-75 · D-76 · D-77 |
 
 > 주소·계정·키는 적지 않는다. Parameter Store 이름까지만 적는다.
 
@@ -21,13 +21,13 @@
 
 ## 클러스터 · 버전
 
-**상태** — 제안 (D-41). 클러스터 수는 정함 (D-75) — prod 하나.
+**상태** — 제안 (D-41). 클러스터 수는 정함 (D-75) — prod 하나. 노드 관리는 정함 (D-77) — Auto Mode.
 
 | 항목 | 값 | 이유 |
 |---|---|---|
-| 모드 · 버전 | EKS 표준 모드, Kubernetes 1.36, 서울 리전 | KEDA 2.21과 Karpenter LTS 1.14가 1.36까지만 지원한다 (11-24 기준) |
+| 모드 · 버전 | EKS Auto Mode (D-77), Kubernetes 1.36, 서울 리전 | KEDA 2.21이 1.36까지만 지원한다 (11-24 기준) |
 | 업그레이드 정책 | `STANDARD` (연장 지원 끔) | 연장 지원을 켜 두면 업그레이드를 놓쳐도 요금만 늘고 눈에 띄지 않는다 |
-| 다음 업그레이드 | 1.37 — KEDA가 지원한 뒤 test에서 먼저 하고, 1.36 표준 지원이 끝나는 2027-08-02 전에 마친다 | |
+| 다음 업그레이드 | 1.37 — KEDA가 지원한 뒤 임시 EKS(D-76)에서 먼저 확인하고, 1.36 표준 지원이 끝나는 2027-08-02 전에 마친다 | |
 | 클러스터 | prod 하나 (D-75). test는 EKS 없이 docker compose | 비용. Kubernetes 동작은 필요한 날 임시 EKS에서 확인한다(D-76) |
 | 자리 | prod: 지금 운영 VPC에 EKS 서브넷을 더한다 | RDS·Redis EC2·Kafka EC2에 피어링 없이 닿는다 |
 | 접근 | access entry(`aws-auth`는 쓰지 않음), 공개·사설 엔드포인트와 CIDR 허용 목록, 컨트롤 플레인 감사 로그 | |
@@ -37,20 +37,19 @@
 
 ## 노드
 
-**상태** — 정함 (D-77): EKS Auto Mode. 아래 표는 Karpenter로 쓴 처음 제안이라, Auto Mode의 NodePool로 옮겨 적을 때 풀 구성과 중단 예산(슬롯 시간 합치기 · 드리프트 0)은 그대로 두고 `expireAfter`만 21일 상한을 따른다.
+**상태** — 정함 (D-77): EKS Auto Mode. 풀 구성과 중단 예산(슬롯 시간 합치기 · 드리프트 0)은 처음 제안(Karpenter, D-41)에서 가져왔고, `expireAfter`는 Auto Mode 상한 21일을 따른다.
 
 - **21일 만료는 막지 못한다** — 다른 배포 · 긴급 수정과 똑같이 계획 종료(drain)로 깔끔한 재연결로 만든다(D-65, D-77). SC1 · SC2 측정 중에는 노드 교체가 겹치지 않았는지 기록한다.
 
 | 풀 | 올리는 것 | 인스턴스 | 중단 규칙 |
 |---|---|---|---|
-| 시스템 (관리형 노드 그룹) | Karpenter, CoreDNS, LBC, Argo CD, KEDA, ESO, Prometheus | Graviton `t4g.medium` — prod 2대, test 1대. `CriticalAddonsOnly` taint, AL2023 arm64 | 노드 그룹 업데이트는 낮에만 |
-| `apps` (Karpenter) | main-api, session-ws, session-worker | on-demand `m7g`·`c7g`, large–xlarge | `expireAfter: Never`. 예산은 17:30–24:00 KST(UTC `30 8 * * *`부터 6시간 30분)에 `nodes: "0"`, 그 밖에는 `"1"`. 통합은 `WhenEmptyOrUnderutilized`, 15분 뒤 |
-| `spot` (Karpenter) | ai-server, CronJob, test 앱 | `m7g`·`c7g`·`m6g`를 섞은 spot, 모자라면 on-demand | |
-| `loadgen` (test만) | k6 Operator 실행기 | spot, taint | |
+| `system` (NodePool) | Argo CD, KEDA, ESO, Prometheus — CoreDNS · 로드 밸런서 · 노드 관리는 Auto Mode가 맡는다 | Graviton `t4g.medium` — prod 2대. `CriticalAddonsOnly` taint | 중단 예산은 `apps`와 같다 |
+| `apps` (NodePool) | main-api, session-ws, session-worker | on-demand `m7g`·`c7g`, large–xlarge | `expireAfter`는 21일 상한(D-77). 예산은 17:30–24:00 KST(UTC `30 8 * * *`부터 6시간 30분)에 `nodes: "0"`, 그 밖에는 `"1"`. 통합은 `WhenEmptyOrUnderutilized`, 15분 뒤 |
+| `spot` (NodePool) | ai-server, CronJob | `m7g`·`c7g`·`m6g`를 섞은 spot, 모자라면 on-demand | |
 
-- **앱 노드에는 버스트형 인스턴스를 쓰지 않는다** — run 14에서 서버 CPU가 치솟았다([load_test/RESULTS.md](../../load_test/RESULTS.md) run 14). 원인은 SC9에서 다시 잰다.
+- **앱 노드에는 버스트형 인스턴스를 쓰지 않는다** — run 14에서 서버 CPU가 치솟았다([load_test/RESULTS.md](../../load_test/RESULTS.md) run 14). SC9는 격리를 재고 끝내기 하나의 CPU 시간은 보고만 한다 — 원인을 가르는 A′-unlimited는 버렸다(D-64).
 - **session-ws는 spot에 두지 않는다** — 슬롯 중에 2분 회수 알림이 오면 재연결이 한꺼번에 몰린다.
-- **노드는 낮에만 바꾼다** — AMI 버전을 Git에 고정해 두고, 버전을 바꾸면 낮에 Drift로 노드가 바뀐다(Drift는 예산을 따른다). EC2 예정 이벤트는 중단 큐(SQS + EventBridge)로 미리 받아 노드를 비운다.
+- **노드 교체는 중단 예산을 따른다** — 합치기 · 드리프트 교체는 슬롯 시간 밖에서만 한다. AMI와 노드 교체는 Auto Mode가 맡고, 21일 만료만 예산 밖이다(D-77).
 - **이미지는 arm64를 담는다** — E1에서 다중 아키텍처 빌드로 바꾼다. 지금 빌드는 [platform.md](platform.md) 「지금 (11-24 기준)」.
 - **상태를 쥔 노드 풀은 두지 않는다** — 상태를 가진 것은 모두 클러스터 밖에 있다(D-48).
 
@@ -76,7 +75,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 
 ## 계획 종료
 
-**상태** — 제안 (D-41, D-42). 이 절에는 파드 스펙 값만 적는다. 앱이 소켓을 닫는 순서와 시간은 [running-session-server/runtime.md](running-session-server/runtime.md)에, 지금 ASG에서 쓸 값(M0의 F9)은 migration 「선행 수정 F1–F9」에 있다.
+**상태** — 제안 (D-41, D-42). 계획 종료로 재연결하는 것은 정함 (D-65, D-77). 이 절에는 파드 스펙 값만 적는다. 앱이 소켓을 닫는 순서와 시간은 [running-session-server/runtime.md](running-session-server/runtime.md)에, 지금 ASG에서 쓸 값(M0의 F9)은 migration 「선행 수정 F1–F9」에 있다.
 
 | 값 | `session-ws` | `main-api` (SSE) | `session-worker` |
 |---|---|---|---|
@@ -98,7 +97,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 
 **상태** — 제안 (D-41).
 
-**엣지** — AWS LBC Ingress를 쓰고, 클러스터마다 IngressGroup ALB를 하나 둔다. 설정은 `target-type: ip`, ACM 인증서, `ELBSecurityPolicy-TLS13-1-2-2021-06`, `drop_invalid_header_fields`, 삭제 보호, S3 접근 로그다. idle timeout은 WS 유휴 시간보다 길게 잡는다. 값은 연결 시간 제한 사슬([running-session-server/runtime.md](running-session-server/runtime.md))을 따른다. Route 53 레코드는 ExternalDNS가 쓴다. 지금은 Ingress를 쓰고, Gateway API는 E7에 test에서 시험한다(D-41).
+**엣지** — Ingress는 Auto Mode의 로드 밸런서 기능으로 만들고(D-77), 클러스터가 하나라(D-75) IngressGroup ALB도 하나다. 설정은 `target-type: ip`, ACM 인증서, `ELBSecurityPolicy-TLS13-1-2-2021-06`, `drop_invalid_header_fields`, 삭제 보호, S3 접근 로그다. idle timeout은 WS 유휴 시간보다 길게 잡는다. 값은 연결 시간 제한 사슬([running-session-server/runtime.md](running-session-server/runtime.md))을 따른다. Route 53 레코드는 ExternalDNS가 쓴다. 지금은 Ingress를 쓰고(D-41), Gateway API는 E7에 임시 EKS(D-76)에서 시험한다.
 
 | `group.order` | 규칙 | 보내는 곳 |
 |---|---|---|
@@ -127,8 +126,8 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 **배포**
 - **Argo CD app-of-apps** — 별도 GitOps 저장소를 동기화한다. 저장소에는 공유 Helm 차트, 서비스별 values, 환경별 디렉터리를 둔다. sync wave는 CRD → 오퍼레이터 → NodePool·ClusterSecretStore → 앱 순서다. `selfHeal`을 켠다.
 - **동기화 금지 창** — AppProject SyncWindow `deny`를 17:30–24:00 KST(UTC `30 8 * * *`부터 6시간 30분)에 main-api와 session-*에 건다. 핫픽스는 수동 동기화로 낸다.
-- **같은 digest를 올린다** — CI는 테스트 → 다중 아키텍처 이미지를 바꿀 수 없는 sha 태그로 ECR에 올림 → compose E2E와 `MultiInstanceE2eTest` → test values에 digest 기록 순서로 돈다. prod 승격은 같은 digest를 옮기는 PR로만 한다.
-- **main-api 카나리** — Argo Rollouts ALB 가중치를 10% → 분석(5xx 비율, p95, Hikari 대기) → 50% → 100%로 올린다. 분석 값은 A′ 기준선으로 정한다(PREREG 「후보 기준」). 옛 엔진에서 새 엔진으로 넘길 때는 ALB 가중치를 쓰지 않는다 — 엔진은 방 단위로 고른다(D-36).
+- **같은 digest를 올린다** — CI는 테스트 → 다중 아키텍처 이미지를 바꿀 수 없는 sha 태그로 ECR에 올림 → compose E2E와 `MultiInstanceE2eTest` → test 서버 compose에 같은 digest를 올리는 순서로 돈다(test에는 EKS가 없다, D-75). prod 승격은 같은 digest를 옮기는 PR로만 한다.
+- **main-api 카나리** — Argo Rollouts ALB 가중치를 10% → 분석(5xx 비율, p95, Hikari 대기) → 50% → 100%로 올린다. 분석 값은 A′ 기준선으로 정한다(PREREG 「후보 기준」). 옛 엔진에서 새 엔진으로 넘길 때는 ALB 가중치를 쓰지 않는다 — 진행 중 방이 0인 조용한 시간에 ALB 경로 규칙과 메인 엔진 스위치를 함께 돌린다(D-78, [running-session-server/migration.md](running-session-server/migration.md) 「진행 중 방과 되돌리기」).
 
 ## IaC · 비밀값 · 신원 · 네트워크 · 관측
 
@@ -136,10 +135,10 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 
 | 영역 | 방식 | 메모 |
 |---|---|---|
-| IaC | Terraform으로 관리한다: VPC(prod는 지금 VPC를 가져온다), EKS, 관리형 노드 그룹, access entry, 애드온, IAM, Pod Identity 연결, Karpenter 중단 큐, RDS 둘, Redis EC2 둘, Kafka·Connect EC2, S3, ECR, ACM, Route 53, CloudWatch 알람. Argo CD는 Terraform Helm provider로 처음 한 번 설치한다 | 지금 있는 RDS와 EC2는 import로 가져온다. 오래 사는 데이터는 ACK로 만들지 않는다 — CR을 지우면 DB가 함께 지워질 수 있다. 시험일에는 `perf` 워크스페이스로 임시 RDS와 Redis EC2를 만들고 끝나면 지운다 |
+| IaC | Terraform으로 관리한다: VPC(prod는 지금 VPC를 가져온다), EKS(Auto Mode), access entry, 애드온, IAM, Pod Identity 연결, RDS 둘, Redis EC2 둘, Kafka·Connect EC2, S3, ECR, ACM, Route 53, CloudWatch 알람. Argo CD는 Terraform Helm provider로 처음 한 번 설치한다 | 지금 있는 RDS와 EC2는 import로 가져온다. 오래 사는 데이터는 ACK로 만들지 않는다 — CR을 지우면 DB가 함께 지워질 수 있다. 시험일에는 `perf` 워크스페이스로 임시 RDS와 Redis EC2를 만들고 끝나면 지운다 |
 | 비밀값 | External Secrets Operator: Parameter Store를 보는 ClusterSecretStore 하나와 서비스마다 ExternalSecret 하나를 두고 `envFrom`으로 넣는다. EKS Secret은 KMS 봉투 암호화 | 서비스마다 자기 경로만 받는다. 지금은 모든 컨테이너가 경로 전체를 받는다(platform 「지금 (11-24 기준)」). 경로 이름은 platform 「설정 · 비밀값」 |
 | 신원 | EKS Pod Identity. ServiceAccount마다 IAM 역할 하나(main-api, session-ws, session-worker, ai-server, 각 컨트롤러) | 코드는 바꾸지 않는다 — `S3ClientConfig`와 `SesClientConfig`는 키 값이 비어 있으면 `DefaultCredentialsProvider`를 쓴다. 버킷별 권한은 platform 「S3」 |
-| 네트워크 | 공개 서브넷(ALB, NAT), 사설 서브넷(노드, 파드), 격리 서브넷(RDS). prod는 NAT 게이트웨이 하나, test는 fck-nat. S3 게이트웨이 엔드포인트. 네임스페이스마다 기본 거부 NetworkPolicy에 필요한 허용만 더한다: ALB → 공개 포트, 모니터링 → 관리 포트, 상대 서비스 → 내부 포트, 나가는 길은 RDS·Redis EC2·Kafka EC2만 | Redis EC2, Kafka EC2, RDS의 보안 그룹이 노드 보안 그룹을 허용해야 한다(파드 단위 보안 그룹은 나중). 러닝 경로는 인터넷으로 나가지 않는다 — S3는 엔드포인트로 간다 |
+| 네트워크 | 공개 서브넷(ALB, NAT), 사설 서브넷(노드, 파드), 격리 서브넷(RDS). prod는 NAT 게이트웨이 하나(임시 EKS는 fck-nat). S3 게이트웨이 엔드포인트. 네임스페이스마다 기본 거부 NetworkPolicy에 필요한 허용만 더한다: ALB → 공개 포트, 모니터링 → 관리 포트, 상대 서비스 → 내부 포트, 나가는 길은 RDS·Redis EC2·Kafka EC2만 | Redis EC2, Kafka EC2, RDS의 보안 그룹이 노드 보안 그룹을 허용해야 한다(파드 단위 보안 그룹은 나중). 러닝 경로는 인터넷으로 나가지 않는다 — S3는 엔드포인트로 간다 |
 | 지표 | kube-prometheus-stack. Prometheus는 3일만 보관한다(KEDA와 알람용). 길게 볼 지표는 모니터링 EC2로 remote_write. 관리 포트에 ServiceMonitor | 클러스터 안 Prometheus를 '앱만'(D-48)에 포함할지는 정하지 않음 (「정하지 않은 것」 4) |
 | 로그 | 앱은 stdout에 ECS JSON을 쓰고, Filebeat DaemonSet이 지금의 ES·Kibana로 보낸다 | 지금은 `LOG_DIR` 아래 파일에 쓴다(`logging.file.name`). k8s 프로필에서는 파일 appender를 끈다 |
 | 추적 | OTel Java 에이전트 (D-55) | 붙이는 방법과 보낼 곳은 platform 「관측」 |
@@ -186,8 +185,8 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 | prod 클러스터 하나 + 시험일 (D-75) | ≈ 652 |
 
 - **넣지 않은 것** — SageMaker와 AI DB(AI 쪽 비용이고, AI DB 자리는 platform 「정하지 않은 것」), 모니터링 EC2(지금 있고 크기가 저장소에 없다), ai-server 파드.
-- **없어지는 것** — prod를 옮긴 뒤(E4) 지금의 앱 함대와 ALB 하나가 빠진다. `t3.small` 두 대라면 월 약 $60이다. 실제 대수는 platform 「확인할 운영 값」에서 확인한다.
-- **prod 순증가** — 클러스터 쪽 ≈ $394 + 러닝 DB ≈ $40 + 세션 Redis ≈ $20 − 없어지는 것 ≈ $60 = **≈ $394**.
+- **없어지는 것** — prod를 옮긴 뒤(E4) 지금의 앱 함대와 ALB 하나가 빠진다. 지금은 `t3.small` 한 대다(11-25, [load_test/msa/RESULTS.md](../../load_test/msa/RESULTS.md) 「0. 운영 증거」). 한 대와 ALB로 월 약 $41이다.
+- **prod 순증가** — 클러스터 쪽 ≈ $394 + 러닝 DB ≈ $40 + 세션 Redis ≈ $20 − 없어지는 것 ≈ $41 = **≈ $413**.
 - **줄일 수 있는 곳**
   - 1년 Compute Savings Plan — 늘 도는 EC2(시스템·앱 노드, Redis·Kafka EC2, ≈ $283)의 약 25%로, 월 ≈ $70.
   - RDS 예약 인스턴스.
@@ -202,12 +201,12 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 |---|---|---|---|
 | E0 | 측정 | M0 | SC0 관문(`K-SC0-*`) 통과. 0단계 운영 증거와 비교군 A 기준선이 RESULTS에 있다 |
 | E1 | 모놀리스 안 수정 + Kubernetes 준비 | M0 | 비교군 A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(채택한 행만)를 넘는다 |
-| E2 | Kubernetes 기초 — test는 compose, 매니페스트 확인 (D-75) | M1 | 파드 둘에서 E2E와 `MultiInstanceE2eTest` 통과. R1(`K-R1-1`, 채택하면 `K-R1-2`) 통과 |
+| E2 | Kubernetes 기초 — test는 compose, 매니페스트는 임시 EKS에서 확인 (D-75, D-76) | M1 | 임시 EKS의 파드 둘에서 E2E와 `MultiInstanceE2eTest` 통과. R1(`K-R1-1`, 채택하면 `K-R1-2`) 통과 |
 | E3 | 같은 이미지를 세 워크로드로 — 증거이며 관문이 아니다 | M1–M3 | R2·R3·R7·R8·R9 결과가 [load_test/msa/RESULTS.md](../../load_test/msa/RESULTS.md) 「회차 색인」에 있다 |
 | E4 | 운영 EKS — 아직 함대만 나눈 모놀리스 | M4 전후 | 운영 슬롯 2주가 PREREG 「후보 기준」을 넘는다. 불변식 I1–I4 어긋남 0 |
 | E5 | 코드 · 데이터 분리 | M1–M7 | `K-R4-1` · `K-R5-1` · `K-R5-2` · `K-R6-1` 통과. B2 구성 확인 `K-SC3-4` · `K-SC4-5` · `K-SC6-2` · `K-SC6-4` 통과. 대조 누락 0(I5) |
 | E6 | AI 서버 EKS — 우리 EKS가 자리 잡은 뒤 같은 클러스터에 합류할 수 있다 (D-75) | — | AI 쪽이 정한다 |
-| E7 | 다듬기 | M8–M9 뒤 | 없음 — 증거가 필요하다고 할 때 한다 |
+| E7 | 다듬기 | M8 뒤 | 없음 — 증거가 필요하다고 할 때 한다 |
 
 ### E0 측정 (지금 ASG)
 M0와 같은 할 일이다 — [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 M0에서 체크한다.
@@ -222,7 +221,7 @@ M0와 같은 할 일이다 — [running-session-server/migration.md](running-ses
 ### E2 Kubernetes 기초 — test 클러스터 없이 (D-75)
 - [ ] test를 docker compose로 옮긴다 — 메인 · 세션 · Redis 둘 · Kafka · Postgres. AI 서버는 넣지 않는다
 - [ ] 매니페스트(Helm · Argo CD 앱)를 만들고 임시 EKS(D-76)에서 파드 둘 · 종료 순서를 확인한 뒤 지운다
-- [ ] Terraform으로 prod VPC에 EKS 서브넷 · EKS 1.36 · 시스템 노드 그룹 · Pod Identity · Auto Mode를 준비한다(트래픽은 아직 없다)
+- [ ] Terraform으로 prod VPC에 EKS 서브넷 · EKS 1.36(Auto Mode) · Pod Identity를 준비한다(트래픽은 아직 없다)
 
 ### E3 같은 이미지를 세 워크로드로
 - [ ] main-api, session-ws, session-worker Deployment(역할 플래그)
@@ -254,9 +253,9 @@ AI 쪽이 준비되고 정하면 한다. `spot` 풀, KEDA Kafka 지연 + SQS, Sa
 - [ ] Multi-AZ RDS — 장애 조치 뒤에도 슬롯이 남는지 임시 RDS로 확인한 다음에 켠다([cdc.md](cdc.md) 「정하지 않은 것」 6)
 - [ ] session-ws Argo Rollouts 카나리 + WS smoke 분석
 - [ ] Kyverno, WAF
-- [ ] Gateway API를 test에서 시험한다
+- [ ] Gateway API를 임시 EKS(D-76)에서 시험한다
 - [ ] Compute Savings Plan
-- [ ] Kubernetes 1.37 — test에서 먼저 하고, 2027-08-02 전에 끝낸다
+- [ ] Kubernetes 1.37 — 임시 EKS(D-76)에서 먼저 확인하고, 2027-08-02 전에 끝낸다
 - [ ] R1–R9를 분기마다 다시 돌린다
 
 ## 정하지 않은 것

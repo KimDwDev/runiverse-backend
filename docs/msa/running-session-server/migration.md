@@ -21,29 +21,16 @@
 - **`- [ ]`는 할 일 단위다** — 그 일을 끝낸 PR이 체크한다. 상자가 다 차도 단계는 README 「진행 단계」에서 닫는다.
 - **나가는 조건의 숫자는 PREREG에만 둔다** — 여기서는 `K-SCn-*` id로 가리킨다. 0이어야 하는 불변식(I1 · I5)과 기간(주 · 슬롯 저녁 수)은 여기 적는다.
 - **나가는 조건 · 지울 기준을 바꾸려면 결정부터** — [../decisions.md](../decisions.md)에 항목을 먼저 쓰고 같은 PR에서 이 문서를 고친다.
-- **이 문서는 메인 저장소에 남는다** — 옛 코드는 메인 저장소에서 지운다. M9 뒤에는 옮긴 기록으로 남는다.
+- **이 문서는 메인 저장소에 남는다** — 옛 코드는 메인 저장소에서 지운다. M8 뒤에는 옮긴 기록으로 남는다.
 
 ## 방식
 
-`정함 (D-22, D-47, D-62, D-78)` — 지금 코드는 지우지 않고, 같은 저장소에 별도 앱을 새로 만들어 compose와 test에서 검증한 뒤 별도 저장소로 옮기고 운영을 전환한다.
-
-```text
-M0     옛 엔진을 재고 F3–F9를 넣는다                      모놀리스 하나, 지금 배포 그대로
-M1     같은 저장소에 별도 앱 뼈대 + 루트 compose · 경로 프록시
-M2     계약 — 방 확정 · 사용자 변경 · 참가자 결과, DLT     메인 쪽 아웃박스 · inbox도 여기서
-M3     새 엔진 + 동등성 — compose에서 두 앱으로 E2E
-M4     앱 변경 출시 + 최소 버전 상향 (D-73, D-74)          운영 카나리는 없다 (D-78)
-M5     test 서버에서 따로 띄워 잰다 (B2)
-M6     별도 저장소로 옮긴다 (폴더 그대로)
-M7     운영 ALB 경로를 새 서비스로 돌린다                  되돌리기 = 경로 규칙 + 엔진 스위치
-M8     옛 엔진을 지운다 (지울 기준 A)
-M9     버림 (D-78) — 모놀리스 안 호스트가 없다
-```
+`정함 (D-22, D-47, D-62, D-78)` — 지금 코드는 지우지 않고, 같은 저장소에 별도 앱을 새로 만들어 compose와 test에서 검증한 뒤 별도 저장소로 옮기고 운영을 전환한다. 단계는 「단계 M0–M9」.
 
 - **지우지 않고 옆에 새로 만든다** — 지금 러닝 세션 코드(이하 옛 엔진)는 M7까지 운영을 맡고 M8에 지운다.
 - **처음부터 따로 띄운다** — 새 코드는 루트의 `running-session-server/`에 별도 Spring Boot 앱으로 만든다. 모놀리스 안에서 호스팅하지 않는다(D-78).
 - **애그리거트를 쪼개지 않고 새로 만든다** — 매칭과 러닝은 한 애그리거트다(「지금 얽힌 곳 (11-24 기준)」). 메인 쪽은 넘기기 이벤트를 쓰고 결과를 받는 일만 더한다.
-- **선행 수정은 모놀리스에 먼저** — F1(끝내기 구조) · F3 · F4 · F5–F9 — `정함 (D-65, D-66, D-67, D-79)`. F2는 버림(D-80). 새 엔진의 끝내기도 같은 구조다(D-63).
+- **선행 수정은 모놀리스에 먼저** — F1(끝내기 구조) · F3 · F4 · F5–F9 — `정함 (D-65, D-66, D-67, D-79)`. F2는 버림(D-80). 새 엔진의 끝내기도 같은 구조다(D-63, D-81).
 
 ## 지금 얽힌 곳 (11-24 기준)
 
@@ -66,9 +53,9 @@ M9     버림 (D-78) — 모놀리스 안 호스트가 없다
 | 아웃박스 | `OutboxEventJpaEntity`의 `ck_outbox_event_aggregate_type`은 `RECORD_CARD`만, 토픽 CHECK는 `(dev\|test\|prod).record-card.music.requested`만 받고 `AggregateType`도 하나다. 같은 CHECK가 손으로 쓴 test · prod DDL에 있다. 쓰는 어댑터는 `RecordCardMusicOutboxAdapter` 하나 | 「아웃박스 일반화」 |
 | 메모리 이벤트 | 커밋 뒤 Spring 이벤트 8종(예: `RunningConnectionCloseRequestedEvent`)은 인스턴스가 죽으면 사라진다 | 경계를 넘는 것은 아웃박스나 `scheduled_jobs`처럼 다시 살릴 수 있는 길로 |
 | 보안 · WS | HS256 비밀값 하나(`JwtEncoderConfig` · `JwtDecoderConfig`, 블랙리스트 `BlockedTokenValidator`). `JwtHandshakeInterceptor`가 모놀리스 필터 체인에 기대고 `AppVersionFilter`가 WS 업그레이드에도 돈다. 레이어 규칙 ([docs/architecture.md](../../architecture.md))이 허용한 직접 import `WebSocketConfig` → `JwtHandshakeInterceptor` · `RunningWebSocketHandler` | architecture 「인증」 (D-30), 「새 저장소가 따르는 규칙」 |
-| 검사 | `settings.gradle`은 루트 프로젝트 하나. `check_conventions.py`는 레이어 방향 · legacy 격리 등을 보고 모듈 경계는 보지 않으며 CI에서 돌지 않는다. ArchUnit · Modulith · Flyway 없음 | 「모듈 모양」 「경계 검사」 |
+| 검사 | `settings.gradle`은 루트 프로젝트 하나. `check_conventions.py`는 레이어 방향 · legacy 격리 등을 보고 모듈 경계는 보지 않으며 CI에서 돌지 않는다. ArchUnit · Modulith · Flyway 없음 | 「앱 모양」 「경계 검사」 |
 
-**메인이 러닝 테이블을 읽는 곳** — 모두 M4(새 엔진 방의 기록이 러닝 쪽에만 생기는 때) 전에 사본이나 허용 목록 호출로 바꾼다. 사본 모양은 정하지 않음([architecture.md](architecture.md) 「메인 사본과 반영」).
+**메인이 러닝 테이블을 읽는 곳** — 새 엔진 방의 기록이 러닝 DB에만 생기기 전에(compose 두 앱 E2E 전, 운영은 M7 전) 모두 사본이나 허용 목록 호출로 바꾼다. 사본은 지금 `running_records` · `running_segments` 그대로다 — 정함 (D-68, [architecture.md](architecture.md) 「메인 사본과 반영」).
 
 | 읽는 곳 | 지금 코드 | 분리 뒤 |
 |---|---|---|
@@ -117,9 +104,9 @@ runiverse-backend/
 
 `정함 (D-78)` — 처음부터 따로 띄우므로 저절로 지켜진다. 남은 것은 메인과 말하는 길을 이벤트와 허용 목록으로만 두는 것이다.
 
-| 무엇 | 모듈이 갖는 것 |
+| 무엇 | 세션 앱이 갖는 것 |
 |---|---|
-| DB | 자기 스키마 · DB 역할(`public` 권한 없음) 또는 러닝 DB — 「정하지 않은 것」 2 |
+| DB | 자기 러닝 DB — dev는 compose의 두 번째 Postgres (D-78), test 자리는 [../platform.md](../platform.md) 「test 환경」 |
 | Redis | 자기 키 접두어 · 채널 · 리스너 컨테이너와 연결 설정. 세션 Redis(D-49)가 생기면 설정만 바꾼다 — 옮기는 창은 [../platform.md](../platform.md) 「Redis」 |
 | 오류 | 자기 오류 코드 + api-spec의 코드 문자열을 그대로 내는 WS 오류 변환기 |
 | 메인과 말하기 | 아웃박스 · inbox와 허용 목록 호출([architecture.md](architecture.md) 「동기 호출 허용 목록」)뿐. 메인 빈 · 포트를 부르지 않는다 |
@@ -132,10 +119,10 @@ runiverse-backend/
 
 | # | 규칙 | 막는 것 |
 |---|---|---|
-| 1 | 모듈 → 메인 import 금지 — Gradle 의존 방향이 막는다 | 추출이 다시 쓰기가 되는 것 |
-| 2 | 메인 → 모듈은 `com.runiverse.running_session.api`만, 호스트 패키지(WS 라우터 · 6-1 · 6-2 분기 · 허용 목록 클라이언트)에서만 | 메인이 모듈 안쪽에 기대는 것 |
+| 1 | 세션 앱 → 메인 import 금지 — 별도 Gradle 프로젝트라 의존할 수 없다(D-78) | 추출이 다시 쓰기가 되는 것 |
+| 2 | 메인 → 세션 앱 import 금지 — 별도 프로젝트라 의존할 수 없다(D-78). 메인은 이벤트 계약과 허용 목록 클라이언트로만 닿는다 | 메인이 세션 안쪽에 기대는 것 |
 | 3 | 옛 엔진 목록(검사가 읽는 파일)의 클래스를 새 파일이 import하면 위반 | 옛 엔진을 지울 수 없게 되는 것 |
-| 4 | 옛 엔진 목록의 파일을 고친 PR은 `mirrored` 라벨이나 `running-session/` 쪽 변경이 있어야 한다. PR 템플릿에 체크 상자를 더한다 | 한 엔진만 고치는 것(「병행 유지」) |
+| 4 | 옛 엔진 목록의 파일을 고친 PR은 `mirrored` 라벨이나 `running-session-server/` 쪽 변경이 있어야 한다. PR 템플릿에 체크 상자를 더한다 | 한 엔진만 고치는 것(「병행 유지」) |
 | 5 | JPQL · SQL 문자열 안의 엔티티 · 테이블 이름도 본다 — 다른 쪽 엔티티를 조인하면 위반 | `loadRanTogether`처럼 import를 피한 결합 |
 | 6 | 서비스 사이 동기 호출 클라이언트는 허용 목록에 있는 것만 | 목록 밖 호출 (D-52) |
 
@@ -156,7 +143,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 | F9 | **M0 모놀리스에 먼저 (D-65)** — WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
 
 - **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `제안 (D-42)`.
-- **나가는 조건** — A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 기준 `K-SC9-5`는 새 엔진(M3 · M5)에서 본다. A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
+- **나가는 조건** — A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 수정(F1)의 효과는 SC9의 A vs A′로 보고(D-79), 끝내기 기준 `K-SC9-5`는 A′(M0)와 새 엔진(M3 · M5)에서 본다(채택한 행만). A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건
 
@@ -203,7 +190,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 - **쓰는 길을 하나로** — `OutboxEventWriter`(종류 · 대상 ID · 토픽 · 본문)를 두고 업무 이름 포트 뒤에 둔다(지금 `RecordCardMusicOutboxAdapter`가 `RequestRecordCardMusicPort` 뒤에 있는 것처럼). UUIDv7 id · 환경 접두어 토픽 · 본문 만들기를 어댑터마다 되풀이하지 않는다. 메인과 세션 둘 다.
 - **CHECK를 먼저 넓힌다** — `ck_outbox_event_aggregate_type` · 토픽 CHECK · `AggregateType`을 새 이벤트에 맞게 넓히고, 같은 변경을 손으로 쓴 test · prod DDL에 배포 전에 넣는다 — 빠지면 업무 트랜잭션이 롤백돼 500이다. erd `outbox_events`도 같은 PR에서.
 - **메인 쪽 새 이벤트는 커넥터를 바꾸지 않는다** — EventRouter가 `topic` 열로 보낸다(`route.by.field`).
-- **러닝 DB는 자기 아웃박스 · 커넥터를 갖는다** — `outbox_events` · `cdc_heartbeats` · 두 번째 슬롯 — [../platform.md](../platform.md) 「러닝 DB CDC」. 호스팅 동안 모듈이 메인 DB 안 스키마를 쓰면 publication `ADD TABLE`과 `table.include.list` 변경으로 슬롯 하나에 싣는다(「정하지 않은 것」 2).
+- **러닝 DB는 자기 아웃박스 · 커넥터를 갖는다** — `outbox_events` · `cdc_heartbeats` · 두 번째 슬롯 — [../platform.md](../platform.md) 「러닝 DB CDC」.
 - **받는 쪽은 결과 이벤트 전에 막는다** — 지금 inbox는 처리하지 못한 메시지를 ERROR로 남기고 건너뛴다. 결과 이벤트를 받기 전에 DLT(또는 보관 테이블) · 건너뜀 알람 · 대조를 만든다 — [../outbox-inbox.md](../outbox-inbox.md) 「받는 쪽 — Inbox」.
 - 이벤트마다 [../outbox-inbox.md](../outbox-inbox.md) 「새 이벤트를 더할 때」를 따른다. 이벤트 후보는 [architecture.md](architecture.md) 「이벤트 (후보)」.
 
@@ -239,12 +226,12 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 
 ## 단계 M0–M9
 
-`정함 (D-22)` — 새로 만들기 → 검증 → 별도 저장소 → 지우기의 순서. 단계를 쪼갠 모양은 `제안`, M6을 M7 앞에 두는 것은 `제안 (D-62)`. 진행 상태는 [README.md](README.md) 「진행 단계」. 순서가 바뀌어도 번호는 다시 매기지 않는다.
+`정함 (D-22, D-78)` — 새로 만들기 → 검증 → 별도 저장소 → 운영 전환 → 지우기의 순서. 단계를 쪼갠 모양은 `제안`, M6을 M7 앞에 두는 것은 `정함 (D-62)`. 진행 상태는 [README.md](README.md) 「진행 단계」. 순서가 바뀌어도 번호는 다시 매기지 않는다.
 
 ### M0 기준선 · 선행 수정
 
 옛 엔진만, test와 운영. 겹치는 EKS 단계: E0 · E1.
-- [ ] 0단계 운영 증거 — [RUNBOOK](../../../load_test/msa/RUNBOOK.md) 「0. 운영 증거」 → [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」
+- [ ] 0단계 운영 증거 (11-25 ASG · Kibana · Grafana까지, SQL 집계 · REST 비율 · CPU 크레딧은 남았다) — [RUNBOOK](../../../load_test/msa/RUNBOOK.md) 「0. 운영 증거」 → [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」
 - [ ] 앱 재접속 값을 받아 [runtime.md](runtime.md)에 넣는다
 - [ ] 하네스 v2([load_test/msa/README.md](../../../load_test/msa/README.md))와 PREREG 동결 — ack 없는 기록 검사와 불변식 SQL(I1 · I2 · I4)을 「무결성 검사」에 둔다
 - [ ] 비교군 A 기준선 — SC0 관문, 그다음 SC1 · SC3 · SC4 · SC9 · SC10
@@ -255,7 +242,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
-**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
+**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`와 `K-SC9-5`(F1)를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
 
 ### M1 별도 앱 뼈대 + 루트 compose (D-78)
 
@@ -270,25 +257,25 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 
 ### M2 계약 (아웃박스 · CDC · inbox, DLT)
 
-메인 쪽 아웃박스 · inbox와 새 앱 쪽을 함께. dev는 compose, 진짜 CDC는 test. 겹치는 EKS 단계: E5(데이터).
+메인 쪽 아웃박스 · inbox와 새 앱 쪽을 함께. dev는 루트 compose의 Kafka + Debezium으로 이벤트가 실제로 오가고(D-78), 운영과 같은 CDC 절차(RDS · 슬롯 · 경보)는 test에서 본다. 겹치는 EKS 단계: E5(데이터).
 - [ ] 확인한다 — 앱이 기록 목록에서 6-1 · 6-2를 다시 여는지(「옛 기록」, D-69). 넘기기(D-71) · 사본 모양(D-68)은 정했다
 - [ ] 이벤트 · 내부 API 본문을 api-spec 14장에 먼저 쓴다 — 방 확정 · 사용자 변경 · 참가자 결과 (D-71, D-72)
 - [ ] 「아웃박스 일반화」 — 쓰는 길, CHECK, 손 DDL
-- [ ] 러닝 DB(또는 스키마) · 두 번째 커넥터 · 슬롯 — platform 「러닝 DB CDC」
+- [ ] 러닝 DB · 두 번째 커넥터 · 슬롯 — platform 「러닝 DB CDC」
 - [ ] DLT · 건너뜀 알람 · 대조 작업 (D-51) — consistency 「대조」
 - [ ] 계약 픽스처를 생산자 · 소비자 테스트가 함께 쓴다. 같은 이벤트 id를 두 번 받으면 행이 하나다
-- [ ] 기본 E2E는 로컬 중계(로컬 가짜 AI 완료 D-13처럼), 진짜 CDC는 test에서
+- [ ] 기본 E2E는 루트 compose의 Kafka + Debezium으로 돈다(D-78), 운영과 같은 CDC 절차는 test에서
 
-**나가는 조건** — 진짜 CDC로 전체 흐름(매칭 → 확정 → 시작 → 끝내기 → 6-1 · 7-1 · 9-2 카드)이 통과한다. CDC 끝-끝 지연 지표가 나온다. 보관 · 건너뜀 0, 대조 누락 0(I5). SC6 1부 · 2부를 모놀리스 안 호스팅으로 돌려 `K-SC6-1`이 성립하고 `K-SC6-3`(크기 한도 초과)이 성립하지 않는다 — 2부 지연은 보고만 한다(3부는 B2라 M5).
+**나가는 조건** — 진짜 CDC로 전체 흐름(매칭 → 확정 → 시작 → 끝내기 → 6-1 · 7-1 · 9-2 카드)이 통과한다. CDC 끝-끝 지연 지표가 나온다. 보관 · 건너뜀 0, 대조 누락 0(I5). SC6 1부(모놀리스 비교군)와 2부(지연 탐침 커넥터)를 돌려 `K-SC6-1`이 성립하고 `K-SC6-3`(크기 한도 초과)이 성립하지 않는다 — 2부 지연은 보고만 한다(3부는 B2라 M5).
 
 ### M3 새 엔진 + 동등성
 
 새 앱. compose에서 두 앱으로 시험한다. 겹치는 EKS 단계: E3.
 - [ ] 시작 — 넘기기 사본을 읽는다. 모르는 방이면 허용 목록 1, 안 되면 `RUNNING_SESSION_UNAVAILABLE`(앱이 다시 보낸다)
 - [ ] 위치 · 콤보 — 지금 Redis 로직을 새 키 공간으로
-- [ ] 끝내기 — F1 구조(D-63): 잠금 밖 S3 원본 · 날씨 → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md). 끝내기 단계 타이머로 `K-SC9-5`를 본다
+- [ ] 끝내기 — F1 구조(D-63, D-81): 잠금 밖 S3 원본 · 날씨 → 짧은 확정(필터 · 목표 판정 · 분석 → 기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md). 끝내기 단계 타이머로 `K-SC9-5`를 본다
 - [ ] 러닝 DB 예약 작업(행 점유) · 혼자 달리기 청소기 · 밀린 작업 훑기 (D-29)
-- [ ] 사용자 삭제 때 모든 인스턴스의 소켓을 모듈 채널로 닫는다
+- [ ] 사용자 삭제 때 모든 인스턴스의 소켓을 세션 Redis 채널로 닫는다
 - [ ] 탈퇴 saga — 메인은 정산을 허용 목록 2의 HTTP 클라이언트로 부른다 — consistency 「계정 탈퇴 saga」
 - [ ] 골든 트랙 동등성 테스트, E2E를 두 구성(메인 하나 · compose 두 앱)으로, 두 구성 모두 `MultiInstanceE2eTest`
 
@@ -305,8 +292,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 ### M5 별도 프로세스 검증 (B2, test)
 
 test만. 겹치는 EKS 단계: E5.
-- [ ] 새 앱 이미지를 test 서버 compose에 올린다 — 「앱 모양」
-- [ ] test에 두 번째 컨테이너(또는 EKS 워크로드)로 띄운다 — 러닝 DB · 세션 Redis는 platform 「test 환경」
+- [ ] 새 앱 이미지를 test 서버 compose에 두 번째 앱으로 올린다(test에는 EKS가 없다, D-75) — 「앱 모양」, 러닝 DB · 세션 Redis 자리는 platform 「test 환경」
 - [ ] 시드가 넘기기 이벤트를 내게 한다 — 지금 `load_test/sql/seed.sql`은 `MATCHED` 방을 바로 넣는다
 - [ ] 핵심 시나리오 SC1–SC7 — 'A′ vs B0 · B2' 장, 탈퇴 saga(SC7) 포함
 
@@ -388,28 +374,28 @@ test만. 겹치는 EKS 단계: E5.
 | 단계 | 문서 | 고칠 것 |
 |---|---|---|
 | M0 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」, load_test/msa PREREG · RESULTS, platform 「확인할 운영 값」 | 새 서버 지표 예정 행(코드가 들어가면 사용 중), 운영 Grafana에 HikariCP(활성 · 대기) 패널 추가 — 0단계에서 풀 기준선을 못 뽑았다, PREREG 동결 · 결과, 관리 포트와 종료 값 |
-| M0 | [api-spec.md](../../api-spec.md) 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42). F4를 승인하면 최소 버전이 최대 30초 늦게 걸린다는 메모 |
-| M1 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「패키지 구조」 「의존 방향」, spec-check 스킬 | 서브프로젝트 · base package · 옛 엔진 목록 규칙, 검사 규칙 |
+| M0 | [api-spec.md](../../api-spec.md) 0 · 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42 · D-65). F4(D-67)로 최소 버전이 최대 30초 늦게 걸린다는 메모 — 0 공통 규칙의 '다음 요청부터 바로' 문구 |
+| M1 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「패키지 구조」 「의존 방향」, spec-check 스킬 | 별도 앱 폴더 `running-session-server/` · base package · 옛 엔진 목록 규칙, 검사 규칙 |
 | M1 | CLAUDE.md | 빌드 · 테스트 명령, 문서 색인 |
 | M2 | api-spec 14장 `서비스 사이 계약 — 메인 ↔ 러닝 세션` (새로) | 이벤트 · 내부 API 본문. architecture 「이벤트 (후보)」 「동기 호출 허용 목록」에는 행과 링크만 남긴다 |
 | M2–M3 | [erd.md](../../erd.md) | `outbox_events` CHECK 값, 임시 「러닝 DB」 장, 메인 쪽 `running_records` · `running_segments`가 사본이라는 표시(D-68 — FK 대상은 그대로) |
-| M2 | [../kafka.md](../kafka.md) 「이름」 「토픽」, [../cdc.md](../cdc.md), [../outbox-inbox.md](../outbox-inbox.md) 「지금 있는 이벤트」 「받는 쪽 — Inbox」, [../README.md](../README.md) 「이벤트 색인」 「구성 — 지금」 | 만들고 검증한 PR에서 — 이름은 platform 「새 이름」에서 옮긴다 |
+| M2 | [../kafka.md](../kafka.md) 「이름 — 환경 접두어 `{env}`」 「토픽」, [../cdc.md](../cdc.md), [../outbox-inbox.md](../outbox-inbox.md) 「지금 있는 이벤트」 「받는 쪽 — Inbox」, [../README.md](../README.md) 「이벤트 색인」 「구성 — 지금」 | 만들고 검증한 PR에서 — 이름은 platform 「새 이름」에서 옮긴다 |
 | ~~날씨 자리를 정할 때~~ | — | **정했다 → D-63** — 세션이 끝낼 때 지금과 같은 기준으로 조회해 값 · 시점이 같다. 고칠 문서 없음 |
 | M3 (앱 작업 전) | [api-spec.md](../../api-spec.md) 5-A · 5-B · 5-C · 5-D, 2-3 | 확정 뒤 이탈 요청(형식 정하면), `POST /match-rooms/leave`의 확정된 방 409 코드, 확정 직후 WS 연결 · 대기 멤버 변화 · `RUNNING_READY`를 WS로(매칭 SSE에서 뺌), 최소 버전 — D-73 · D-74. 앱 출시 전에 계약을 먼저 적는다 |
-| M4 | api-spec 7-1 · 2-2 | 7-1은 반영된 뒤 보인다(D-58). `/users/me/status`는 반영 전 `RUNNING`일 수 있다(D-31) |
 | M5 | verification 「판정과 결과」, load_test/msa RESULTS, rationale 「근거 순위」 | 판정 |
 | M6 | [../README.md](../README.md) 「서비스 이름」, [README.md](README.md) 「저장소를 나눌 때」, CLAUDE.md · 루트 README | 실제 이름, runtime.md · erd 러닝 DB 장 옮기기, 문서 색인 |
+| M7 (전환 전) | api-spec 7-1 · 2-2 | 7-1은 반영된 뒤 보인다(D-58). `/users/me/status`는 반영 전 `RUNNING`일 수 있다(D-31) |
 | M7 | api-spec 6-1 · 6-2, architecture 「공개 경로」, msa README 「구성 — 지금」, platform 「지금 (11-24 기준)」 | 응답 주인 표시(세션), 세션 규칙을 운영 중으로, 새 날짜의 지금 구성 |
 | M8 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)), erd 2장 | 옛 엔진 목록 규칙 · WS 직접 import 예외를 지움, 메인에 남는 러닝 테이블만 |
-| M9 | 이 문서 | 상태 줄을 기록으로 |
+| M8 | 이 문서 | 상태 줄을 기록으로 (M9는 버림, D-78) |
 
 ## 정하지 않은 것
 
-1. **모놀리스 안 영속성** — (가) 메인 영속성 설정을 `@Primary`로 명시한다(메인을 건드린다) (나) 모듈이 `HikariDataSource`를 빈으로 내지 않고 이름 붙인 `TransactionTemplate` · `JdbcClient`만 낸다. 쓰기가 적고 구간 묶음 삽입에 맞아 (나)를 권한다. M1 전에 정한다.
-2. **호스팅 동안 러닝 DB vs 메인 DB 안 스키마** — 러닝 DB RDS가 생기기 전 모듈이 어디를 가리키는가. 스키마면 슬롯 하나로 싣지만 러닝 DB로 옮길 때 데이터 이동이 생긴다. 러닝 DB면 두 번째 커넥터를 M2에 만든다.
+1. ~~모놀리스 안 영속성~~ — **정했다 → D-78**: 별도 앱이라 자기 DataSource를 쓰고 메인 영속성 설정과 겹치지 않는다.
+2. ~~호스팅 동안 러닝 DB vs 메인 DB 안 스키마~~ — **정했다 → D-78**: 모놀리스 안 호스팅이 없어 처음부터 자기 러닝 DB(dev는 compose의 두 번째 Postgres)를 쓰고, 두 번째 커넥터는 M2에 만든다. test의 러닝 DB 자리는 [../platform.md](../platform.md) 「test 환경」.
 3. **Flyway를 들이는 때** — M1 vs 저장소를 나눌 때(M6) (D-56).
 4. **힙 `MaxRAMPercentage` 값** — 75 / 70 / 65 (F8). SC11(J1–J4) 결과로 정한다.
 5. **분리 전 방의 결과 다시 보기** — 앱이 기록 목록에서 6-1 · 6-2를 다시 여는지 확인한다. 열면 M7 전에 옛 방 결과를 러닝 DB로 복사한다(「옛 기록」, D-69).
-6. **엔진을 적는 자리** — `running_rooms`의 열(손 DDL) vs Redis 키(TTL 7시간 이상).
+6. ~~엔진을 적는 자리~~ — **정했다 → D-78**: 방마다 엔진을 적지 않고 메인의 전체 엔진 스위치 하나다(「라우팅」).
 7. **운영에서 F9를 거는 방법** — ASG 인스턴스 새로 고침이 컨테이너에 정상 종료 신호를 주고 기다리게 하는 연결.
 8. ~~M6 · M7 순서~~ — **정했다 → D-62**: 저장소를 옮긴 뒤 새 저장소 배포물로 운영 추출한다.

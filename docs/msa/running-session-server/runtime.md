@@ -61,7 +61,7 @@
 
 ## 끝내기
 
-`정함 (D-24)` — 기록 + 상태 + 아웃박스를 러닝 DB 한 트랜잭션으로 커밋한 뒤 ack한다 (I1). 봉인과 확정으로 나누는 모양은 `정함 (D-63, D-79)` — 옛 엔진에도 M0에서 먼저 넣고, 새 엔진도 같은 구조로 짠다.
+`정함 (D-24)` — 기록 + 상태 + 아웃박스를 러닝 DB 한 트랜잭션으로 커밋한 뒤 ack한다 (I1). 봉인과 확정으로 나누는 모양은 `정함 (D-63, D-79, D-81)` — 옛 엔진에도 M0에서 먼저 넣고, 새 엔진도 같은 구조로 짠다.
 
 ```text
 RUNNING_FINISH ──┐
@@ -97,12 +97,12 @@ RUNNING_FINISH ──┐
 
 | 작업 | 언제 | 하는 일 | 상태 |
 |---|---|---|---|
-| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`) | 노쇼(`JOINED`)는 이탈로 닫는다(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람은 러너마다 「끝내기」와 같은 봉인 → 짧은 확정. 모두 확정돼야 작업을 끝낸 것으로 적고, 못 끝낸 러너는 트랙 TTL 7시간(`running-track.ttl`) 안에서 다시 한다. 마지막 참가자 결과에 방 상태를 싣는다(D-72) 이벤트 | 제안 — 옛 엔진에서 F3로 먼저 |
+| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`) | 노쇼(`JOINED`)는 이탈로 닫는다(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람은 러너마다 「끝내기」와 같은 봉인 → 짧은 확정. 모두 확정돼야 작업을 끝낸 것으로 적고, 못 끝낸 러너는 트랙 TTL 7시간(`running-track.ttl`) 안에서 다시 한다. 마지막 참가자 결과 이벤트에 방 상태를 싣는다(D-72) | 제안 — 옛 엔진에는 F3로 먼저 (D-66) |
 | 혼자 달리기 청소기 | 주기 — 기준 시간을 넘긴 `RUNNING` 혼자 달리기 | 강제 종료와 같은 확정. 기준 시간은 「정하지 않은 것」 | 제안 |
 | 밀린 작업 훑기 | 30초마다 | 시각이 지났는데 끝나지 않은 예약을 다시 실행한다 | 제안 |
 | 콤보 보관 | 방 닫힘 커밋 뒤 | 콤보 구간을 러닝 DB에 남긴다. 실패해도 종료는 그대로다(지금 `RunningComboArchiver`) | 운영 중 — 세션 안의 로컬 단계 |
 
-- **지금 코드의 문제와 고칠 차례** — 방 하나를 트랜잭션 하나로 묶은 강제 종료(`ForceFinishRunningRoomHandler`), 실패한 타이머가 기동 때만 회복되는 것(`JobTimerAdapter` · `ScheduledJobRecoveryRunner`)은 [migration.md](migration.md) 「선행 수정 F1–F9」.
+- **지금 코드의 문제와 고칠 차례** — 방 하나를 트랜잭션 하나로 묶은 강제 종료(`ForceFinishRunningRoomHandler`)는 F3([migration.md](migration.md) 「선행 수정 F1–F9」). 실패한 타이머가 기동 때만 회복되는 것(`JobTimerAdapter` · `ScheduledJobRecoveryRunner`)은 F1–F9에 없다 — 세션은 위 표의 밀린 작업 훑기로 막는다.
 - **콤보 보관은 saga도 넘기기도 아니다** — 세션 Redis와 러닝 DB가 모두 세션 것이라 커밋 뒤 로컬 단계로 남는다.
 - **마지막 그물은 메인의 대조다** — [consistency.md](consistency.md) 「대조」.
 
@@ -117,7 +117,7 @@ RUNNING_FINISH ──┐
 | 늦게 도는 종료 처리 | `RemoveRunningSessionHandler`는 자기 연결이 빠졌을 때만 명부에서 빼고 `DISCONNECTED`를 알린다. `FINISHED` 뒤에는 바뀌지 않는다 (I3) |
 
 - **알고 두는 것 — 늦은 `DISCONNECTED`** — 다른 인스턴스로 다시 붙으면 옛 인스턴스의 종료 콜백이 가드를 통과해(그 인스턴스 표에는 아직 옛 연결이 있다) `DISCONNECTED`를 알린다. 상대 화면은 다음 좌표(약 10초)에 `RUNNING`으로 돌아온다 — api-spec 5-D가 허용한다. 고칠 안은 `CloseSupersededSessionHandler`가 닫기 전에 표에서 빼고 명부에서 나가는 것이다(매칭 `CloseSupersededMatchStreamHandler`와 같은 모양). k6에서는 `false_disconnected_broadcast`로 센다.
-- **탈퇴 소켓 닫기는 모든 인스턴스에 간다** — 제안 (D-44). 사용자 변경 이벤트(삭제)를 받은 인스턴스가 세션 Redis로 알린다 ([consistency.md](consistency.md) 「계정 탈퇴 saga」 5).
+- **탈퇴 소켓 닫기는 모든 인스턴스에 간다** — 정함 (D-44, D-70, D-72). 사용자 변경 이벤트(삭제)를 받은 인스턴스가 세션 Redis로 알린다 ([consistency.md](consistency.md) 「계정 탈퇴 saga」 5).
 - **테스트** — 기본 E2E는 앱 한 대다. 다른 인스턴스 경우는 두 번째 인스턴스를 `JPA_DDL=none`으로 띄우고 `E2E_SECOND_BASE_URL`을 줘야 `MultiInstanceE2eTest`가 돈다.
 
 ## 연결 시간 제한 사슬
@@ -138,7 +138,7 @@ RUNNING_FINISH ──┐
 
 ## 계획 종료
 
-`제안 (D-42)` — 인스턴스 · 파드를 내릴 때 소켓을 `4500`으로 닫는다. 앱은 이미 `4500`을 다시 붙기로 처리한다(api-spec 5). 지금은 드레인이 없다 — 배포가 모든 소켓을 끊는 문제는 [rationale.md](rationale.md) 「G1 배포 결합」.
+`정함 (D-65)` — 인스턴스 · 파드를 내릴 때 소켓을 `4500`으로 닫는다(닫기 코드 재사용은 `제안 (D-42)`). 앱은 이미 `4500`을 다시 붙기로 처리한다(api-spec 5). 지금은 드레인이 없다 — 배포가 모든 소켓을 끊는 문제는 [rationale.md](rationale.md) 「G1 배포 결합」.
 
 드레이너(이름 후보 `WebSocketDrainer`)가 `SmartLifecycle`로 웹 서버 graceful보다 먼저 돈다. 종료 신호(SIGTERM)를 받으면:
 

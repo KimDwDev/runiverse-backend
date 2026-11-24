@@ -2,7 +2,7 @@
 
 러닝 세션 분리 검증을 실제로 돌리는 순서다. 운영에서 읽기만 하는 0단계 운영 증거를 먼저 뽑고, 그다음 측정 환경을 만들어 한 회차씩 돌린다. 무엇을 왜 재는지는 [verification.md](../../docs/msa/running-session-server/verification.md), 회차 규칙과 기준 숫자는 [PREREG.md](PREREG.md), 하네스 구성은 [README.md](README.md)에 있다.
 
-> 상태: 「0. 운영 증거」는 지금 할 수 있다 — 운영 읽기 권한이 있는 개발자가 한다. 「1. 준비」부터는 계획 — 하네스 v2가 생기고 PREREG를 얼린 뒤에 돈다.
+> 상태: 「0. 운영 증거」는 11-25에 ASG · Kibana · Grafana 몫을 뽑았다(RESULTS 「0. 운영 증거」). 0-1 세션 코드 변경 표시, 0-3 대조일, 0-4 운영 DB 집계, 0-5의 Prometheus REST 비율 · CloudWatch 크레딧이 남았다 — 운영 읽기 권한이 있는 개발자가 한다. 「1. 준비」부터는 계획 — 하네스 v2가 생기고 PREREG를 얼린 뒤에 돈다.
 
 | 무엇 | 어디 |
 |---|---|
@@ -15,7 +15,7 @@
 
 ## 0. 운영 증거
 
-운영 배포 때 진행 중이던 러닝이 몇이었고, 연결이 몇 개 끊겼고, 몇 번 다시 붙었는지를 센다 — G1이 실제로 얼마나 큰지다. **다른 일보다 먼저 한다** — ASG 활동 기록은 약 6주만 남아 오래된 배포부터 사라진다.
+운영 배포 때 진행 중이던 러닝이 몇이었고, 연결이 몇 개 끊겼고, 몇 번 다시 붙었는지를 센다 — G1이 실제로 얼마나 큰지다. ASG 활동 기록은 약 6주만 남는다 — 새 배포를 더할 때는 6주 안에 뽑는다.
 
 - **운영에서는 읽기만 한다** — 콘솔 · CLI · Kibana · 읽기 전용 SQL.
 - **결과는 합계만 옮긴다** — 사용자 ID · 좌표 · 방 번호 · 인스턴스 ID는 RESULTS에 옮기지 않는다.
@@ -47,22 +47,53 @@ aws autoscaling describe-scaling-activities \
   --output table
 ```
 
-- 병합 시각 뒤 처음 나오는 `Terminating`의 `StartTime`(UTC) + 9시간이 그 배포의 종료 시각이다.
+- 병합 시각 뒤 처음 나오는 `Terminating`의 `StartTime` · `EndTime`(UTC) + 9시간이 그 배포의 내리기 시작 · 종료 시각이다. 둘 다 적고, 0-3의 창은 종료(`EndTime`)로 잡는다.
 - **기록이 사라진 배포**는 '병합 + 10분'을 쓰고 RESULTS에 `추정`이라 적는다 — 빌드 시간만큼 실제는 더 늦다.
+- **콘솔로 볼 때** — EC2 › Auto Scaling 그룹 › 운영 ASG의 '활동' 탭 작업 기록에서 `Terminating EC2 instance` 행의 시작 · 종료 시간을 옮긴다(+09:00로 보이면 KST 그대로). '세부 정보' 탭의 원하는 용량 · 크기 조정 한도 · 인스턴스 유형 · 상태 확인 종류 · 유예를 같이 적는다. 캡처는 인스턴스 ID를 가린다.
 
 ### 0-3. 끊긴 연결과 재연결 (Kibana)
 
-러닝 연결은 `RunningWebSocketHandler`가 연결마다 `러닝 WebSocket 연결`, 닫힐 때마다 `러닝 WebSocket 종료 — userId=…, status=CloseStatus[code=…, reason=…]`를 INFO로 남긴다. 운영 로그 데이터 뷰에서 종료 시각 앞뒤 10분을 본다.
+러닝 연결은 `RunningWebSocketHandler`가 연결마다 `러닝 WebSocket 연결`, 닫힐 때마다 `러닝 WebSocket 종료 — userId=…, status=CloseStatus[code=…, reason=…]`를 INFO로 남긴다. Kibana Discover를 ES|QL로 바꿔 `filebeat-*`를 읽고, 운영은 `labels.env == "prod"`로 거른다. 시간 선택기는 질의의 날짜를 모두 덮게 넓힌다(11-25는 최근 90일).
+
+- **질의 안 시각 문자열은 UTC다** — KST에서 9시간을 빼고 `Z`를 붙인다. 결과 열은 Kibana 시간대(KST)로 보인다.
+- **`first` · `last`는 ES|QL 예약어다** — 열 이름으로 쓰면 질의가 깨진다. `t_from` · `t_to`처럼 쓴다.
+- **`host.name`은 인스턴스를 가를 때만 본다** — RESULTS와 캡처에 옮기지 않는다.
+
+1. **로그가 남은 범위** — 배포 창이 보관 범위 안인지 먼저 본다. 범위 밖이면 그 배포는 `로그 없음`이다.
 
 ```text
-# 끊김 — 정상 종료(1000)를 뺀 전부
-labels.env : "<운영 라벨>" and log.level : "INFO" and message : "러닝 WebSocket 종료" and not message : "code=1000"
+FROM filebeat-*
+| STATS oldest = MIN(@timestamp), newest = MAX(@timestamp), docs = COUNT(*) BY labels.env
+```
 
-# 코드별 — 아래 표의 코드마다 한 번씩
-labels.env : "<운영 라벨>" and log.level : "INFO" and message : "러닝 WebSocket 종료" and message : "code=1006"
+2. **배포 창마다 연결 · 종료** — 창은 옛 인스턴스 종료 시각(0-2)의 30분 전부터 10분 뒤까지다. 내리기 시작 → 종료(약 6분)와 PREREG 종료 창(± 10분)을 덮는다. 배포마다 `CASE`에 조건 · 이름 한 쌍을 더한다 — 11-25에는 러닝 시간대 배포 다섯 창을 돌렸다.
 
-# 다시 붙은 연결
-labels.env : "<운영 라벨>" and log.level : "INFO" and message : "러닝 WebSocket 연결"
+```text
+FROM filebeat-*
+| WHERE labels.env == "prod" AND message LIKE "*러닝 WebSocket*"
+| EVAL kind = CASE(message LIKE "*WebSocket 연결*", "연결", message LIKE "*WebSocket 종료*", "종료", "그 밖")
+| EVAL win = CASE(
+    @timestamp >= "2026-11-02T09:25:00Z" AND @timestamp <= "2026-11-02T10:05:00Z", "11-02",
+    @timestamp >= "2026-11-10T13:28:00Z" AND @timestamp <= "2026-11-10T14:08:00Z", "11-10",
+    @timestamp >= "2026-11-15T11:04:00Z" AND @timestamp <= "2026-11-15T11:44:00Z", "11-15",
+    @timestamp >= "2026-11-18T12:15:00Z" AND @timestamp <= "2026-11-18T12:55:00Z", "11-18",
+    @timestamp >= "2026-11-19T12:46:00Z" AND @timestamp <= "2026-11-19T13:26:00Z", "11-19",
+    null)
+| WHERE win IS NOT NULL
+| STATS cnt = COUNT(*), t_from = MIN(@timestamp), t_to = MAX(@timestamp) BY win, kind, host.name
+| SORT win, t_from
+```
+
+종료가 있으면 코드별로 다시 센다 — `kind` 줄을 `| WHERE message LIKE "*WebSocket 종료*" | EVAL code = CASE(message LIKE "*code=1000*", "1000", message LIKE "*code=1001*", "1001", message LIKE "*code=1006*", "1006", message LIKE "*code=4001*", "4001", message LIKE "*code=4500*", "4500", "그 밖")`로, `BY`를 `win, code`로 바꾼다.
+
+3. **하루 연결 수** — 규모를 본다. 결과의 `day`가 KST 자정(`T00:00:00.000+09:00`)인지 본다 — 09시로 나오면 UTC로 잘린 것이라 `@timestamp + 9 hours`를 자른다.
+
+```text
+FROM filebeat-*
+| WHERE labels.env == "prod" AND message LIKE "*러닝 WebSocket 연결*"
+| EVAL day = DATE_TRUNC(1 day, @timestamp)
+| STATS conns = COUNT(*) BY day
+| SORT day
 ```
 
 | 코드 | 뜻 (`4001` · `4500`은 api-spec 5-C) | 셈 |
@@ -72,9 +103,8 @@ labels.env : "<운영 라벨>" and log.level : "INFO" and message : "러닝 WebS
 | `4500` | 보낼 메시지가 밀려 한도를 넘음 | 따로 |
 | 그 밖 (`1009` · `1011` …) | — | 따로 |
 
-- **옛 인스턴스가 먼저 죽으면 종료 줄이 남지 않을 수 있다** — 그래서 새 인스턴스의 `러닝 WebSocket 연결` 수를 같이 센다.
-- **대조** — 배포가 없던 날(가능하면 같은 요일)의 같은 시각 20분을 같은 질의로 센다.
-- **로그 보관 기간 밖의 배포**는 `로그 없음`으로 적는다.
+- **옛 인스턴스가 먼저 죽으면 종료 줄이 남지 않을 수 있다** — 그래서 새 인스턴스의 `러닝 WebSocket 연결` 수를 같이 센다. 종료 줄 0은 끊김 0의 증거가 아니다 — 진행 중이던 러닝은 0-4로 센다.
+- **대조** — 배포가 없던 날(가능하면 같은 요일)의 같은 시각 창을 2의 질의로 센다.
 
 ### 0-4. 진행 중이던 러닝 (SQL)
 
@@ -99,6 +129,8 @@ psql "<운영 DB 읽기 접속>" -f load_test/msa/sql/prod-evidence.sql
 | 슬롯 시간 `CPUCreditBalance` 최솟값 (4주) | CloudWatch | 비교군 A의 크레딧 조건, G4 |
 | ALB · 대상 그룹 · ASG · 시작 템플릿 설정 | [platform.md](../../docs/msa/platform.md) 「확인할 운영 값」의 읽는 법 | 측정 환경을 운영과 같게 |
 | 앱 재접속 · `HEALTH_CHECK` · 끝내기 재시도 · 재전송 묶음 값 | 노션 프론트 가이드 (옮겨 적는다) | [runtime.md](../../docs/msa/running-session-server/runtime.md) → 하네스 환경 변수 |
+| 요청률 · 힙 · 인스턴스 시작 시각 — Grafana `Runiverse Monitoring › JVM (Micrometer)`, Application `running-service`, Instance 드롭다운에서 그 기간에 살아 있던 인스턴스를 고른다. 배포마다 인스턴스가 바뀌어 여러 개가 남으므로, Quick Facts의 Start time을 0-2의 새 인스턴스 시각과 맞춰 본다. I/O Overview의 Rate(최근 24시간 · 30일)와 Heap used를 읽고, 캡처는 Instance 드롭다운(내부 주소)을 가린다 | 운영 Grafana | RESULTS 「0. 운영 증거」 요청률 · 힙 |
+| 커넥션 풀 — 대시보드에 HikariCP 패널이 없다. `hikaricp_connections_active` · `hikaricp_connections_pending` 패널을 더한 뒤(M0) 같은 인스턴스 선택으로 읽는다 | 운영 Grafana | 비교군 A 풀 기준선 |
 
 ### 0-6. 적기
 
@@ -111,7 +143,7 @@ psql "<운영 DB 읽기 접속>" -f load_test/msa/sql/prod-evidence.sql
 | 무엇 | 구성 | 이유 |
 |---|---|---|
 | 접속 | bastion 경유 SSH | 1차 캠페인과 같다 ([../RUNBOOK.md](../RUNBOOK.md) 「0. 준비 (한 번만)」) |
-| 앱 | 비교군마다 인스턴스 둘 이상, ALB 뒤(TLS). 크기 · 수는 verification 「비교군」 | 운영 모양 그대로 — 한 대 직결은 배포 · 재연결을 재지 못한다 |
+| 앱 | 비교군마다 인스턴스 둘 이상, ALB 뒤(TLS). 크기 · 수는 verification 「비교군」 | 운영은 한 대지만 B0 · B2와 비용을 맞추고 다른 인스턴스 경우를 보려고 둘 — 한 대 직결은 배포 · 재연결을 재지 못한다 |
 | 이미지 | 코드가 같은 비교군은 같은 digest, 역할 · 변형은 환경 변수로만 | 이미지 차이가 결과에 섞이지 않게 |
 | DB | 측정용 임시 RDS (B2는 러닝 DB용 하나 더) | test DB는 Kafka EC2 위의 PostgreSQL이라(D-10) Kafka · Connect 수치가 섞인다 |
 | Redis | 측정용 EC2, AOF `everysec` (A′R2 · B2는 둘) | 운영과 같게 (D-49) |
