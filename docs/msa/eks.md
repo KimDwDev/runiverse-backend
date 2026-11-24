@@ -21,23 +21,25 @@
 
 ## 클러스터 · 버전
 
-**상태** — 제안 (D-41). 클러스터 수는 정하지 않음.
+**상태** — 제안 (D-41). 클러스터 수는 정함 (D-75) — prod 하나.
 
 | 항목 | 값 | 이유 |
 |---|---|---|
 | 모드 · 버전 | EKS 표준 모드, Kubernetes 1.36, 서울 리전 | KEDA 2.21과 Karpenter LTS 1.14가 1.36까지만 지원한다 (11-24 기준) |
 | 업그레이드 정책 | `STANDARD` (연장 지원 끔) | 연장 지원을 켜 두면 업그레이드를 놓쳐도 요금만 늘고 눈에 띄지 않는다 |
 | 다음 업그레이드 | 1.37 — KEDA가 지원한 뒤 test에서 먼저 하고, 1.36 표준 지원이 끝나는 2027-08-02 전에 마친다 | |
-| 클러스터 | 둘: test를 먼저 만들고 prod를 만든다 | 배우면서 낸 실수(CRD·오퍼레이터 업그레이드)가 진행 중인 러닝에 닿지 않는다. 하나로 줄이는 안은 「비용」과 「정하지 않은 것」 1 |
-| 자리 | prod: 지금 운영 VPC에 EKS 서브넷을 더한다. test: test EC2가 있는 개발 VPC에 둔다 | RDS·Redis EC2·Kafka EC2에 피어링 없이 닿는다 |
+| 클러스터 | prod 하나 (D-75). test는 EKS 없이 docker compose | 비용. Kubernetes 동작은 필요한 날 임시 EKS에서 확인한다(D-76) |
+| 자리 | prod: 지금 운영 VPC에 EKS 서브넷을 더한다 | RDS·Redis EC2·Kafka EC2에 피어링 없이 닿는다 |
 | 접근 | access entry(`aws-auth`는 쓰지 않음), 공개·사설 엔드포인트와 CIDR 허용 목록, 컨트롤 플레인 감사 로그 | |
 
-- **직접 운영하는 컨트롤러** — Karpenter 1.14 LTS, AWS Load Balancer Controller v3.6.x, Argo CD와 Argo Rollouts 1.9, KEDA 2.21, External Secrets Operator, ExternalDNS, metrics-server, kube-prometheus-stack, k6 Operator(test만). 직접 운영하는 것 자체가 배우는 목표다(D-23).
+- **직접 운영하는 컨트롤러** — 노드 · 로드 밸런서는 Auto Mode가 맡는다(D-77). 직접 올리는 것: Argo CD와 Argo Rollouts 1.9, KEDA 2.21, External Secrets Operator, ExternalDNS, metrics-server, kube-prometheus-stack. 처음 제안이던 Karpenter 1.14 LTS · AWS Load Balancer Controller 직접 운영은 D-41에 기록으로 남는다.
 - **올리지 않는 것** — Strimzi, 클러스터 안 Valkey, CloudNativePG. Kafka·Redis는 EC2에 두고 RDS는 둘만 쓴다(D-48, D-49, D-50). EKS 관리형 Argo CD도 쓰지 않는다(D-41).
 
 ## 노드
 
-**상태** — 제안 (D-41). Karpenter와 Auto Mode 중 무엇을 쓸지는 정하지 않음 (「정하지 않은 것」 2).
+**상태** — 정함 (D-77): EKS Auto Mode. 아래 표는 Karpenter로 쓴 처음 제안이라, Auto Mode의 NodePool로 옮겨 적을 때 풀 구성과 중단 예산(슬롯 시간 합치기 · 드리프트 0)은 그대로 두고 `expireAfter`만 21일 상한을 따른다.
+
+- **21일 만료는 막지 못한다** — 다른 배포 · 긴급 수정과 똑같이 계획 종료(drain)로 깔끔한 재연결로 만든다(D-65, D-77). SC1 · SC2 측정 중에는 노드 교체가 겹치지 않았는지 기록한다.
 
 | 풀 | 올리는 것 | 인스턴스 | 중단 규칙 |
 |---|---|---|---|
@@ -87,7 +89,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 | ALB 등록 해제 지연 | 90초 — preStop과 앱 종료 시간(runtime.md)을 합한 것보다 길다. 남은 연결이 없으면 AWS가 일찍 끝낸다 | 45초 | — |
 | 대상 그룹 `slow_start` | 30초 — 막 뜬 JVM에 부하가 한꺼번에 몰리지 않게 | — | — |
 
-- **슬롯 시간(17:30–24:00 KST)에는 자발적으로 파드를 내리지 않는다** — Argo CD 동기화 금지 창(main-api·session-*, 핫픽스는 수동 동기화), Karpenter `apps` 예산 `nodes: "0"`, KEDA 축소 안정화가 함께 막는다. 이 시간에 생기는 중단은 계획 밖(`1006`)이고, 앱의 재연결 경로로 복구한다(runtime.md).
+- **슬롯 시간(17:30–24:00 KST)에는 자발적으로 파드를 내리지 않는다** — Argo CD 동기화 금지 창(main-api·session-*, 긴급 수정은 수동 동기화로 EKS에 낸다 — D-77), Auto Mode NodePool 중단 예산(합치기 · 드리프트 0), KEDA 축소 안정화가 함께 막는다. 21일 만료 교체와 긴급 수정은 계획 종료(drain)로 재연결된다. 그 밖의 중단은 계획 밖(`1006`)이고, 앱의 재연결 경로로 복구한다(runtime.md).
 - **닫기 코드는 `4500`을 다시 쓴다** — 앱 출시 없이 지금 계약으로 된다(D-42).
 - **축소할 때도 계획 종료를 따른다** — KEDA가 파드를 줄이면 위와 같은 순서로 비운다. 선택 사항: 파드마다 `controller.kubernetes.io/pod-deletion-cost`에 연결 수를 넣어 가장 빈 파드부터 내린다.
 - **통과 기준** — R1(롤아웃 재시작) · R2(노드 비우기)의 기준은 PREREG `K-R1-1` · `K-R2-1`이다. R7(메인 배포)은 증거이고 관문이 아니다(`K-R7-1`).
@@ -142,7 +144,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 | 로그 | 앱은 stdout에 ECS JSON을 쓰고, Filebeat DaemonSet이 지금의 ES·Kibana로 보낸다 | 지금은 `LOG_DIR` 아래 파일에 쓴다(`logging.file.name`). k8s 프로필에서는 파일 appender를 끈다 |
 | 추적 | OTel Java 에이전트 (D-55) | 붙이는 방법과 보낼 곳은 platform 「관측」 |
 | 경보 | CloudWatch 알람 → SNS. 클러스터 밖에 둔다 | 클러스터나 Prometheus가 아파도 알림은 나간다. 대상: ALB, RDS(복제 슬롯 지연 포함), NAT |
-| 부하 시험 | test 클러스터의 `loadgen` 풀에서 k6 Operator TestRun을 실제 ALB로 보낸다 | prod에는 부하를 넣지 않는다. 클러스터가 생기기 전 측정은 [load_test/msa/](../../load_test/msa/README.md) |
+| 부하 시험 | 측정하는 날만 띄우는 부하 시험 환경에서 — test 클러스터는 없다(D-75) | prod에는 부하를 넣지 않는다. 클러스터가 생기기 전 측정은 [load_test/msa/](../../load_test/msa/README.md) |
 | 정책 | Pod Security Admission `restricted`, `runAsNonRoot`, 읽기 전용 루트에 `/tmp` emptyDir, capability 모두 제거, seccomp `RuntimeDefault`. ECR 태그 불변과 푸시 때 검사. 기반 이미지는 digest로 고정 | Dockerfile은 이미 `USER spring`이다. 기반 이미지 `eclipse-temurin:21-jre`는 지금 태그로만 지정돼 있다. Kyverno는 E7 |
 
 클러스터 밖에 두는 것 전체는 platform 「배치 — 지금과 목표」에 있다.
@@ -176,14 +178,12 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 
 | 항목 | 가정 | 월 (USD) |
 |---|---|---|
-| test 클러스터를 따로 둘 때 (클러스터 둘) | 컨트롤 플레인 73 + 시스템 `t4g.medium` 1대 30.37 + 앱 `m7g.large` spot 2대 평일 14시간 17.31 + EBS 5.47 + fck-nat 3.98 + ALB 18.18 + IPv4 3개 10.95 + 기타 3 | ≈ 162 |
-| test를 prod 클러스터의 네임스페이스로 둘 때 (클러스터 하나) | spot 앱 노드 17.31 + EBS 3.65 + 기타 3. test 데이터 EC2와 VPC가 달라 피어링이 필요하다 | ≈ 24 |
+| test | EKS 없음 — docker compose (D-75). 지금 test EC2 비용에 더해지는 것만 — 용량은 [platform.md](platform.md) 「test 환경」 | — |
 | 시험일 | 월 4일 × 10시간: 앱 `m7g.large` 3대, k6 `c7g.xlarge` spot 3대, 임시 RDS 둘, 임시 Redis EC2 둘 | ≈ 27 |
 
 | 합계 | 월 (USD, 추정) |
 |---|---|
-| 클러스터 둘 | ≈ 814 |
-| 클러스터 하나 | ≈ 676 |
+| prod 클러스터 하나 + 시험일 (D-75) | ≈ 652 |
 
 - **넣지 않은 것** — SageMaker와 AI DB(AI 쪽 비용이고, AI DB 자리는 platform 「정하지 않은 것」), 모니터링 EC2(지금 있고 크기가 저장소에 없다), ai-server 파드.
 - **없어지는 것** — prod를 옮긴 뒤(E4) 지금의 앱 함대와 ALB 하나가 빠진다. `t3.small` 두 대라면 월 약 $60이다. 실제 대수는 platform 「확인할 운영 값」에서 확인한다.
@@ -192,7 +192,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
   - 1년 Compute Savings Plan — 늘 도는 EC2(시스템·앱 노드, Redis·Kafka EC2, ≈ $283)의 약 25%로, 월 ≈ $70.
   - RDS 예약 인스턴스.
   - prod NAT 게이트웨이를 fck-nat로 바꾸면 월 ≈ $41을 아낀다. 대신 슬롯 시간에 노드를 늘릴 때 이미지·Pod Identity 경로와 메인의 외부 API 호출이 인스턴스 한 대에 걸린다.
-  - Auto Mode를 고르면 노드 요금에 약 12%가 더 붙는다(`m7g.large` 한 대에 월 ≈ $8.8이고, spot에도 붙는다).
+  - Auto Mode(D-77)라 노드 요금에 약 12%가 더 붙는다(`m7g.large` 한 대에 월 ≈ $8.8이고, spot에도 붙는다).
 
 ## 도입 단계 E0–E7
 
@@ -202,11 +202,11 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 |---|---|---|---|
 | E0 | 측정 | M0 | SC0 관문(`K-SC0-*`) 통과. 0단계 운영 증거와 비교군 A 기준선이 RESULTS에 있다 |
 | E1 | 모놀리스 안 수정 + Kubernetes 준비 | M0 | 비교군 A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(채택한 행만)를 넘는다 |
-| E2 | test 클러스터 기초 — 지금 이미지를 Deployment 하나로 | M1 | 파드 둘에서 E2E와 `MultiInstanceE2eTest` 통과. R1(`K-R1-1`, 채택하면 `K-R1-2`) 통과 |
+| E2 | Kubernetes 기초 — test는 compose, 매니페스트 확인 (D-75) | M1 | 파드 둘에서 E2E와 `MultiInstanceE2eTest` 통과. R1(`K-R1-1`, 채택하면 `K-R1-2`) 통과 |
 | E3 | 같은 이미지를 세 워크로드로 — 증거이며 관문이 아니다 | M1–M3 | R2·R3·R7·R8·R9 결과가 [load_test/msa/RESULTS.md](../../load_test/msa/RESULTS.md) 「회차 색인」에 있다 |
 | E4 | 운영 EKS — 아직 함대만 나눈 모놀리스 | M4 전후 | 운영 슬롯 2주가 PREREG 「후보 기준」을 넘는다. 불변식 I1–I4 어긋남 0 |
 | E5 | 코드 · 데이터 분리 | M1–M7 | `K-R4-1` · `K-R5-1` · `K-R5-2` · `K-R6-1` 통과. B2 구성 확인 `K-SC3-4` · `K-SC4-5` · `K-SC6-2` · `K-SC6-4` 통과. 대조 누락 0(I5) |
-| E6 | AI 서버 EKS | — | AI 쪽이 정한다 |
+| E6 | AI 서버 EKS — 우리 EKS가 자리 잡은 뒤 같은 클러스터에 합류할 수 있다 (D-75) | — | AI 쪽이 정한다 |
 | E7 | 다듬기 | M8–M9 뒤 | 없음 — 증거가 필요하다고 할 때 한다 |
 
 ### E0 측정 (지금 ASG)
@@ -219,11 +219,10 @@ M0와 같은 할 일이다 — [running-session-server/migration.md](running-ses
 - [ ] 다중 아키텍처(arm64 포함) 이미지 빌드, 기반 이미지 digest 고정
 - A′만으로 풀린 근거는 분리 근거에서 뺀다(verification 「판정과 결과」).
 
-### E2 test 클러스터 기초
-- [ ] Terraform: 개발 VPC에 EKS 서브넷, EKS 1.36, 시스템 노드 그룹, Pod Identity, Karpenter 중단 큐
-- [ ] Argo CD를 부트스트랩하고 컨트롤러를 올린다(Karpenter NodePool, LBC, ExternalDNS, ESO, KEDA, metrics-server, kube-prometheus-stack, k6 Operator)
-- [ ] test 데이터는 지금 test EC2에 그대로 둔다. 보안 그룹만 연다
-- [ ] 지금 모놀리스 이미지를 Deployment 하나(파드 둘)로 올린다. SSM `docker rm -f` 배포는 걷어 낸다
+### E2 Kubernetes 기초 — test 클러스터 없이 (D-75)
+- [ ] test를 docker compose로 옮긴다 — 메인 · 세션 · Redis 둘 · Kafka · Postgres. AI 서버는 넣지 않는다
+- [ ] 매니페스트(Helm · Argo CD 앱)를 만들고 임시 EKS(D-76)에서 파드 둘 · 종료 순서를 확인한 뒤 지운다
+- [ ] Terraform으로 prod VPC에 EKS 서브넷 · EKS 1.36 · 시스템 노드 그룹 · Pod Identity · Auto Mode를 준비한다(트래픽은 아직 없다)
 
 ### E3 같은 이미지를 세 워크로드로
 - [ ] main-api, session-ws, session-worker Deployment(역할 플래그)
@@ -235,7 +234,7 @@ M0와 같은 할 일이다 — [running-session-server/migration.md](running-ses
 
 ### E4 운영 EKS — 함대만 나눈 모놀리스
 - [ ] Terraform prod: 지금 운영 VPC에 EKS 서브넷을 더하고, 지금 있는 RDS·Redis EC2·Kafka EC2를 import한다
-- [ ] 컨트롤러를 설치하고 동기화 금지 창과 Karpenter 예산을 확인한다
+- [ ] 컨트롤러를 설치하고 동기화 금지 창과 Auto Mode NodePool 중단 예산을 확인한다
 - [ ] Route 53 가중치로 옛 ALB에서 새 ALB로 10% → 50% → 100% 옮긴다. 옮기는 시간은 10:00–16:00 KST뿐이다
 - [ ] 되돌릴 수 있게 옛 ASG를 2주 동안 켜 둔 뒤, F9 계획 종료로 걷어 낸다
 - Redis·Kafka는 옮기지 않는다 — 같은 EC2를 그대로 쓴다(D-48–D-50). 불변식은 consistency 「불변식 I1–I7」.
@@ -262,9 +261,10 @@ AI 쪽이 준비되고 정하면 한다. `spot` 풀, KEDA Kafka 지연 + SQS, Sa
 
 ## 정하지 않은 것
 
-1. **클러스터 수** — 둘(test 먼저, 제안)로 할지, prod 하나에 test 네임스페이스를 둘지. 하나로 하면 월 ≈ $138이 덜 든다. 대신 배우면서 낸 CRD·오퍼레이터·버전 업그레이드 실수가 진행 중인 러닝에 닿고, test 파드가 prod 노드와 보안 그룹을 같이 쓴다. test 데이터 EC2와 VPC가 달라 피어링도 필요하다.
-2. **Karpenter와 Auto Mode** — Karpenter(D-41 제안)는 `expireAfter: Never`와 슬롯 시간 예산 0으로 노드를 낮에만 바꾼다. 대신 컨트롤러를 직접 올리고 관리해야 한다. Auto Mode는 노드 수명 상한 21일이 강제여서 슬롯 중에 소켓을 든 노드가 비워질 수 있다. 요금 약 12%가 spot에도 붙고, Karpenter와 LBC가 가려진다. 대신 직접 운영할 것이 줄어든다.
-3. **test 데이터 면** — D-48의 '앱만'을 test에도 그대로 적용해 지금 test EC2(Kafka·Postgres·Connect, D-10)에 둘지, 클러스터 안 spot에 올릴지. 클러스터 안에 올리면 오퍼레이터를 배울 수 있지만, test 배치가 운영 배치와 달라진다.
+1. ~~클러스터 수~~ — **정했다 → D-75**: prod 하나, test는 docker compose.
+2. ~~Karpenter와 Auto Mode~~ — **정했다 → D-77**: Auto Mode. 슬롯 시간 노드 교체가 실제 문제로 보이면 Karpenter로 옮기는 것을 다시 본다.
+3. ~~test 데이터 면~~ — **정했다 → D-75**: test는 EKS 없이 compose라 데이터도 test EC2(또는 compose)에 둔다.
 4. **클러스터 안 Prometheus** — KEDA의 Prometheus 트리거는 클러스터에서 조회할 수 있는 Prometheus가 있어야 한다. 이것을 '앱만'(D-48)에 들어가는 허용 인프라로 볼지, KEDA가 모니터링 EC2의 Prometheus를 직접 보게 할지.
-5. **모니터링 EC2에 닿는 길** — remote_write와 Filebeat가 운영 모니터링 EC2에 닿아야 한다. test 클러스터는 VPC가 달라 닿지 않는다(부하 시험 때는 test VPC에 모니터링 EC2를 따로 띄웠다). 피어링을 할지, test 모니터링을 클러스터 안에 둘지.
+5. **모니터링 EC2에 닿는 길** — prod 클러스터의 remote_write와 Filebeat가 운영 모니터링 EC2에 닿아야 한다(같은 VPC인지 확인). test는 클러스터가 없어(D-75) 지금처럼 부하 시험 때만 test VPC에 모니터링 EC2를 따로 띄운다.
 6. **ai-server 워크로드의 주인** — 클러스터에 올릴지, 언제 올릴지, 어떤 자원을 쓸지는 AI 쪽이 정한다(ai-server/architecture 「실행 환경」).
+7. ~~Kubernetes 동작을 검증할 곳~~ — **정했다 → D-76**: 필요한 날만 임시 EKS를 띄웠다 지운다(하루 약 $7).

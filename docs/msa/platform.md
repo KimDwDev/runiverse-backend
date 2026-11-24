@@ -180,6 +180,7 @@
 - **(가)면 먼저 볼 것** — 남은 메모리(Connect 힙 최대 1GB가 이미 올라가 있다), 루트 디스크 남은 양, 두 슬롯의 지연(test는 알람이 없다).
 - **세션 Redis 자리도 정하지 않음** — 따로 두면 prod와 같고, 같은 서버면 접두어로만 갈린다.
 - **dev(로컬)에는 CDC가 없다** — 로컬에서 결과 이벤트를 받는 방법은 정하지 않음(음악 완료처럼 로컬 가짜를 둘지 — [outbox-inbox.md](outbox-inbox.md) 「로컬 가짜 AI (음악 완료)」).
+- **앱도 compose로 같은 EC2에 둔다** — 정함 (D-75, D-76). test EC2를 `t3.large`(8GB)로 키우고 메인 · 세션 · Redis 둘을 compose로 더한다(AI 서버는 넣지 않는다). docker compose 플러그인을 설치하고, 키운 뒤 남는 메모리 · 디스크를 확인한다.
 - **부하 시험 구성** — [load_test/msa/RUNBOOK.md](../../load_test/msa/RUNBOOK.md) 「1. 준비」.
 
 ## 새 이름

@@ -48,7 +48,7 @@
 | 3 분리 + saga | M7 운영 추출 | 새 저장소 배포물로 ALB 경로를 돌린다 | 되돌리기 연습 · 양쪽 배포의 서로 영향 0 | 대기 |
 | 3 분리 + saga | M8 옛 엔진 삭제 | — | 지울 기준 A | 대기 |
 | 3 분리 + saga | M9 모놀리스 안 호스트 제거 | — | 지울 기준 B | 대기 |
-| 4 플랫폼 | E2 test 클러스터 기초 | 지금 이미지를 Deployment 하나로 — SSM `docker rm -f` 배포를 대신한다 | R1 · 파드 둘에서 E2E · `MultiInstanceE2eTest` | 대기 |
+| 4 플랫폼 | E2 Kubernetes 기초 (test는 compose, D-75) | test를 compose로 옮기고 매니페스트 · 종료 순서를 확인한다 | R1 · 파드 둘에서 E2E · `MultiInstanceE2eTest` | 대기 |
 | 4 플랫폼 | E3 같은 이미지를 세 워크로드로 | main-api · session-ws · session-worker — 증거, 관문 아님 | R2 · R3 · R7 · R8 · R9 | 대기 |
 | 4 플랫폼 | E4 운영 EKS | 아직 함대만 나눈 모놀리스 | PREREG 「후보 기준」 · I1–I4 | 대기 |
 | 4 플랫폼 | E5 코드 · 데이터 분리 | 데이터 분리를 EKS 위에서 한다 | R4 · R5 · R6, B2의 SC3 · SC4 · SC6, I5 | 대기 |
