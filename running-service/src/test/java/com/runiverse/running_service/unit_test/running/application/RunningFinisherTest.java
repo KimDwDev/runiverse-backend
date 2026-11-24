@@ -1,6 +1,7 @@
 package com.runiverse.running_service.unit_test.running.application;
 
 import com.runiverse.running_service.application.running.port.out.RecordRunningMetricPort;
+import com.runiverse.running_service.application.running.port.out.FinishLeasePort;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import com.runiverse.running_service.application.common.port.out.UpdateUserAvgPacePort;
@@ -9,6 +10,7 @@ import com.runiverse.running_service.application.running.common.GoalCheck;
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
+import com.runiverse.running_service.application.running.common.RunningFinishSteps;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
@@ -100,6 +102,7 @@ public class RunningFinisherTest {
     private static final int TARGET = 5_000;
     private static final BigDecimal WEIGHT = new BigDecimal("70.0");
     private static final int CADENCE = 168;
+    private static final String LEASE_TOKEN = "lease-token";
     private static final String GPS_TRACK_KEY = "gps-tracks/user/125/2026-08-27.json";
     // 외부 날씨 API가 붙기 전이라 어댑터는 기본값만 돌려준다(DefaultWeatherAdapter)
     private static final Weather WEATHER = new Weather(0, new BigDecimal("15.0"));
@@ -178,6 +181,10 @@ public class RunningFinisherTest {
     @Mock
     private RecordRunningMetricPort recordRunningMetricPort;
 
+    // 임대 자체는 FinishLeaseRedisAdapterTest가 본다 — 여기서는 기본으로 잡히게 두고, 겹침은 따로 본다
+    @Mock
+    private FinishLeasePort finishLeasePort;
+
     @Captor
     private ArgumentCaptor<RunningRecord> recordCaptor;
 
@@ -189,17 +196,38 @@ public class RunningFinisherTest {
     // 설정값은 검증 대상이라 mock이 아니라 실제 값을 넣는다 — 0.8 경계가 이 테스트의 주제다
     @BeforeEach
     void setUp() {
-        finisher = new RunningFinisher(lockRunningRoomPort, lockRunningPlayerPort,
-                loadRunningTrackPort, loadUserWeightPort, loadWeatherPort, saveGpsTrackPort,
-                createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort,
-                existsRunningPlayerPort, updateRunningRoomPort, startMatchCooldownPort,
-                existsRunningRecordPort, loadRecentRunningPacesPort, updateUserAvgPacePort,
-                liveRunningStatusChanger, runningComboArchiver, markRunningComboFinishedPort,
-                eventPublisher, PROPERTIES, DEFAULT_PROPERTIES, recordRunningMetricPort);
+        finisher = new RunningFinisher(
+                finishLeasePort, // FinishLeasePort
+                new RunningFinishSteps(
+                        lockRunningRoomPort, // LockRunningRoomPort
+                        lockRunningPlayerPort, // LockRunningPlayerPort
+                        loadRunningTrackPort, // LoadRunningTrackPort
+                        loadUserWeightPort, // LoadUserWeightPort
+                        createRunningRecordPort, // CreateRunningRecordPort
+                        updateRunningPlayerPort, // UpdateRunningPlayerPort
+                        deleteRunningTrackPort, // DeleteRunningTrackPort
+                        existsRunningPlayerPort, // ExistsRunningPlayerPort
+                        updateRunningRoomPort, // UpdateRunningRoomPort
+                        startMatchCooldownPort, // StartMatchCooldownPort
+                        existsRunningRecordPort, // ExistsRunningRecordPort
+                        loadRecentRunningPacesPort, // LoadRecentRunningPacesPort
+                        updateUserAvgPacePort, // UpdateUserAvgPacePort
+                        liveRunningStatusChanger, // LiveRunningStatusChanger
+                        runningComboArchiver, // RunningComboArchiver
+                        markRunningComboFinishedPort, // MarkRunningComboFinishedPort
+                        eventPublisher, // ApplicationEventPublisher
+                        PROPERTIES, // RunningFinishProperties
+                        DEFAULT_PROPERTIES, // TrackFilterProperties
+                        recordRunningMetricPort), // RecordRunningMetricPort
+                saveGpsTrackPort, // SaveGpsTrackPort
+                loadWeatherPort, // LoadWeatherPort
+                PROPERTIES, // RunningFinishProperties
+                recordRunningMetricPort);
         // 이 클래스의 트랙은 대부분 유효 러닝을 통과해 기록이 남는다 —
         // 기록 없이 닫히는 경우만 개별 테스트가 뒤집는다
         lenient().when(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
                 .thenReturn(true);
+        lenient().when(finishLeasePort.tryAcquire(anyLong(), any())).thenReturn(Optional.of(LEASE_TOKEN));
     }
 
     // 종료 시각이 찍힌 참가자 = 이미 확정이 끝난 참가자다(deleted_at이 곧 종료 표시)
@@ -1105,7 +1133,7 @@ public class RunningFinisherTest {
                     .willReturn(true);
             willThrow(new IllegalStateException("redis down"))
                     .given(markRunningComboFinishedPort).markFinished(ROOM_ID, new UserId(USER_ID));
-            LogCapture log = LogCapture.of(RunningFinisher.class);
+            LogCapture log = LogCapture.of(RunningFinishSteps.class);
 
             try {
                 // when -> 콤보는 곁가지다. 종료는 이미 확정됐다
@@ -1348,7 +1376,7 @@ public class RunningFinisherTest {
             givenPlayer(player(RunningPlayerStatus.RUNNING, null));
             givenRoom(room(RunningRoomType.MATCH, TARGET));
             givenTrack(new RunningTrack("[]", List.of()));
-            LogCapture log = LogCapture.of(RunningFinisher.class);
+            LogCapture log = LogCapture.of(RunningFinishSteps.class);
 
             try {
                 // when
@@ -1385,7 +1413,7 @@ public class RunningFinisherTest {
             given(loadUserWeightPort.loadWeightKg(new UserId(USER_ID))).willReturn(Optional.of(WEIGHT));
             given(loadRunningTrackPort.load(ROOM_ID, new UserId(USER_ID)))
                     .willReturn(new RunningTrack("raw", points));
-            LogCapture log = LogCapture.of(RunningFinisher.class);
+            LogCapture log = LogCapture.of(RunningFinishSteps.class);
 
             try {
                 // when

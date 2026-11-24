@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.running.command.combo.UpdateRun
 import com.runiverse.running_service.integration_test.fake.FakeEmailSender;
 import com.runiverse.running_service.integration_test.fake.FakeRunningComboPublisher;
 import com.runiverse.running_service.integration_test.fake.FakeRunningProgressPublisher;
+import com.runiverse.running_service.integration_test.fake.InMemoryFinishLeaseStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRunningComboStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryRunningDistanceStore;
 import com.runiverse.running_service.integration_test.fake.InMemoryLiveRunningStatusStore;
@@ -62,6 +63,7 @@ public abstract class IntegrationTestSupport {
     protected InMemoryRunningComboArchiveStore runningComboArchiveStore;
     protected FakeRunningComboPublisher runningComboPublisher;
     protected InMemoryRunningRecordStore runningRecordStore;
+    protected InMemoryFinishLeaseStore finishLeaseStore;
     protected FakeGpsTrackUploader gpsTrackUploader;
     protected FakeWeatherProvider weatherProvider;
     protected InMemoryAccessTokenBlacklist accessTokenBlacklist;
@@ -94,6 +96,7 @@ public abstract class IntegrationTestSupport {
         runningComboArchiveStore = new InMemoryRunningComboArchiveStore();
         runningComboPublisher = new FakeRunningComboPublisher();
         runningRecordStore = new InMemoryRunningRecordStore();
+        finishLeaseStore = new InMemoryFinishLeaseStore();
         gpsTrackUploader = new FakeGpsTrackUploader();
         weatherProvider = new FakeWeatherProvider();
         accessTokenBlacklist = new InMemoryAccessTokenBlacklist();

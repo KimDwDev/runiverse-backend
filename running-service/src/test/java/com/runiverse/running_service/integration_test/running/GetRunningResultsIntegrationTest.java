@@ -14,6 +14,7 @@ import com.runiverse.running_service.application.running.command.start.StartRunn
 import com.runiverse.running_service.application.running.common.LiveRunningStatusChanger;
 import com.runiverse.running_service.application.running.common.RunningFinishProperties;
 import com.runiverse.running_service.application.running.common.RunningFinisher;
+import com.runiverse.running_service.application.running.common.RunningFinishSteps;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
 import com.runiverse.running_service.application.running.exception.RunningResultNotFoundException;
 import com.runiverse.running_service.application.running.port.out.TrackPoint;
@@ -99,33 +100,31 @@ public class GetRunningResultsIntegrationTest extends IntegrationTestSupport {
                 runningStore      // UpdateRunningPlayerPort
         );
         RunningFinisher runningFinisher = new RunningFinisher(
-                runningStore,       // LockRunningRoomPort
-                runningStore,       // LockRunningPlayerPort
-                runningTrackStore,  // LoadRunningTrackPort
-                onboardingStore,    // LoadUserWeightPort
-                weatherProvider,    // LoadWeatherPort
-                gpsTrackUploader,   // SaveGpsTrackPort
-                runningRecordStore, // CreateRunningRecordPort
-                runningStore,       // UpdateRunningPlayerPort
-                runningTrackStore,  // DeleteRunningTrackPort
-                runningStore,       // ExistsRunningPlayerPort
-                runningStore,       // UpdateRunningRoomPort
-                // 쿨다운 발급은 이 테스트의 주제가 아니다 — 아무것도 하지 않는다
-                (userId, cooldown) -> {
-                },                  // StartMatchCooldownPort
-                runningRecordStore, // ExistsRunningRecordPort
-                runningRecordStore, // LoadRecentRunningPacesPort
-                onboardingStore,    // UpdateUserAvgPacePort
-                new LiveRunningStatusChanger( // LiveRunningStatusChanger
-                        liveRunningStatusStore, runningDistanceStore, runningProgressPublisher),
-                newRunningComboArchiver(), // RunningComboArchiver
-                runningComboStore,  // MarkRunningComboFinishedPort
-                event -> {          // ApplicationEventPublisher
-                },
-                PROPERTIES
-                ,
-                DEFAULT_PROPERTIES,
-                // 메트릭은 이 테스트의 관심사가 아니다 — 메모리 레지스트리에 흘려보낸다
+                finishLeaseStore, // FinishLeasePort
+                new RunningFinishSteps(
+                        runningStore, // LockRunningRoomPort
+                        runningStore, // LockRunningPlayerPort
+                        runningTrackStore, // LoadRunningTrackPort
+                        onboardingStore, // LoadUserWeightPort
+                        runningRecordStore, // CreateRunningRecordPort
+                        runningStore, // UpdateRunningPlayerPort
+                        runningTrackStore, // DeleteRunningTrackPort
+                        runningStore, // ExistsRunningPlayerPort
+                        runningStore, // UpdateRunningRoomPort
+                        (userId, cooldown) -> { }, // StartMatchCooldownPort
+                        runningRecordStore, // ExistsRunningRecordPort
+                        runningRecordStore, // LoadRecentRunningPacesPort
+                        onboardingStore, // UpdateUserAvgPacePort
+                        new LiveRunningStatusChanger( liveRunningStatusStore, runningDistanceStore, runningProgressPublisher), // LiveRunningStatusChanger
+                        newRunningComboArchiver(), // RunningComboArchiver
+                        runningComboStore, // MarkRunningComboFinishedPort
+                        event -> { }, // ApplicationEventPublisher
+                        PROPERTIES, // RunningFinishProperties
+                        DEFAULT_PROPERTIES, // TrackFilterProperties
+                        new RunningMetricAdapter(new SimpleMeterRegistry())), // RecordRunningMetricPort
+                gpsTrackUploader, // SaveGpsTrackPort
+                weatherProvider, // LoadWeatherPort
+                PROPERTIES, // RunningFinishProperties
                 new RunningMetricAdapter(new SimpleMeterRegistry()));
         updateRunningLocationHandler = new UpdateRunningLocationHandler(
                 runningTrackStore,        // AppendRunningTrackPort
