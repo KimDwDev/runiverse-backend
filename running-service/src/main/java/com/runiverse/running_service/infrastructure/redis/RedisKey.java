@@ -8,6 +8,7 @@ public enum RedisKey {
     MATCH("match"),
     RUNNING_TRACK("running:track"),
     RUNNING_COMBO("running:combo"),
+    RUNNING_FINISH_LEASE("running:finish-lease"),
     RECORD_CARD("record-card");
 
     private static final String DELIMITER = ":";
