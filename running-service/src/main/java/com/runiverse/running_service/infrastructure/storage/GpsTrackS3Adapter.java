@@ -9,6 +9,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -20,6 +21,10 @@ public class GpsTrackS3Adapter implements SaveGpsTrackPort {
 
     private static final String KEY_PREFIX = "gps-tracks";
     private static final DateTimeFormatter KEY_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    // 재시도까지 합친 이 업로드 한 건의 상한 — 클라이언트 전역은 시도당 3초뿐이라 재시도가 쌓이면 끝이 없다.
+    // 끝내기 임대 TTL(running-finish-lease.ttl, 30초)보다 짧아야 봉인이 임대 안에서 끝난다.
+    // 클라이언트를 기록 카드 등과 같이 쓰므로 전역이 아니라 이 요청에만 건다(D-82)
+    private static final Duration UPLOAD_TIMEOUT = Duration.ofSeconds(10);
     private final S3Client s3Client;
     private final S3Properties properties;
 
@@ -30,7 +35,8 @@ public class GpsTrackS3Adapter implements SaveGpsTrackPort {
                 request -> request
                         .bucket(properties.gpsTrackBucket())
                         .key(key)
-                        .contentType("application/json"),
+                        .contentType("application/json")
+                        .overrideConfiguration(o -> o.apiCallTimeout(UPLOAD_TIMEOUT)),
                 RequestBody.fromString(envelope(upload), StandardCharsets.UTF_8));
         return key;
     }
