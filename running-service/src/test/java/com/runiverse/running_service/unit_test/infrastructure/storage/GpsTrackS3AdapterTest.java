@@ -191,4 +191,15 @@ public class GpsTrackS3AdapterTest {
         assertThat(points.size()).isEqualTo(1);
         assertThat(points.get(0).get(1).asDouble()).isEqualTo(37.51234);
     }
+
+    @Test
+    @DisplayName("재시도까지 합친 업로드 한 건에 10초 상한을 건다")
+    void limitsWholeUploadCall() {
+        // when
+        adapter.save(upload(LocalDateTime.of(2026, 8, 27, 19, 0), LocalDateTime.of(2026, 8, 27, 19, 30)));
+
+        // then -> 상한이 없으면 봉인이 끝내기 임대 TTL(30초)을 넘겨 다른 연결의 봉인과 겹친다
+        assertThat(capturedRequest().overrideConfiguration())
+                .hasValueSatisfying(o -> assertThat(o.apiCallTimeout()).contains(Duration.ofSeconds(10)));
+    }
 }
