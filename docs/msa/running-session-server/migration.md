@@ -142,7 +142,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 | F8 | **M0 모놀리스 (D-66)** — `JAVA_TOOL_OPTIONS`로 `MaxRAMPercentage` — 값은 「정하지 않은 것」 4 | Dockerfile `ENTRYPOINT`에 JVM 옵션이 없다 |
 | F9 | **M0 모놀리스에 먼저 (D-65)** — WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
 
-- **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `제안 (D-42)`.
+- **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `정함 (D-42)`.
 - **나가는 조건** — A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 수정(F1)의 효과는 SC9의 A vs A′로 보고(D-79), 끝내기 기준 `K-SC9-5`는 A′(M0)와 새 엔진(M3 · M5)에서 본다(채택한 행만). A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건

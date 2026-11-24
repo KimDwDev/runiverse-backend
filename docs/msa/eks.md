@@ -75,7 +75,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 
 ## 계획 종료
 
-**상태** — 제안 (D-41, D-42). 계획 종료로 재연결하는 것은 정함 (D-65, D-77). 이 절에는 파드 스펙 값만 적는다. 앱이 소켓을 닫는 순서와 시간은 [running-session-server/runtime.md](running-session-server/runtime.md)에, 지금 ASG에서 쓸 값(M0의 F9)은 migration 「선행 수정 F1–F9」에 있다.
+**상태** — 제안 (D-41). 계획 종료로 재연결하는 것과 닫기 코드 `4500`은 정함 (D-42, D-65, D-77). 이 절에는 파드 스펙 값만 적는다. 앱이 소켓을 닫는 순서와 시간은 [running-session-server/runtime.md](running-session-server/runtime.md)에, 지금 ASG에서 쓸 값(M0의 F9)은 migration 「선행 수정 F1–F9」에 있다.
 
 | 값 | `session-ws` | `main-api` (SSE) | `session-worker` |
 |---|---|---|---|
