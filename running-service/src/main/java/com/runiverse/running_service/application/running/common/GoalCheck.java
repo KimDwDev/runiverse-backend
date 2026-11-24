@@ -11,4 +11,10 @@ public record GoalCheck(boolean finished, int remainingMeters) {
     public static GoalCheck pending(int remainingMeters) {
         return new GoalCheck(false, remainingMeters);
     }
+
+    // 다른 연결이 이 러닝을 끝내는 중이라 판정하지 않았다 — 자동 종료만 받는다(알리지 않고 다음 배치가 다시 본다).
+    // 사용자 종료는 이 값 대신 RunningFinishInProgressException으로 재전송을 받는다
+    public static GoalCheck inProgress() {
+        return new GoalCheck(false, 0);
+    }
 }

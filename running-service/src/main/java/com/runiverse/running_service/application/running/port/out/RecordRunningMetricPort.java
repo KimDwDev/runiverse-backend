@@ -15,4 +15,8 @@ public interface RecordRunningMetricPort {
     // 다 뛰었다고 보고 누른 종료(forced=false)를 미뤘을 때 남은 거리 —
     // 화면 거리와 서버 확정 거리가 얼마나 어긋나는지 본다
     void userFinishDeferred(int remainingMeters);
+
+    // 끝내기 임대를 잡지 못한 종료 — 다른 연결이 같은 러닝을 끝내는 중이다.
+    // 사용자 종료는 RUNNING_TRACK_UNAVAILABLE로 답해 저장소 장애와 섞이므로 여기서 가른다
+    void finishInProgress(boolean onGoal);
 }

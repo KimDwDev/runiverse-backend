@@ -15,6 +15,7 @@ public class RunningMetricAdapter implements RecordRunningMetricPort {
     private static final String GAPS = "runiverse.running.finish.gaps";
     private static final String GOAL = "runiverse.running.location.goal";
     private static final String GOAL_PENDING = "runiverse.running.finish.goalpending";
+    private static final String IN_PROGRESS = "runiverse.running.finish.inprogress";
     private static final String METERS = "meters";
     // 분포를 보려고 히스토그램을 켠다 — 구간을 목표 거리 범위로 묶어 시계열이 불필요하게 늘지 않게 한다
     private static final double MIN_EXPECTED_METERS = 1;
@@ -40,6 +41,11 @@ public class RunningMetricAdapter implements RecordRunningMetricPort {
     @Override
     public void userFinishDeferred(int remainingMeters) {
         meters(GOAL_PENDING).record(remainingMeters);
+    }
+
+    @Override
+    public void finishInProgress(boolean onGoal) {
+        meterRegistry.counter(IN_PROGRESS, "trigger", onGoal ? "goal" : "user").increment();
     }
 
     // 뺀 거리가 0인 러닝도 기록한다 — 빼면 "거른 게 없는 러닝"이 분포에서 사라져 비율을 낼 수 없다
