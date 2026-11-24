@@ -24,7 +24,7 @@ Runiverse는 메인 서버(running-service)·러닝 세션 서버·AI 전용 서
 | 보이는 이름 | 문서 폴더 | 저장소 · 코드 | Kafka 계정 | 상태 |
 |---|---|---|---|---|
 | 메인 서버 | 없음 — `docs/*`가 메인 문서 | 이 저장소의 `running-service` (Gradle 프로젝트도 같은 이름) | `{env}.running-service` | 운영 중 |
-| 러닝 세션 서버 | [`running-session-server/`](running-session-server/README.md) | 모놀리스 안: Gradle 서브프로젝트 `running-session`, 패키지 `com.runiverse.running_session` — 제안 (D-35), 별도 프로세스 호스트 `running-session-app` — 제안 (D-61). 나눈 뒤: 저장소 · 이미지 `running-session-server` — 제안 (D-61) | `{env}.running-session-server` — 제안 (D-61) | 계획 — [running-session-server/README.md](running-session-server/README.md) 「진행 단계」 |
+| 러닝 세션 서버 | [`running-session-server/`](running-session-server/README.md) | 같은 저장소의 별도 앱 폴더 `running-session-server/`, 패키지 `com.runiverse.running_session` — 정함 (D-78). 나눈 뒤: 저장소 · 이미지 `running-session-server` — 제안 (D-61) | `{env}.running-session-server` — 제안 (D-61) | 계획 — [running-session-server/README.md](running-session-server/README.md) 「진행 단계」 |
 | AI 전용 서버 | [`ai-server/`](ai-server/README.md) | 저장소 `runiverse-ai` (AI 쪽) | `{env}.runiverse-ai` | 운영 중 — [ai-server/README.md](ai-server/README.md) 「지금 상태」 |
 
 - **실제 이름은 이 표가 정본이다** — 폴더 이름은 보이는 이름을 따른다. AI는 폴더(`ai-server/`)와 실제 이름(`runiverse-ai`)이 다르다.
