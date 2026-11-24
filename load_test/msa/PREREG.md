@@ -307,7 +307,7 @@
 | A′ | SC3 C5 | 날씨가 멈춰도 다른 끝내기를 막지 않는다(잠금 밖). 멈춘 끝내기는 `weather.timeout` 뒤 기본값으로 확정된다 |
 | A′ | SC3 C6 | 장애 동안 끝내기는 0%다. 회복 뒤 모두 끝나고 잃은 러닝은 0이다 |
 | A′ | SC5 · SC7 · SC8 | 기준 안에 든다. 강제 종료 100개가 30초 안에 끝난다. 10 km 끝내기 하나에 CPU 20–60 ms, GC 멈춤 < 10 ms, 3분에 퍼진 400명 끝내기에서 CPU 증가 < 10% |
-| A′ | SC9 400명 동시 | 끝내기가 S3 · 날씨를 잠금 밖에서 기다려(F1, D-81) 풀이 바닥나지 않는다 — finish_success ≥ 99% · Hikari 시간 초과 0 · ack_without_record 0이고 run 14가 재현되지 않는다. 메인 REST p95 상승은 A보다 한참 작지만, 같은 JVM · 풀이라 남는다 |
+| A′ | SC9 400명 동시 | 끝내기가 분석 · S3 · 날씨를 잠금 밖에서 해(F1, D-82) 풀이 바닥나지 않는다 — finish_success ≥ 99% · Hikari 시간 초과 0 · ack_without_record 0이고 run 14가 재현되지 않는다. 메인 REST p95 상승은 A보다 한참 작지만, 같은 JVM · 풀이라 남는다 |
 | A′ | SC9 포화 · SC10 포화 | 같은 JVM · 풀 · Redis라 한쪽 포화가 다른 쪽으로 번진다 — `K-SC9-2` · `K-SC10-2`를 넘지 못한다 |
 | A′ | SC12 | 현실 몰림에서 DB 읽기 p95 상승이 20% 미만이다. RDS는 병목이 아니다 |
 | A′c | SC5 | 연결의 머리 막힘은 없어지고, Redis 단일 스레드 경합은 남는다 |
@@ -334,7 +334,7 @@
 
 | id | 후보 | 기준 | 채택하면 쓰는 곳 | 상태 |
 |---|---|---|---|---|
-| K-SC9-5 | 끝내기 수정 F1 (모놀리스 A′ · 새 엔진, D-63 · D-79 · D-81) | A′(M0)와 B2 새 엔진(M3 · M5) 각각 · SC9 400명 동시(날씨 2초) · 3회: 10초 안 `RUNNING_FINISHED` ≥ 99%(또는 ≥ 99.5%에 끝내기 p95 < 2초 — 얼릴 때 하나를 고른다) · `INTERNAL_SERVER_ERROR` 0 · Hikari 시간 초과 0 · 스크레이프 공백 ≤ 15초 · REST p95 ≤ 1.5배 · ack_without_record 0 · 끝내기 확정 하나에 확정 트랜잭션 1(목표 미달로 미룬 잠금 판정은 `runiverse.running.finish.goalpending`으로 보고만 — D-80) · 단계 타이머(`runiverse.running.finish.step`)가 끝내기 시간의 90% 이상을 설명 | M0 · M3 · M5 | 제안 |
+| K-SC9-5 | 끝내기 수정 F1 (모놀리스 A′ · 새 엔진, D-63 · D-79 · D-82) | A′(M0)와 B2 새 엔진(M3 · M5) 각각 · SC9 400명 동시(날씨 2초) · 3회: 10초 안 `RUNNING_FINISHED` ≥ 99%(또는 ≥ 99.5%에 끝내기 p95 < 2초 — 얼릴 때 하나를 고른다) · `INTERNAL_SERVER_ERROR` 0 · Hikari 시간 초과 0 · 스크레이프 공백 ≤ 15초 · REST p95 ≤ 1.5배 · ack_without_record 0 · 끝내기 확정 하나에 판정 · 확정 트랜잭션 각 1(목표 미달로 미룬 잠금 판정은 `runiverse.running.finish.goalpending`으로 보고만 — D-80) · 단계 타이머(`runiverse.running.finish.step`)가 끝내기 시간의 90% 이상을 설명 | M0 · M3 · M5 | 제안 |
 | K-SC1-5 | ASG 계획 종료 | A′ · ASG 인스턴스 교체 · 러너 400명: 닫힘 코드는 4500뿐 | M0 · E1 (F9) | 제안 |
 | K-SC1-6 | 운영 메인 배포 | M7 뒤 운영 메인 배포마다 러닝 WS 끊김 0(닫힘 코드별 수 지표) | M7 | 제안 |
 | K-SC2-2 | 세션 롤링 배포 | B2 · 러너 1,000명: 잃은 트랙 0 · finish_success ≥ 99.9% · reconnect_to_started_ms p95 < 5초 · 30초 안에 100% 재연결 | M5 · M7 | 제안 |

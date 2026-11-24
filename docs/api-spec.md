@@ -1867,7 +1867,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
   | `PAUSE_SEGMENT_DECREASED` | `RUNNING_LOCATION_UPDATE`의 `pauseSegment`가 `sequence` 순서를 거슬러 줄었다 — 검증 실패 계열(REST의 400에 해당)이다. 클라 로컬 트랙이 깨졌다는 뜻이라 같은 배치를 다시 보내도 계속 거부된다. 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다 |
   | `RUNNING_SESSION_UNAVAILABLE` | 외부 저장소 장애로 세션을 등록하지 못함 — 이 연결로는 러닝 메시지를 처리할 수 없다(참가자 상태는 이미 `RUNNING`일 수 있다). 잠시 뒤 `RUNNING_START`를 다시 보낸다 — 멱등이다 |
-  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다. `sourceType`으로 갈린다 — `RUNNING_LOCATION_UPDATE`면 다음 배치 차례에 로컬 트랙 전체를 다시 보내고, `RUNNING_FINISH`면 좌표가 아니라 `RUNNING_FINISH`를 다시 보낸다 |
+  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다. `sourceType`으로 갈린다 — `RUNNING_LOCATION_UPDATE`면 다음 배치 차례에 로컬 트랙 전체를 다시 보내고, `RUNNING_FINISH`면 좌표가 아니라 `RUNNING_FINISH`를 다시 보낸다. 다른 연결(다시 붙기 전 소켓 등)이 같은 러닝의 종료를 처리하는 중일 때도 `RUNNING_FINISH`에 이 코드가 나간다 — 처리 방법은 같다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
