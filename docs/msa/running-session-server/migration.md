@@ -28,7 +28,7 @@
 `정함 (D-22, D-47)` — 별도 저장소로 옮기는 때(M6을 M7 앞에)는 `제안 (D-62)`.
 
 ```text
-M0     옛 엔진을 잰다 (F2–F9는 정하지 않음)               모놀리스 하나, 지금 배포 그대로
+M0     옛 엔진을 재고 F3 · F5–F9를 넣는다                   모놀리스 하나, 지금 배포 그대로
 M1–M3  모놀리스 안에 새 엔진을 만든다                 새 엔진 트래픽 0%, 두 엔진 E2E
 M4     운영에서 방마다 새 엔진으로 올린다              되돌리기 = 새 방 비율 0%
 M5     따로 띄워 test에서 잰다 (B2)
@@ -42,7 +42,7 @@ M9     모놀리스 안 호스트를 지운다 (지울 기준 B)
 - **애그리거트를 쪼개지 않고 새로 만든다** — 매칭과 러닝은 한 애그리거트다(「지금 얽힌 곳 (11-24 기준)」). 방 · 매칭 코드는 매주 바뀌고(방 채팅 11-10~17, 초대 · 탈퇴 10-27~11-02, 7-1 카드 요약 11-23), 실시간 러닝 경로의 마지막 기능 변경은 10-20(`dd36727a`)이라 새로 만들 대상이 작고 멈춰 있다 — [rationale.md](rationale.md) 「받쳐 주는 근거 G5–G8」.
 - **검증된 운영 길을 그대로 쓴다** — 새 엔진이 증명될 때까지(M4) ALB · ASG · Parameter Store · E2E · 대시보드를 바꾸지 않는다.
 - **모놀리스가 되돌릴 곳이다** — 옛 엔진은 M8까지, 모놀리스 안 호스트는 M9까지 남는다(「진행 중 방과 되돌리기」).
-- **끝내기 구조는 새 엔진에서 짠다** — `정함 (D-63)`. 옛 엔진의 끝내기는 고치지 않는다. 그래서 끝내기 폭주는 속도 비교에 쓰지 않고 격리로 잰다(D-64). 나머지 선행 수정(F2–F9)을 모놀리스에서 먼저 할지는 `제안 (D-34)`.
+- **끝내기 구조는 새 엔진에서 짠다** — `정함 (D-63)`. 옛 엔진의 끝내기는 고치지 않는다. 그래서 끝내기 폭주는 속도 비교에 쓰지 않고 격리로 잰다(D-64). F3 · F5–F9는 모놀리스에 먼저 넣는다 — `정함 (D-65, D-66)`. F2는 새 엔진에서, F4는 승인 대기.
 
 ## 지금 얽힌 곳 (11-24 기준)
 
@@ -141,22 +141,22 @@ running-service/                     메인 저장소 — 지금은 Gradle 프�
 
 ## 선행 수정 F1–F9
 
-F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. F2–F9는 `제안 (D-34)` — 모놀리스에서 먼저 할지 정하지 않았고, 하면 그 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
+F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. M0에서 모놀리스에 먼저 넣는 것은 F3 · F5–F9 — `정함 (D-65, D-66)`. F2는 새 엔진에서(D-66), F4는 승인 대기. 모놀리스에 넣은 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
 
 | F | 고칠 것 | 지금 코드 |
 |---|---|---|
 | F1 | **M3 새 엔진에서만 (D-63)** — 끝내기를 봉인과 확정으로 나눈다. 봉인(잠금 · 트랜잭션 밖): Redis 트랙 읽기 · `TrackFilter` · `TrackAnalyzer` · S3 원본 업로드 · 날씨 조회(실패하면 기본값). 확정: 잠금 → 다시 확인 → 기록 · 구간 · 상태 · 아웃박스를 쓰는 짧은 트랜잭션. 옛 엔진은 그대로 둔다 | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
-| F2 | 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
-| F3 | 강제 종료를 러너마다 짧은 트랜잭션 하나로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
+| F2 | **M3 새 엔진에서 (D-66)** — 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
+| F3 | **M0 모놀리스 (D-66)** — 강제 종료를 러너마다 짧은 트랜잭션 하나로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
 | F4 | `app_versions` 30초 캐시 — **승인 대기**: 최소 버전 상향이 최대 30초 늦게 걸린다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 캐시 없이 읽는다 |
-| F5 | Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `reWriteBatchedInserts`만 설정돼 있다 |
-| F6 | liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
-| F7 | `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`에 실행기 지정이 없다 |
-| F8 | `JAVA_TOOL_OPTIONS`로 `MaxRAMPercentage` — 값은 「정하지 않은 것」 4 | Dockerfile `ENTRYPOINT`에 JVM 옵션이 없다 |
-| F9 | WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
+| F5 | **M0 모놀리스 (D-66)** — Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `reWriteBatchedInserts`만 설정돼 있다 |
+| F6 | **M0 모놀리스 (D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
+| F7 | **M0 모놀리스 (D-66)** — `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`에 실행기 지정이 없다 |
+| F8 | **M0 모놀리스 (D-66)** — `JAVA_TOOL_OPTIONS`로 `MaxRAMPercentage` — 값은 「정하지 않은 것」 4 | Dockerfile `ENTRYPOINT`에 JVM 옵션이 없다 |
+| F9 | **M0 모놀리스에 먼저 (D-65)** — WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
 
 - **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `제안 (D-42)`.
-- **나가는 조건** — F2–F9를 하면 A′가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 기준 `K-SC9-5`는 새 엔진(M3 · M5)에서 본다. A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
+- **나가는 조건** — A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 기준 `K-SC9-5`는 새 엔진(M3 · M5)에서 본다. A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건
 
@@ -255,10 +255,13 @@ F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. F2–F9는 `제안 (D-
 - [ ] 앱 재접속 값을 받아 [runtime.md](runtime.md)에 넣는다
 - [ ] 하네스 v2([load_test/msa/README.md](../../../load_test/msa/README.md))와 PREREG 동결 — ack 없는 기록 검사와 불변식 SQL(I1 · I2 · I4)을 「무결성 검사」에 둔다
 - [ ] 비교군 A 기준선 — SC0 관문, 그다음 SC1 · SC3 · SC4 · SC9 · SC10
-- [ ] F2–F9 — 모놀리스에서 할지 정한 뒤 (F4는 승인 뒤), 「선행 조건」의 M0 행
+- [ ] F9 계획 종료 (D-65)
+- [ ] F3 · F5 · F6 · F7 · F8 (D-66) — 하나씩, 파일 단위로
+- [ ] F4 — 승인 뒤
+- [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
-**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. F2–F9를 했다면 A′가 PREREG 「후보 기준」의 `K-SC1-5`를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
+**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
 
 ### M1 모듈 뼈대 (트래픽 0%)
 
@@ -290,6 +293,7 @@ F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. F2–F9는 `제안 (D-
 모놀리스 안, 운영은 그림자만. 겹치는 EKS 단계: E3.
 - [ ] 시작 — 넘기기 사본을 읽는다. 모르는 방이면 허용 목록 1, 안 되면 `RUNNING_SESSION_UNAVAILABLE`(앱이 다시 보낸다)
 - [ ] 위치 · 콤보 — 지금 Redis 로직을 새 키 공간으로
+- [ ] F2 목표 도달 사전 검사를 트랜잭션 밖으로 (D-66)
 - [ ] 끝내기 — F1 구조(D-63): 잠금 밖 S3 원본 · 날씨 → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md). 끝내기 단계 타이머로 `K-SC9-5`를 본다
 - [ ] 러닝 DB 예약 작업(행 점유) · 혼자 달리기 청소기 · 밀린 작업 훑기 (D-29)
 - [ ] 사용자 삭제 때 모든 인스턴스의 소켓을 모듈 채널로 닫는다
