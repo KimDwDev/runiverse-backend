@@ -12,6 +12,7 @@ import com.runiverse.running_service.application.running.common.RunningFinishPro
 import com.runiverse.running_service.application.running.common.RunningFinisher;
 import com.runiverse.running_service.application.running.common.RunningFinishSteps;
 import com.runiverse.running_service.application.running.exception.NotRoomPlayerException;
+import com.runiverse.running_service.application.running.exception.RunningFinishInProgressException;
 import com.runiverse.running_service.application.running.exception.RunningNotStartableException;
 import com.runiverse.running_service.application.running.exception.RunningRoomNotFoundException;
 import com.runiverse.running_service.application.running.port.out.CreateRunningRecordPort;
@@ -88,6 +89,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -1441,6 +1443,192 @@ public class RunningFinisherTest {
 
             // then -> 늦은 배치가 올 때마다 세면 확정 수가 부풀려진다
             verifyNoInteractions(recordRunningMetricPort);
+        }
+    }
+
+    @Nested
+    @DisplayName("끝내기 임대·단계 분리 테스트 (D-82)")
+    class LeaseTest {
+
+        private static final UserId USER = new UserId(USER_ID);
+
+        private void givenLeaseHeld() {
+            given(finishLeasePort.tryAcquire(ROOM_ID, USER)).willReturn(Optional.empty());
+        }
+
+        @Test
+        @DisplayName("임대가 있으면 사용자 종료는 잠그지 않고 처리 중 예외로 돌려보낸다")
+        void rejectsUserFinishWhileHeld() {
+            // given -> 다시 붙기 전 소켓이 같은 러닝을 끝내는 중이다
+            givenLeaseHeld();
+
+            // when & then -> RUNNING_TRACK_UNAVAILABLE로 나가 클라가 잠시 뒤 RUNNING_FINISH를 다시 보낸다
+            assertThatThrownBy(() -> finisher.finish(ROOM_ID, USER_ID, false))
+                    .isInstanceOf(RunningFinishInProgressException.class);
+            // 기다리지도 잠그지도 않는다 — 앞 요청이 쥔 임대를 잠금을 쥔 채 기다리면 교착이다
+            verifyNoInteractions(lockRunningPlayerPort, lockRunningRoomPort, loadRunningTrackPort);
+            verify(recordRunningMetricPort).finishInProgress(false);
+            verify(finishLeasePort, never()).release(anyLong(), any(), any());
+        }
+
+        @Test
+        @DisplayName("임대가 있으면 자동 종료는 알리지 않고 끝내지 않은 것으로 답한다")
+        void skipsAutoFinishWhileHeld() {
+            // given
+            givenLeaseHeld();
+
+            // when -> 이 경로에 ERROR를 보내면 클라가 로컬 트랙 전체를 다시 보낸다
+            GoalCheck result = finisher.finishOnGoal(ROOM_ID, USER_ID);
+
+            // then -> 다음 배치가 다시 판정한다
+            assertThat(result.finished()).isFalse();
+            verifyNoInteractions(lockRunningPlayerPort, saveGpsTrackPort, loadWeatherPort);
+            verify(recordRunningMetricPort).finishInProgress(true);
+        }
+
+        @Test
+        @DisplayName("확정을 저장한 뒤에 자기 토큰으로 임대를 놓는다")
+        void releasesOwnLeaseAfterConfirm() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            finish();
+
+            // then -> 확정 전에 놓으면 그 사이 들어온 종료가 봉인을 다시 한다
+            InOrder inOrder = inOrder(finishLeasePort, saveGpsTrackPort, createRunningRecordPort,
+                    updateRunningPlayerPort);
+            inOrder.verify(finishLeasePort).tryAcquire(ROOM_ID, USER);
+            inOrder.verify(saveGpsTrackPort).save(any());
+            inOrder.verify(createRunningRecordPort).create(any());
+            inOrder.verify(updateRunningPlayerPort).update(any());
+            inOrder.verify(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+        }
+
+        @Test
+        @DisplayName("S3 원본 업로드는 판정과 확정의 잠금 사이, 잠금 밖에서 한다")
+        void uploadsBetweenJudgeAndConfirmLocks() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            finish();
+
+            // then -> 판정과 확정이 각자 잠그고, 업로드·날씨는 그 사이다(run 14 원인 제거)
+            InOrder inOrder = inOrder(lockRunningPlayerPort, saveGpsTrackPort, loadWeatherPort,
+                    createRunningRecordPort);
+            inOrder.verify(lockRunningPlayerPort).lockInRoom(new RunningRoomId(ROOM_ID), USER);
+            inOrder.verify(saveGpsTrackPort).save(any());
+            inOrder.verify(loadWeatherPort).load(anyDouble(), anyDouble(), any());
+            inOrder.verify(lockRunningPlayerPort).lockInRoom(new RunningRoomId(ROOM_ID), USER);
+            inOrder.verify(createRunningRecordPort).create(any());
+            // 판정 트랙 한 번만 읽는다 — 확정이 다시 읽으면 올린 원본과 기록이 다른 트랙에서 나온다
+            verify(loadRunningTrackPort, times(1)).load(ROOM_ID, USER);
+        }
+
+        @Test
+        @DisplayName("판정과 확정 사이에 다른 종료가 먼저 끝냈으면 기록을 저장하지 않는다")
+        void skipsSaveWhenFinishedInBetween() {
+            // given -> 판정 때는 RUNNING, 확정 때는 강제 종료 등이 먼저 확정해 둔 상태
+            given(lockRunningPlayerPort.lockInRoom(new RunningRoomId(ROOM_ID), USER))
+                    .willReturn(Optional.of(player(RunningPlayerStatus.RUNNING, null)),
+                            Optional.of(player(RunningPlayerStatus.COMPLETED, PAST.plusMinutes(20))));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+
+            // when
+            GoalCheck result = finisher.finish(ROOM_ID, USER_ID, true);
+
+            // then -> 이미 끝났으니 ack만 다시 — 기록이 두 번 남지 않는다
+            assertThat(result.finished()).isTrue();
+            verify(createRunningRecordPort, never()).create(any());
+            verify(updateRunningPlayerPort, never()).update(any());
+            verify(deleteRunningTrackPort).delete(ROOM_ID, USER);
+            verify(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+        }
+
+        @Test
+        @DisplayName("목표 미달로 미루면 S3·날씨를 부르지 않고 임대를 놓는다")
+        void releasesWithoutSealWhenPending() {
+            // given -> 2,800m — 목표 5,000m에 못 미친다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(USER)).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, USER)).willReturn(track(1_001, 2.8));
+
+            // when
+            GoalCheck result = finisher.finish(ROOM_ID, USER_ID, false);
+
+            // then -> 목표 근처 배치마다 헛업로드가 나지 않는다
+            assertThat(result.finished()).isFalse();
+            verifyNoInteractions(saveGpsTrackPort, loadWeatherPort, createRunningRecordPort);
+            verify(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+        }
+
+        @Test
+        @DisplayName("기록을 만들 수 없는 짧은 러닝은 S3·날씨 없이 상태만 확정한다")
+        void confirmsStatusWithoutSealForShortRun() {
+            // given -> 30초 · 81m — 최소 거리·시간 미만이다
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(USER)).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, USER)).willReturn(track(30, 2.8));
+
+            // when
+            finish();
+
+            // then -> 주인 없는 원본 객체를 남기지 않는다
+            verifyNoInteractions(saveGpsTrackPort, loadWeatherPort, createRunningRecordPort);
+            verify(updateRunningPlayerPort).update(any());
+        }
+
+        @Test
+        @DisplayName("판정이 실패해도 임대를 놓는다")
+        void releasesWhenJudgeFails() {
+            // given -> 이 방의 참가자가 아니다
+            givenPlayer(null);
+
+            // when & then -> 안 놓으면 TTL까지 이 러너의 끝내기가 막힌다
+            assertThatThrownBy(RunningFinisherTest.this::finish).isInstanceOf(NotRoomPlayerException.class);
+            verify(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+        }
+
+        @Test
+        @DisplayName("S3 업로드가 실패하면 저장하지 않고 임대를 놓는다")
+        void releasesWhenSealFails() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            given(loadUserWeightPort.loadWeightKg(USER)).willReturn(Optional.of(WEIGHT));
+            given(loadRunningTrackPort.load(ROOM_ID, USER)).willReturn(track(1_801, 2.8));
+            willThrow(new IllegalStateException("S3 down")).given(saveGpsTrackPort).save(any());
+
+            // when & then -> 확정되지 않았으니 다음 시도가 처음부터 다시 한다
+            assertThatThrownBy(RunningFinisherTest.this::finish).isInstanceOf(IllegalStateException.class);
+            verifyNoInteractions(createRunningRecordPort, updateRunningPlayerPort, deleteRunningTrackPort);
+            verify(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+        }
+
+        @Test
+        @DisplayName("임대 해제가 실패해도 이미 확정한 종료는 성공으로 답한다")
+        void keepsConfirmedFinishWhenReleaseFails() {
+            // given
+            givenPlayer(player(RunningPlayerStatus.RUNNING, null));
+            givenRoom(room(RunningRoomType.MATCH, TARGET));
+            givenTrack(track(1_801, 2.8));
+            willThrow(new IllegalStateException("redis down"))
+                    .given(finishLeasePort).release(ROOM_ID, USER, LEASE_TOKEN);
+
+            // when -> 실패로 답하면 기록은 남았는데 클라는 로컬 트랙을 붙든 채 재전송한다
+            GoalCheck result = finisher.finish(ROOM_ID, USER_ID, true);
+
+            // then -> 임대는 TTL이 지나면 풀린다
+            assertThat(result.finished()).isTrue();
+            verify(createRunningRecordPort).create(any());
         }
     }
 }

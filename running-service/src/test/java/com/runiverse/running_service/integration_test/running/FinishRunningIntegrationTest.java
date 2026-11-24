@@ -1,5 +1,6 @@
 package com.runiverse.running_service.integration_test.running;
 
+import com.runiverse.running_service.application.running.exception.RunningFinishInProgressException;
 import com.runiverse.running_service.application.auth.command.signup.SignUpCommand;
 import com.runiverse.running_service.application.auth.command.signup.SignUpHandler;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
@@ -55,6 +56,7 @@ import java.util.UUID;
 
 import static com.runiverse.running_service.support.TrackFilterFixtures.DEFAULT_PROPERTIES;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("러닝 종료 통합 테스트")
@@ -224,6 +226,42 @@ public class FinishRunningIntegrationTest extends IntegrationTestSupport {
         assertThat(storedPlayer(runningRoomId).getDeletedAt()).isPresent();
         // 혼자 뛰었어도 CANCELLED가 아니라 FINISHED다
         assertThat(storedRoom(runningRoomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        assertThat(runningRecordStore.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("다른 연결이 끝내는 중이면 확정하지 않고 재전송을 받는다")
+    void rejectsFinishWhileAnotherConnectionFinishes() {
+        // given -> 다시 붙기 전 소켓이 같은 러닝의 봉인(S3·날씨)을 하는 중이다
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        runFor(userId, runningRoomId, 400);
+        finishLeaseStore.hold(runningRoomId, new UserId(userId));
+
+        // when & then -> RUNNING_TRACK_UNAVAILABLE로 나가 클라가 잠시 뒤 다시 보낸다
+        assertThatThrownBy(() -> finish(userId, runningRoomId))
+                .isInstanceOf(RunningFinishInProgressException.class);
+        assertThat(storedPlayer(runningRoomId).getStatus()).isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(runningRecordStore.size()).isZero();
+        assertThat(meterRegistry.get("runiverse.running.finish.inprogress")
+                .tag("trigger", "user").counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("끝낸 뒤에는 임대가 남지 않는다")
+    void releasesLeaseAfterFinish() {
+        // given
+        UUID userId = onboardedUser(EMAIL, NICKNAME);
+        Long runningRoomId = runningRoom(userId);
+        runFor(userId, runningRoomId, 400);
+
+        // when
+        finish(userId, runningRoomId);
+
+        // then -> 남으면 ack를 못 받은 클라의 재전송이 TTL까지 막힌다
+        assertThat(finishLeaseStore.isHeld(runningRoomId, new UserId(userId))).isFalse();
+        // 재전송은 이미 끝난 것으로 ack만 다시 받는다
+        assertThatCode(() -> finish(userId, runningRoomId)).doesNotThrowAnyException();
         assertThat(runningRecordStore.size()).isEqualTo(1);
     }
 
