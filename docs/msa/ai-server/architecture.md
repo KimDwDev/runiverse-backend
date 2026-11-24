@@ -104,11 +104,11 @@ AI 쪽이 정한다. 메인이 아는 것과 플랫폼 설계에서 권한 것�
 - **사본에 있어야 하는 것** — `running_summary` 여덟 값(api-spec 9-5 요청 이벤트)과 숨긴 방 여부(9-1 · 9-2가 본다). 사본 행이 없으면 9-2는 404, 9-3 · 9-6은 `IllegalStateException`(500)으로 끝나 음악 요청이 나가지 않는다. 빠진 행은 대조로 잡는다([running-session-server/consistency.md](../running-session-server/consistency.md) 「대조」).
 - **끝낸 직후에는 카드를 만들 수 없다** — 메인 사본에 반영되기 전까지다. 기록과 카드는 반영 뒤에 보인다(D-58). 같은 창의 다른 영향은 [running-session-server/consistency.md](../running-session-server/consistency.md) 「종료 뒤 최종 일관 창」(D-31 제안).
 - **날씨 값이 바뀔 수 있다** — 지금은 끝내기 안에서 채운다(`RunningFinisher` → `LoadWeatherPort`). 끝내기 경로에서 빼는 것은 제안(D-32)이고, (가) 세션이 시작 때 받기와 (나) 메인이 반영 뒤 채우기 중 (나)면 날씨가 비어 있는 동안 9-2가 올 수 있다. `weather_code` · `temperature`는 9-5의 필수 필드이고, 지금 `RecordCardMusicRequest.RunningSummary.weatherCode`는 `int`라 빈 값을 받지 못한다.
-- 사본 모양과 날씨 자리는 [running-session-server/architecture.md](../running-session-server/architecture.md) 「메인 사본과 반영」 「정하지 않은 것」. 이 절은 그것이 정해지는 단계에서 고친다([running-session-server/migration.md](../running-session-server/migration.md) 「단계마다 고칠 문서」).
+- 사본 모양(지금 테이블 그대로, D-68)과 날씨 자리(D-63)는 정했다 — 근거는 [running-session-server/architecture.md](../running-session-server/architecture.md) 「메인 사본과 반영」 「정하지 않은 것」. 이 절은 그것이 정해지는 단계에서 고친다([running-session-server/migration.md](../running-session-server/migration.md) 「단계마다 고칠 문서」).
 
 ## 정하지 않은 것
 
 1. **AI 완료 발행을 AI 아웃박스로 바꿀지와 그 주인** — 도표대로 가면 MySQL 커넥터를 누가 운영하는지(AI 쪽 vs cdc.md를 넓혀 우리 Connect), `generated` 쓰기 권한을 어느 계정으로 옮길지 함께 정한다(「완료 발행 — 지금과 그림」).
 2. **AI DB 자리** — D-48의 RDS 둘에 들지 않는다. AI 쪽이 따로 운영할지, 우리 플랫폼 어디에 둘지 → [platform.md](../platform.md) 「정하지 않은 것」.
 3. **Python 워커를 우리 EKS에서 돌릴지 (워크로드 주인)** → [eks.md](../eks.md) 「정하지 않은 것」.
-4. **분리 뒤 `running_summary`의 재료** — 메인 사본 모양, 날씨 자리 → [running-session-server/architecture.md](../running-session-server/architecture.md) 「정하지 않은 것」.
+4. ~~분리 뒤 `running_summary`의 재료~~ — **정했다 → D-68 · D-63**: 지금 테이블 그대로 읽고, 날씨 값도 지금과 같다 — [running-session-server/architecture.md](../running-session-server/architecture.md) 「정하지 않은 것」.

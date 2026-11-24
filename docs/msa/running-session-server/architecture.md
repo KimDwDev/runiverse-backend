@@ -86,7 +86,7 @@
 | S3 원본 트랙 (`gps_track_key`) | 세션 — 쓰는 쪽 하나. 탈퇴해도 남긴다(api-spec 12-4) | 메인은 읽지 않는다 | 정함 (D-26) |
 | 홈 활동 (`RunningActivityReader`) | 보여 주는 쪽은 메인 | 지금 달리는 수는 세션에서 당겨 온다(「동기 호출 허용 목록」), 끝낸 러닝은 사본 | 제안 |
 | `running_rooms.deleted_at` (관리자 방 숨김) | 두 DB 모두 | 「정하지 않은 것」 | 정하지 않음 |
-| `record_cards` 와 음악 아웃박스·inbox | 메인 — 그대로 | FK·잠금 대상은 사본으로 옮긴다(「메인 사본과 반영」) | 운영 중 |
+| `record_cards` 와 음악 아웃박스·inbox | 메인 — 그대로 | FK·잠금 대상은 그대로 — 지금 `running_records`가 사본이 된다(D-68) | 운영 중 |
 
 ## 넘기기
 
@@ -134,7 +134,7 @@
 
 ## 메인 사본과 반영
 
-메인이 사본을 갖는 것은 `정함 (D-24)`. 사본의 모양은 `정하지 않음`, 반영 순서는 `제안`, 날씨는 세션이 끝낼 때 잠금 밖에서 조회해 기록에 넣는다 — `정함 (D-63)`.
+메인이 사본을 갖는 것은 `정함 (D-24)`. 사본의 모양은 `정함 (D-68)` — 지금 테이블 그대로, 반영 순서는 `제안`, 날씨는 세션이 끝낼 때 잠금 밖에서 조회해 기록에 넣는다 — `정함 (D-63)`.
 
 **사본에 있어야 하는 것** — 모양이 무엇이든 이것을 채운다.
 
@@ -151,12 +151,7 @@
 
 구간(`running_splits`)과 콤보는 두지 않는다 — 6-2로 세션이 응답한다.
 
-**모양** — `정하지 않음`:
-
-- (가) 지금 `running_records`(와 세그먼트)를 사본으로 쓴다 — `record_cards.running_record_id` FK(`fk_record_card_running_record`, `ON DELETE CASCADE`)와 `lockOwnedBy`의 `PESSIMISTIC_WRITE`가 그대로다.
-- (나) 새 투영 테이블(이름 후보 `running_record_summaries`)을 만들고 FK·잠금 대상을 그리로 옮긴다 — 손으로 쓰는 운영 DDL이 필요하다.
-
-어느 쪽이든 카드 FK와 잠금은 메인 사본 행을 가리켜야 한다 — DB를 넘는 FK·잠금은 없다.
+**모양** — `정함 (D-68)`: 지금 `running_records`(와 세그먼트)를 사본으로 쓴다. `record_cards.running_record_id` FK(`fk_record_card_running_record`, `ON DELETE CASCADE`)와 `lockOwnedBy`의 `PESSIMISTIC_WRITE`가 그대로다. 카드 FK와 잠금은 메인 사본 행을 가리킨다 — DB를 넘는 FK·잠금은 없다.
 
 **반영 순서** — `제안`. 메시지 하나에 메인 트랜잭션 하나다.
 
@@ -181,7 +176,7 @@
 | # | 호출 | 방향 | 언제만 | 시간 제한 | 멱등 | 실패하면 | 상태 |
 |---|---|---|---|---|---|---|---|
 | 1 | 넘기기 당겨 오기 | 세션 → 메인 | 모르는 방에 `RUNNING_START`·이탈·정산이 닿을 때 | 500ms, 재시도 1회, 회로 차단 | 넘기기와 같은 upsert | `RUNNING_SESSION_UNAVAILABLE` → 앱이 다시 보낸다 | 제안 — 「넘기기」와 함께 정한다 |
-| 2 | 탈퇴 정산 | 메인 → 세션 | 러닝 중 탈퇴 saga의 기점 | 정하지 않음 | 사용자 ID + 탈퇴 ID | 기점 전 실패 → 지금의 503 `ACCOUNT_DELETION_UNAVAILABLE` | 제안 (D-44) — [consistency.md](consistency.md) 「계정 탈퇴 saga」 |
+| 2 | 탈퇴 정산 | 메인 → 세션 | 러닝 중 탈퇴 saga의 기점 | 3초 (D-70) | 사용자 ID + 탈퇴 ID | 기점 전 실패 → 지금의 503 `ACCOUNT_DELETION_UNAVAILABLE` | 정함 (D-44, D-70) — [consistency.md](consistency.md) 「계정 탈퇴 saga」 |
 | 3 | 확정 뒤 이탈 전달 | 메인 → 세션 | 넘긴 신청에 `POST /match-rooms/leave` | — | 방 ID + 사용자 ID | 세션에 닿지 못하면 상태를 바꾸지 않고 실패 | 후보 — [consistency.md](consistency.md) 「확정 뒤 이탈」이 정하지 않음 |
 | 4 | 활성 확인 | 메인 → 세션 | `/users/me/status`가 `RUNNING`을 계산할 때만 | 300ms | 읽기 | 메인 자기 판단 | 제안 |
 | 5 | 지금 달리는 수 | 메인 → 세션 | 홈 활동 방송 주기 | 짧게 | 읽기 | 마지막 값 | 제안 |
@@ -278,7 +273,7 @@ ALB 경로 규칙의 단일 집이다. 순위 1 · 2 · 10은 운영 중인 규�
 ## 정하지 않은 것
 
 1. **넘기기 방식** — 후보는 방 확정 이벤트 + 당겨 오기(「넘기기」). 이름, 여유 10분 · 1분 · 0을 CDC 지연이 감당하는지(SC5)와 함께 정한다 (D-26).
-2. **메인 사본 모양** — 지금 `running_records` 재사용 vs 새 투영 테이블, 그에 따라 `record_cards` FK·`lockOwnedBy` 잠금 대상(「메인 사본과 반영」).
+2. ~~메인 사본 모양~~ — **정했다 → D-68**: 지금 `running_records` · `running_segments`를 그대로 쓴다.
 3. ~~날씨 자리~~ — **정했다 → D-63**: 세션이 끝낼 때 잠금 밖에서 조회한다.
 4. **세션 핸드셰이크의 최소 버전 관문** — 지금 `AppVersionFilter`는 WS 업그레이드도 막고(`shouldNotFilter`가 빼는 것은 앱 버전·actuator·관리자·preflight뿐) 요청마다 `app_versions`를 캐시 없이 읽는다. (가) 세션에 복제(이벤트·주기 당겨 오기) (나) 공유 라이브러리 (다) 스플래시(2-3)에서 메인이 이미 막은 것에 기댄다고 명시.
 5. **폐기된 토큰** — 서비스마다 Redis가 하나라(D-49) 세션이 메인 블랙리스트를 바로 못 읽는다. (가) 메인 블랙리스트 키 읽기 전용 계약(저장소 사이 계약 테스트) (나) 짧은 access 토큰 수명 (다) 토큰 폐기·사용자 삭제 이벤트로 세션 자기 폐기 캐시. ES256과 함께 정한다 (D-30).

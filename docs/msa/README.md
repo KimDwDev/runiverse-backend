@@ -90,14 +90,14 @@ Runiverse는 메인 서버(running-service)·러닝 세션 서버·AI 전용 서
 
 | 요소 | 상태 | 자세히 |
 |---|---|---|
-| 러닝 세션 서버를 별도 저장소의 별도 서버로 | 정함 (D-47) — 옮기는 때는 제안 (D-62) | [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 |
+| 러닝 세션 서버를 별도 저장소의 별도 서버로 | 정함 (D-47) — 옮기는 때(운영 추출 앞)도 정함 (D-62) | [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 |
 | 경계 — 명단 확정까지 메인, 그 뒤 세션 | 정함 (D-26) | [running-session-server/architecture.md](running-session-server/architecture.md) 「경계 — 생애 단계」 |
 | 메인 ↔ 세션 이벤트 — 넘기기 · 결과 이벤트 셋 · 사용자 생애 | 넘기기는 정하지 않음 — 후보: 메인 아웃박스 이벤트 + 모르는 방 당겨 오기. 나머지는 제안 (D-28) | [running-session-server/architecture.md](running-session-server/architecture.md) 「넘기기」 「이벤트 (후보)」 |
-| 러닝 DB가 러닝 기록의 정본, 메인은 사본 테이블 (커넥터 (2) → 메인 inbox) | 정함 (D-24) — 사본 모양은 정하지 않음 | [running-session-server/architecture.md](running-session-server/architecture.md) 「메인 사본과 반영」 |
+| 러닝 DB가 러닝 기록의 정본, 메인은 사본 테이블 (커넥터 (2) → 메인 inbox) | 정함 (D-24) — 사본은 지금 `running_records` · `running_segments` 그대로 (D-68) | [running-session-server/architecture.md](running-session-server/architecture.md) 「메인 사본과 반영」 |
 | 결과 이벤트를 받기 전에 처리 못 한 메시지 모으기 · 건너뜀 알람 · 대조 | 정함 (D-51) — DLT 토픽인지 보관 테이블인지는 정하지 않음 | [running-session-server/consistency.md](running-session-server/consistency.md) 「대조」 |
 | ALB 경로 규칙 — 러닝 WebSocket · 결과 조회 6-1 · 6-2는 세션, 나머지는 메인. 7-1 · 기록 카드는 메인 반영 뒤 | 정함 (D-26, D-58) — 새 규칙의 순위 값은 제안 | [running-session-server/architecture.md](running-session-server/architecture.md) 「공개 경로」 「결과 조회」 |
 | 동기 호출 — 허용 목록만 | 정함 (D-52) — 목록은 제안 (D-53) | [running-session-server/architecture.md](running-session-server/architecture.md) 「동기 호출 허용 목록」 |
-| 서비스 사이 saga — 러닝 중 계정 탈퇴 하나 | 정함 (D-43) — 단계는 제안 (D-44) | [running-session-server/consistency.md](running-session-server/consistency.md) 「계정 탈퇴 saga」 |
+| 서비스 사이 saga — 러닝 중 계정 탈퇴 하나 | 정함 (D-43, D-44, D-70) — 메인 오케스트레이션 | [running-session-server/consistency.md](running-session-server/consistency.md) 「계정 탈퇴 saga」 |
 | 플랫폼 — RDS 둘 · Redis 서비스마다 EC2 · Kafka EC2 한 대 · 추적 OTel 에이전트 | 정함 (D-48 · D-49 · D-50 · D-55) — 브로커 셋 · Strimzi · MSK는 정하지 않음 | [platform.md](platform.md) |
 | 앱 워크로드는 EKS | 정함 (D-23, D-48) — 세부는 제안 (D-41) | [eks.md](eks.md) |
 | AI 완료 발행 (AI 아웃박스 + CDC) · AI DB 자리 | 정하지 않음 | [ai-server/architecture.md](ai-server/architecture.md) 「완료 발행 — 지금과 그림」, [platform.md](platform.md) 「정하지 않은 것」 |
