@@ -189,9 +189,9 @@
 | 대상 | 후보 | 상태 |
 |---|---|---|
 | 세션 Kafka 계정 | `{env}.running-session-server` | 제안 (D-61) |
-| 결과 토픽 (세션 → 메인) | `{env}.running.results` 하나 — 결과 이벤트 셋을 방 ID key로 한 토픽에 담아 한 방 안의 순서를 지킨다 | 이름 정하지 않음 (D-28) · 한 토픽은 제안 |
-| 사용자 생애 토픽 (메인 → 세션) | `{env}.user.lifecycle` — 사용자 ID key | 정하지 않음 (D-28) |
-| 넘기기 토픽 (메인 → 세션) | `{env}.running-room.confirmed` — 넘기기를 이벤트로 정할 때만 | 정하지 않음 ([architecture](running-session-server/architecture.md) 「넘기기」) |
+| 결과 토픽 (세션 → 메인) | `{env}.running.results` — 참가자 결과를 방 ID key로 담아 한 방 안의 순서를 지킨다 | 이름 정하지 않음 · 이벤트는 정함 (D-72) |
+| 사용자 변경 토픽 (메인 → 세션) | `{env}.user.changed` — 사용자 ID key | 이름 정하지 않음 · 이벤트는 정함 (D-72) |
+| 넘기기 토픽 (메인 → 세션) | `{env}.running-room.confirmed` — 방 ID key | 이름 정하지 않음 · 이벤트는 정함 (D-71) |
 | 컨슈머 그룹 | 메인 `{env}.running-service.running-results` · 세션 `{env}.running-session-server.<용도>` | 정하지 않음 |
 | DLT | `{topic}.{group}.dlt`(D-51) — `{env}`는 토픽 쪽에 한 번만 | 정하지 않음 (DLT vs 보관 테이블) |
 | ACL | `{env}.debezium`: 결과 토픽·새 heartbeat 토픽 `WRITE` `DESCRIBE` / 메인: 결과 토픽 `READ` `DESCRIBE`, 그룹 `READ`, 자기 DLT `WRITE` / 세션: 받는 토픽 `READ` `DESCRIBE`, 그룹 `READ`, 세션 inbox에 DLT를 두면 자기 DLT `WRITE`(D-51) — 그 밖의 직접 발행 권한은 주지 않는다 | 제안 |
@@ -232,7 +232,7 @@
 3. **Multi-AZ** (두 RDS) — [cdc.md](cdc.md) 「정하지 않은 것」 6. 슬롯이 장애 조치를 넘는지 임시 RDS로 확인한 뒤 정한다.
 4. **test에 더할 것의 자리** — 러닝 DB(같은 PostgreSQL vs test RDS)와 세션 Redis(「test 환경」).
 5. **러닝 DB WAL 상한 · 스토리지** — 20 GiB에 맞는 `max_slot_wal_keep_size` 값과 스토리지 자동 조정을 켤지.
-6. **결과 토픽 이름 · 파티션 수** (D-28) — 「새 이름」의 후보에서 고른다. 파티션은 만든 뒤 바꾸지 않는다.
+6. **토픽 셋의 이름 · 파티션 수** (D-72) — 「새 이름」의 후보에서 고른다. 파티션은 만든 뒤 바꾸지 않는다.
 7. **로컬에서 결과 이벤트 받기** — 「test 환경」.
 8. **세션이 메인 블랙리스트를 읽을지** — [architecture](running-session-server/architecture.md) 「인증」에서 정한다. 정하면 「Redis」의 접근 행과 키 표의 블랙리스트 행을 고친다.
-9. **세션 inbox(사용자 생애 이벤트 · 이벤트로 정하면 넘기기)도 DLT를 둘지** — D-51은 메인이 받는 결과 이벤트만 정했다. 두면 「새 이름」의 세션 ACL에 자기 DLT `WRITE`가 붙는다.
+9. **세션 inbox(방 확정 · 사용자 변경)도 DLT를 둘지** — D-51은 메인이 받는 결과 이벤트만 정했다. 두면 「새 이름」의 세션 ACL에 자기 DLT `WRITE`가 붙는다.

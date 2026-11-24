@@ -38,7 +38,8 @@
 
 **목표** — 제안
 
-- **메인을 부르지 않는다** — 참가자 · 몸무게 · 프로필은 넘기기로 받은 세션 자기 행에서 읽는다. 예외는 세션이 모르는 방 하나다 — 당겨 오기([architecture.md](architecture.md) 「동기 호출 허용 목록」 1). 당겨 오지 못하면 `RUNNING_SESSION_UNAVAILABLE`이고 앱은 지금처럼 다시 보낸다.
+- **확정 직후 붙는다** — 앱은 `MATCH_CONFIRMED`를 받으면 러닝 WS에 붙어 대기 화면(멤버 변화 · 시작 카운트다운)을 받고, 확정 뒤 이탈도 세션에 보낸다(D-73). 시작 전 대기 연결은 `HEALTH_CHECK`로 유지한다 — 동시 연결이 시작 10분 전부터 늘고, 세션 확장 기준(WS 연결 게이지)이 이것을 센다.
+- **메인을 부르지 않는다** — 참가자 · 몸무게 · 프로필은 넘기기로 받은 세션 자기 행에서 읽는다. 예외는 세션이 모르는 방 하나다 — 당겨 오기([architecture.md](architecture.md) 「동기 호출 허용 목록」 1, 방 하나에 한 번으로 묶는다, D-71). 당겨 오지 못하면 `RUNNING_SESSION_UNAVAILABLE`이고 앱은 지금처럼 다시 보낸다.
 - **토큰은 로컬에서 검증한다** — ES256 공개 키 (D-30 제안). 폐기된 토큰과 최소 버전 관문은 [architecture.md](architecture.md) 「인증」 「정하지 않은 것」.
 - **순서는 그대로다** — 등록 → 화면 상태 → 콤보 → 스냅샷 → ack. 바꾸면 자기 상태 통지나 방금 붙은 콤보를 놓친다(`RunningWebSocketHandler`의 순서 주석).
 - **잠금은 참가자 → 러닝 세션 순이다** — 끝내기 · 강제 종료 · 이탈 · 정산과 같은 순서다.
@@ -69,7 +70,7 @@ RUNNING_FINISH ──┐
                   ─▶ 확정 (러닝 DB 트랜잭션 하나)
                       참가자 → 러닝 세션 잠금 → 이미 끝났으면 ack만 다시
                       기록 · 세그먼트 · 구간 → 참가자 상태 · 페널티 → 마지막이면 방 닫기
-                      아웃박스 행 (참가자 완주 · 이탈, 마지막이면 세션 닫힘) → 커밋
+                      아웃박스 행 (참가자 결과 — 마지막이면 방 상태 FINISHED/CANCELLED를 싣는다, D-72) → 커밋
                   ─▶ 커밋 뒤: 화면 상태 FINISHED + 진행 발행
                   ─▶ RUNNING_FINISHED (ack)
                   ─▶ Redis 정리: 트랙 삭제 · 콤보 끊기 · 방이 닫혔으면 콤보 보관
@@ -96,7 +97,7 @@ RUNNING_FINISH ──┐
 
 | 작업 | 언제 | 하는 일 | 상태 |
 |---|---|---|---|
-| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`) | 노쇼(`JOINED`)는 이탈로 닫는다(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람은 러너마다 「끝내기」와 같은 봉인 → 짧은 확정. 모두 확정돼야 작업을 끝낸 것으로 적고, 못 끝낸 러너는 트랙 TTL 7시간(`running-track.ttl`) 안에서 다시 한다. 마지막에 세션 닫힘 이벤트 | 제안 — 옛 엔진에서 F3로 먼저 |
+| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`) | 노쇼(`JOINED`)는 이탈로 닫는다(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람은 러너마다 「끝내기」와 같은 봉인 → 짧은 확정. 모두 확정돼야 작업을 끝낸 것으로 적고, 못 끝낸 러너는 트랙 TTL 7시간(`running-track.ttl`) 안에서 다시 한다. 마지막 참가자 결과에 방 상태를 싣는다(D-72) 이벤트 | 제안 — 옛 엔진에서 F3로 먼저 |
 | 혼자 달리기 청소기 | 주기 — 기준 시간을 넘긴 `RUNNING` 혼자 달리기 | 강제 종료와 같은 확정. 기준 시간은 「정하지 않은 것」 | 제안 |
 | 밀린 작업 훑기 | 30초마다 | 시각이 지났는데 끝나지 않은 예약을 다시 실행한다 | 제안 |
 | 콤보 보관 | 방 닫힘 커밋 뒤 | 콤보 구간을 러닝 DB에 남긴다. 실패해도 종료는 그대로다(지금 `RunningComboArchiver`) | 운영 중 — 세션 안의 로컬 단계 |
@@ -116,7 +117,7 @@ RUNNING_FINISH ──┐
 | 늦게 도는 종료 처리 | `RemoveRunningSessionHandler`는 자기 연결이 빠졌을 때만 명부에서 빼고 `DISCONNECTED`를 알린다. `FINISHED` 뒤에는 바뀌지 않는다 (I3) |
 
 - **알고 두는 것 — 늦은 `DISCONNECTED`** — 다른 인스턴스로 다시 붙으면 옛 인스턴스의 종료 콜백이 가드를 통과해(그 인스턴스 표에는 아직 옛 연결이 있다) `DISCONNECTED`를 알린다. 상대 화면은 다음 좌표(약 10초)에 `RUNNING`으로 돌아온다 — api-spec 5-D가 허용한다. 고칠 안은 `CloseSupersededSessionHandler`가 닫기 전에 표에서 빼고 명부에서 나가는 것이다(매칭 `CloseSupersededMatchStreamHandler`와 같은 모양). k6에서는 `false_disconnected_broadcast`로 센다.
-- **탈퇴 소켓 닫기는 모든 인스턴스에 간다** — 제안 (D-44). 사용자 삭제 이벤트를 받은 인스턴스가 세션 Redis로 알린다 ([consistency.md](consistency.md) 「계정 탈퇴 saga」 5).
+- **탈퇴 소켓 닫기는 모든 인스턴스에 간다** — 제안 (D-44). 사용자 변경 이벤트(삭제)를 받은 인스턴스가 세션 Redis로 알린다 ([consistency.md](consistency.md) 「계정 탈퇴 saga」 5).
 - **테스트** — 기본 E2E는 앱 한 대다. 다른 인스턴스 경우는 두 번째 인스턴스를 `JPA_DDL=none`으로 띄우고 `E2E_SECOND_BASE_URL`을 줘야 `MultiInstanceE2eTest`가 돈다.
 
 ## 연결 시간 제한 사슬

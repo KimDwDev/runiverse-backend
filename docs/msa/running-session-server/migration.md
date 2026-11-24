@@ -278,8 +278,8 @@ F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. M0에서 모놀리스�
 ### M2 계약 (아웃박스 · CDC · inbox, DLT)
 
 모놀리스 안, test 먼저. 겹치는 EKS 단계: E5(데이터).
-- [ ] 먼저 정한다 — 넘기기 방식(architecture 「넘기기」), 「옛 기록」 (메인 사본 모양은 D-68로 정했다)
-- [ ] 이벤트 · 내부 API 본문을 api-spec 14장에 먼저 쓴다 — 넘기기 · 결과 셋 · 사용자 생애 (D-28)
+- [ ] 확인한다 — 앱이 기록 목록에서 6-1 · 6-2를 다시 여는지(「옛 기록」, D-69). 넘기기(D-71) · 사본 모양(D-68)은 정했다
+- [ ] 이벤트 · 내부 API 본문을 api-spec 14장에 먼저 쓴다 — 방 확정 · 사용자 변경 · 참가자 결과 (D-71, D-72)
 - [ ] 「아웃박스 일반화」 — 쓰는 길, CHECK, 손 DDL
 - [ ] 러닝 DB(또는 스키마) · 두 번째 커넥터 · 슬롯 — platform 「러닝 DB CDC」
 - [ ] DLT · 건너뜀 알람 · 대조 작업 (D-51) — consistency 「대조」
@@ -306,6 +306,7 @@ F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. M0에서 모놀리스�
 ### M4 방 단위 카나리 (모놀리스 안)
 
 운영 모놀리스 안. 겹치는 EKS 단계: E4.
+- [ ] **먼저** — 확정 뒤 대기 · 이탈 · 카운트다운을 러닝 WS로 받는 앱(D-73)을 iOS · 안드로이드 모두 내고, 최소 버전을 그 버전으로 올리고 ALB 차단을 건다(D-74). 그 전에는 새 엔진 비율을 0보다 올리지 않는다
 - [ ] 새 엔진 비율 — 내부 계정 → 5% → 25% → 50% → 100%, 단계마다 슬롯 저녁 3번 이상
 - [ ] 엔진별 대시보드 — 끝내기 성공률, ack 없는 기록, 끝낸 뒤 6-1 자기 기록 빠짐, `RUNNING_TRACK_UNAVAILABLE`, 예상 밖 끊김, CDC 지연, 보관 이벤트
 - [ ] 멈추는 규칙을 decisions.md에 적는다
@@ -418,6 +419,7 @@ test만. 겹치는 EKS 단계: E5.
 | M2–M3 | [erd.md](../../erd.md) | `outbox_events` CHECK 값, 임시 「러닝 DB」 장, 메인 쪽 `running_records` · `running_segments`가 사본이라는 표시(D-68 — FK 대상은 그대로) |
 | M2 | [../kafka.md](../kafka.md) 「이름」 「토픽」, [../cdc.md](../cdc.md), [../outbox-inbox.md](../outbox-inbox.md) 「지금 있는 이벤트」 「받는 쪽 — Inbox」, [../README.md](../README.md) 「이벤트 색인」 「구성 — 지금」 | 만들고 검증한 PR에서 — 이름은 platform 「새 이름」에서 옮긴다 |
 | ~~날씨 자리를 정할 때~~ | — | **정했다 → D-63** — 세션이 끝낼 때 지금과 같은 기준으로 조회해 값 · 시점이 같다. 고칠 문서 없음 |
+| M3 (앱 작업 전) | [api-spec.md](../../api-spec.md) 5-A · 5-B · 5-C · 5-D, 2-3 | 확정 뒤 이탈 요청(형식 정하면), `POST /match-rooms/leave`의 확정된 방 409 코드, 확정 직후 WS 연결 · 대기 멤버 변화 · `RUNNING_READY`를 WS로(매칭 SSE에서 뺌), 최소 버전 — D-73 · D-74. 앱 출시 전에 계약을 먼저 적는다 |
 | M4 | api-spec 7-1 · 2-2 | 7-1은 반영된 뒤 보인다(D-58). `/users/me/status`는 반영 전 `RUNNING`일 수 있다(D-31) |
 | M5 | verification 「판정과 결과」, load_test/msa RESULTS, rationale 「근거 순위」 | 판정 |
 | M6 | [../README.md](../README.md) 「서비스 이름」, [README.md](README.md) 「저장소를 나눌 때」, CLAUDE.md · 루트 README | 실제 이름, runtime.md · erd 러닝 DB 장 옮기기, 문서 색인 |

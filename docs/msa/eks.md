@@ -62,7 +62,7 @@ E3–E4에서는 한 이미지를 역할 플래그로 나눠 세 워크로드로
 |---|---|---|---|---|
 | `main-api` | 인증·사용자, 매칭·초대·채팅과 SSE, 기록 카드, 기록 목록(7-1), 알림, 메인 예약 작업, inbox 컨슈머 | 2–6 | 500m / 1.5Gi | `apps`. Deployment로 시작해 Argo Rollouts 카나리로 옮긴다 |
 | `session-ws` | 러닝 WebSocket, 결과 조회 6-1·6-2(D-58). 예약 작업과 컨슈머는 없다 | 2–8 | 500m / 1.5Gi | `apps` on-demand만. 우선순위 클래스 `runiverse-critical`, 존 분산 `maxSkew 1` `DoNotSchedule`, PDB, ALB 준비 게이트 |
-| `session-worker` | `RUNNING_START`·`RUNNING_FORCE_FINISH` 예약 작업(DB 행 점유는 그대로), 러너마다 따로 하는 강제 종료(F3), 넘기기·사용자 생애 이벤트 inbox, 내부 API, 세션 Redis 채널로 ws 파드에 팬아웃 | 2 고정 | 250m / 1Gi | `apps`, PDB `minAvailable 1` |
+| `session-worker` | `RUNNING_START`·`RUNNING_FORCE_FINISH` 예약 작업(DB 행 점유는 그대로), 러너마다 따로 하는 강제 종료(F3), 방 확정·사용자 변경 이벤트 inbox, 내부 API, 세션 Redis 채널로 ws 파드에 팬아웃 | 2 고정 | 250m / 1Gi | `apps`, PDB `minAvailable 1` |
 | `ai-server` | 기록 카드 음악 요청 소비 (Python) | 1–3 | AI 쪽이 정함 | `spot`. KEDA Kafka 지연 + SageMaker 완료 SQS — [ai-server/architecture.md](ai-server/architecture.md) 「실행 환경」 |
 
 - **JVM 옵션은 파드 env로 준다** — `JAVA_TOOL_OPTIONS`에 MaxRAMPercentage와 `-XX:+ExitOnOutOfMemoryError`를 넣는다. 퍼센트 값은 정하지 않음(F8, migration 「정하지 않은 것」). 지금 Dockerfile `ENTRYPOINT`에는 JVM 옵션이 없다.

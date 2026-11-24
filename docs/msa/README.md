@@ -83,16 +83,16 @@ Runiverse는 메인 서버(running-service)·러닝 세션 서버·AI 전용 서
  AI 전용 서버 (완료 발행 방식은 정하지 않음) ────────┘
    └ AI DB · SageMaker · S3 음악
 
- Kafka 위 이벤트  세션 → 메인  결과 이벤트 셋 — 제안 (D-28)
-                  메인 → 세션  넘기기 — 정하지 않음 · 사용자 생애 — 제안 (D-28)
+ Kafka 위 이벤트  세션 → 메인  참가자 결과 — 정함 (D-72)
+                  메인 → 세션  방 확정 · 사용자 변경 — 정함 (D-71, D-72)
                   메인 ↔ AI    음악 요청 · 완료 — 정함 (D-03)
 ```
 
 | 요소 | 상태 | 자세히 |
 |---|---|---|
 | 러닝 세션 서버를 별도 저장소의 별도 서버로 | 정함 (D-47) — 옮기는 때(운영 추출 앞)도 정함 (D-62) | [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 |
-| 경계 — 명단 확정까지 메인, 그 뒤 세션 | 정함 (D-26) | [running-session-server/architecture.md](running-session-server/architecture.md) 「경계 — 생애 단계」 |
-| 메인 ↔ 세션 이벤트 — 넘기기 · 결과 이벤트 셋 · 사용자 생애 | 넘기기는 정하지 않음 — 후보: 메인 아웃박스 이벤트 + 모르는 방 당겨 오기. 나머지는 제안 (D-28) | [running-session-server/architecture.md](running-session-server/architecture.md) 「넘기기」 「이벤트 (후보)」 |
+| 경계 — 매칭 방은 메인, 러닝 방(모집 마감 뒤 대기 · 이탈 · 달리기)은 세션 | 정함 (D-26, D-71, D-73) | [running-session-server/architecture.md](running-session-server/architecture.md) 「경계 — 생애 단계」 |
+| 메인 ↔ 세션 이벤트 — 방 확정 · 사용자 변경 · 참가자 결과 | 정함 (D-71, D-72) — 이름 · 본문은 api-spec 14장을 쓸 때 | [running-session-server/architecture.md](running-session-server/architecture.md) 「넘기기」 「이벤트 (후보)」 |
 | 러닝 DB가 러닝 기록의 정본, 메인은 사본 테이블 (커넥터 (2) → 메인 inbox) | 정함 (D-24) — 사본은 지금 `running_records` · `running_segments` 그대로 (D-68) | [running-session-server/architecture.md](running-session-server/architecture.md) 「메인 사본과 반영」 |
 | 결과 이벤트를 받기 전에 처리 못 한 메시지 모으기 · 건너뜀 알람 · 대조 | 정함 (D-51) — DLT 토픽인지 보관 테이블인지는 정하지 않음 | [running-session-server/consistency.md](running-session-server/consistency.md) 「대조」 |
 | ALB 경로 규칙 — 러닝 WebSocket · 결과 조회 6-1 · 6-2는 세션, 나머지는 메인. 7-1 · 기록 카드는 메인 반영 뒤 | 정함 (D-26, D-58) — 새 규칙의 순위 값은 제안 | [running-session-server/architecture.md](running-session-server/architecture.md) 「공개 경로」 「결과 조회」 |
