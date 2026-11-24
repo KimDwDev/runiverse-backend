@@ -26,7 +26,7 @@
 | I1 | **`RUNNING_FINISHED` ack ⇒ 기록이 남았다** — '메인이 안다'가 아니다. 앱은 ack를 받으면 로컬 트랙을 지운다(api-spec 5-D) | 세션 — 기록 + 참가자 · 방 상태 + 아웃박스 행을 러닝 DB 한 트랜잭션으로 커밋한 뒤 ack ([runtime.md](runtime.md)) | k6 무결성 `ack_without_record` = 0 (SC1 · SC2 · SC3 · SC9) | 정함 (D-24) |
 | I2 | **강제 종료 시각(시작 + 6시간, `match.force-finish-offset`) + 10분이 지나 활성인 참가자가 없다** — 혼자 달리기 포함 | 세션 — 강제 종료 · 혼자 달리기 청소기 · 밀린 작업 훑기 ([runtime.md](runtime.md)) | 대조 매일 + 알람 | 제안 (D-29) |
 | I3 | **`FINISHED`는 끝 상태다** — 늦은 배치와 ack 뒤 닫힌 연결의 `DISCONNECTED`가 덮지 못한다 | 세션 Redis 화면 상태(`UpdateRunningLocationHandler`의 끝남 검사, `LiveRunningStatus.canChangeFrom`) + 방 · 참가자의 끝 상태 | 대조(끝난 방에 활성 참가자 0) · k6 무결성(끝낸 뒤 보낸 배치가 트랙 · 거리에 없다) | 운영 중 — 분리 뒤 그대로 |
-| I4 | **사용자마다 활성 신청은 하나 이하다** | 메인 `running_players`(`deleted_at IS NULL`) — `ExistsActiveApplicationPort` · `ExistsActiveRunningPlayerPort` | 대조 매일 | 운영 중 — 분리 뒤 주인은 제안 (D-27) |
+| I4 | **사용자마다 활성 신청은 하나 이하다** | 메인 `running_players`(`deleted_at IS NULL`) — `ExistsActiveApplicationPort` · `ExistsActiveRunningPlayerPort` | 대조 매일 | 운영 중 — 분리 뒤 주인은 정함 (D-27) |
 | I5 | **러닝 DB 기록 = 메인 사본 (누락 0)** | 러닝 DB 아웃박스 → Debezium → 메인 inbox, DLT · 건너뜀 알람 | 대조 매일 + SC6 | 정함 (D-24 · D-51) |
 | I6 | **자리를 풀기 전에 쿨다운을 건다** | 메인 반영 순서 — 쿨다운 `SET EXAT` 다음에 자리를 푼다 ([architecture.md](architecture.md) 「메인 사본과 반영」) | SC6 · SC7 — 자리가 풀린 뒤 쿨다운 없이 통과한 신청 0 | 제안 |
 | I7 | **다음 신청 전에 평균 페이스가 최신이다** | 같은 반영 트랜잭션에서 평균 페이스를 다시 낸 뒤 자리를 푼다 | SC6 | 제안 |
@@ -43,7 +43,7 @@
 | 끝내기 · 목표 도달 자동 종료 | 러닝 DB 로컬 트랜잭션 + 아웃박스, 그 뒤 ack. 메인의 반응은 파생 상태다 |
 | 강제 종료 · 노쇼 | 세션 로컬 트랜잭션(러너마다 하나) + 이벤트 |
 | 넘기기 | 아웃박스 이벤트 + '없을 때만 넣기'. 늦게 온 것은 아무것도 바꾸지 않는다 (D-71, [architecture.md](architecture.md) 「넘기기」) |
-| 혼자 달리기 열기 | 메인 한 트랜잭션(번호 · 신청 · 방) + 넘기기 — 제안 (D-27) |
+| 혼자 달리기 열기 | 메인 한 트랜잭션(번호 · 신청 · 방) + 넘기기 — 정함 (D-27) |
 | 메인 inbox 반응 (사본 · 평균 페이스 · 쿨다운 · 자리) | 세션 결정을 따라 할 뿐이라 되돌릴 일이 없다. 같은 메시지를 다시 받아도 결과가 같다 |
 | 결과 조회 6-1 · 6-2 | 세션이 응답한다. 메인 반영 지연은 대조로 본다 (D-58) |
 | 기록 카드 | 메인 사본 위의 로컬 트랜잭션 |

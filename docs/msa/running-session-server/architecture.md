@@ -55,7 +55,7 @@
 
 ## 메인 쪽 불변식
 
-`제안 (D-27)` — [consistency.md](consistency.md) 「불변식 I1–I7」의 I4로 확인한다.
+`정함 (D-27)` — [consistency.md](consistency.md) 「불변식 I1–I7」의 I4로 확인한다.
 
 - **`runningRoomId`는 메인 혼자 매긴다** — 혼자 달리기 방도 같다. 공개 API의 방 번호는 정수 하나의 공간이라, 세션이 자기 번호로 방을 만들면 겹친다.
 - **사용자마다 활성 신청은 하나다** — 지금처럼 `running_players`가 그 자리이고 `ExistsActiveApplicationPort`(신청·초대 열기·초대 수락)와 `ExistsActiveRunningPlayerPort`(혼자 달리기)가 지킨다.
@@ -68,9 +68,9 @@
 
 | 데이터 | 목표 주인 | 다른 쪽이 얻는 법 | 상태 |
 |---|---|---|---|
-| `running_rooms` 모집 단계 · 방 번호 | 메인 | 세션은 넘기기로 받는다 | 정함 (D-26) · 번호는 제안 (D-27) |
+| `running_rooms` 모집 단계 · 방 번호 | 메인 | 세션은 넘기기로 받는다 | 정함 (D-26) · 번호는 정함 (D-27) |
 | `running_rooms` 러닝 단계 (`STARTED` 뒤, `close_at`, 확정 뒤 인원) | 세션 — 러닝 DB, 메인의 `runningRoomId`가 키 | 메인은 참가자 결과 이벤트에 실린 방 상태로 사본을 고친다(D-72). '시작됨'은 `MATCHED` + 지금 ≥ `startAt`으로 본다 | 정함 (D-26) |
-| `running_players` 활성 신청 자리 | 메인 | 넘긴 자리는 참가자 결과 이벤트로만 푼다 (D-72) | 제안 (D-27) |
+| `running_players` 활성 신청 자리 | 메인 | 넘긴 자리는 참가자 결과 이벤트로만 푼다 (D-72) | 정함 (D-27) |
 | `running_players` 러닝 상태 | 세션 (참가자, 같은 `runningPlayerId`) | 메인은 최종 상태를 이벤트로 받아 사본에 적는다 | 정함 (D-26) |
 | `running_room_sessions` (자리·연결) | 확정 전 메인, 뒤 세션 | 명단은 넘기기에 실린다 | 정함 (D-26) |
 | `running_room_invitations` | 메인만 — 전이가 모두 `MATCHING` 중이다. 확정 뒤 `ACCEPTED` → `LEFT`는 이탈 결과로 메인이 적는다 | 세션은 읽지 않는다. FK와 `FlushPendingChangesPort` 우회는 메인 안에 남는다 | 제안 |
@@ -247,7 +247,7 @@
 |---|---|---|
 | WS `/api/v1/ws/running` | **바뀜** — 확정 직후부터 붙는다. 대기 멤버 변화 · 시작 카운트다운 · (정하면) 이탈 메시지가 더해진다. 같은 JWT · `X-App-Version`, ALB가 세션으로 보낸다 | 정함 (D-26, D-73) — 메시지 이름은 정하지 않음 |
 | 6-1 · 6-2 | **그대로** — 세션이 응답 | 정함 (D-58) |
-| `POST /running-rooms/solo` | **그대로** — 메인 | 제안 (D-27) |
+| `POST /running-rooms/solo` | **그대로** — 메인 | 정함 (D-27) |
 | `DELETE /users/me` (12-4) | **그대로** — 정산 실패는 지금의 503 `ACCOUNT_DELETION_UNAVAILABLE` | 정함 (D-43) · 단계는 제안 (D-44) |
 | `/running-matches` (legacy) | **그대로** — ALB 404, 메인 | 운영 중 |
 | `RUNNING_START` 오류 `RUNNING_SESSION_UNAVAILABLE` | 모양 그대로, 원인 하나 더(넘기기를 당겨 오지 못함) — 앱은 지금처럼 다시 보낸다 | 제안 |
