@@ -16,6 +16,7 @@ public class RunningMetricAdapterTest {
     private static final String GAPS = "runiverse.running.finish.gaps";
     private static final String GOAL = "runiverse.running.location.goal";
     private static final String GOAL_PENDING = "runiverse.running.finish.goalpending";
+    private static final String IN_PROGRESS = "runiverse.running.finish.inprogress";
 
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final RunningMetricAdapter adapter = new RunningMetricAdapter(registry);
@@ -108,5 +109,18 @@ public class RunningMetricAdapterTest {
         assertThat(pending.count()).isEqualTo(2);
         assertThat(pending.totalAmount()).isEqualTo(290.0);
         assertThat(pending.max()).isEqualTo(250.0);
+    }
+
+    @Test
+    @DisplayName("임대를 잡지 못한 종료를 경로별로 센다")
+    void countsFinishInProgressByTrigger() {
+        // when
+        adapter.finishInProgress(false);
+        adapter.finishInProgress(false);
+        adapter.finishInProgress(true);
+
+        // then - 사용자 종료는 RUNNING_TRACK_UNAVAILABLE로 답해 저장소 장애와 섞이므로 이 값으로 가른다
+        assertThat(registry.get(IN_PROGRESS).tag("trigger", "user").counter().count()).isEqualTo(2.0);
+        assertThat(registry.get(IN_PROGRESS).tag("trigger", "goal").counter().count()).isEqualTo(1.0);
     }
 }
