@@ -28,7 +28,7 @@
 `정함 (D-22, D-47)` — 별도 저장소로 옮기는 때(M6을 M7 앞에)는 `제안 (D-62)`.
 
 ```text
-M0     옛 엔진을 재고 먼저 고친다 (F1–F9)             모놀리스 하나, 지금 배포 그대로
+M0     옛 엔진을 잰다 (F2–F9는 정하지 않음)               모놀리스 하나, 지금 배포 그대로
 M1–M3  모놀리스 안에 새 엔진을 만든다                 새 엔진 트래픽 0%, 두 엔진 E2E
 M4     운영에서 방마다 새 엔진으로 올린다              되돌리기 = 새 방 비율 0%
 M5     따로 띄워 test에서 잰다 (B2)
@@ -42,7 +42,7 @@ M9     모놀리스 안 호스트를 지운다 (지울 기준 B)
 - **애그리거트를 쪼개지 않고 새로 만든다** — 매칭과 러닝은 한 애그리거트다(「지금 얽힌 곳 (11-24 기준)」). 방 · 매칭 코드는 매주 바뀌고(방 채팅 11-10~17, 초대 · 탈퇴 10-27~11-02, 7-1 카드 요약 11-23), 실시간 러닝 경로의 마지막 기능 변경은 10-20(`dd36727a`)이라 새로 만들 대상이 작고 멈춰 있다 — [rationale.md](rationale.md) 「받쳐 주는 근거 G5–G8」.
 - **검증된 운영 길을 그대로 쓴다** — 새 엔진이 증명될 때까지(M4) ALB · ASG · Parameter Store · E2E · 대시보드를 바꾸지 않는다.
 - **모놀리스가 되돌릴 곳이다** — 옛 엔진은 M8까지, 모놀리스 안 호스트는 M9까지 남는다(「진행 중 방과 되돌리기」).
-- **결함은 옛 엔진에서 먼저 고친다** — `제안 (D-34)`. 새 엔진만 고치면 비교가 고친 효과를 분리 효과로 세고, 되돌릴 곳에 run 14 실패가 남는다.
+- **끝내기 구조는 새 엔진에서 짠다** — `정함 (D-63)`. 옛 엔진의 끝내기는 고치지 않는다. 그래서 끝내기 폭주는 속도 비교에 쓰지 않고 격리로 잰다(D-64). 나머지 선행 수정(F2–F9)을 모놀리스에서 먼저 할지는 `제안 (D-34)`.
 
 ## 지금 얽힌 곳 (11-24 기준)
 
@@ -141,11 +141,11 @@ running-service/                     메인 저장소 — 지금은 Gradle 프�
 
 ## 선행 수정 F1–F9
 
-`제안 (D-34)` — run 14의 원인을 옛 엔진에서 먼저 고친다. 묶음 전체가 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
+F1은 `정함 (D-63)` — 새 엔진(M3)에서만 한다. F2–F9는 `제안 (D-34)` — 모놀리스에서 먼저 할지 정하지 않았고, 하면 그 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
 
 | F | 고칠 것 | 지금 코드 |
 |---|---|---|
-| F1 | 끝내기를 봉인과 확정으로 나눈다. 봉인(잠금 · 트랜잭션 밖): Redis 트랙 읽기 · `TrackFilter` · `TrackAnalyzer` · S3 업로드 · 날씨 조회. 확정: 참가자 → 방 잠금, 기록 · 구간 · 상태를 쓰는 짧은 트랜잭션. 날씨를 끝내기 경로에서 아예 빼는 자리는 분리 설계에서 정한다 (D-32) | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
+| F1 | **M3 새 엔진에서만 (D-63)** — 끝내기를 봉인과 확정으로 나눈다. 봉인(잠금 · 트랜잭션 밖): Redis 트랙 읽기 · `TrackFilter` · `TrackAnalyzer` · S3 원본 업로드 · 날씨 조회(실패하면 기본값). 확정: 잠금 → 다시 확인 → 기록 · 구간 · 상태 · 아웃박스를 쓰는 짧은 트랜잭션. 옛 엔진은 그대로 둔다 | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
 | F2 | 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
 | F3 | 강제 종료를 러너마다 짧은 트랜잭션 하나로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
 | F4 | `app_versions` 30초 캐시 — **승인 대기**: 최소 버전 상향이 최대 30초 늦게 걸린다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 캐시 없이 읽는다 |
@@ -156,7 +156,7 @@ running-service/                     메인 저장소 — 지금은 Gradle 프�
 | F9 | WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
 
 - **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `제안 (D-42)`.
-- **나가는 조건** — A′가 PREREG 「후보 기준」의 `K-SC9-5`(끝내기 몰림)와 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). F2는 자동 종료 한 번에 확정 트랜잭션이 하나인지 끝내기 단계 지표로 본다. A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
+- **나가는 조건** — F2–F9를 하면 A′가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 기준 `K-SC9-5`는 새 엔진(M3 · M5)에서 본다. A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건
 
@@ -255,10 +255,10 @@ running-service/                     메인 저장소 — 지금은 Gradle 프�
 - [ ] 앱 재접속 값을 받아 [runtime.md](runtime.md)에 넣는다
 - [ ] 하네스 v2([load_test/msa/README.md](../../../load_test/msa/README.md))와 PREREG 동결 — ack 없는 기록 검사와 불변식 SQL(I1 · I2 · I4)을 「무결성 검사」에 둔다
 - [ ] 비교군 A 기준선 — SC0 관문, 그다음 SC1 · SC3 · SC4 · SC9 · SC10
-- [ ] F1–F9 (F4는 승인 뒤), 「선행 조건」의 M0 행
+- [ ] F2–F9 — 모놀리스에서 할지 정한 뒤 (F4는 승인 뒤), 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
-**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′가 PREREG 「후보 기준」의 `K-SC9-5` · `K-SC1-5`를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
+**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. F2–F9를 했다면 A′가 PREREG 「후보 기준」의 `K-SC1-5`를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
 
 ### M1 모듈 뼈대 (트래픽 0%)
 
@@ -290,7 +290,7 @@ running-service/                     메인 저장소 — 지금은 Gradle 프�
 모놀리스 안, 운영은 그림자만. 겹치는 EKS 단계: E3.
 - [ ] 시작 — 넘기기 사본을 읽는다. 모르는 방이면 허용 목록 1, 안 되면 `RUNNING_SESSION_UNAVAILABLE`(앱이 다시 보낸다)
 - [ ] 위치 · 콤보 — 지금 Redis 로직을 새 키 공간으로
-- [ ] 끝내기 — 봉인 → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md)
+- [ ] 끝내기 — F1 구조(D-63): 잠금 밖 S3 원본 · 날씨 → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md). 끝내기 단계 타이머로 `K-SC9-5`를 본다
 - [ ] 러닝 DB 예약 작업(행 점유) · 혼자 달리기 청소기 · 밀린 작업 훑기 (D-29)
 - [ ] 사용자 삭제 때 모든 인스턴스의 소켓을 모듈 채널로 닫는다
 - [ ] 탈퇴 saga — 메인은 정산을 허용 목록 2의 클라이언트로 부른다. 호스팅하는 동안에도 같은 인터페이스다 — consistency 「계정 탈퇴 saga」
@@ -413,7 +413,7 @@ test만. 겹치는 EKS 단계: E5.
 | M2 | api-spec 14장 `서비스 사이 계약 — 메인 ↔ 러닝 세션` (새로) | 이벤트 · 내부 API 본문. architecture 「이벤트 (후보)」 「동기 호출 허용 목록」에는 행과 링크만 남긴다 |
 | M2–M3 | [erd.md](../../erd.md) | `outbox_events` CHECK 값, 임시 「러닝 DB」 장, `record_cards` FK 대상(사본 모양을 정할 때) |
 | M2 | [../kafka.md](../kafka.md) 「이름」 「토픽」, [../cdc.md](../cdc.md), [../outbox-inbox.md](../outbox-inbox.md) 「지금 있는 이벤트」 「받는 쪽 — Inbox」, [../README.md](../README.md) 「이벤트 색인」 「구성 — 지금」 | 만들고 검증한 PR에서 — 이름은 platform 「새 이름」에서 옮긴다 |
-| 날씨 자리를 정할 때 | api-spec 5-D 부수효과, api-spec 9-5 `running_summary.weather_code`, [feature-spec.md](../../feature-spec.md) 날씨, erd `running_records.weather_code` · `temperature`, [../ai-server/architecture.md](../ai-server/architecture.md) 「러닝 세션 분리의 영향」 | 시작 좌표를 누가 언제 Open-Meteo에 보내는가(개인정보 고지), 비었을 때 null인지 폴백인지와 9-2와의 시점, nullable 여부 (D-32) |
+| ~~날씨 자리를 정할 때~~ | — | **정했다 → D-63** — 세션이 끝낼 때 지금과 같은 기준으로 조회해 값 · 시점이 같다. 고칠 문서 없음 |
 | M4 | api-spec 7-1 · 2-2 | 7-1은 반영된 뒤 보인다(D-58). `/users/me/status`는 반영 전 `RUNNING`일 수 있다(D-31) |
 | M5 | verification 「판정과 결과」, load_test/msa RESULTS, rationale 「근거 순위」 | 판정 |
 | M6 | [../README.md](../README.md) 「서비스 이름」, [README.md](README.md) 「저장소를 나눌 때」, CLAUDE.md · 루트 README | 실제 이름, runtime.md · erd 러닝 DB 장 옮기기, 문서 색인 |

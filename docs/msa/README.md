@@ -204,7 +204,7 @@ Runiverse는 메인 서버(running-service)·러닝 세션 서버·AI 전용 서
 |---|---|---|
 | `D-nn` · `RS-D-nn` | 결정 · 저장소를 나눈 뒤 러닝 세션 안에서만 뜻이 있는 결정 | [decisions.md](decisions.md) · 러닝 세션 저장소 (나중) |
 | G1–G8 · AG1–AG6 · X1–X5 | 분리 근거 · 반대 근거 · 버린 근거 | [running-session-server/rationale.md](running-session-server/rationale.md) |
-| SC0–SC13 · C1–C7 · L30 · L60 · L100 | k6 시나리오 (SC1–SC7 핵심, `S`로 쓰지 않는다 — S3와 겹친다) · SC3 안 장애 · REST 부하 수준 | [running-session-server/verification.md](running-session-server/verification.md) 「번호」 |
+| SC0–SC14 · C1–C7 · L30 · L60 · L100 | k6 시나리오 (SC1–SC7 핵심, `S`로 쓰지 않는다 — S3와 겹친다) · SC3 안 장애 · REST 부하 수준 | [running-session-server/verification.md](running-session-server/verification.md) 「번호」 |
 | A · A′ · B0 · B2 (+ 변형) | 비교군 | [running-session-server/verification.md](running-session-server/verification.md) 「비교군」 |
 | R1–R9 | 플랫폼 검증 | [running-session-server/verification.md](running-session-server/verification.md) 「플랫폼 검증 R1–R9」 |
 | `K-SCn-m` · `K-Rn-m` | 판정 기준 · 단계 나가는 기준 후보 | [load_test/msa/PREREG.md](../../load_test/msa/PREREG.md) 「시나리오별 기준」 「후보 기준」 |
