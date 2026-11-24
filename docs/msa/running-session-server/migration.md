@@ -411,7 +411,7 @@ test만. 겹치는 EKS 단계: E5.
 
 | 단계 | 문서 | 고칠 것 |
 |---|---|---|
-| M0 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」, load_test/msa PREREG · RESULTS, platform 「확인할 운영 값」 | 새 서버 지표 예정 행(코드가 들어가면 사용 중), PREREG 동결 · 결과, 관리 포트와 종료 값 |
+| M0 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」, load_test/msa PREREG · RESULTS, platform 「확인할 운영 값」 | 새 서버 지표 예정 행(코드가 들어가면 사용 중), 운영 Grafana에 HikariCP(활성 · 대기) 패널 추가 — 0단계에서 풀 기준선을 못 뽑았다, PREREG 동결 · 결과, 관리 포트와 종료 값 |
 | M0 | [api-spec.md](../../api-spec.md) 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42). F4를 승인하면 최소 버전이 최대 30초 늦게 걸린다는 메모 |
 | M1 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「패키지 구조」 「의존 방향」, spec-check 스킬 | 서브프로젝트 · base package · 옛 엔진 목록 규칙, 검사 규칙 |
 | M1 | CLAUDE.md | 빌드 · 테스트 명령, 문서 색인 |
