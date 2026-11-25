@@ -14,7 +14,7 @@
 | 결정과 바뀐 이력 | [../decisions.md](../decisions.md) |
 | 레이어 · 패키지 · 다중 인스턴스 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) |
 
-> 상태: 계획 — 단계 상태는 [README.md](README.md) 「진행 단계」에만 둔다. 절마다 `운영 중` · `정함 (D-xx)` · `제안` · `정하지 않음`을 단다. 「지금 얽힌 곳 (11-24 기준)」만 지금 코드다.
+> 상태: 계획 — 단계 상태는 [README.md](README.md) 「진행 단계」에만 둔다. 절마다 `운영 중` · `정함 (D-xx)` · `제안` · `정하지 않음`을 단다. 「지금 얽힌 곳 (11-24 기준)」과 표의 '지금' · '지금 코드' 칸만 지금 코드다.
 
 > 주소·키·비밀값은 적지 않는다 — Parameter Store 이름까지만.
 
@@ -30,11 +30,11 @@
 - **지우지 않고 옆에 새로 만든다** — 지금 러닝 세션 코드(이하 옛 엔진)는 M7까지 운영을 맡고 M8에 지운다.
 - **처음부터 따로 띄운다** — 새 코드는 루트의 `running-session-server/`에 별도 Spring Boot 앱으로 만든다. 모놀리스 안에서 호스팅하지 않는다(D-78).
 - **애그리거트를 쪼개지 않고 새로 만든다** — 매칭과 러닝은 한 애그리거트다(「지금 얽힌 곳 (11-24 기준)」). 메인 쪽은 넘기기 이벤트를 쓰고 결과를 받는 일만 더한다.
-- **선행 수정은 모놀리스에 먼저** — F1(끝내기 구조) · F3 · F5–F9 — `정함 (D-65, D-66, D-79)`. F2는 버림(D-80), F4는 버림(D-84). 새 엔진의 끝내기도 같은 구조다(D-63, D-82).
+- **선행 수정은 모놀리스에 먼저** — 「선행 수정 F1–F9」. 새 엔진의 끝내기도 같은 구조다(D-63, D-82).
 
 ## 지금 얽힌 곳 (11-24 기준)
 
-`운영 중` — 11-24 코드를 센 것이다. 목표 쪽 결론은 [architecture.md](architecture.md) 「경계 — 생애 단계」.
+`운영 중` — 11-24 코드를 센 것이다. import · 끝내기 안 정책 · Redis 리스너 행은 M0 선행 수정(F1 · F3 · F7, 11-25) 뒤의 코드다. 목표 쪽 결론은 [architecture.md](architecture.md) 「경계 — 생애 단계」.
 
 **러닝과 매칭이 한 애그리거트다**
 
@@ -43,11 +43,11 @@
 | 애그리거트 | `RunningRoom`이 모집(`join` · `leave` · `invite` · `acceptInvitation` · `closeMatching`)과 러닝(`start` · `rejoin` · `finishSession` · `finish` · `cancel`)을 함께 들고 `RoomSession` · `RoomInvitation`을 품는다 | 새 엔진은 자기 러닝 세션 모델을 갖는다. 옛 클래스는 M8에서 러닝 메서드만 줄인다 |
 | 어댑터 | `RunningPersistenceAdapter`가 러닝 포트 13개 + 매칭 포트 9개 + `LoadUserStatusPort`를 구현한다 — 주석 '매칭 유스케이스가 자기 포트로 같은 애그리거트를 다룬다' | M8에서 러닝 포트를 뺀다 |
 | 잠금 | 참가자 → 방 순서(레이어 규칙). 시작 · 취소 · 끝내기 · 강제 종료 · 탈퇴 정산이 같은 행을 잠그고, 방 행은 매칭 배정 · 초대 · 모집 마감 · 채팅도 잠근다. 매칭과 러닝 사이에 선을 그으면 같은 방 · 참가자 행을 쓰는 트랜잭션이 매칭 10개 + 러닝 7개다 | 생애 단계로 나눠 단계마다 쓰는 쪽이 하나다 (D-26) |
-| import | `application/match` → `domain.running` 38파일, `application/running` → `application/match` 4파일(예: `SettleRunningForAccountDeletionHandler`), 반대 7파일(예: `SendInvitationHandler`). running → recordcard 2, recordcard → running 1, user → running 1 | 새 엔진은 메인을 import하지 않는다(「경계 검사」) |
+| import | `application/match` → `domain.running` 38파일, `application/running` → `application/match` 5파일(예: `SettleRunningForAccountDeletionHandler` · `ForceFinishSteps`), 반대 7파일(예: `SendInvitationHandler`). running → recordcard 2, recordcard → running 1, user → running 1 | 새 엔진은 메인을 import하지 않는다(「경계 검사」) |
 | 공유 VO · 포트 | `Pace` · `AvgPace` · `RunningRoomId` · `RunningRecordId`. `UserPersistenceAdapter`(포트 약 30개)가 끝내기에 `LoadUserWeightPort` · `UpdateUserAvgPacePort`를 준다 | 몸무게는 넘기기 스냅샷, 평균 페이스는 메인 inbox (architecture 「데이터 주인」) |
-| 끝내기 안 정책 | `RunningFinisher`가 페널티 · 쿨다운(`StartMatchCooldownPort`) · 평균 페이스 · 몸무게 · 날씨(`LoadWeatherPort`)를 한 트랜잭션에서 한다 | 「선행 조건」 — 정책을 끝내기 밖 반응으로 뺀다 |
+| 끝내기 안 정책 | `RunningFinishSteps`가 판정 트랜잭션에서 몸무게(`LoadUserWeightPort`)를 읽고, 확정 트랜잭션에서 페널티 · 쿨다운(`StartMatchCooldownPort`) · 평균 페이스(`UpdateUserAvgPacePort`)를 한다. 날씨(`LoadWeatherPort`)는 `RunningFinisher`의 봉인(잠금 밖)이다 | 「선행 조건」 — 정책을 끝내기 밖 반응으로 뺀다 |
 | 오류 코드 | application `ErrorCode`가 sealed(`permits` 11개)이고 `GlobalExceptionHandler.toStatus()`가 빠짐없이 가른다. 다른 Gradle 프로젝트는 끼지 못해 그 예외가 일반 처리기로 떨어져 500이 되고 `ErrorExposurePolicy`가 가린다. `RunningWebSocketHandler`가 `BusinessException` · `ErrorCode`를 import한다 | 모듈 자기 오류 코드 + WS 오류 변환기(「원격처럼」) |
-| Redis 리스너 | `runningChannelContainer` 빈 하나(`RunningChannelConfig`, 실행기 지정 없음)를 `MatchChannelConfig` · `NotificationChannelConfig` · `ScheduleChannelConfig` · 방 구독자가 이름으로 받는다 | 두 번째 컨테이너 빈이 생기면 주입이 모호해진다(「원격처럼」) |
+| Redis 리스너 | `RunningChannelConfig`의 컨테이너 둘 — `runningChannelContainer`(`@Primary`, 실행기 지정 없음)를 `MatchChannelConfig` · `NotificationChannelConfig` · `ScheduleChannelConfig` · `MatchRoomSubscriber`가, `runningRoomChannelContainer`(`running:room:*`, 상한 있는 실행기 — F7)를 `RunningRoomSubscriber`가 쓴다 | 세션 앱은 자기 리스너 컨테이너를 갖는다(「원격처럼」) |
 | 예약 작업 | `scheduled_jobs` 한 테이블, 채널 `schedule:job` 하나. 실행기는 매칭 셋(`MATCH_CLOSE` · `RUNNING_READY` · `RUNNING_REMINDER`)과 러닝 둘(`RUNNING_START` · `RUNNING_FORCE_FINISH`). `RunScheduledJobHandler.executorOf`는 실행기 없는 종류에 `IllegalStateException`을 던진다 | 서비스마다 자기 테이블 · 채널 (D-29) |
 | 쿨다운 | `MatchCooldownRedisAdapter`가 매칭 `MatchCooldownPort`와 러닝 `StartMatchCooldownPort`를 함께 구현한다(키 `match:cooldown:{userId}`) | 정하는 쪽 세션, 지키는 쪽 메인 (architecture 「데이터 주인」) |
 | 아웃박스 | `OutboxEventJpaEntity`의 `ck_outbox_event_aggregate_type`은 `RECORD_CARD`만, 토픽 CHECK는 `(dev\|test\|prod).record-card.music.requested`만 받고 `AggregateType`도 하나다. 같은 CHECK가 손으로 쓴 test · prod DDL에 있다. 쓰는 어댑터는 `RecordCardMusicOutboxAdapter` 하나 | 「아웃박스 일반화」 |
@@ -72,7 +72,6 @@
 - **트랙을 못 읽으면 전부 롤백된다** — `RunningTrackUnavailableException`을 `AccountDeletionUnavailableException`(503 `ACCOUNT_DELETION_UNAVAILABLE`)으로 바꿔 던진다.
 - **`FlushPendingChangesPort`** — 초대를 `LEFT`로 바꾸는 갱신을 커밋까지 미루면 CASCADE가 그 행을 먼저 지워 갱신이 실패하므로 바로 DB에 쓴다.
 - **소켓은 같은 인스턴스만 닫힌다** — 커밋 뒤 `RunningConnectionCloseListener`가 그 인스턴스의 연결만 닫는다.
-- 초대 방에 혼자 남아 탈퇴하면 500이 나던 버그는 PR #116(11-02)에서 고쳤다.
 
 ## 앱 모양
 
@@ -128,21 +127,21 @@ runiverse-backend/
 
 ## 선행 수정 F1–F9
 
-M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D-65, D-66, D-79)`. F2는 버림(D-80), F4도 버림(D-84). 모놀리스에 넣은 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
+M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D-66, D-79, D-82, D-83, D-85)`, 11-25에 코드로 넣었다(단위 · 통합 4,118(탈퇴 수정 포함) · E2E 한 대 161 · 두 대 176 통과). F2는 버림(D-80), F4도 버림(D-84). 모놀리스에 넣은 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
 
 | F | 고칠 것 | 지금 코드 |
 |---|---|---|
-| F1 | **M0 모놀리스 — 이번 PR (D-79)** — 끝내기를 판정 → 봉인 → 확정으로 나눈다 (D-82). 임대(판정 앞, Redis `SET NX` TTL 30초) → 판정(잠금 안): 다시 확인 · 트랙 스냅숏 · `TrackFilter` · 목표 판정. 봉인(잠금 밖, 임대만): `TrackAnalyzer` · S3 원본 업로드 · 날씨. 확정(잠금 안): 다시 확인 → 기록 · 구간 · 상태 저장. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`, 자동 종료는 무응답. 원본 트랙 업로드 요청에만 `apiCallTimeout` 10초. 새 엔진도 같은 구조로 짠다 | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
-| F2 | **버림 (D-80)** — 계산마다 잠근 채 판정한다. 아래는 버린 안: 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
-| F3 | **M0 모놀리스 (D-66, D-83)** — 강제 종료를 알람(잠금 없이 확인 → 할 일 있을 때만 잠금 → 남으면 1분 뒤 다시 걸기) + 러너마다 워커(`RunningFinisher.finish`)로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
-| F4 | **버림 (D-84)** — `app_versions` 30초 캐시. 버전 확인은 쿼리 하나 동안만 커넥션을 빌리고, 풀을 바닥내던 원인은 F1 · F3가 없앴다. 커넥션 대기는 F5 지표로 본다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 잠금 없이 읽는다 — 그대로 둔다 |
-| F5 | **M0 모놀리스 (D-66)** — Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `reWriteBatchedInserts`만 설정돼 있다 |
-| F6 | **M0 모놀리스 (D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
-| F7 | **M0 모놀리스 (D-66)** — `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`에 실행기 지정이 없다 |
-| F8 | **M0 모놀리스 (D-66)** — `JAVA_TOOL_OPTIONS`로 `MaxRAMPercentage` — 값은 「정하지 않은 것」 4 | Dockerfile `ENTRYPOINT`에 JVM 옵션이 없다 |
-| F9 | **M0 모놀리스 — graceful 종료만 (D-85)** — `server.shutdown=graceful` · 대기 상한 `SHUTDOWN_TIMEOUT`(20초), test 배포는 `docker stop -t 30` · `--stop-timeout 30`. EC2는 등록 해제가 SIGTERM보다 먼저라 readiness 내림 · `RUNNING_START` 거절 · 4500 나눠 닫기 · SSE 완료는 EKS에서 한다(D-65의 순서). prod 시작 템플릿의 정지 대기는 확인할 운영 값 | `server.shutdown` 설정이 없고 test 배포가 `docker rm -f`(SIGKILL)였다 |
+| F1 | **M0 모놀리스 — 됨 (11-25, D-79 · D-82)** — 끝내기를 임대 → 판정(잠금) → 봉인(잠금 밖: 분석 · S3 원본 · 날씨) → 확정(잠금)으로 나눈다. 단계와 지킬 순서는 [runtime.md](runtime.md) 「끝내기」. 새 엔진도 같은 구조로 짠다 | `RunningFinisher`(트랜잭션 없는 지휘자 — 임대 → 판정 → 봉인 → 확정, finally에서 임대 해제) · `RunningFinishSteps`(`judge` · `confirm` 트랜잭션) · `FinishLeaseRedisAdapter`(키 `running:finish-lease:{runningRoomId}:{userId}`, `SET NX PX` + 토큰, `release_finish_lease.lua`로 자기 토큰만 지운다, `running-finish-lease.ttl=30s`). 임대를 본 `RUNNING_FINISH`는 `RunningFinishInProgressException`(코드 `RUNNING_TRACK_UNAVAILABLE`), 목표 도달 자동 종료는 무응답 — 둘 다 `runiverse.running.finish.inprogress`로 센다. `GpsTrackS3Adapter`는 원본 트랙 업로드 요청에만 `apiCallTimeout` 10초 |
+| F2 | **버림 (D-80)** — 계산마다 잠근 채 판정한다. 아래는 버린 안: 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 임대를 잡고 판정 트랜잭션(`RunningFinishSteps.judge`, `FOR UPDATE`)을 연다 — 그대로 둔다 |
+| F3 | **M0 모놀리스 — 됨 (11-25, D-66 · D-83)** — 강제 종료를 알람(잠금 없이 확인 → 할 일 있을 때만 잠금 → 남으면 1분 뒤 다시 걸기) + 러너마다 워커(`RunningFinisher.finish`)로. 지킬 순서는 [runtime.md](runtime.md) 「강제 종료 · 청소기」 | `ForceFinishRunningRoomHandler`(자기 트랜잭션을 열지 않는다)가 잠금 없이 방 · 참가자를 읽고, 미출석 `JOINED`나 뛰는 사람 없는 열린 방이 있을 때만 `ForceFinishSteps.settle`(참가자 → 방 잠금, 다시 읽은 값으로 이탈 · 방 닫기). 뛰는 사람이 남으면 1분 뒤로 다시 걸고, 커밋 뒤 `ForceFinishRunnerDispatcher`가 `forceFinishExecutor`(스레드 4 · 대기 100)에서 러너마다 `FinishRunningUsecase`(forced=true)를 부른다. `RunScheduledJobHandler`는 실행기가 돌려준 시각으로 `ScheduledJob.reschedule`하고 커밋 뒤 `ScheduledJobRescheduledEvent`로 타이머를 다시 건다 — 실행 시각 전의 이른 발화는 건너뛴다. 간격 `running-force-finish.retry-interval=1m`, 상한 시작 + 6시간 + `retry-window=7h` |
+| F4 | **버림 (D-84)** — `app_versions` 30초 캐시를 넣지 않는다. 커넥션 대기는 F5 지표로 본다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 잠금 없이 읽는다 — 그대로 둔다 |
+| F5 | **M0 모놀리스 — 됨 (11-25, D-66)** — Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `spring.datasource.hikari.*` — `pool-name=main`, `maximum-pool-size=${DB_POOL_MAX_SIZE:10}`, `minimum-idle=${DB_POOL_MIN_IDLE:10}`, `connection-timeout=${DB_POOL_CONNECTION_TIMEOUT_MS:5000}`, `leak-detection-threshold=${DB_POOL_LEAK_DETECTION_MS:10000}`, 기존 `reWriteBatchedInserts`. 시간 값은 밀리초 숫자만 받는다(`3s`는 기동 실패) |
+| F6 | **M0 모놀리스 — 됨 (11-25, D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌). 대상 그룹 검사는 readiness이고 ASG(ELB 방식)도 같은 판정을 따른다. liveness는 EKS livenessProbe(재시작)용이다 — 이유는 [../platform.md](../platform.md) 「지금 (11-25 기준)」 health 행 | `management.endpoint.health.probes.enabled=true`, 그룹 `liveness`(`livenessState`) · `readiness`(`readinessState`). 기존 `/actuator/health`는 DB · Redis를 합친 진단용 그대로다. `SecurityConfig`가 `/actuator/health` · `/actuator/health/liveness` · `/actuator/health/readiness` · `/actuator/prometheus`를 인증 없이 연다. 대상 그룹 검사 경로는 배포 뒤 바꾼다(「단계 M0–M9」 M0) |
+| F7 | **M0 모놀리스 — 됨 (11-25, D-66)** — `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`의 `runningRoomChannelContainer`(`RunningRoomSubscriber`가 쓴다) + `runningRoomListenerExecutor`(스레드 `${RUNNING_ROOM_LISTENER_THREADS:8}` · 대기 줄 `${RUNNING_ROOM_LISTENER_QUEUE_CAPACITY:5000}`). 넘치면 `RunningRoomMessageDropHandler`가 버리고 10초에 한 줄 WARN(첫 버림은 바로) + `runiverse.running.room.dropped`. 매칭 · 알림 · 예약은 기존 `runningChannelContainer`(`@Primary`) |
+| F8 | **M0 모놀리스 — 됨 (11-25, D-66)** — 컨테이너 힙 비율 `MaxRAMPercentage`. EKS 파드 제한을 둔 뒤의 값은 「정하지 않은 것」 4 | Dockerfile `ENV JVM_MAX_RAM_PERCENTAGE=50.0`, `ENTRYPOINT`가 `exec java -XX:MaxRAMPercentage=${JVM_MAX_RAM_PERCENTAGE}`로 넘긴다 — `exec`라 java가 PID 1이고 SIGTERM이 닿는다. `docker run`에 `--memory` 제한이 없어 서버 전체 메모리 기준이다(t3.small 2GB → 힙 약 1GB) |
+| F9 | **M0 모놀리스 — 됨 (11-25) · graceful 종료만 (D-85)** — EC2는 등록 해제가 SIGTERM보다 먼저라 readiness 내림 · `RUNNING_START` 거절 · 4500 나눠 닫기 · SSE 완료는 EKS에서 한다(「선행 조건」 드레이너 · SSE 행). prod 시작 템플릿의 정지 대기는 확인할 운영 값 | `server.shutdown=graceful`, `spring.lifecycle.timeout-per-shutdown-phase=${SHUTDOWN_TIMEOUT:20s}`. test 배포(`backend-ci-cd.yml`)는 `docker stop -t 30` + `docker rm`, `docker run --stop-timeout 30` |
 
-- **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `정함 (D-42)`.
+- **EKS의 계획 종료**(readiness 내림 · `4500` 나눠 닫기 · SSE 완료)는 순서와 시간이 [runtime.md](runtime.md) 「계획 종료」, 파드 값이 [../eks.md](../eks.md) 「계획 종료」에 있다. 닫기 코드는 `4500`을 다시 쓴다 — `정함 (D-42)`.
 - **나가는 조건** — A′(F9 포함)의 ASG 배포는 graceful 종료만이라 `K-SC1-5`(나눠 닫기)는 EKS(B2)에서 본다(D-85). 끝내기 수정(F1)의 효과는 SC9의 A vs A′로 보고(D-79), 끝내기 기준 `K-SC9-5`는 A′(M0)와 새 엔진(M3 · M5)에서 본다(채택한 행만). A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건
@@ -171,16 +170,16 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 
 | 조건 | 지금 | 언제 |
 |---|---|---|
-| **드레이너** — `WebSocketDrainer`(`SmartLifecycle`)가 F9의 앱 쪽을 맡는다. `server.shutdown=graceful`, `spring.lifecycle.timeout-per-shutdown-phase` 명시 | 없다 | M0 |
-| **main-api SSE 종료** — 종료 때 열린 SSE(매칭 스트림 · 앱 스트림)를 완료해 앱이 지금 계약대로 다시 붙게 한다. ASG에서는 F9와 함께, 파드 값은 eks 「계획 종료」 main-api 열 | 없다 | M0 |
-| **JVM · 컨테이너** — `JAVA_TOOL_OPTIONS`(F8 + `ExitOnOutOfMemoryError` + DNS 캐시 시간), Tomcat keep-alive(값은 [runtime.md](runtime.md)의 연결 시간 제한 사슬), 기반 이미지 digest 고정 | 옵션 없음, `eclipse-temurin:21-jre` 태그 | M0 |
+| **드레이너** — `WebSocketDrainer`(`SmartLifecycle`)가 SIGTERM에 readiness 내림 · 새 `RUNNING_START` 거절 · `4500` 나눠 닫기 · 끝내기 중 소켓의 ack 뒤 닫기를 맡는다 — 순서와 시간은 [runtime.md](runtime.md) 「계획 종료」 | 없다. graceful 종료 · 대기 상한은 F9로 있다 | EKS (D-85) |
+| **main-api SSE 종료** — 종료 때 열린 SSE(매칭 스트림 · 앱 스트림)를 먼저 완료해 앱이 지금 계약대로 다시 붙고 graceful이 대기 상한을 다 쓰지 않게 한다. 파드 값은 eks 「계획 종료」 main-api 열 | 없다. EC2에서는 등록 취소 지연 끝에 ALB가 끊고, 서버는 다음 keep-alive(15초) 안에 정리한다 | EKS (D-85) |
+| **JVM · 컨테이너** — JVM 옵션 `ExitOnOutOfMemoryError` · DNS 캐시 시간(힙 비율은 F8), Tomcat keep-alive(값은 [runtime.md](runtime.md) 「연결 시간 제한 사슬」), 기반 이미지 digest 고정 | `ENTRYPOINT`에는 `-XX:MaxRAMPercentage`만 있다(F8). Tomcat keep-alive 설정 없음, `eclipse-temurin:21-jre` 태그 | M0 |
 | **서버 쪽 빈틈 감지** — 배치의 첫 `sequence`가 저장된 마지막 + 1보다 크면 `RUNNING_TRACK_UNAVAILABLE`로 다시 보내게 한다. Redis 재시작 손실(AOF everysec)을 계약 변경 없이 덮는다 | 없다 | M0 |
-| **인스턴스를 넘는 수정** — 탈퇴 소켓 닫기를 모든 인스턴스로, 늦은 DISCONNECTED(`CloseSupersededSessionHandler`가 닫기 전에 표에서 빼고 나간다 — 범위는 정하지 않음, [runtime.md](runtime.md)), `StartRunningHandler`가 지금 ≥ `start_at`이면 멱등 시작 | `RunningConnectionCloseListener`는 같은 인스턴스만 닫는다 | M0–M3 |
-| **끝내기에서 정책 빼기** — 페널티 · 쿨다운 · 평균 페이스를 `RunningFinisher` 밖의 반응으로. 옛 엔진 동결이 지켜지려면 필요하다 | 끝내기 트랜잭션 안 | M0–M2 |
-| **끝내기 칸막이** — 동시에 도는 끝내기 수에 상한 | 없다 | M0 |
+| **인스턴스를 넘는 수정** — 탈퇴 소켓 닫기를 모든 인스턴스로, 늦은 DISCONNECTED(`CloseSupersededSessionHandler`가 닫기 전에 표에서 빼고 나간다 — 범위는 정하지 않음, [runtime.md](runtime.md) 「다중 인스턴스」), `StartRunningHandler`가 지금 ≥ `start_at`이면 멱등 시작 | `RunningConnectionCloseListener`는 같은 인스턴스만 닫는다 | M0–M3 |
+| **끝내기에서 정책 빼기** — 페널티 · 쿨다운 · 평균 페이스를 끝내기 확정 밖의 반응으로. 옛 엔진 동결이 지켜지려면 필요하다 | `RunningFinishSteps.confirm` 트랜잭션 안 | M0–M2 |
+| **끝내기 칸막이** — 동시에 도는 끝내기 수에 상한 | 강제 종료 워커만 `forceFinishExecutor`(스레드 4)로 묶인다(F3). 사용자 종료 · 목표 도달 종료는 상한 없음 | M0 |
 | **지표** — WS 연결 게이지 · 닫기 코드별 수 · 끝내기 단계 타이머 · Tomcat 스레드. 이름은 [metrics-convention.md](../../metrics-convention.md) 예정 행을 코드보다 먼저 쓴다 | 게이지 없음 | M0 |
 | **로그** — k8s 프로필은 stdout ECS, 파일 appender 끔, WS · 컨슈머 경로 MDC | `logging.file.name`이 파일로 쓴다 | M0 (E1) |
-| **CI** — `MultiInstanceE2eTest`를 두 번째 인스턴스(`E2E_SECOND_BASE_URL`, 두 번째는 `JPA_DDL=none`)로 돌린다 · 경로 필터 · prod 빌드가 테스트를 돈다 | CI가 `E2E_SECOND_BASE_URL`을 주지 않아 그 테스트가 건너뛴다 · 경로 필터 없음 · `backend-cd-prod.yml`이 `bootJar -x test` | M0 |
+| **CI** — 경로 필터 · prod 빌드가 테스트를 돈다. `MultiInstanceE2eTest`는 CI에 넣지 않고 로컬 `E2E_MULTI_INSTANCE=true`로 돌린다(D-86) | 경로 필터 없음 · `backend-cd-prod.yml`이 `bootJar -x test` | M0 |
 | **CI (배포물 둘)** — `E2E_WS_BASE_URL`로 WS를 따로 가리킨다 · 계약 테스트 · Kafka를 낀 서비스 사이 E2E | `E2eTestSupport`가 `E2E_BASE_URL` + `/ws/running`으로 WS 주소를 만든다 | M1–M2 |
 
 ## 아웃박스 일반화
@@ -231,22 +230,22 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 ### M0 기준선 · 선행 수정
 
 옛 엔진만, test와 운영. 겹치는 EKS 단계: E0 · E1.
-- [ ] 0단계 운영 증거 (11-25 ASG · Kibana · Grafana까지, SQL 집계 · REST 비율 · CPU 크레딧은 남았다) — [RUNBOOK](../../../load_test/msa/RUNBOOK.md) 「0. 운영 증거」 → [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」
+- [ ] 0단계 운영 증거 (11-25 ASG · Kibana · Grafana까지, SQL 집계 · 대조일 · REST 비율 · CPU 크레딧은 남았다) — [RUNBOOK](../../../load_test/msa/RUNBOOK.md) 「0. 운영 증거」 → [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」
 - [ ] 앱 재접속 값을 받아 [runtime.md](runtime.md)에 넣는다
 - [ ] 하네스 v2([load_test/msa/README.md](../../../load_test/msa/README.md))와 PREREG 동결 — ack 없는 기록 검사와 불변식 SQL(I1 · I2 · I4)을 「무결성 검사」에 둔다
 - [ ] 비교군 A 기준선 — SC0 관문, 그다음 SC1 · SC3 · SC4 · SC9 · SC10
-- [x] F1 끝내기 구조 — 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금) (D-79, D-82) — 코드 · 단위 · 통합 테스트 11-25. E2E · 효과(SC9 A vs A′)는 아직
-- [x] F9 graceful 종료 (D-85) — 11-25 컨테이너 `docker stop`에 'Graceful shutdown complete'(남은 요청 없을 때 0.4초), E2E 161 · 단위 4117 통과. 나눠 닫기는 EKS
-- [x] F3 강제 종료 — 알람 확인 + 러너별 워커 + 1분 뒤 다시 걸기 (D-83) — 코드 · 단위 · 통합 테스트 · E2E 11-25
-- [x] F5 Hikari 명시 — `pool-name=main` · 나머지는 환경변수(기본값): 최대 `DB_POOL_MAX_SIZE`(10) · 최소 `DB_POOL_MIN_IDLE`(10) · 대기 상한 `DB_POOL_CONNECTION_TIMEOUT_MS`(5000) · 누수 감지 `DB_POOL_LEAK_DETECTION_MS`(10000) (D-66) — E2E 11-25: 누수 경고 0 · 대기 시간 초과 0 · 최장 사용 0.33초
-- [x] F6 health 그룹 — `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`), 둘 다 DB · Redis를 보지 않는다. 기존 `/actuator/health`는 진단용으로 그대로 (D-66) — E2E 11-25. Redis를 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP. **남은 것: 배포 뒤 test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸기(사용자)**
-- [x] F7 러닝 방 채널 전용 컨테이너(`runningRoomChannelContainer`) + 상한 있는 실행기 — 스레드 `RUNNING_ROOM_LISTENER_THREADS`(8) · 대기 줄 `RUNNING_ROOM_LISTENER_QUEUE_CAPACITY`(5000), 넘치면 버리고 10초에 한 줄 WARN + `runiverse.running.room.dropped`. 매칭 · 알림 · 예약은 기존 컨테이너 (D-66) — E2E 11-25
-- [x] F8 힙 비율 — Dockerfile `JVM_MAX_RAM_PERCENTAGE`(기본 50.0)를 `exec java -XX:MaxRAMPercentage=…`로 넘긴다(`exec`라 java가 PID 1 — SIGTERM이 닿는다). `--memory` 제한이 없어 서버 전체 메모리 기준이다 (D-66) — 11-25 이미지에서 기본 50 · 덮어쓰기 40 확인, E2E는 F9와 함께
+- [x] F1 끝내기 구조 (D-79, D-82) — 코드 · 단위 · 통합 · E2E 11-25(두 인스턴스: 임대가 인스턴스를 넘어 보이고, 다른 인스턴스로 다시 붙어 끝내도 기록이 하나다). 탈퇴 정리가 임대에 막히면 500이 아니라 503 `ACCOUNT_DELETION_UNAVAILABLE`로 돌려보낸다(11-25 수정 — 정리 중 끝내기를 부르는 경로가 '처리 중' 예외를 받지 못했다). 효과(SC9 A vs A′)는 아래 A′ 측정에서 본다
+- [x] F3 강제 종료 (D-83) — 코드 · 단위 · 통합 · E2E 11-25(두 인스턴스: 두 번째 인스턴스를 SIGTERM으로 재시작한 뒤 기동 복구가 미출석 이탈 · 러너 확정 · 방 닫기 · 1분 뒤 다시 걸기를 한다)
+- [x] F5 Hikari 명시 (D-66) — E2E 11-25: 누수 경고 0 · 대기 시간 초과 0 · 최장 사용 0.33초
+- [x] F6 health 그룹 (D-66) — E2E 11-25(두 인스턴스 probe UP). Redis를 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP. **남은 것: 배포 뒤 test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸기(개발자)**
+- [x] F7 러닝 방 채널 전용 컨테이너 + 상한 있는 실행기 (D-66) — E2E 11-25
+- [x] F8 힙 비율 (D-66) — 11-25 이미지에서 기본 50 · 덮어쓰기 40 확인, E2E는 F9와 함께
+- [x] F9 graceful 종료 (D-85) — 11-25 컨테이너 `docker stop`에 'Graceful shutdown complete'(남은 일이 없으면 0.4초), 두 인스턴스 E2E에서 두 번째 인스턴스를 SIGTERM으로 재시작. 나눠 닫기는 EKS. **남은 것: prod 시작 템플릿 `docker run --stop-timeout`이 30초인지 확인(개발자)**
 - [x] ~~F4 `app_versions` 30초 캐시~~ — 버림 (D-84)
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
-**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′가 PREREG 「후보 기준」의 `K-SC9-5`(F1)를 넘는다(채택한 행만) — `K-SC1-5`는 EKS(B2)에서 본다(D-85). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
+**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′가 PREREG 「후보 기준」의 `K-SC9-5`(F1)를 넘는다(채택한 행만) — `K-SC1-5`는 EKS(B2)에서 본다(D-85). 다중 인스턴스 E2E가 로컬에서 통과하고(D-86) prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
 
 ### M1 별도 앱 뼈대 + 루트 compose (D-78)
 
@@ -277,7 +276,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 새 앱. compose에서 두 앱으로 시험한다. 겹치는 EKS 단계: E3.
 - [ ] 시작 — 넘기기 사본을 읽는다. 모르는 방이면 허용 목록 1, 안 되면 `RUNNING_SESSION_UNAVAILABLE`(앱이 다시 보낸다)
 - [ ] 위치 · 콤보 — 지금 Redis 로직을 새 키 공간으로
-- [ ] 끝내기 — F1 구조(D-63, D-82): 판정(필터 · 목표 판정 · 임대) → 봉인(분석 · S3 원본 · 날씨) → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md). 끝내기 단계 타이머로 `K-SC9-5`를 본다
+- [ ] 끝내기 — F1 구조(D-63, D-82): 임대 → 판정(필터 · 목표 판정) → 봉인(분석 · S3 원본 · 날씨) → 짧은 확정(기록 · 구간 · 아웃박스) → 커밋 뒤 ack (I1) — [runtime.md](runtime.md) 「끝내기」. 끝내기 단계 타이머로 `K-SC9-5`를 본다
 - [ ] 러닝 DB 예약 작업(행 점유) · 혼자 달리기 청소기 · 밀린 작업 훑기 (D-29)
 - [ ] 사용자 삭제 때 모든 인스턴스의 소켓을 세션 Redis 채널로 닫는다
 - [ ] 탈퇴 saga — 메인은 정산을 허용 목록 2의 HTTP 클라이언트로 부른다 — consistency 「계정 탈퇴 saga」
@@ -354,7 +353,7 @@ test만. 겹치는 EKS 단계: E5.
 2. SQL로 진행 중 옛 엔진 방 0. 마지막 옛 방이 닫힌 뒤 강제 종료 지평(+6시간)과 트랙 TTL(7시간)이 지났고 오래된 혼자 달리기 `RUNNING` 행이 없다.
 3. 그 기간 옛 엔진으로 되돌린 적이 없고, 옛 엔진을 꺼 둔(코드는 남은) 채 1–2주가 지났다.
 4. 새 엔진이 M0 기준선 이상이다 — 끝내기 성공률 · CDC 지연 · `RUNNING_TRACK_UNAVAILABLE`과 예상 밖 끊김 비율(PREREG 「후보 기준」), ack 없는 기록 0(I1), 대조 누락 0(I5), 보관 · 건너뛴 inbox 0, 끝낸 뒤 6-1 자기 기록 빠짐 0.
-5. 골든 트랙 동등성과 E2E가 SESSION만으로 통과한다(CI의 `MultiInstanceE2eTest` 포함).
+5. 골든 트랙 동등성과 E2E가 SESSION만으로 통과한다(다중 인스턴스 E2E 포함 — 로컬, D-86).
 6. WS 메시지 · 6-1 · 6-2의 api-spec 차이가 없다. 앱에 보이는 것이 바뀌었으면 먼저 iOS · 안드로이드 최소 버전 상향과 옛 버전 ALB 차단(11-03처럼)을 한다.
 7. 지우는 PR이 옛 엔진 목록의 파일만 지우고 공유 클래스를 줄인다 — 목록 참조 검사 0.
 
@@ -378,18 +377,17 @@ test만. 겹치는 EKS 단계: E5.
 | 단계 | 문서 | 고칠 것 |
 |---|---|---|
 | M0 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」, load_test/msa PREREG · RESULTS, platform 「확인할 운영 값」 | 새 서버 지표 예정 행(코드가 들어가면 사용 중), 운영 Grafana에 HikariCP(활성 · 대기) 패널 추가 — 0단계에서 풀 기준선을 못 뽑았다, PREREG 동결 · 결과, 관리 포트와 종료 값 |
-| M0 | [api-spec.md](../../api-spec.md) 0 · 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42 · D-65). F4는 버려(D-84) 0 공통 규칙의 '다음 요청부터 바로' 문구는 그대로다 |
+| 드레이너를 넣을 때 (EKS, D-85) | [api-spec.md](../../api-spec.md) 5 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42) |
 | M1 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「패키지 구조」 「의존 방향」, spec-check 스킬 | 별도 앱 폴더 `running-session-server/` · base package · 옛 엔진 목록 규칙, 검사 규칙 |
 | M1 | CLAUDE.md | 빌드 · 테스트 명령, 문서 색인 |
 | M2 | api-spec 14장 `서비스 사이 계약 — 메인 ↔ 러닝 세션` (새로) | 이벤트 · 내부 API 본문. architecture 「이벤트 (후보)」 「동기 호출 허용 목록」에는 행과 링크만 남긴다 |
 | M2–M3 | [erd.md](../../erd.md) | `outbox_events` CHECK 값, 임시 「러닝 DB」 장, 메인 쪽 `running_records` · `running_segments`가 사본이라는 표시(D-68 — FK 대상은 그대로) |
 | M2 | [../kafka.md](../kafka.md) 「이름 — 환경 접두어 `{env}`」 「토픽」, [../cdc.md](../cdc.md), [../outbox-inbox.md](../outbox-inbox.md) 「지금 있는 이벤트」 「받는 쪽 — Inbox」, [../README.md](../README.md) 「이벤트 색인」 「구성 — 지금」 | 만들고 검증한 PR에서 — 이름은 platform 「새 이름」에서 옮긴다 |
-| ~~날씨 자리를 정할 때~~ | — | **정했다 → D-63** — 세션이 끝낼 때 지금과 같은 기준으로 조회해 값 · 시점이 같다. 고칠 문서 없음 |
 | M3 (앱 작업 전) | [api-spec.md](../../api-spec.md) 5-A · 5-B · 5-C · 5-D, 2-3 | 확정 뒤 이탈 요청(형식 정하면), `POST /match-rooms/leave`의 확정된 방 409 코드, 확정 직후 WS 연결 · 대기 멤버 변화 · `RUNNING_READY`를 WS로(매칭 SSE에서 뺌), 최소 버전 — D-73 · D-74. 앱 출시 전에 계약을 먼저 적는다 |
 | M5 | verification 「판정과 결과」, load_test/msa RESULTS, rationale 「근거 순위」 | 판정 |
 | M6 | [../README.md](../README.md) 「서비스 이름」, [README.md](README.md) 「저장소를 나눌 때」, CLAUDE.md · 루트 README | 실제 이름, runtime.md · erd 러닝 DB 장 옮기기, 문서 색인 |
 | M7 (전환 전) | api-spec 7-1 · 2-2 | 7-1은 반영된 뒤 보인다(D-58). `/users/me/status`는 반영 전 `RUNNING`일 수 있다(D-31) |
-| M7 | api-spec 6-1 · 6-2, architecture 「공개 경로」, msa README 「구성 — 지금」, platform 「지금 (11-24 기준)」 | 응답 주인 표시(세션), 세션 규칙을 운영 중으로, 새 날짜의 지금 구성 |
+| M7 | api-spec 6-1 · 6-2, architecture 「공개 경로」, msa README 「구성 — 지금」, platform 「지금 (11-25 기준)」 | 응답 주인 표시(세션), 세션 규칙을 운영 중으로, 새 날짜의 지금 구성 |
 | M8 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)), erd 2장 | 옛 엔진 목록 규칙 · WS 직접 import 예외를 지움, 메인에 남는 러닝 테이블만 |
 | M8 | 이 문서 | 상태 줄을 기록으로 (M9는 버림, D-78) |
 
@@ -398,8 +396,8 @@ test만. 겹치는 EKS 단계: E5.
 1. ~~모놀리스 안 영속성~~ — **정했다 → D-78**: 별도 앱이라 자기 DataSource를 쓰고 메인 영속성 설정과 겹치지 않는다.
 2. ~~호스팅 동안 러닝 DB vs 메인 DB 안 스키마~~ — **정했다 → D-78**: 모놀리스 안 호스팅이 없어 처음부터 자기 러닝 DB(dev는 compose의 두 번째 Postgres)를 쓰고, 두 번째 커넥터는 M2에 만든다. test의 러닝 DB 자리는 [../platform.md](../platform.md) 「test 환경」.
 3. **Flyway를 들이는 때** — M1 vs 저장소를 나눌 때(M6) (D-56).
-4. **힙 `MaxRAMPercentage` 값** — EC2는 50으로 시작했다(F8, 11-25 — `--memory` 제한이 없어 서버 전체 메모리 기준이라 75 · 70 · 65는 t3.small 2GB에서 힙 밖 · OS와 합쳐 넘칠 수 있다). EKS에서 파드 메모리 제한을 둔 뒤의 값(75 / 70 / 65)은 SC11(J1–J4) 결과로 정한다.
+4. **힙 `MaxRAMPercentage` 값** — EC2는 50이다(F8 — 서버 전체 메모리 기준이라 75 · 70 · 65는 t3.small 2GB에서 힙 밖 · OS와 합쳐 넘칠 수 있다). EKS에서 파드 메모리 제한을 둔 뒤의 값(75 / 70 / 65)은 SC11(J1–J4) 결과로 정한다.
 5. **분리 전 방의 결과 다시 보기** — 앱이 기록 목록에서 6-1 · 6-2를 다시 여는지 확인한다. 열면 M7 전에 옛 방 결과를 러닝 DB로 복사한다(「옛 기록」, D-69).
 6. ~~엔진을 적는 자리~~ — **정했다 → D-78**: 방마다 엔진을 적지 않고 메인의 전체 엔진 스위치 하나다(「라우팅」).
-7. **운영에서 F9를 거는 방법** — ASG 인스턴스 새로 고침이 컨테이너에 정상 종료 신호를 주고 기다리게 하는 연결.
+7. ~~운영에서 F9를 거는 방법~~ — **정했다 → D-85**: graceful 종료만 넣고, 배포 쪽 정지 대기를 `SHUTDOWN_TIMEOUT`보다 길게 둔다 — test는 `docker stop -t 30`, prod는 시작 템플릿의 `docker run --stop-timeout`(값은 [../platform.md](../platform.md) 「확인할 운영 값」).
 8. ~~M6 · M7 순서~~ — **정했다 → D-62**: 저장소를 옮긴 뒤 새 저장소 배포물로 운영 추출한다.

@@ -8,7 +8,7 @@
 |---|---|
 | 메인과의 경계 · 넘기기 · 이벤트 · 동기 호출 | [architecture.md](architecture.md) |
 | 불변식 · 탈퇴 saga · 대조 | [consistency.md](consistency.md) |
-| 고칠 차례 (F1–F9) · 새 엔진 단계 (M3) | [migration.md](migration.md) 「선행 수정 F1–F9」 「단계 M0–M9」 |
+| 선행 수정 (F1–F9) · 새 엔진 단계 (M3) | [migration.md](migration.md) 「선행 수정 F1–F9」 「단계 M0–M9」 |
 | 파드 값 (preStop · 유예 · 등록 해제) | [eks.md](../eks.md) 「계획 종료」 |
 | Redis 키 · 버킷 · 확인할 운영 값 | [platform.md](../platform.md) 「Redis」 「S3」 「확인할 운영 값」 |
 | 단계 진행 | [README.md](README.md) 「진행 단계」 |
@@ -56,12 +56,11 @@
 - **끊김만으로 콤보가 끊기지 않는다** — 좌표가 `running-combo.freshness`(19초)보다 오래 안 오면 관측 없음으로 보고 쌓지도 깎지도 않는다. 다시 붙어 재전송이 따라잡은 뒤의 거리 차로 판정한다. 끊는 것은 일시정지 · 끝남, 그리고 창(`running-combo.exit-meters` 30m) 밖이거나 한쪽이 서 있는 판정이 `running-combo.miss-allowance`(1)번을 넘게 이어질 때다 — feature-spec 러닝 콤보.
 - **실패 처리가 다르다** — `SUPERSEDE` 발행이 실패하면 `RUNNING_SESSION_UNAVAILABLE`로 시작을 막는다(좌표도 담지 못할 상태다). 진행 · 콤보 발행 실패는 로그만 남긴다.
 - **pub/sub은 세션 인스턴스 사이에만 쓴다** — 방 채널 `running:room:{id}`가 진행 · 콤보 · `SUPERSEDE`를 나른다. 서비스 사이 pub/sub은 없다 (D-49, [README.md](../README.md) 「통신 — 어디로 무엇이 지나가는가」).
-- **세션 자기 리스너 컨테이너에 상한 있는 실행기를 둔다** — 제안. 모놀리스에서는 F7로 먼저 한다.
-- **지금 리스너 컨테이너** — `runningChannelContainer` 빈 하나를 러닝 · 매칭 · 알림 · 예약 채널이 같이 쓰고, 실행기를 정하지 않았다(`RunningChannelConfig`).
+- **세션 자기 리스너 컨테이너에 상한 있는 실행기를 둔다** — 제안. 모놀리스는 F7로 넣었다 — 방 채널(`running:room:*`) 전용 `runningRoomChannelContainer` + 상한 있는 실행기(넘치면 버리고 `runiverse.running.room.dropped`를 센다), 매칭 · 알림 · 예약은 기존 `runningChannelContainer`(`RunningChannelConfig`). 값은 [migration.md](migration.md) 「단계 M0–M9」 M0.
 
 ## 끝내기
 
-`정함 (D-24)` — 기록 + 상태 + 아웃박스를 러닝 DB 한 트랜잭션으로 커밋한 뒤 ack한다 (I1). 판정 → 봉인 → 확정으로 나누는 모양은 `정함 (D-63, D-79, D-82)` — 옛 엔진에도 M0에서 먼저 넣고, 새 엔진도 같은 구조로 짠다.
+`정함 (D-24)` — 기록 + 상태 + 아웃박스를 러닝 DB 한 트랜잭션으로 커밋한 뒤 ack한다 (I1). 판정 → 봉인 → 확정으로 나누는 모양은 `정함 (D-82)` — 옛 엔진에는 M0의 F1(D-79)로 넣었고, 새 엔진도 같은 구조로 짠다.
 
 ```text
 RUNNING_FINISH ──┐
@@ -76,10 +75,9 @@ RUNNING_FINISH ──┐
                       이미 끝났으면 저장 없이 ack만
                       기록 · 세그먼트 · 구간 → 참가자 상태 · 페널티 → 마지막이면 방 닫기
                       아웃박스 행 (참가자 결과 — 마지막이면 방 상태 FINISHED/CANCELLED를 싣는다, D-72) → 커밋
-                  ─▶ 커밋 뒤: 화면 상태 FINISHED + 진행 발행
+                  ─▶ 커밋 뒤: 트랙 삭제 · 화면 상태 FINISHED + 진행 발행 · 콤보 끊기 (방이 닫혔으면 콤보 보관)
                   ─▶ 임대 지우기 (자기 토큰만 — 모든 경로 · 실패도 finally 하나)
                   ─▶ RUNNING_FINISHED (ack)
-                  ─▶ Redis 정리: 트랙 삭제 · 콤보 끊기 · 방이 닫혔으면 콤보 보관
 ```
 
 | 지킬 순서 | 깨지면 |
@@ -87,46 +85,49 @@ RUNNING_FINISH ──┐
 | ack는 커밋 뒤다 | 앱이 로컬 트랙을 지운 뒤 기록이 롤백되면 그 러닝은 되살릴 수 없다 (I1) |
 | `FINISHED` 표시는 ack 앞이다 | ack를 받은 앱이 닫는 연결의 `DISCONNECTED`나 늦은 배치가 끝난 상태를 덮는다 (I3) |
 | Redis 트랙은 S3 업로드와 커밋 뒤에만 지운다 | 다시 시도할 원본이 없다 |
-| 확정 트랜잭션 안에서 바깥을 부르지 않는다 — S3 · 날씨 · 메인 | 잠금과 커넥션을 쥔 채 기다려 끝내기 몰림에서 무너진다 — run 14, [rationale.md](rationale.md) 「G4 끝내기 폭주는 고칠 결함」 |
+| 판정 · 확정 트랜잭션 안에서 바깥을 부르지 않는다 — S3 · 날씨 · 메인 | 잠금과 커넥션을 쥔 채 기다려 끝내기 몰림에서 무너진다 — run 14, [rationale.md](rationale.md) 「G4 끝내기 폭주는 고칠 결함」 |
 | 평균 페이스 · 쿨다운은 메인이 반영 때 한다 — 세션은 절대 시각 `cooldownUntil`만 싣는다 | 끝내기가 메인에 동기로 기댄다 — [rationale.md](rationale.md) 「G3 장애 격리」 |
 | 목표 판정은 잠금 안이다 (D-80). 분석은 판정의 스냅숏으로 봉인에서 한다 (D-82) | 판정이 밖이면 미달 판정이 겹친 끝내기와 어긋난다. 분석이 다른 트랙을 읽으면 올린 원본 · 저장한 기록이 어긋난다 |
 | 임대는 판정 앞에서, 쥔 것 없이 한 번만 시도한다 (D-82) | 잠금을 쥔 채 임대를 기다리면 확정(임대를 쥔 채 잠금을 기다림)과 교착이다. 판정 트랜잭션 안에서 잡으면 커밋 실패 때 토큰을 잃는다 |
 | 임대는 자기 토큰일 때만, 실패해도 지운다 (D-82) | 남의 임대를 지워 봉인이 겹치거나, 실패한 임대가 TTL까지 끝내기를 막는다 |
 
-- **멱등이다** — 이미 확정된 참가자에게는 기록을 덮어쓰지 않고 ack만 다시 보낸다(지금 `RunningFinisher.confirm`과 같다). 앱의 `RUNNING_FINISH` 재전송과 다음 위치 배치가 다시 시도다.
-- **목표 도달 자동 종료도 같은 길이다** — 위치 배치가 목표를 채우면 `UpdateRunningFinishJudge` 자리에서 같은 봉인 → 확정을 탄다. 몸무게는 넘기기 스냅샷에서 읽는다.
-- **날씨는 봉인에서 조회한다** — `정함 (D-63)`. 지금처럼 출발 좌표 · 출발 시각 기준이고, 실패하면 기본값이라 끝내기를 막지 않는다. 확정 트랜잭션 안에서는 부르지 않는다.
-- **커밋 뒤 ack 전에 프로세스가 죽으면** — 기록은 남고 앱은 ack를 받지 못한다 → [consistency.md](consistency.md) 「정하지 않은 것」.
+- **멱등이다** — 이미 확정된 참가자에게는 기록을 덮어쓰지 않고 ack만 다시 보낸다(판정 · 확정 모두 잠근 뒤 다시 확인한다). 앱의 `RUNNING_FINISH` 재전송과 다음 위치 배치가 다시 시도다.
+- **모놀리스 코드 (F1)** — 지휘자 `RunningFinisher`(트랜잭션 없음 · 봉인 · finally 임대 해제), 잠금 안 두 단계 `RunningFinishSteps.judge` · `confirm`(각자 `@Transactional`), 임대 `FinishLeasePort` → `FinishLeaseRedisAdapter`(`running-finish-lease.ttl` 30초, 해제는 Lua로 자기 토큰만). 임대를 본 사용자 종료는 `RunningFinishInProgressException`(코드 `RUNNING_TRACK_UNAVAILABLE`), 횟수는 `runiverse.running.finish.inprogress`.
+- **목표 도달 자동 종료도 같은 길이다** — 위치 배치의 누적이 목표에 닿으면 `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 같은 임대 → 판정 → 봉인 → 확정을 탄다. 확정 거리가 못 미치면 아무것도 보내지 않고 다음 배치가 다시 본다. 몸무게는 넘기기 스냅샷에서 읽는다.
+- **날씨는 봉인에서 조회한다** — `정함 (D-63, D-82)`. 출발 좌표 · 출발 시각 기준이고, 실패하면 기본값이라 끝내기를 막지 않는다.
+- **커밋 뒤 ack 전에 프로세스가 죽으면** — 기록은 남고 앱은 ack를 받지 못한다 → [consistency.md](consistency.md) 「정하지 않은 것」 5.
 
 ## 강제 종료 · 청소기
 
-`제안 (D-29)` — 예약 작업은 세션 자기 `scheduled_jobs`와 채널로 돈다. `RUNNING_START` · `RUNNING_FORCE_FINISH`는 넘기기 때 건다.
+`제안 (D-29)` — 예약 작업은 세션 자기 `scheduled_jobs`와 채널로 돈다. `RUNNING_START` · `RUNNING_FORCE_FINISH`를 넘기기 때 거는 것은 `정함 (D-71)`.
 
 | 작업 | 언제 | 하는 일 | 상태 |
 |---|---|---|---|
-| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`)을 알람으로 | 알람이 잠금 없이 확인하고, 할 일이 있을 때만 참가자 → 방을 잠가 노쇼(`JOINED`) 이탈 · 방 닫기(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람이 남으면 예약을 1분 뒤로 다시 걸고 러너마다 워커가 「끝내기」 그대로 확정한다. 마지막 러너가 방을 닫고, 모두 끝난 것을 본 알람이 완료로 적는다. 상한은 트랙 TTL 7시간(`running-track.ttl`). 마지막 참가자 결과 이벤트에 방 상태를 싣는다(D-72) | 정함 (D-83) — 옛 엔진에는 F3로 먼저 |
+| 강제 종료 | 시작 + 6시간 (`match.force-finish-offset`)을 알람으로 | 알람이 잠금 없이 확인하고, 할 일이 있을 때만 참가자 → 방을 잠가 노쇼(`JOINED`) 이탈 · 방 닫기(페널티면 `cooldownUntil`을 싣는다). 뛰던 사람이 남으면 예약을 1분 뒤(`running-force-finish.retry-interval`)로 다시 걸고 러너마다 워커가 「끝내기」 그대로 확정한다. 마지막 러너가 방을 닫고, 모두 끝난 것을 본 알람이 완료로 적는다. 상한은 시작 + 6시간 + 7시간(`running-force-finish.retry-window`, 트랙 보관 기간) — 넘기면 다시 걸지 않고 ERROR 로그 뒤 완료로 적는다. 마지막 참가자 결과 이벤트에 방 상태를 싣는다(D-72) | 정함 (D-83) — 모놀리스는 F3로 넣었다(11-25) |
 | 혼자 달리기 청소기 | 주기 — 기준 시간을 넘긴 `RUNNING` 혼자 달리기 | 강제 종료와 같은 확정. 기준 시간은 「정하지 않은 것」 | 제안 |
 | 밀린 작업 훑기 | 30초마다 | 시각이 지났는데 끝나지 않은 예약을 다시 실행한다 | 제안 |
 | 콤보 보관 | 방 닫힘 커밋 뒤 | 콤보 구간을 러닝 DB에 남긴다. 실패해도 종료는 그대로다(지금 `RunningComboArchiver`) | 운영 중 — 세션 안의 로컬 단계 |
 
-- **강제 종료의 지킬 순서 (D-83)** — 잠금 순서는 예약 행 → 참가자 → 방. 잠금 없이 읽은 값으로 고치지 않는다(잠그고 다시 읽는다). 워커는 알람 커밋 뒤에 보낸다. 예약은 실행 전에 다시 걸고, 다 끝난 것을 본 알람만 완료로 적는다.
-- **지금 코드의 문제와 고칠 차례** — 방 하나를 트랜잭션 하나로 묶은 강제 종료(`ForceFinishRunningRoomHandler`)는 F3([migration.md](migration.md) 「선행 수정 F1–F9」, D-83). 실패한 타이머가 기동 때만 회복되는 것(`JobTimerAdapter` · `ScheduledJobRecoveryRunner`)은 F1–F9에 없다 — 세션은 위 표의 밀린 작업 훑기로 막는다.
-- **콤보 보관은 saga도 넘기기도 아니다** — 세션 Redis와 러닝 DB가 모두 세션 것이라 커밋 뒤 로컬 단계로 남는다.
+- **강제 종료의 지킬 순서 (D-83)** — 잠금 순서는 예약 행 → 참가자 → 방. 잠금 없이 읽은 값으로 고치지 않는다(잠그고 다시 읽는다). 예약은 알람 트랜잭션에서 다시 걸고, 워커는 그 커밋 뒤에 보낸다. 실행 시각 전에 깬 옛 타이머는 건너뛴다. 다 끝난 것을 본 알람만 완료로 적는다.
+- **모놀리스 코드 (F3)** — `RunScheduledJobHandler`가 실행기가 돌려준 다시 실행할 시각(`Optional<LocalDateTime>`)으로 `ScheduledJob.reschedule`을 불러 같은 행을 다시 건다(커밋 뒤 `ScheduledJobRescheduledEvent`로 타이머 등록 · 전파). 알람은 `ForceFinishRunningRoomHandler`, 잠금 안 고치기는 `ForceFinishSteps.settle`, 워커는 `ForceFinishRunnerDispatcher`가 `forceFinishExecutor`(스레드 4, 대기 100)에서 러너마다 `FinishRunningUsecase`(forced=true)를 부른다.
+- **실패한 타이머는 기동 때만 회복된다** — `JobTimerAdapter` · `ScheduledJobRecoveryRunner`. F1–F9에 없다 — 세션은 위 표의 밀린 작업 훑기로 막는다.
 - **마지막 그물은 메인의 대조다** — [consistency.md](consistency.md) 「대조」.
 
 ## 다중 인스턴스
 
-`운영 중` — 지금 러닝 모델을 그대로 가져간다. 규칙은 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「다중 인스턴스」.
+`운영 중` — 지금 러닝 연결 모델을 그대로 가져간다. 끝내기 임대 · 강제 종료 알람 행은 `정함 (D-82, D-83)`. 규칙은 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「다중 인스턴스」.
 
 | 경우 | 동작 |
 |---|---|
 | 같은 인스턴스에서 갈아타기 | `RegisterRunningSessionHandler`가 연결표에서 옛 연결을 꺼내 바로 `4001`로 닫는다. 옛 연결의 종료 처리는 '내 연결일 때만 정리' 가드에 걸려 건너뛴다 |
 | 다른 인스턴스로 다시 붙기 | 새 연결이 먼저 붙고 방 채널에 `SUPERSEDE`(이긴 연결 ID)를 발행한다. 인스턴스마다 자기 표만 보고 진 연결을 닫는다(`CloseSupersededSessionHandler`). A(1) → B(2) → C(1)로 이어 붙어도 C만 남는다 — 앱 두 대 E2E(11-11) |
 | 늦게 도는 종료 처리 | `RemoveRunningSessionHandler`는 자기 연결이 빠졌을 때만 명부에서 빼고 `DISCONNECTED`를 알린다. `FINISHED` 뒤에는 바뀌지 않는다 (I3) |
+| 같은 러너의 끝내기가 두 인스턴스에서 겹침 | 임대가 Redis 키라 인스턴스를 넘어 보인다 — 늦은 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 재전송을 받고, 기록은 하나다(확정의 재확인 · `running_records` UNIQUE) (D-82) — 앱 두 대 E2E(11-25) |
+| 강제 종료 알람을 여러 인스턴스가 타이머로 든다 | 예약 행 잠금 + `is_sent` · 실행 시각 확인으로 하나만 돈다. 다시 건 예약은 커밋 뒤 모든 인스턴스에 타이머로 퍼져, 워커 도중 인스턴스가 내려가도 1분 뒤 다른 인스턴스나 재기동 복구가 이어받는다 (D-83) — 재기동 복구는 앱 두 대 E2E(11-25, 두 번째 인스턴스를 SIGTERM으로 재시작) |
 
 - **알고 두는 것 — 늦은 `DISCONNECTED`** — 다른 인스턴스로 다시 붙으면 옛 인스턴스의 종료 콜백이 가드를 통과해(그 인스턴스 표에는 아직 옛 연결이 있다) `DISCONNECTED`를 알린다. 상대 화면은 다음 좌표(약 10초)에 `RUNNING`으로 돌아온다 — api-spec 5-D가 허용한다. 고칠 안은 `CloseSupersededSessionHandler`가 닫기 전에 표에서 빼고 명부에서 나가는 것이다(매칭 `CloseSupersededMatchStreamHandler`와 같은 모양). k6에서는 `false_disconnected_broadcast`로 센다.
 - **탈퇴 소켓 닫기는 모든 인스턴스에 간다** — 정함 (D-44, D-70, D-72). 사용자 변경 이벤트(삭제)를 받은 인스턴스가 세션 Redis로 알린다 ([consistency.md](consistency.md) 「계정 탈퇴 saga」 5).
-- **테스트** — 기본 E2E는 앱 한 대다. 다른 인스턴스 경우는 두 번째 인스턴스를 `JPA_DDL=none`으로 띄우고 `E2E_SECOND_BASE_URL`을 줘야 `MultiInstanceE2eTest`가 돈다.
+- **테스트** — 다른 인스턴스 경우는 로컬에서 앱 두 대로 `MultiInstanceE2eTest`를 돌린다 — CI에는 넣지 않는다(D-86). 실행법은 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「다중 인스턴스」.
 
 ## 연결 시간 제한 사슬
 
@@ -146,16 +147,16 @@ RUNNING_FINISH ──┐
 
 ## 계획 종료
 
-`정함 (D-65 → D-85)` — 파드를 내릴 때 소켓을 `4500`으로 닫는다(닫기 코드 재사용은 `정함 (D-42)`). **아래 1–6은 EKS(새 엔진 · 파드)의 순서다** — 지금 EC2 모놀리스는 ASG가 등록 해제(그 끝에 ALB가 WS · SSE를 끊는다)를 SIGTERM보다 먼저 해서 5의 graceful 종료만 넣었다(F9, D-85). 앱은 이미 `4500`을 다시 붙기로 처리한다(api-spec 5). 지금은 드레인이 없다 — 배포가 모든 소켓을 끊는 문제는 [rationale.md](rationale.md) 「G1 배포 결합」.
+`정함 (D-85)` — 파드를 내릴 때 소켓을 `4500`으로 닫는다(닫기 코드 재사용은 `정함 (D-42)`). **아래 1–6은 EKS(파드)의 순서다** — EC2 ASG는 그중 5만 한다(이유는 아래 목록). 앱은 이미 `4500`을 다시 붙기로 처리한다(api-spec 5).
 
 드레이너(이름 후보 `WebSocketDrainer`)가 `SmartLifecycle`로 웹 서버 graceful보다 먼저 돈다. 종료 신호(SIGTERM)를 받으면:
 
-1. **준비 상태(readiness)를 내린다** — 대상 그룹 검사가 readiness를 보게 하는 것은 F6.
+1. **준비 상태(readiness)를 내린다** — readiness 그룹(`/actuator/health/readiness`, DB · Redis를 보지 않는다)은 F6로 있다.
 2. **새 `RUNNING_START`는 `RUNNING_SESSION_UNAVAILABLE`로 거절한다** — 앱은 다시 보내고, 곧 닫힌 뒤 다른 인스턴스로 붙는다.
 3. **열린 소켓을 `4500`으로 30초에 걸쳐 나눠 닫는다(무작위 간격)** — 한꺼번에 닫으면 남은 인스턴스로 `RUNNING_START`가 몰린다(SC5).
 4. **끝내기 중인 소켓은 ack를 보낸 뒤 닫는다** — 커밋 뒤 ack 전 끊김을 계획 종료가 늘리지 않는다.
-5. **Spring graceful 20초** (`server.shutdown=graceful`, `spring.lifecycle.timeout-per-shutdown-phase`) — graceful은 업그레이드된 WS를 닫지 않으므로 3이 먼저다.
-6. **남은 소켓은 프로세스 종료로 `1006`이 된다.**
+5. **Spring graceful** — `server.shutdown=graceful`, 대기 상한 `SHUTDOWN_TIMEOUT`(기본 20초). 받은 요청 · 끝내기 · 강제 종료 워커는 마치고, WS는 기다리지 않고 끝에 `1001`로 닫으므로 3이 먼저다. 모놀리스에 이미 있다(F9).
+6. **정지 대기(`terminationGracePeriodSeconds`)를 넘기면 남은 연결은 SIGKILL로 `1006`이 된다.**
 
 | 앱이 쓰는 시간 | 값 |
 |---|---|
@@ -163,8 +164,9 @@ RUNNING_FINISH ──┐
 | graceful | 20초 |
 | 합 | 50초 — 플랫폼의 종료 유예와 ALB 등록 해제 지연은 preStop + 이 합보다 길어야 한다 |
 
-- **플랫폼 값은 따로 둔다** — 지금 ASG에 쓸 값(M0의 F9)은 [migration.md](migration.md) 「선행 수정 F1–F9」, EKS 파드 값은 [eks.md](../eks.md) 「계획 종료」.
-- **메인 SSE 드레인은 세션 일이 아니다** — [eks.md](../eks.md) 「계획 종료」의 main-api 행, [migration.md](migration.md) 「선행 조건」.
+- **EC2 ASG는 5만 한다 (F9, D-85)** — 대상 그룹 등록 해제(등록 취소 지연이 끝날 때 ALB가 남은 WS · SSE를 끊는다)가 SIGTERM보다 먼저라 1–4가 닫을 소켓이 없다. 그래서 EC2 배포는 소켓을 한꺼번에 끊는다 — [rationale.md](rationale.md) 「G1 배포 결합」.
+- **플랫폼 값은 따로 둔다** — EC2 ASG 값(M0의 F9)은 [migration.md](migration.md) 「선행 수정 F1–F9」, EKS 파드 값은 [eks.md](../eks.md) 「계획 종료」.
+- **메인 SSE 드레인은 세션 일이 아니다** — [eks.md](../eks.md) 「계획 종료」의 `main-api` 열, [migration.md](migration.md) 「선행 조건」.
 - **계획 밖 끊김(`1006`)** — OOM · 노드 · AZ 장애는 드레인 없이 끊긴다. 앱은 ack 전까지 로컬 트랙을 지우지 않아 잃는 것은 없고, 다시 붙어 `RUNNING_START` → 재전송으로 이어 간다. 앱이 무작위 지연 없이 바로 다시 붙으면 동시에 몰린 `RUNNING_START`가 된다 — 「앱 재접속 정책」.
 
 ## 앱 재접속 정책
@@ -175,11 +177,11 @@ RUNNING_FINISH ──┐
 |---|---|---|---|---|
 | 위치 배치 주기 | 진행 · 콤보 해상도 | 약 10초 (api-spec 5-D) | — | 10초 |
 | 다시 붙기 간격 (backoff · 무작위 지연) | 계획 종료 · 장애 뒤 몰림 — SC1 · SC2 · SC5 | 없음 | 비어 있음 | 1초 + 0–2초 무작위, 두 배씩 30초까지 |
-| 끝내기 재시도 · ack 기다림 | I1 · SC9 | `RUNNING_FINISH`는 멱등 (api-spec 5-D) | 비어 있음 | 15초 기다린 뒤 2 · 4 · 8 · 16초 |
+| 끝내기 재시도 · ack 기다림 | I1 · SC9 | `RUNNING_FINISH`는 멱등 (api-spec 5-D). 다른 연결이 끝내는 중(임대)이면 `RUNNING_TRACK_UNAVAILABLE` (D-82) | 비어 있음 | 15초 기다린 뒤 2 · 4 · 8 · 16초 |
 | 재전송 묶음 크기 · 간격 | 다시 붙은 뒤의 부하 | 트랙 전체를 짧은 간격으로 다시 보낸다(`UpdateRunningLocationHandler` 주석) | 비어 있음 | 비어 있음 |
 | `HEALTH_CHECK` 주기 | 「연결 시간 제한 사슬」 | '주기적으로' (api-spec 5) | 비어 있음 | 30초 |
-| `1006`도 `4500`처럼 다시 붙는가 | 계획 밖 끊김 | `4500`은 다시 붙고 `4001`은 붙지 않는다 (api-spec 5) | 비어 있음 | 다시 붙는다 |
-| `RUNNING_START`가 `NOT_ROOM_PLAYER`일 때 | ack를 잃은 끝내기 ([consistency.md](consistency.md) 「정하지 않은 것」) | 없음 | 비어 있음 | — |
+| `1001` · `1006`도 `4500`처럼 다시 붙는가 | graceful 끝(`1001`) · 계획 밖 끊김(`1006`) | `4500`은 다시 붙고 `4001`은 붙지 않는다 (api-spec 5) | 비어 있음 | 다시 붙는다 |
+| `RUNNING_START`가 `NOT_ROOM_PLAYER`일 때 | ack를 잃은 끝내기 ([consistency.md](consistency.md) 「정하지 않은 것」 5) | 없음 | 비어 있음 | — |
 
 ## 러닝 DB · Redis 키
 

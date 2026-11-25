@@ -57,7 +57,7 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 - `{env}`는 `dev` · `test` · `prod` 중 하나다. 운영은 클러스터가 달라도 같은 규칙을 쓴다.
 - **이벤트 안에 환경 필드를 넣어 걸러 내지 않는다** — 토픽이 다르면 애초에 받지 않는다.
 - 구분자는 `.`과 `-`만 쓴다 — Kafka는 메트릭 이름에서 `.`과 `_`를 같게 본다.
-- running-service는 `KAFKA_ENV` 하나로 모든 이름을 만든다(`KafkaNamingProperties`).
+- running-service는 `KAFKA_ENV`(`kafka.env`) 하나로 모든 이름을 만든다 — 아웃박스 `topic`은 `KafkaNamingProperties`, 완료 리스너의 토픽·그룹은 같은 값을 그대로 쓴다.
 
 | 대상 | 이름 |
 |---|---|
@@ -78,14 +78,14 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 | `{env}.debezium-connect.configs` · `.offsets` · `.status` | 1 | 1 | 키마다 최신 값 | **`compact`** |
 | `{env}.debezium-heartbeat.outbox` | 1 | 1 | **1일** | `delete` |
 
-- **이벤트 토픽은 `delete`여야 한다** — 같은 카드의 이벤트가 같은 key로 여러 번 나간다(9-2 작성 뒤 9-3 수정). `compact`면 앞 이벤트가 지워진다.
+- **이벤트 토픽은 `delete`여야 한다** — 같은 카드의 이벤트가 같은 key로 여러 번 나간다(쓰는 곳은 [outbox-inbox.md](outbox-inbox.md) 「지금 있는 이벤트」). `compact`면 앞 이벤트가 지워진다.
 - **Connect 내부 토픽은 `compact`여야 한다** — 커넥터 설정과 "WAL을 어디까지 보냈는지"를 키마다 최신 값으로 남긴다. `delete`면 7일 뒤 지워져 커넥터가 처음부터 다시 시작한다. configs는 파티션이 반드시 1개다.
 - **heartbeat 토픽은 아무도 읽지 않는다** — Debezium이 위치를 기록하는 계기다. "Debezium이 마지막으로 살아 있던 때"를 볼 때만 쓴다.
-- **파티션 수는 처음에 정하고 바꾸지 않는다** — 파티션은 `hash(key) % 파티션 수`라, 늘리면 같은 카드가 다른 파티션으로 가 순서가 깨진다(줄이는 것은 Kafka가 허락하지 않는다).
+- **파티션 수는 처음에 정하고 바꾸지 않는다** — 늘리면 같은 카드가 다른 파티션으로 가 순서가 깨진다(줄이는 것은 Kafka가 허락하지 않는다).
 
 ### 지금 설정 때문에 지켜야 할 것
 
-- **완료 이벤트는 running-service 한 대만 처리한다** — 파티션이 1개라 ALB 뒤 인스턴스가 여럿이어도 한 대만 읽고 나머지는 대기한다. 처리 결과는 DB에만 쓴다(architecture.md 「다중 인스턴스」).
+- **완료 이벤트는 running-service 한 대만 처리한다** — 파티션이 1개라 ALB 뒤 인스턴스가 여럿이어도 한 대만 읽고 나머지는 대기한다. 처리 결과는 DB에만 쓴다([docs/architecture.md](../architecture.md) 「다중 인스턴스 (로드 밸런서 뒤)」).
 - **배포·스케일링 때 같은 완료 이벤트가 다시 온다** — 리밸런스 중 커밋하지 못한 이벤트를 다른 인스턴스가 받는다. inbox가 거른다([outbox-inbox.md](outbox-inbox.md)).
 - **받는 쪽이 7일 넘게 멈추면 이벤트를 잃을 수 있다.**
 - **running-service는 `auto.offset.reset=earliest`다** — 처음 붙는 그룹과, 7일 넘게 비어 커밋한 오프셋이 지워진 그룹은 남아 있는 이벤트를 처음부터 받는다. 이미 처리한 것은 inbox가 거른다.
@@ -120,7 +120,7 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 
 - **서버 인증서는 1년마다 만료된다** — 만료되면 모든 클라이언트가 한꺼번에 끊긴다. 같은 CA로 다시 발급해 키스토어만 바꾸면 클라이언트는 그대로다.
 - **CA 개인키가 있으면 누구나 신뢰받는 서버 인증서를 만든다** — 갱신할 때만 필요하다.
-- **CA 인증서는 클라이언트가 도는 곳마다 있어야 한다** — running-service는 Auto Scaling·Docker로 배포되므로 새 인스턴스·컨테이너에서도 `KAFKA_SSL_CA_LOCATION` 경로에 파일이 있어야 한다. CA 인증서는 공개 정보라 시크릿이 아니다.
+- **CA 인증서는 클라이언트가 도는 곳마다 있어야 한다** — running-service는 새 인스턴스·컨테이너마다 `KAFKA_SSL_CA_LOCATION` 경로에 넣는다(아래 「CA 인증서 배포」).
 
 ### SASL
 
@@ -154,7 +154,7 @@ dev·test가 클러스터 하나를 같이 써서, **토픽·컨슈머 그룹·�
 
 ## 보내는 쪽은 중복 방지를 켠다
 
-- **Kafka에 쓰는 모든 프로듀서는 `enable.idempotence=true`로 보낸다** — 재전송 중복을 줄이고 재전송 때도 파티션 안 순서를 지킨다. 토픽 `WRITE`만 있으면 된다.
+- **Kafka에 쓰는 모든 프로듀서는 `enable.idempotence=true`로 보낸다** — 재전송 중복을 줄이고 재전송 때도 파티션 안 순서를 지킨다.
 - 브로커가 강제하지 않는다 — 클라이언트마다 켠다. Debezium은 Connect 워커 설정(`producer.enable.idempotence=true`)에 명시한다. **AI 서버의 Python 클라이언트는 라이브러리에 따라 기본이 꺼짐**(예: `confluent-kafka`)이라 명시해야 한다.
 - 켜도 받는 쪽 중복은 남는다 — inbox는 그대로 둔다.
 
@@ -164,7 +164,7 @@ running-service는 완료 토픽만 받는다(컨슈머 하나, 프로듀서 없
 
 | 변수 | 예 | 설명 |
 |---|---|---|
-| `KAFKA_ENV` | `test` | `{env}` 값. 아웃박스 `topic`과 토픽·그룹 이름을 이 값 하나로 만든다. **기본값이 없고 `dev`·`test`·`prod`가 아니면 기동하지 않는다.** Parameter Store `/runiverse/test/KAFKA_ENV`(`test`) · `/runiverse/deploy/KAFKA_ENV`(`prod`). 로컬은 **붙는 DB의 환경**을 따른다([cdc.md](cdc.md)) |
+| `KAFKA_ENV` | `test` | `{env}` 값(위 「이름 — 환경 접두어 `{env}`」). **기본값이 없고 `dev`·`test`·`prod`가 아니면 기동하지 않는다.** Parameter Store `/runiverse/test/KAFKA_ENV`(`test`) · `/runiverse/deploy/KAFKA_ENV`(`prod`). 로컬은 **붙는 DB의 환경**을 따른다([cdc.md](cdc.md) 「`KAFKA_ENV`는 기계가 아니라 DB를 따른다」) |
 | `KAFKA_CONSUMER_ENABLED` | `true` | 완료 구독을 켠다. **기본값이 없어 없으면 기동하지 않는다.** `false`면 리스너·오류 처리기를 만들지 않아 아래 값을 보지 않는다(로컬·E2E). `true`면 아래 네 값이 모두 있고 CA 파일을 읽을 수 있어야 기동한다 — 빠진 변수 이름만 알리고 값은 싣지 않는다. Parameter Store test·deploy 모두 `true` |
 | `KAFKA_BOOTSTRAP_SERVERS` | `<브로커 VPC 주소>:9092` | 인증서 SAN과 같은 주소 |
 | `KAFKA_SASL_USERNAME` | `test.running-service` | `{env}.running-service` |
@@ -178,7 +178,7 @@ running-service는 완료 토픽만 받는다(컨슈머 하나, 프로듀서 없
 
 | 무엇 | 값 |
 |---|---|
-| 원본 | Parameter Store `/runiverse/files/{test\|deploy}/kafka-ca.crt` (SecureString) |
+| 원본 | Parameter Store `/runiverse/files/{test\|deploy}/kafka-ca.crt` (SecureString — SAN에 브로커의 VPC 안 주소가 있어 콘솔에 바로 보이지 않게) |
 | 서버에 두는 곳 | `/opt/runiverse/kafka-ca.crt` — `root`, `644` |
 | 컨테이너 | `/app/config/kafka-ca.crt`에 읽기 전용 마운트 |
 | test | 배포 워크플로(`backend-ci-cd.yml`, SSM 명령)가 받는다 — 새 컨테이너와 롤백 컨테이너 모두 마운트 |
@@ -193,7 +193,7 @@ running-service는 완료 토픽만 받는다(컨슈머 하나, 프로듀서 없
 
 ### 로컬 앱으로 붙기
 
-브로커는 VPC 안 주소를 알려 주고(`advertised.listeners`) 서버 인증서 SAN도 그 주소 하나라, 로컬에서 다른 주소로 붙으면 재접속·호스트 검증에서 실패한다. **로컬에서도 같은 주소로 붙게 만든다.**
+브로커가 알려 주는 주소와 서버 인증서 SAN이 VPC 안 주소 하나라(「TLS」), **로컬에서도 같은 주소로 붙게 만든다.**
 
 - 로컬 루프백에 브로커의 VPC 주소를 별칭으로 붙이고, bastion을 거치는 SSH 터널을 **그 주소:9092**에 연다 — 앱은 `KAFKA_BOOTSTRAP_SERVERS`에 VPC 주소를 그대로 쓴다.
 - 개발 클러스터 계정(`dev.running-service`)과 개발 CA로 붙는다. CA 파일은 `infra/kafka/`에 두고 커밋하지 않는다(`.gitignore` `infra/kafka/*.crt`).
@@ -211,9 +211,9 @@ running-service는 완료 토픽만 받는다(컨슈머 하나, 프로듀서 없
 
 ## 정하지 않은 것
 
-1. **파티션 수** — 지금 1이다. 완료 구독 처리량이 모자라면 실제 이벤트가 쌓이기 전에 다시 정한다. 러닝 결과처럼 새로 만들 토픽의 이름·파티션 수는 [platform.md](platform.md) 「새 이름」에서 만들기 전에 정하고, 브로커를 셋으로 늘릴지(D-50, [decisions.md](decisions.md))와 함께 다시 본다.
+1. **파티션 수** — 지금 1이다. 완료 구독 처리량이 모자라면 실제 이벤트가 쌓이기 전에 다시 정한다. 러닝 결과처럼 새로 만들 토픽의 이름·파티션 수는 [platform.md](platform.md) 「새 이름」에서 만들기 전에 정하고, 브로커를 셋으로 늘릴지([platform.md](platform.md) 「정하지 않은 것」 2, D-50)와 함께 다시 본다.
 2. **인증서 관리** — 클러스터마다 서버 인증서 만료일, 만료 전 알림, CA 개인키 보관 위치(브로커 EC2 밖), 갱신 절차.
-3. ~~CA 인증서 배포~~ — **정했다**: running-service는 Parameter Store → test 배포 워크플로·prod 시작 템플릿 사용자 데이터 → 읽기 전용 마운트(「CA 인증서 배포」). AI 서버는 AI 쪽에서 넣는다.
+3. ~~CA 인증서 배포~~ — **정했다**: 「CA 인증서 배포」.
 4. **모니터링** — 브로커 상태·디스크·컨슈머 지연([metrics-convention.md](../metrics-convention.md)와 맞춘다).
 5. **검증용 토픽** — 접속을 확인할 때 쓸 토픽과 권한.
 6. **`test`·`dev` running-service의 요청 토픽 권한 제거** — 위 ACL ⚠️.

@@ -23,11 +23,11 @@ AI 전용 서버(저장소·Kafka 계정 `runiverse-ai`)는 기록 카드 음악
 | 단계 | 상태 |
 |---|---|
 | 요청 발행 — 아웃박스 → Debezium → 요청 토픽 | 됨 — [README.md](../README.md) 「지금 운영 중인 것」 |
-| AI 서버 수신 | test 됨 — 11-23 실제 카드가 AI 서버까지 가고 카드·사진 ID가 그대로 돌아왔다. prod 수신은 AI 쪽 확인 |
+| AI 서버 수신 | test 됨 (11-23) — prod 수신은 AI 쪽 확인 전 |
 | AI 서버 inbox — 요청 헤더 `id`로 거르기 | AI 쪽 확인 전 ([decisions.md](../decisions.md) D-09 제안) |
 | 메인 완료 구독 + inbox | 됨 — [README.md](../README.md) 「지금 운영 중인 것」 |
 | AI 음악 엔드포인트 | 대기 (AI 쪽) — 11-23 왕복에서 없어 결과가 `FAILED`(`INVOKE`)였다 |
-| 완료 반영 — AI 완료 → 메인 음악 상태 | 대기 (AI 쪽) — 완료 이벤트에 헤더 `id`가 없고 이름이 `inference_id`라 메인이 계약 위반으로 건너뛴다. 그동안 실제 음악은 `GENERATING`에 남는다 |
+| 완료 반영 — AI 완료 → 메인 음악 상태 | 대기 (AI 쪽) — 완료 이벤트의 헤더 이름이 `id`가 아니라 `inference_id`라 메인이 계약 위반으로 건너뛴다. 그동안 실제 음악은 `GENERATING`에 남는다 |
 | EKS 위 AI 서버 (E6) | 상태는 [running-session-server/README.md](../running-session-server/README.md) 「진행 단계」 E6 줄 |
 
 - **11-23 왕복의 경로와 결과는 [outbox-inbox.md](../outbox-inbox.md) 「검증 — 테스트가 못 보는 것」에 있다** — AI 쪽이 고치면 그 표 마지막 줄을 같은 방법으로 test → prod 순서로 확인하고 이 표를 고친다.
@@ -35,14 +35,14 @@ AI 전용 서버(저장소·Kafka 계정 `runiverse-ai`)는 기록 카드 음악
 
 ## 기다리는 것
 
-AI 쪽이 해야 메인이 다음으로 간다. 받으면 「지금 상태」를 고친다.
+AI 쪽이 해야 메인이 다음으로 간다.
 
 1. **완료 이벤트의 헤더 `id`(= `inference_id`)** — 없으면 메인이 받지 않는다 ([api-spec.md](../../api-spec.md) 9-5 완료 이벤트, [outbox-inbox.md](../outbox-inbox.md) 「처리할 수 없는 메시지」, [decisions.md](../decisions.md) D-12).
-2. **AI 음악 엔드포인트** — 11-23 왕복이 `FAILED`(`INVOKE`)로 끝났다.
+2. **AI 음악 엔드포인트.**
 3. **prod 수신 확인.**
 4. **요청 이벤트를 헤더 `id`(= `outbox_event_id`)로 거르는지** — api-spec 9-5 요청 이벤트 「아직 정하지 않은 것」 4, D-09.
 5. **음악 버킷 이름 (test·prod)** — 「정하지 않은 것」 1.
-6. **계약에서 남은 것** — `failed_stage` 값 전체, 파일 형식은 [api-spec.md](../../api-spec.md) 9-5 「아직 정하지 않은 것」에 둔다(여기 옮기지 않는다).
+6. **계약에서 남은 것** — `failed_stage` 값 전체 · 파일 형식 — [api-spec.md](../../api-spec.md) 9-5 「아직 정하지 않은 것」.
 
 ## 정하지 않은 것
 

@@ -73,7 +73,7 @@ Runiverse는 지금 메인 서버(running-service)와 AI 전용 서버로 돌고
     │                                    │ 동기 호출 ── 허용 목록만
     │                                    ▼
     └─────────────────────────▶ 러닝 세션 서버 ── WebSocket · 결과 조회 (6-1 · 6-2)
-                                  명단 확정 뒤 러닝 · 끝내기 · 강제 종료
+                                  명단 확정 뒤 대기 · 이탈 · 러닝 · 끝내기 · 강제 종료
                                   ├ 세션 Redis (EC2, AOF)
                                   ├ 러닝 DB (RDS) ── 러닝 기록 정본 · 아웃박스 · inbox
                                   └ S3 원본 트랙
@@ -90,12 +90,12 @@ Runiverse는 지금 메인 서버(running-service)와 AI 전용 서버로 돌고
 
 | 요소 | 상태 | 자세히 |
 |---|---|---|
-| 러닝 세션 서버를 별도 저장소의 별도 서버로 | 정함 (D-47) — 옮기는 때(운영 추출 앞)도 정함 (D-62) | [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 |
+| 러닝 세션 서버를 별도 저장소의 별도 서버로 | 정함 (D-47) — 옮기기 전에는 같은 저장소의 별도 앱 폴더 (D-78), 옮기는 때(운영 추출 앞)도 정함 (D-62) | [running-session-server/migration.md](running-session-server/migration.md) 「단계 M0–M9」 |
 | 경계 — 매칭 방은 메인, 러닝 방(모집 마감 뒤 대기 · 이탈 · 달리기)은 세션 | 정함 (D-26, D-71, D-73) | [running-session-server/architecture.md](running-session-server/architecture.md) 「경계 — 생애 단계」 |
 | 메인 ↔ 세션 이벤트 — 방 확정 · 사용자 변경 · 참가자 결과 | 정함 (D-71, D-72) — 이름 · 본문은 api-spec 14장을 쓸 때 | [running-session-server/architecture.md](running-session-server/architecture.md) 「넘기기」 「이벤트 (후보)」 |
 | 러닝 DB가 러닝 기록의 정본, 메인은 사본 테이블 (커넥터 (2) → 메인 inbox) | 정함 (D-24) — 사본은 지금 `running_records` · `running_segments` 그대로 (D-68) | [running-session-server/architecture.md](running-session-server/architecture.md) 「메인 사본과 반영」 |
 | 결과 이벤트를 받기 전에 처리 못 한 메시지 모으기 · 건너뜀 알람 · 대조 | 정함 (D-51) — DLT 토픽인지 보관 테이블인지는 정하지 않음 | [running-session-server/consistency.md](running-session-server/consistency.md) 「대조」 |
-| ALB 경로 규칙 — 러닝 WebSocket · 결과 조회 6-1 · 6-2는 세션, 나머지는 메인. 7-1 · 기록 카드는 메인 반영 뒤 | 정함 (D-26, D-58) — 새 규칙의 순위 값은 제안 | [running-session-server/architecture.md](running-session-server/architecture.md) 「공개 경로」 「결과 조회」 |
+| ALB 경로 규칙 — 러닝 WebSocket · 결과 조회 6-1 · 6-2는 세션, 나머지는 메인. 7-1 · 기록 카드는 메인 반영 뒤 | 정함 (D-26, D-58) — 새 규칙의 순위 값은 제안, 확정 뒤 이탈 경로는 정하지 않음 (D-73) | [running-session-server/architecture.md](running-session-server/architecture.md) 「공개 경로」 「결과 조회」 |
 | 동기 호출 — 허용 목록만 | 정함 (D-52) — 호출 1 · 2는 정함 (D-71, D-70) · 3 버림 (D-73) · 나머지 제안 (D-53) | [running-session-server/architecture.md](running-session-server/architecture.md) 「동기 호출 허용 목록」 |
 | 서비스 사이 saga — 러닝 중 계정 탈퇴 하나 | 정함 (D-43, D-44, D-70) — 메인 오케스트레이션 | [running-session-server/consistency.md](running-session-server/consistency.md) 「계정 탈퇴 saga」 |
 | 플랫폼 — RDS 둘 · Redis 서비스마다 EC2 · Kafka EC2 한 대 · 추적 OTel 에이전트 | 정함 (D-48 · D-49 · D-50 · D-55) — 브로커 셋 · Strimzi · MSK는 정하지 않음 | [platform.md](platform.md) |
@@ -129,7 +129,7 @@ Runiverse는 지금 메인 서버(running-service)와 AI 전용 서버로 돌고
 | 세션 인스턴스 ↔ 인스턴스 | 세션 Redis pub/sub | 정함 (D-49) | [running-session-server/runtime.md](running-session-server/runtime.md) |
 
 - **서비스 사이는 Kafka로 주고받는다** — 한쪽이 멈춰도 다른 쪽은 이벤트를 남기고 계속 돈다. 메인은 AI 서버를 HTTP로 부르지 않는다.
-  - **예외 하나 — 허용 목록에 적힌 동기 호출** — 정함 (D-52). 목록과 호출마다의 이유·시간 제한·멱등 키·실패 때 동작은 [running-session-server/architecture.md](running-session-server/architecture.md) 「동기 호출 허용 목록」(후보는 제안, D-53). 목록 밖 호출은 금지이고 `check_conventions.py`로 막는다(D-52 — 검사 규칙은 [running-session-server/migration.md](running-session-server/migration.md) 「경계 검사」 6). 지금 허용된 호출은 없다.
+  - **예외 하나 — 허용 목록에 적힌 동기 호출** — 정함 (D-52). 목록과 호출마다의 이유·시간 제한·멱등 키·실패 때 동작은 [running-session-server/architecture.md](running-session-server/architecture.md) 「동기 호출 허용 목록」(후보는 제안, D-53). 목록 밖 호출은 금지이고 `check_conventions.py`로 막는다(D-52 — 검사 규칙은 [running-session-server/migration.md](running-session-server/migration.md) 「경계 검사」 6). 지금 도는 동기 호출은 없다.
 - **서비스 사이에 Redis pub/sub을 쓰지 않는다** — Redis는 서비스마다 따로 두고(D-49), pub/sub은 한 서비스의 인스턴스 사이에서만 쓴다.
 - **받는 서비스는 용도마다 컨슈머 그룹 하나로 받는다** — 그룹은 `{env}.<서비스>.<용도>`다([kafka.md](kafka.md) 「이름 — 환경 접두어 `{env}`」). 이벤트 하나는 그 서비스의 한 인스턴스만 처리하고, 결과는 DB에만 쓴다. 앱 연결을 든 인스턴스에 알려야 하면 커밋한 뒤 그 서비스 안의 Redis pub/sub으로 넘긴다 — 기존 SSE 푸시와 같은 방식이다.
   - 지금 토픽은 파티션이 1이라 그룹마다 한 대만 읽는다([kafka.md](kafka.md) 「지금 설정 때문에 지켜야 할 것」). 새 토픽의 파티션 수는 [platform.md](platform.md) 「새 이름」에서 정한다.
@@ -199,7 +199,7 @@ Runiverse는 지금 메인 서버(running-service)와 AI 전용 서버로 돌고
 | I1–I7 | 불변식 | [running-session-server/consistency.md](running-session-server/consistency.md) 「불변식 I1–I7」 |
 | F1–F9 · M0–M9 · 지울 기준 A · B | 분리 전 모놀리스 안 수정 (F1 · F3 · F5–F9를 합치면 비교군 A′, F2 · F4는 버림 — D-80 · D-84) · 옮기기 단계 (M9는 버림 — D-78) · 옛 엔진을 지우는 기준 (B는 버림 — D-78) | [running-session-server/migration.md](running-session-server/migration.md) 「선행 수정 F1–F9」 「단계 M0–M9」 「지울 기준 A · B」 |
 | E0–E7 | EKS 도입 단계 | [eks.md](eks.md) 「도입 단계 E0–E7」 |
-| 넘기기-동기 · 넘기기-사본 | B2의 넘기기 변형 (SC5) | [running-session-server/verification.md](running-session-server/verification.md) 「비교군」 |
+| 넘기기-동기 · 넘기기-사본 | B2의 넘기기 변형 (SC3 · SC5) | [running-session-server/verification.md](running-session-server/verification.md) 「비교군」 |
 | run n | 측정 회차 | [load_test/RESULTS.md](../../load_test/RESULTS.md) (첫 측정) · [load_test/msa/RESULTS.md](../../load_test/msa/RESULTS.md) 「회차 색인」 |
 
 ## 고치는 규칙

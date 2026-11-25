@@ -1,8 +1,8 @@
 # 러닝 세션 분리 검증 결과
 
-러닝 세션 분리 검증(2차 캠페인)에서 잰 숫자 전부와 0단계 운영 증거의 합계를 둔다. [verification.md](../../docs/msa/running-session-server/verification.md) 「판정과 결과」는 여기서 판정 단어와 run_id만 옮긴다. 1차 캠페인의 숫자는 [../RESULTS.md](../RESULTS.md)에 있고 run id로만 가리킨다.
+러닝 세션 분리 검증(2차 캠페인)에서 잰 숫자 전부와 0단계 운영 증거의 합계를 둔다. [verification.md](../../docs/msa/running-session-server/verification.md) 「판정과 결과」는 여기서 판정 낱말과 run_id만 옮긴다. 1차 캠페인의 숫자는 [../RESULTS.md](../RESULTS.md)에 있고 run id로만 가리킨다.
 
-> 상태: 0단계 운영 증거 일부 — ASG 활동 · 세부 정보, Kibana 로그, Grafana를 11-25에 뽑았다(「0. 운영 증거」). 운영 DB 집계(`sql/prod-evidence.sql`), 대조일, 10-23 · 11-20 배포 창의 끊김 · 재연결, 18–23시 REST 비율, CPU 크레딧은 아직이다. 잰 회차는 없다.
+> 상태: 0단계 운영 증거 일부 — ASG 활동 · 세부 정보, Kibana 로그, Grafana를 11-25에 뽑았다(「0. 운영 증거」). 운영 DB 집계(`sql/prod-evidence.sql`), 대조일, 10-06(18:35 뒤) · 10-23 · 11-20 배포 창의 끊김 · 재연결, 18–23시 REST 비율, CPU 크레딧, Hikari 풀 기준선은 아직이다. 잰 회차는 없다.
 
 | 무엇 | 어디 |
 |---|---|
@@ -15,7 +15,7 @@
 - **덧붙이기만 한다** — 무효 회차도 한 줄씩 남긴다. 지난 행은 고치지 않고, 고칠 것은 날짜를 단 새 행으로 적는다.
 - **모든 회차 행에 PREREG sha와 이미지 digest를 적는다** — 동결 뒤 바뀐 것은 「편차」에만 적는다.
 - **숫자는 중앙값 [최솟값–최댓값], n을 같이 적는다** — 가장 좋은 회차만 적지 않는다.
-- **판정이 바뀌면** 같은 PR에서 verification 「판정과 결과」의 그 행과 [rationale.md](../../docs/msa/running-session-server/rationale.md) 「근거 순위」의 판정 단어를 고친다.
+- **판정이 바뀌면** 같은 PR에서 verification 「판정과 결과」의 그 행과 [rationale.md](../../docs/msa/running-session-server/rationale.md) 「근거 순위」의 판정 낱말을 고친다.
 
 ## 0. 운영 증거
 
@@ -73,7 +73,7 @@
 
 ## 판정 상세
 
-판정 단어 — 지지 / 기각 / 판정 못 함 / 분리 뒤에만 / 안 돌림. '빗나감'은 PREREG 「비교군별 예측」과 다른 결과다.
+판정 낱말 — 지지 / 기각 / 판정 못 함 / 분리 뒤에만 / 안 돌림. '빗나감'은 PREREG 「비교군별 예측」과 다른 결과다.
 
 | K | 근거 | 예측 (PREREG) | 측정 | 판정 | 빗나감 | run_id |
 |---|---|---|---|---|---|---|

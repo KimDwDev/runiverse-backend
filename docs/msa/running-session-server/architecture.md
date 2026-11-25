@@ -2,7 +2,7 @@
 
 메인 서버(running-service)와 러닝 세션 서버 사이의 목표 구조다. 선을 어디에 긋는지, 데이터마다 주인이 누구인지, 선을 넘는 것(넘기기·이벤트·허용된 동기 호출·인증)이 무엇인지, 메인이 사본으로 무엇을 갖는지, 공개 계약이 어떻게 그대로 남는지를 적는다. 세션과 메인 사이에 무언가를 더하거나 바꿀 때 여기서 시작한다.
 
-> 상태: 목표 설계 — 아직 코드에 없다. 절과 행마다 `정함 (D-xx)` · `제안` · `정하지 않음`을 단다. 이 문서는 저장소를 나눈 뒤에도 메인 저장소에 남는다([ai-server/architecture.md](../ai-server/architecture.md)와 짝).
+> 상태: 목표 설계 — 아직 코드에 없다. 절과 행마다 `운영 중` · `정함 (D-xx)` · `제안` · `정하지 않음`을 단다. 이 문서는 저장소를 나눈 뒤에도 메인 저장소에 남는다([ai-server/architecture.md](../ai-server/architecture.md)와 짝).
 
 | 무엇 | 어디 |
 |---|---|
@@ -28,7 +28,7 @@
 
 | 성질 | 근거 |
 |---|---|
-| **러닝 중 경로가 메인 없이 돈다** — 위치 배치는 세션 자기 Redis만 쓴다 | [rationale.md](rationale.md) 「G3 장애 격리」 · 지금도 위치 배치에 SQL이 없다(`UpdateRunningLocationHandler`에 트랜잭션 없음) |
+| **러닝 중 경로가 메인 없이 돈다** — 위치 배치는 세션 자기 Redis만 쓴다 | [rationale.md](rationale.md) 「G3 장애 격리」 · 지금도 목표에 닿기 전 위치 배치에는 SQL이 없다(`UpdateRunningLocationHandler`에 트랜잭션 없음, 목표 도달은 끝내기로 넘긴다) |
 | **기록은 쓰는 쪽에 산다** — 기록 + 참가자·방 상태 + 아웃박스 행을 러닝 DB 한 트랜잭션으로 커밋한 뒤 `RUNNING_FINISHED`를 보낸다. ack는 '메인이 안다'가 아니라 '기록이 남았다'다 | [consistency.md](consistency.md) 「불변식 I1–I7」 (I1) |
 | **메인의 반응은 파생 상태다** — 자리 풀기·쿨다운·평균 페이스·기록 목록은 세션 결정을 따라 할 뿐이라 되돌릴 일이 없다. 이미 쓰는 아웃박스 → Debezium → inbox를 그대로 쓴다 | [outbox-inbox.md](../outbox-inbox.md) |
 | **시작·끝내기 폭주는 세션 자기 풀과 DB에 걸린다** — 메인 커넥션 풀과 서비스 DB를 나눠 쓰지 않는다 | [rationale.md](rationale.md) 「G4 끝내기 폭주는 고칠 결함」 |
@@ -47,7 +47,7 @@
 | 모집 | 메인 | `MATCHING` → `MATCHED` (시작 전 취소 `CANCELLED`) | 신청 자리(`running_players`, `deleted_at IS NULL`) | 신청·합류·초대·수락·거절·나가기·방 평균 페이스 다시 계산·모집 마감 |
 | 러닝 | 세션 | `MATCHED` → `STARTED` → `FINISHED` / `CANCELLED` | `JOINED` → `RUNNING` → `COMPLETED` / `RUNNING_LEFT_*` / 노쇼 `MATCHED_LEFT_*` | 대기(멤버 변화 · 카운트다운) · 확정 뒤 이탈 · 시작 · 다시 붙기 · 끝내기 · 강제 종료 · 기록 · 구간 · 콤보 |
 
-- **넘기는 순간은 `RunningRoom.closeMatching()`이다** — 매칭 방은 시작 10분 전(`match.close-offset`), 초대 방은 1분 전(`invite.close-offset`)에 `CloseMatchingHandler`가 부른다. 혼자 달리기는 `MATCHED`로 태어나므로 만들 때 넘긴다.
+- **넘기는 순간은 방이 `MATCHED`가 되는 커밋이다** — 시각과 코드는 「넘기기」.
 - **확정 뒤 명단은 메인 쪽 전이로는 줄기만 한다** — `join()`(`canJoin()`)과 `invite()`가 `MATCHING`을 요구한다. 다시 붙기(`rejoin()`)는 러닝 단계의 일이라 세션 몫이다. 그래서 확정 순간의 스냅샷이 넘기기 지점으로 충분하다.
 - **잠금 순서는 서비스 안에만 있다** — 메인은 신청 → 방, 세션은 참가자 → 러닝 세션. DB를 넘는 잠금은 없다. 확정 뒤 나가기와 `RUNNING_START`는 둘 다 세션에 닿아 같은 참가자 잠금으로 줄을 선다([consistency.md](consistency.md) 「확정 뒤 이탈」).
 - **확정되면 매칭 방은 닫힌다** — 메인은 그 방의 멤버 변화 알림을 더 보내지 않고, 앱은 러닝 방(세션 WS)으로 옮긴다. 메인에 남는 것은 채팅과 결과 반영이다(「메인에 남는 흐름 · 혼자 달리기」).
@@ -79,7 +79,7 @@
 | 러닝 DB `outbox_events` · inbox · `cdc_heartbeats` | 세션 | 두 번째 커넥터·슬롯 — [platform.md](../platform.md) 「러닝 DB CDC」 | 정함 (D-24) |
 | `scheduled_jobs` + 예약 채널 | 종류별 — 메인 `MATCH_CLOSE` · `RUNNING_READY` · `RUNNING_REMINDER`, 세션 `RUNNING_START` · `RUNNING_FORCE_FINISH` + 혼자 달리기 청소기 + 밀린 작업 훑기. 서비스마다 자기 테이블·채널, `(type, target_id)` 유일 | 없음 — 같이 쓰면 `RunScheduledJobHandler.executorOf`가 자기 실행기 없는 종류에 `IllegalStateException`을 던진다 | 제안 (D-29) |
 | 쿨다운 (지금 `MatchCooldownRedisAdapter`) | 지키는 쪽은 메인(신청·상태가 읽는다), 정하는 쪽은 세션(페널티 판정) | 세션이 절대 시각 `cooldownUntil`을 참가자 결과에 싣고, 메인이 `SET EXAT` 뒤 자리를 푼다(I6) | 정함 (D-72) |
-| `user_onboardings.avg_pace` | 메인 — inbox에서 사본의 최근 5개로 다시 계산한다(지금은 `RunningFinisher` → `UpdateUserAvgPacePort`) | 세션은 넘기기 스냅샷의 참가자 페이스로 방 평균을 낸다(I7) | 제안 |
+| `user_onboardings.avg_pace` | 메인 — inbox에서 사본의 최근 5개로 다시 계산한다(지금은 끝내기 확정 `RunningFinishSteps.confirm` → `UpdateUserAvgPacePort`) | 세션은 넘기기 스냅샷의 참가자 페이스로 방 평균을 낸다(I7) | 제안 |
 | 몸무게 (칼로리, 지금 `LoadUserWeightPort`) | 메인 | 넘기기 스냅샷 — 끝내기가 사용자 테이블을 읽지 않아 사용자 행이 지워져도 정산된다 | 제안 |
 | 프로필 (닉네임·`profile_image_key`·삭제 여부) | 메인 | 넘기기 스냅샷 + 사용자 변경 이벤트(상태 전체, D-72)로 세션의 작은 사본. 프로필 URL을 누가 만드는지는 정하지 않음 — 후보 (가) 세션 직접 presign ([runtime.md](runtime.md)) | 제안 |
 | 서명 키 · 토큰 블랙리스트 | 메인 | 「인증」 | 제안 (D-30) |
@@ -93,7 +93,7 @@
 
 `정함 (D-71)` — 모집 마감 커밋에 메인이 매칭 방을 닫고 방 확정 이벤트를 아웃박스에 쓴다.
 
-**넘기는 순간** — 메인이 방을 `MATCHING`에서 꺼내는 트랜잭션의 커밋: 매칭 방은 시작 10분 전, 초대 방은 1분 전(`CloseMatchingHandler`), 혼자 달리기는 만들 때(`OpenSoloRoomHandler`). 그 전에는 메인이 지금처럼 모든 것을 정한다 — 스케줄러가 늦어 마감 시각이 지났는데 아직 `MATCHING`이면 그 사이 이탈도 메인이 지금의 시각 기준으로 정한다.
+**넘기는 순간** — 메인이 방을 `MATCHING`에서 꺼내는(`RunningRoom.closeMatching()`) 트랜잭션의 커밋: 매칭 방은 시작 10분 전(`match.close-offset`), 초대 방은 1분 전(`invite.close-offset`) — `CloseMatchingHandler`, 혼자 달리기는 `MATCHED`로 태어나 만들 때(`OpenSoloRoomHandler`). 그 전에는 메인이 지금처럼 모든 것을 정한다 — 스케줄러가 늦어 마감 시각이 지났는데 아직 `MATCHING`이면 그 사이 이탈도 메인이 지금의 시각 기준으로 정한다.
 
 **방 확정에 싣는 것**
 
@@ -135,9 +135,9 @@
 
 ## 메인 사본과 반영
 
-메인이 사본을 갖는 것은 `정함 (D-24)`. 사본의 모양은 `정함 (D-68)` — 지금 테이블 그대로, 반영 순서는 `제안`, 날씨는 세션이 끝낼 때 잠금 밖에서 조회해 기록에 넣는다 — `정함 (D-63)`.
+메인이 사본을 갖는 것은 `정함 (D-24)`. 사본의 모양은 `정함 (D-68)` — 지금 테이블 그대로, 반영 순서는 `제안`, 날씨는 아래 '날씨'.
 
-**사본에 있어야 하는 것** — 모양이 무엇이든 이것을 채운다.
+**사본에 있어야 하는 것** — 메인이 사본에서 읽는 곳이다.
 
 | 쓰는 곳 | 필요한 것 | 지금 읽는 코드 |
 |---|---|---|
@@ -167,13 +167,12 @@
 9. 커밋 → 오프셋 커밋
 
 - **사본 상태는 상태 전이 규칙을 거치지 않는다** — 메인 사본은 `STARTED` · `RUNNING`을 모른다(시작됨은 시각으로 본다). 그래서 `MATCHED` → `FINISHED`, `JOINED` → `COMPLETED` 같은 사본 적기는 전이 검사를 우회하는 전용 메서드로, 다시 와도 같은 결과로 한다.
-- **Redis 오류도 다시 시도한다** — 5의 쿨다운이 메인 Redis 순간 장애로 실패하면 지금 오류 처리기는 DB 오류만 다시 시도하고 나머지는 건너뛴다. 결과 이벤트를 받기 전에 Redis 연결 오류를 재시도 대상에 넣고 DLT를 만든다(D-51).
-
+- **Redis 오류도 다시 시도한다** — 5의 쿨다운이 메인 Redis 순간 장애로 실패하면 지금 오류 처리기는 DB 오류만 다시 시도하고 나머지는 건너뛴다. 결과 이벤트를 받기 전에 Redis 연결 오류를 재시도 대상에 넣는다.
 - **핸들러 안에서 외부 호출을 하지 않는다** — 날씨·S3를 부르면 한 파티션의 직렬 처리라 끝내기 몰림이 몇 분짜리 반영 지연이 된다.
 - **지금 inbox를 그대로 쓴다** — `RecordInboxEventPort` · `InboxEventAdapter` · `KafkaConsumerConfig`의 재시도 기준. 다만 오류 처리기가 빈 하나라 새 리스너도 건너뛰기를 물려받는다 — 결과 이벤트를 받기 전에 DLT·건너뜀 알람·대조를 만든다(D-51, [outbox-inbox.md](../outbox-inbox.md) 「받는 쪽 — Inbox」).
 - **반영 전에는 보이지 않을 뿐이다** — 7-1·카드에는 반영된 뒤 나온다(D-58). 반영 전 사용자가 활성으로 보이는 창은 [consistency.md](consistency.md) 「종료 뒤 최종 일관 창」, 누락 0 확인은 「대조」.
 
-**날씨** — `정함 (D-63)`. 세션이 끝내기 봉인(잠금 밖)에서 지금과 같은 기준(출발 좌표 · 출발 시각, 실패하면 기본값)으로 조회해 기록에 넣고, 메인은 사본으로 받는다. 값이 지금과 같아 9-5 `running_summary`의 날씨 필드와 erd는 바뀌지 않는다.
+**날씨** — `정함 (D-63)`. 세션이 끝내기 봉인에서 조회해 기록에 넣고([runtime.md](runtime.md) 「끝내기」), 메인은 사본으로 받는다. 값이 지금과 같아 9-5 `running_summary`의 날씨 필드와 erd는 바뀌지 않는다.
 
 ## 동기 호출 허용 목록
 
@@ -207,7 +206,7 @@
 |---|---|
 | 매칭 신청 · 초대 열기 · 보내기 · 수락 · 거절 | 그대로. 반영 전 창에는 `MATCH_ALREADY_IN_PROGRESS`·초대 대상 '바쁨'이 날 수 있다(D-31) — 다시 신청할 수 있기까지의 시간을 잰다([verification.md](verification.md) 「지표」) |
 | 넘기기 전 나가기 | 그대로 메인 안 — `POST /match-rooms/leave`. 확정된 방이면 409 새 코드로 답해 앱이 세션 쪽으로 다시 보낸다 (D-73) |
-| 확정 뒤 대기 · 나가기 · 카운트다운 | 세션 — 앱이 확정(`MATCH_CONFIRMED`) 뒤 러닝 WS에 붙어 받는다. 메인은 그 방의 멤버 변화 알림을 보내지 않는다 (D-73) |
+| 확정 뒤 대기 · 나가기 · 카운트다운 | 세션 — 앱이 확정(`MATCH_CONFIRMED`, 초대 방은 `MATCHED`가 실린 `MATCH_ROOM_UPDATED`) 뒤 러닝 WS에 붙어 받는다. 메인은 그 방의 멤버 변화 알림을 보내지 않는다 (D-73) |
 | 대기방 채팅 | 메인에 그대로 (D-73). `MATCHED`이고 지금 ≥ `startAt`이면 닫힌 것으로 본다(`RoomChatAccessPolicy`). 채팅 멤버는 참가자 결과로 고친다 — 나간 사람이 몇 초 보낼 수 있는 틈은 받아들이고, 앱은 나가는 즉시 채팅 화면을 닫는다 |
 | `/users/me/status` | 반영 전 `RUNNING`을 줄 수 있다. `RUNNING`을 계산할 때만 세션에 활성 확인(허용 목록 4)을 하고, 아니면 `IDLE`. 끝낸 참가자의 `RUNNING_START`는 계속 `NOT_ROOM_PLAYER`다 |
 | 홈 활동 | 지금 달리는 수는 허용 목록 5, 끝낸 러닝은 사본 |
@@ -215,8 +214,8 @@
 
 **혼자 달리기**
 
-- **`POST /running-rooms/solo`는 메인에 남는다** — 메인이 번호를 매기고 신청과 `MATCHED`로 태어난 `SOLO` 방을 한 트랜잭션에 만든다. 지금처럼 예약 작업은 없다(`OpenSoloRoomHandler`).
-- **넘기기 여유가 0이다** — 바로 이어지는 `RUNNING_START`가 모르는 방에 닿으므로 넘기기 방식이 무엇이든 당겨 오기(허용 목록 1)가 이 경로를 받친다.
+- **`POST /running-rooms/solo`는 메인이 한 트랜잭션에 만든다** — 메인에 남는 이유는 「메인 쪽 불변식」(D-27). 번호를 매기고 신청과 `MATCHED`로 태어난 `SOLO` 방을 함께 넣는다. 지금처럼 예약 작업은 없다(`OpenSoloRoomHandler`).
+- **넘기기 여유가 0이다** — 바로 이어지는 `RUNNING_START`가 방 확정 이벤트보다 먼저 닿을 수 있어 당겨 오기(허용 목록 1, D-71)가 이 경로를 받친다.
 - **세션에 혼자 달리기 청소기를 둔다** — 지금은 앱이 죽으면 `RUNNING`이 영영 남고(`RunningActivityReader` 주석), Redis 트랙은 7시간(`running-track.ttl`)에 조용히 사라진다. 분리 뒤에는 메인 자리까지 계속 막힌다. 청소기의 끝내기는 [runtime.md](runtime.md), 혼자 달리기 이탈·탈퇴는 [consistency.md](consistency.md).
 
 ## 결과 조회
@@ -254,7 +253,7 @@
 | `/users/me/status` (2-2) | 모양 그대로, 뜻이 바뀜 — 끝낸 뒤 반영 전 `RUNNING`, `cooldownUntil`이 늦게 보인다 | 제안 (D-31) |
 | 매칭 신청 · 초대 수락 · 혼자 달리기 | 모양 그대로, 반영 전 409가 날 수 있다 | 제안 (D-31) |
 | 7-1 · 홈 활동 · 친구 추천 | 모양 그대로, 반영 뒤 보인다 — api-spec 7-1에 메모를 단다(전환 때, [migration.md](migration.md) 「단계마다 고칠 문서」) | 정함 (D-58) |
-| 9-1 ~ 9-6 · 9-5 이벤트 | 본문 그대로 — `weather_code`는 지금처럼 기록에 이미 있다 (D-63) | 정함 |
+| 9-1 ~ 9-6 · 9-5 이벤트 | 본문 그대로 — `weather_code`는 지금처럼 기록에 이미 있다 | 정함 (D-63) |
 | `POST /match-rooms/leave` | **바뀜** — 모집 중 방만 받는다. 확정된 방이면 409 새 코드(이름 정하지 않음) — 도메인별 `*ErrorCode` enum · `GlobalExceptionHandler.toStatus()` · `ErrorExposurePolicy.EXPOSED_CODES`에 함께 넣는다 | 정함 (D-73) |
 | 확정 뒤 이탈 (새) | 세션이 받는다 — 러닝 WS 메시지 또는 `POST /running-rooms/{runningRoomId}/leave` | 정함 (D-73) — 형식은 정하지 않음 |
 | 최소 버전 | iOS · 안드로이드 모두 M4에서 올리고 ALB 차단을 건다 — 운영 전환(M7) 전 | 정함 (D-74, D-78) |
@@ -286,7 +285,7 @@ ALB 경로 규칙의 단일 집이다. 순위 1 · 2 · 10은 운영 중인 규�
 1. ~~넘기기 방식~~ — **정했다 → D-71**: 모집 마감 커밋에 방 확정 이벤트, `RUNNING_START`에만 당겨 오기.
 2. ~~메인 사본 모양~~ — **정했다 → D-68**: 지금 `running_records` · `running_segments`를 그대로 쓴다.
 3. ~~날씨 자리~~ — **정했다 → D-63**: 세션이 끝낼 때 잠금 밖에서 조회한다.
-4. **세션 핸드셰이크의 최소 버전 관문** — 지금 `AppVersionFilter`는 WS 업그레이드도 막고(`shouldNotFilter`가 빼는 것은 앱 버전·actuator·관리자·preflight뿐) 요청마다 `app_versions`를 캐시 없이 읽는다. (가) 세션에 복제(이벤트·주기 당겨 오기) (나) 공유 라이브러리 (다) 스플래시(2-3)에서 메인이 이미 막은 것에 기댄다고 명시.
+4. **세션 핸드셰이크의 최소 버전 관문** — 지금 `AppVersionFilter`는 WS 업그레이드도 막고(`shouldNotFilter`가 빼는 것은 앱 버전·actuator·관리자·preflight뿐) 요청마다 `app_versions`를 캐시 없이 읽는다(캐시는 버렸다 — D-84). (가) 세션에 복제(이벤트·주기 당겨 오기) (나) 공유 라이브러리 (다) 스플래시(2-3)에서 메인이 이미 막은 것에 기댄다고 명시.
 5. **폐기된 토큰** — 서비스마다 Redis가 하나라(D-49) 세션이 메인 블랙리스트를 바로 못 읽는다. (가) 메인 블랙리스트 키 읽기 전용 계약(저장소 사이 계약 테스트) (나) 짧은 access 토큰 수명 (다) 토큰 폐기 이벤트·사용자 변경 이벤트(삭제)로 세션 자기 폐기 캐시. ES256과 함께 정한다 (D-30).
 6. ~~`RUNNING_READY`가 메인 SSE를 탄다~~ — **정했다 → D-73 · D-74**: 러닝 WS로 옮기고 최소 버전을 올린다.
 7. **관리자 방 숨김** — `running_rooms.deleted_at`(손 SQL)이 7-1·함께 뛴 사람·카드 잠금을 거른다. 분리 뒤 두 DB에 있다: 두 DB를 모두 고치는 절차 vs 관리자 방 숨김 이벤트.

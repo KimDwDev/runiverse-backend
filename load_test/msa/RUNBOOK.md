@@ -2,7 +2,7 @@
 
 러닝 세션 분리 검증을 실제로 돌리는 순서다. 운영에서 읽기만 하는 0단계 운영 증거를 먼저 뽑고, 그다음 측정 환경을 만들어 한 회차씩 돌린다. 무엇을 왜 재는지는 [verification.md](../../docs/msa/running-session-server/verification.md), 회차 규칙과 기준 숫자는 [PREREG.md](PREREG.md), 하네스 구성은 [README.md](README.md)에 있다.
 
-> 상태: 「0. 운영 증거」는 11-25에 ASG · Kibana · Grafana 몫을 뽑았다(RESULTS 「0. 운영 증거」). 0-1 세션 코드 변경 표시, 0-3 대조일, 0-4 운영 DB 집계, 0-5의 Prometheus REST 비율 · CloudWatch 크레딧이 남았다 — 운영 읽기 권한이 있는 개발자가 한다. 「1. 준비」부터는 계획 — 하네스 v2가 생기고 PREREG를 얼린 뒤에 돈다.
+> 상태: 「0. 운영 증거」는 11-25에 ASG · Kibana · Grafana 몫을 뽑았다(RESULTS 「0. 운영 증거」). 0-3 대조일과 남은 배포 창(10-06 18:35 뒤 · 10-23 · 11-20), 0-4 운영 DB 집계, 0-5의 Prometheus REST 비율 · CloudWatch 크레딧 · HikariCP 기준선(패널을 더한 뒤)이 남았다 — 운영 읽기 권한이 있는 개발자가 한다. 「1. 준비」부터는 계획 — 하네스 v2가 생기고 PREREG를 얼린 뒤에 돈다.
 
 | 무엇 | 어디 |
 |---|---|
@@ -49,6 +49,7 @@ aws autoscaling describe-scaling-activities \
 
 - 병합 시각 뒤 처음 나오는 `Terminating`의 `StartTime` · `EndTime`(UTC) + 9시간이 그 배포의 내리기 시작 · 종료 시각이다. 둘 다 적고, 0-3의 창은 종료(`EndTime`)로 잡는다.
 - **기록이 사라진 배포**는 '병합 + 10분'을 쓰고 RESULTS에 `추정`이라 적는다 — 빌드 시간만큼 실제는 더 늦다.
+- **병합과 짝이 없는 `Terminating`**(시작 템플릿 교체 같은 재시작)도 한 줄로 적고 `코드 병합 아님`이라 쓴다 — 0-1의 목록에는 나오지 않는다.
 - **콘솔로 볼 때** — EC2 › Auto Scaling 그룹 › 운영 ASG의 '활동' 탭 작업 기록에서 `Terminating EC2 instance` 행의 시작 · 종료 시간을 옮긴다(+09:00로 보이면 KST 그대로). '세부 정보' 탭의 원하는 용량 · 크기 조정 한도 · 인스턴스 유형 · 상태 확인 종류 · 유예를 같이 적는다. 캡처는 인스턴스 ID를 가린다.
 
 ### 0-3. 끊긴 연결과 재연결 (Kibana)
@@ -126,11 +127,11 @@ psql "<운영 DB 읽기 접속>" -f load_test/msa/sql/prod-evidence.sql
 | 무엇 | 어디서 | 쓰는 곳 |
 |---|---|---|
 | 18~23시 REST 비율 — `sum by (method, uri) (increase(http_server_requests_seconds_count{application="running-service"}[$__range]))`를 그 시간대로 | 운영 Prometheus | `k6/profiles/rest-mix.json` |
-| 슬롯 시간 `CPUCreditBalance` 최솟값 (4주) | CloudWatch | 비교군 A의 크레딧 조건, G4 |
+| 슬롯 시간 `CPUCreditBalance` 최솟값 (4주) | CloudWatch | PREREG 「실행 규칙」 16 크레딧 조건 |
 | ALB · 대상 그룹 · ASG · 시작 템플릿 설정 | [platform.md](../../docs/msa/platform.md) 「확인할 운영 값」의 읽는 법 | 측정 환경을 운영과 같게 |
-| 앱 재접속 · `HEALTH_CHECK` · 끝내기 재시도 · 재전송 묶음 값 | 노션 프론트 가이드 (옮겨 적는다) | [runtime.md](../../docs/msa/running-session-server/runtime.md) → 하네스 환경 변수 |
+| 앱 재접속 · `HEALTH_CHECK` · 끝내기 재시도 · 재전송 묶음 값 | 노션 프론트 가이드 (옮겨 적는다) | [runtime.md](../../docs/msa/running-session-server/runtime.md) 「앱 재접속 정책」 → 하네스 환경 변수 |
 | 요청률 · 힙 · 인스턴스 시작 시각 — Grafana `Runiverse Monitoring › JVM (Micrometer)`, Application `running-service`, Instance 드롭다운에서 그 기간에 살아 있던 인스턴스를 고른다. 배포마다 인스턴스가 바뀌어 여러 개가 남으므로, Quick Facts의 Start time을 0-2의 새 인스턴스 시각과 맞춰 본다. I/O Overview의 Rate(최근 24시간 · 30일)와 Heap used를 읽고, 캡처는 Instance 드롭다운(내부 주소)을 가린다 | 운영 Grafana | RESULTS 「0. 운영 증거」 요청률 · 힙 |
-| 커넥션 풀 — 대시보드에 HikariCP 패널이 없다. `hikaricp_connections_active` · `hikaricp_connections_pending` 패널을 더한 뒤(M0) 같은 인스턴스 선택으로 읽는다 | 운영 Grafana | 비교군 A 풀 기준선 |
+| 커넥션 풀 — 대시보드에 HikariCP 패널이 없다. `hikaricp_connections_active` · `hikaricp_connections_pending` 패널을 더한 뒤(M0) 같은 인스턴스 선택으로 읽는다. 질의는 `pool` 태그를 둘 다 받는다(`pool=~"HikariPool-1\|main"`) — 선행 수정 전 이미지(A)는 풀 이름을 정하지 않아 Hikari 기본 `HikariPool-1`, 선행 수정 이미지(A′)는 `main`(F5)이라 배포 앞뒤가 한 패널에 보인다 | 운영 Grafana | 비교군 A 풀 기준선 |
 
 ### 0-6. 적기
 
@@ -152,8 +153,8 @@ psql "<운영 DB 읽기 접속>" -f load_test/msa/sql/prod-evidence.sql
 | k6 | c 계열 EC2(버스트형 아님), digest 고정 이미지. 방을 호스트 사이에 나누지 않는다 | 생성기가 병목이 되지 않게 |
 | S3 · 날씨 | test 버킷 · v2 날씨 스텁 | 실제 S3 경로를 탄다 |
 
-- [ ] platform 「확인할 운영 값」의 ALB · 대상 그룹 · ASG · 시작 템플릿 값을 측정 환경에 같게 두고, 그 사본을 회차 기록에 남긴다
-- [ ] 앱 재접속 값이 [runtime.md](../../docs/msa/running-session-server/runtime.md)에 있다 — 없으면 SC1 · SC2 · SC3 측정 회차는 돌리지 않는다. 다른 회차는 그 표의 하네스 임시값으로 돌리고 회차 색인에 `임시값`이라 적는다
+- [ ] platform 「확인할 운영 값」의 ALB · 대상 그룹 · ASG · 시작 템플릿 값을 측정 환경에 같게 두고, 그 사본을 회차 기록에 남긴다 — 대상 그룹 검사 경로와 정지 대기는 비교군을 따른다(PREREG 「실행 규칙」 10)
+- [ ] 앱 재접속 값이 [runtime.md](../../docs/msa/running-session-server/runtime.md) 「앱 재접속 정책」에 있다 — 없으면 SC1 · SC2 · SC3 측정 회차는 돌리지 않는다. 다른 회차는 그 표의 하네스 임시값으로 돌리고 회차 색인에 `임시값`이라 적는다
 - [ ] PREREG가 동결이다 ([PREREG.md](PREREG.md) 「상태」) — 동결 전 회차는 smoke로만 쓴다
 - [ ] JWT 비밀값 파일이 k6 호스트에 있다 (출력하지 않는다)
 - [ ] 모든 호스트의 시계가 맞다 — `gate.sh`가 확인한다

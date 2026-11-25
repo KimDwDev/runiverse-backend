@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Runiverse 백엔드 — 원격 동반 러닝 플랫폼의 API 서버. 클라이언트는 Flutter 모바일 앱(안드로이드 우선, iOS는 이후 출시).
+Runiverse 백엔드 — 원격 동반 러닝 플랫폼의 API 서버. 클라이언트는 Flutter 모바일 앱(안드로이드·iOS 모두 출시).
 
 ## 빌드 및 테스트
 
@@ -13,7 +13,7 @@ cd running-service
 
 - 로컬 실행은 설정값을 `.env`로 공급한다(spring-dotenv). 테스트는 스프링 컨텍스트를 띄우지 않아 `.env` 없이 돈다 — 대신 JPQL·DB 제약·설정 바인딩·실제 Jackson 설정은 테스트가 통과해도 검증된 게 아니다.
 - 테스트는 Mockito javaagent로 실행된다(build.gradle의 `mockitoAgent`) — 테스트 JVM 옵션 수정 시 주의.
-- E2E는 `e2e_test/run-e2e.sh` — 배포 이미지(기본 `runiverse-backend:e2e`, 직접 빌드)를 Docker로 띄워 돌린다.
+- E2E는 `e2e_test/run-e2e.sh` — 배포 이미지(기본 `runiverse-backend:e2e`, 직접 빌드)를 Docker로 띄워 돌린다. 기본은 앱 한 대라 `MultiInstanceE2eTest`가 건너뛴다 — `E2E_MULTI_INSTANCE=true bash e2e_test/run-e2e.sh`면 두 번째 인스턴스(8081, `JPA_DDL=none`)를 함께 띄워 돌린다.
 
 ## 문서 인덱스 — 구현 전 반드시 해당 문서를 읽을 것
 
@@ -39,7 +39,7 @@ cd running-service
 - `BusinessException`·`ErrorCode`(sealed interface)·`UserErrorCode`가 domain(VO 검증)·application(유스케이스)에 같은 이름으로 존재 — import 시 레이어 확인.
 - application 에러 코드는 도메인별 `*ErrorCode` enum과 `GlobalExceptionHandler.toStatus()`에 반드시 반영한다. 400 외 상태로 공개할 코드는 `ErrorExposurePolicy.EXPOSED_CODES`에도 넣는다 — 빠지면 컴파일·테스트를 통과해도 런타임에 500으로 마스킹된다. 의도적 비노출은 근거와 테스트를 남긴다.
 - 도메인 예외는 500으로 응답한다 — 400으로 보여줄 검증은 Request DTO·경로 변수의 Bean Validation이 만든다.
-- 운영은 ALB 뒤 다중 인스턴스다 — 인스턴스 메모리(연결·방 명부·구독)를 만들거나 바꾸면 같은 인스턴스 갈아타기·다른 인스턴스 재연결·늦은 종료 처리를 모두 따지고 테스트한다(`docs/architecture.md` 「다중 인스턴스」). 기본 E2E는 앱 한 대라 `MultiInstanceE2eTest`가 건너뛴다 — `E2E_MULTI_INSTANCE=true bash e2e_test/run-e2e.sh`로 두 번째 인스턴스(8081, `JPA_DDL=none`)를 함께 띄워 돌린다.
+- 운영은 ALB 뒤 다중 인스턴스다 — 인스턴스 메모리(연결·방 명부·구독)를 만들거나 바꾸면 같은 인스턴스 갈아타기·다른 인스턴스 재연결·늦은 종료 처리를 모두 따지고 테스트한다(`docs/architecture.md` 「다중 인스턴스」). 인스턴스 메모리나 서버 사이 상태(임대·예약·방 채널)를 바꿨으면 다중 인스턴스 E2E(`E2E_MULTI_INSTANCE=true`, 「빌드 및 테스트」)를 로컬에서 돌리고 결과를 PR 테스트 내용에 적는다 — CI는 앱 한 대만 띄워 이 회귀를 잡지 않는다(`docs/msa/decisions.md` D-86).
 - `.env` 등 시크릿 파일은 절대 커밋하지 않고, 키 값은 출력 시 마스킹한다.
 - 요청 없이 공개 API 계약(요청·응답 형식)이나 의존성(라이브러리)을 변경하지 않는다.
 - 문제를 우회하는 해결 금지 — 테스트 약화·빈 catch·기능 삭제로 오류를 없애지 않는다.

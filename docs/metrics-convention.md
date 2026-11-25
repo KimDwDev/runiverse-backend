@@ -5,7 +5,7 @@
 ## 수집 구조
 
 - 앱은 Micrometer로 기록하고 `/actuator/prometheus`로 노출한다. Prometheus가 주기적으로 긁어 가고(pull), Grafana가 Prometheus를 조회한다.
-- 앱은 누적값만 들고 있다. Prometheus가 읽어 가도 지워지지 않고, 앱이 재시작할 때만 0으로 돌아간다. 시각별 기록은 Prometheus에 쌓이고, 증가 속도(`rate()`)는 Grafana에서 계산한다.
+- 앱은 누적값만 들고 있다(재시작하면 0) — 시각별 기록은 Prometheus에 쌓이고, 증가 속도(`rate()`)는 Grafana에서 계산한다.
 - 모든 메트릭에 공통 태그 `application=running-service`를 붙인다.
 
 ## 로그와 메트릭의 역할
@@ -140,7 +140,7 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 |---|---|
 | `http.server.requests` | 엔드포인트별 **응답 시간**·상태 코드 |
 | `jvm.*`, `process.*` | 메모리·GC·스레드·CPU |
-| `hikaricp.*` | DB 커넥션 풀 — `pool=main`(메인 서버 풀, `spring.datasource.hikari.pool-name`). 풀이 바닥났는지는 `pending` · `timeout`, 오래 쥐는지는 `usage`(누수 감지 10초는 로그로) |
+| `hikaricp.*` | DB 커넥션 풀 — `pool=main`(메인 서버 풀, `spring.datasource.hikari.pool-name`). 풀이 바닥났는지는 `pending`·`timeout`, 오래 쥐는지는 `usage`(누수 감지 10초는 로그로) |
 | `lettuce.*` | Redis 명령 |
 | `logback.events` | 레벨별 로그 수 — ERROR 증가 알림에 쓴다 |
 
@@ -156,18 +156,18 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 | `runiverse.sse.events` | Counter | 매칭 스트림 연결 | 예정 |
 | `runiverse.running.finish.filtered` | DistributionSummary (baseUnit `meters`) | `RunningFinishSteps`(판정) → `RunningMetricAdapter` | 사용 중 — `filter=pause\|accuracy\|spike\|gap\|stop`. 종료 확정 1건당(기록이 생기지 않는 종료 포함) 트랙 필터 단계별로 뺀 거리(feature-spec 트랙 필터). 0도 기록한다. 히스토그램을 켠다(1~10,000m). 판정값 조정용 |
 | `runiverse.running.finish.gaps` | Counter | `RunningFinishSteps`(판정) → `RunningMetricAdapter` | 사용 중 — `decision=accepted\|rejected`. 관측 안 된 칸의 인정·거부 수 |
-| `runiverse.running.location.goal` | Counter | `RunningFinishSteps`(자동 종료 판정) → `RunningMetricAdapter` | 사용 중 — `decision=finished\|pending`. 러닝 중 누적이 목표를 넘은 배치에서 확정 거리로 끝냈는지, 미달이라 미뤘는지 |
+| `runiverse.running.location.goal` | Counter | `RunningFinishSteps`(자동 종료 판정) → `RunningMetricAdapter` | 사용 중 — `decision=finished\|pending`. 러닝 중 누적이 목표를 넘은 배치에서 확정 거리로 끝냈는지, 미달이라 미뤘는지. `pending`이 목표 근처 배치마다 남는 잠금 판정(D-80의 대가) 횟수다 — 사용자 종료(`forced=false`)를 미룬 것은 `runiverse.running.finish.goalpending`이 센다 |
 | `runiverse.running.finish.goalpending` | DistributionSummary (baseUnit `meters`) | `RunningFinishSteps`(`forced=false` 종료 판정) → `RunningMetricAdapter` | 사용 중 — `forced=false` 종료를 미뤘을 때의 남은 거리(`RUNNING_GOAL_PENDING`의 `remainingMeters`). 화면 거리와 서버 확정 거리가 얼마나 어긋나는지 본다. 히스토그램을 켠다(1~10,000m) |
-| `runiverse.running.finish.inprogress` | Counter | `RunningFinisher` → `RunningMetricAdapter` | 사용 중 — `trigger=user\|goal`. 끝내기 임대를 잡지 못한 종료 수 — 다른 연결이 같은 러닝을 끝내는 중이다(D-82). 사용자 종료는 `RUNNING_TRACK_UNAVAILABLE`로 답하므로 저장소 장애와 이 값으로 가른다 |
-| `runiverse.running.room.dropped` | Counter | `RunningRoomMessageDropHandler`(러닝 방 채널 실행기의 거절 처리) | 사용 중 — 태그 없음. 러닝 방 채널(`running:room:*`) 대기 줄이 꽉 차 버린 메시지 수(진행 · 콤보 · supersede를 가르지 않는다 — 가르려면 메시지를 열어야 해 버리는 순간의 비용이 커진다). 로그는 10초에 한 줄로 모아 남기므로 정확한 총량은 이 값으로 본다(F7) |
+| `runiverse.running.finish.inprogress` | Counter | `RunningFinisher` → `RunningMetricAdapter` | 사용 중 — `trigger=user\|goal`. 끝내기 임대를 잡지 못한 종료 수 — 다른 종료(다시 붙기 전 소켓·강제 종료 워커 등)가 같은 러닝을 끝내는 중이다(D-82). `goal`은 목표 도달 자동 종료, `user`는 `RunningFinisher.finish`를 거친 나머지 전부다(`RUNNING_FINISH`·강제 종료 워커·탈퇴 정리를 가르지 않는다). `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 답하므로 저장소 장애와 이 값으로 가른다 |
+| `runiverse.running.room.dropped` | Counter | `RunningRoomMessageDropHandler`(러닝 방 채널 실행기의 거절 처리) | 사용 중 — 태그 없음. 러닝 방 채널(`running:room:*`) 대기 줄이 꽉 차 버린 메시지 수(진행·콤보·supersede를 가르지 않는다 — 가르려면 메시지를 열어야 해 버리는 순간의 비용이 커진다). 로그는 10초에 한 줄로 모아 남기므로 정확한 총량은 이 값으로 본다. 서버가 꺼지는 중 실행기가 거절한 메시지도 센다(로그는 남기지 않는다) — 종료 직전에 늘어난 값은 넘침이 아니다(F7) |
 | `runiverse.running.state.access` | Timer | 러닝 상태 어댑터 → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|distance\|status\|combo_snapshot\|combo_pair\|combo_segment`, `phase=running\|finish`, `operation=read\|write`, `result`. 러닝 상태 저장소 왕복의 횟수·시간. 같은 부하를 `store`만 바꿔 돌려 Redis와 DB를 비교한다. 히스토그램을 켠다(100µs~5s — Redis가 1ms 아래라 기본 하한이면 분포가 첫 칸에 몰린다) |
 | `runiverse.running.state.loaded` | DistributionSummary (baseUnit `items`) | 러닝 상태 어댑터(종료 집계 읽기) → `RunningStateMeter` | 사용 중 — `store=redis\|db`, `target=track\|combo_segment`. 종료 때 러닝 하나치를 통째로 읽은 개수(좌표 수, 콤보 구간 수). 저장소 물리 단위(stream 엔트리·행)가 아니라 논리 단위로 센다. `state.access`의 시간과 나눠 1,000개당 시간으로 저장소를 비교한다. 히스토그램을 켠다(1~30,000) |
-| `runiverse.websocket.connections` | Gauge | `RunningWebSocketHandler`(연결 수립·종료) · `RunningSessionRegistryAdapter`(명부 크기) | 예정 — `domain=running`, `stage=open\|started`. 인스턴스마다 지금 열린 러닝 소켓 수(`open`)와 `RUNNING_START`를 마친 세션 수(`started`). 배포 때 끊기는 인원, 계획 종료가 끝났는지, 자동 확장 신호로 본다. 이름은 정하지 않음 — `…sessions.active` 꼴과 함께 [msa/running-session-server/verification.md](msa/running-session-server/verification.md) 「정하지 않은 것」 1에서 정한다 |
-| `runiverse.sse.connections` | Gauge | `AppStreamRegistryAdapter` · `MatchStreamRegistryAdapter` | 예정 — `domain=app\|match`. 인스턴스마다 지금 열린 SSE 연결 수 |
+| `runiverse.websocket.connections` | Gauge | `RunningWebSocketHandler`(연결 수립·종료)·`RunningSessionRegistryAdapter`(명부 크기) | 예정 — `domain=running`, `stage=open\|started`. 인스턴스마다 지금 열린 러닝 소켓 수(`open`)와 `RUNNING_START`를 마친 세션 수(`started`). 배포 때 끊기는 인원, 계획 종료가 끝났는지, 자동 확장 신호로 본다. 이름은 정하지 않음 — `…sessions.active` 꼴과 함께 [msa/running-session-server/verification.md](msa/running-session-server/verification.md) 「정하지 않은 것」 1에서 정한다 |
+| `runiverse.sse.connections` | Gauge | `AppStreamRegistryAdapter`·`MatchStreamRegistryAdapter` | 예정 — `domain=app\|match`. 인스턴스마다 지금 열린 SSE 연결 수 |
 | `runiverse.websocket.closes` | Counter | `RunningWebSocketHandler.afterConnectionClosed` | 예정 — `domain=running`, `code=1000\|1001\|1006\|1009\|1011\|4001\|4500\|unknown`(목록 밖 코드는 `unknown`). 닫힌 러닝 연결 수 — 배포·장애 때 끊김을 close code별로 본다 |
 | `runiverse.running.start` | Counter | `StartRunningHandler` → `RunningMetricAdapter` | 예정 — `decision=first\|reconnect`. 처리한 `RUNNING_START` 중 참가자가 `JOINED`였으면 `first`, 이미 `RUNNING`이면 `reconnect`(재연결·앱 재시작). 배포·장애 뒤 재연결 몰림을 본다 |
 | `runiverse.running.location.gaps` | Counter | `UpdateRunningLocationHandler` → `RunningMetricAdapter` | 예정 — 배치의 첫 새 좌표 `sequence`가 서버가 받은 마지막 `sequence` + 1보다 클 때 1. 러닝 중 서버 트랙에 빈 순번이 생긴 횟수(재시작·장애로 잃은 좌표, 재전송 누락). 종료 때 칸 단위로 세는 `runiverse.running.finish.gaps`와 다르다 |
-| `runiverse.running.finish.step` | Timer | `RunningFinisher` → `RunningMetricAdapter` | 예정 — `step=lock_player\|lock_room\|load_weight\|load_track\|filter\|analyze\|upload_track\|load_weather\|insert_record\|update_avg_pace`, `trigger=user\|goal\|force\|account_deletion`, `result`. 종료 확정 한 건 안의 단계별 시간 — 잠금·커넥션을 쥔 채 도는 단계(S3 업로드·날씨 조회)를 가린다. 히스토그램을 켠다 |
+| `runiverse.running.finish.step` | Timer | `RunningFinishSteps`(판정·확정)·`RunningFinisher`(봉인) → `RunningMetricAdapter` | 예정 — `step=lock_player\|lock_room\|load_weight\|load_track\|filter\|analyze\|upload_track\|load_weather\|insert_record\|update_avg_pace`, `trigger=user\|goal\|force\|account_deletion`, `result`. 끝내기 한 건 안의 단계별 시간 — 잠금·커넥션을 쥔 판정·확정과 임대만 쥔 봉인(`analyze`·`upload_track`·`load_weather`)이 끝내기 시간을 얼마나 차지하는지 본다(D-82, [PREREG](../load_test/msa/PREREG.md) 「후보 기준」 `K-SC9-5`). 탈퇴 정리는 탈퇴 트랜잭션 안에서 불러 봉인도 잠금을 쥔 채 돈다([msa/running-session-server/migration.md](msa/running-session-server/migration.md) 「지금 얽힌 곳」). `lock_player`·`lock_room`은 판정과 확정에서 한 번씩 잰다. `force`·`account_deletion`을 가르려면 호출하는 쪽이 출처를 넘겨야 한다 — 지금 `RunningFinisher`는 `forced`와 목표 도달만 안다. 히스토그램을 켠다 |
 | `runiverse.running.combo.breaks` | Counter | `UpdateRunningComboJudge` → `RunningMetricAdapter` | 예정 — `decision=finished\|paused\|standing\|apart`. 판정이 끊은 콤보 수와 갈래(`RunningComboEvaluator` 판정 순서). 연결이 끊긴 동안은 콤보를 붙잡아 두므로, 재연결 뒤 `apart`가 느는지로 끊김이 콤보를 깼는지 본다 |
 | `runiverse.running.replica.lag` | Timer | 메인의 러닝 결과 반영(inbox) → 기록 포트 | 예정 — `event`(결과 이벤트 종류, 이름은 계약을 정할 때), `result`. 러닝 DB 커밋 시각(이벤트 발생 시각)부터 메인 사본 반영 커밋까지 — 종료 뒤 최종 일관 창의 길이다. 히스토그램을 켠다. 복제 슬롯 지연은 인프라 지표다([msa/platform.md](msa/platform.md) 「관측」). `replica`는 기능 폴더가 아직 없다 — 기능 폴더 이름은 반영 inbox 핸들러를 만들 때 맞춘다 |
 | `runiverse.running.replica.missing` | Gauge | 대조 작업 → 기록 포트 | 예정 — 마지막 대조에서 러닝 DB에는 있고 메인 사본에는 없는 기록 수(유예 시간이 지난 것만). 0이어야 한다 — 0이 아니면 알람([msa/running-session-server/consistency.md](msa/running-session-server/consistency.md) 「대조」). `replica`는 기능 폴더가 아직 없다 — 기능 폴더 이름은 대조 작업을 만들 때 맞춘다 |

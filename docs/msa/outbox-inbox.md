@@ -4,11 +4,11 @@
 
 | 무엇 | 어디 |
 |---|---|
-| 테이블 스키마 (정본) | [erd.md](../erd.md) `outbox_events` (inbox 테이블은 정하면 여기에 더한다) |
+| 테이블 스키마 (정본) | [erd.md](../erd.md) `outbox_events` · `inbox_events` |
 | 이벤트 계약 (토픽·본문 필드) | [api-spec.md](../api-spec.md) 9-5 |
 | 아웃박스 행이 Kafka로 나가는 경로 | [cdc.md](cdc.md) — Debezium · PostgreSQL 논리 복제 |
 | 토픽·계정·권한 | [kafka.md](kafka.md) |
-| 코드 위치 | [architecture.md](../architecture.md) 패키지 구조 `infrastructure/kafka/` |
+| 코드 위치 | [architecture.md](../architecture.md) 「패키지 구조」 — 아웃박스 · inbox는 `infrastructure/kafka/`, 리스너는 `presentation/<domain>/kafka/` |
 
 ## 왜 쓰는가
 
@@ -69,7 +69,7 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 ### 정해진 것
 
 - **같은 이벤트가 다시 온다고 전제한다** — CDC 재시작, 컨슈머 리밸런스, 오프셋 커밋 전 장애 모두 같은 이벤트를 다시 준다.
-  - 프로듀서 중복 방지(`enable.idempotence`)를 켜도 마찬가지다 — 그것은 프로듀서가 한 번 붙어 있는 동안의 재전송만 막는다. 위 경우는 막지 못한다.
+  - 프로듀서 중복 방지(`enable.idempotence`)를 켜도 마찬가지다([kafka.md](kafka.md) 「보내는 쪽은 중복 방지를 켠다」).
 - **running-service 전체가 컨슈머 그룹 하나로 받는다** — ALB 뒤 인스턴스가 여럿이어도 이벤트 하나는 한 인스턴스만 처리한다. 처리 결과는 DB에만 쓰고 인스턴스 메모리에 두지 않는다 — 어느 인스턴스가 받아도 같다.
 - **처리하지 못하면 오프셋을 커밋하지 않는다** — 다시 받아 처리한다.
 - **inbox와 상태 규칙은 둘 다 둔다** — 막는 것이 다르다.
@@ -104,7 +104,7 @@ AI 서버로 가는 요청 이벤트의 inbox는 **AI 서버가 맡는다.** run
 
 - **다시 받을지는 원인 예외의 SQLState로 가른다** — 같은 DB 끊김도 나는 자리(트랜잭션 시작·쿼리·커밋)마다 감싸는 예외 타입이 달라 타입으로는 빠짐없이 고를 수 없다. 원인 체인에서 `SQLException`을 찾아 `08`(연결)·`40`(데드락·직렬화)·`57`(DB 재시작·관리자 종료·문장 취소)·`55P03`(잠금 대기 초과)이면 다시 받는다. SQLState 없이 오는 커넥션 풀 대기 초과는 `SQLTransientException`·`SQLRecoverableException` 타입으로 본다(`KafkaConsumerConfig`).
 - **넘긴 메시지는 되살릴 수 있다** — 로그에 토픽·파티션·오프셋·key가 남고, 메시지는 토픽에 7일 남는다. inbox에 기록되지 않아 다시 넣으면 처리된다.
-- **약점** — 우리 코드 버그로 실패해도 넘어간다. ERROR 로그(`[공통] Kafka 메시지 처리 건너뜀`)로 드러나고, 건너뜀을 감지하는 알람은 모니터링에서 따로 둔다.
+- **약점** — 우리 코드 버그로 실패해도 넘어간다. ERROR 로그(`[공통] Kafka 메시지 처리 건너뜀`)로 드러나고, 건너뜀 알람은 러닝 결과 이벤트를 받기 전에 만든다(D-51, 아래 「정하지 않은 것」 2).
 - 계약 위반은 inbox에 넣지 않는다 — 처리하지 않은 메시지다. 원문은 로그로 찾는다(본문 전체가 아니라 토픽·파티션·오프셋·key).
 
 ### 테이블
@@ -134,7 +134,7 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 | CA 인증서가 컨테이너에 읽기 전용으로 마운트된다 | — | ✅ 배포 워크플로 | ✅ 시작 템플릿 버전 8 — 배포로 뜬 새 인스턴스 |
 | AI 서버가 보낸 완료 이벤트(헤더 `id` = `inference_id`)가 반영된다 | — | AI 서버 반영 뒤 | AI 서버 반영 뒤 |
 
-- **11-23 실제 왕복(로컬 앱 → test DB·test 토픽)** — 9-2 → 아웃박스 → Debezium → AI 서버 수신까지 됐다(AI가 카드 ID·사진 ID를 그대로 돌려보냈다). AI의 완료 이벤트는 헤더 이름이 `id`가 아니라 `inference_id`여서 받는 쪽이 「헤더 id 없음」으로 건너뛰는 상태이고, AI 음악 엔드포인트가 없어 결과도 `FAILED`(`INVOKE`)였다. 두 가지를 AI 쪽에 전했다 — 고쳐지면 위 표 마지막 줄을 같은 방법으로 확인한다.
+- **11-23 실제 왕복(로컬 앱 → test DB·test 토픽)** — 9-2 → 아웃박스 → Debezium → AI 서버 수신까지 됐다(AI가 카드 ID·사진 ID를 그대로 돌려보냈다). AI의 완료 이벤트는 헤더 이름이 `id`가 아니라 `inference_id`여서 받는 쪽이 '헤더 `id` 없음'으로 건너뛰는 상태이고, AI 음악 엔드포인트가 없어 결과도 `FAILED`(`INVOKE`)였다. AI 쪽이 두 가지를 고치면([ai-server/README.md](ai-server/README.md) 「기다리는 것」 1–2) 위 표 마지막 줄을 같은 방법으로 확인한다.
 - 로컬 검증에 쓴 메시지는 확인 뒤 `kafka-delete-records`로 지웠다([kafka.md](kafka.md) 「지금 설정 때문에 지켜야 할 것」).
 
 ### 정하지 않은 것
@@ -147,14 +147,14 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 
 | 토픽 (`{env}.` 생략) | 방향 | 쓰는 곳 | 코드 | 받는 쪽 중복 거르기 |
 |---|---|---|---|---|
-| `record-card.music.requested` | running-service → AI | 9-2 작성 확정, 9-3 수정(바로 반영·9-2 수정 확정), 9-6 다시 만들기 | `RecordCardDraftSaver`·`RecordCardEditor`·`RetryRecordCardMusicHandler` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` (제안, AI 서버와 확인 전) |
+| `record-card.music.requested` | running-service → AI | 9-2 작성 확정, 9-3 수정(바로 반영·9-2 수정 확정), 9-6 다시 만들기 | `RecordCardDraftSaver`·`RecordCardEditor`·`RetryRecordCardMusicHandler` → `RequestRecordCardMusicPort` → `RecordCardMusicOutboxAdapter` | AI 서버 inbox — 헤더 `id` — 제안 (D-09), AI 서버와 확인 전 |
 | `record-card.music.generated` | AI → running-service | AI 서버가 음악을 만든 뒤 | `RecordCardMusicGeneratedListener` → `RecordCardMusicGeneratedMessageMapper`(검사·Command 변환) → `CompleteRecordCardMusicUsecase` → `CompleteRecordCardMusicHandler`(`RecordInboxEventPort` → `InboxEventAdapter`) | running-service inbox — 헤더 `id`(= `inference_id`) + 상태 규칙 |
 
 ## 로컬 가짜 AI (음악 완료)
 
 로컬은 Debezium·Kafka·AI 서버가 없어 음악이 계속 `GENERATING`이다. 그 자리만 가짜로 바꾼다 — 포트·usecase·Handler·도메인은 그대로다.
 
-```
+```text
 9-2 → LocalAiMusicAdapter(@Primary) ─┬→ RecordCardMusicOutboxAdapter (outbox는 운영과 같이 쓴다)
                                       └→ 커밋 뒤 5초 → 성공 완료 메시지(9-5 형식 ConsumerRecord)를 Spring 이벤트로 발행
                                            → LocalRecordCardMusicGeneratedListener → Mapper → usecase(inbox·음악 저장)
@@ -176,7 +176,7 @@ E2E는 `KAFKA_CONSUMER_ENABLED=false`라 리스너가 뜨지 않는다. 새 환�
 - [ ] erd `outbox_events`의 CHECK를 넓힌다 — `ck_outbox_event_topic`, 새 대상이면 `ck_outbox_event_aggregate_type`과 `AggregateType`. **test·prod DB의 CHECK도 손으로 함께**(각 환경 토픽만)
 - [ ] Kafka에 토픽을 만들고 권한을 준다 ([kafka.md](kafka.md))
 - [ ] CDC 설정이 바뀌는지 확인한다 ([cdc.md](cdc.md))
-- [ ] 테스트 — 아래 "테스트"의 세 층
+- [ ] 테스트 — 아래 「테스트」의 세 층
 
 **받는 쪽**
 

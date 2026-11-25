@@ -12,7 +12,7 @@
 | 잰 숫자 | [RESULTS.md](RESULTS.md) |
 | 1차 캠페인 · 그 숫자 | [../README.md](../README.md) · [../RESULTS.md](../RESULTS.md) |
 | 러닝 WebSocket 계약 | [api-spec.md](../../docs/api-spec.md) 5-C · 5-D |
-| 앱 재접속 값 (Flutter) | [runtime.md](../../docs/msa/running-session-server/runtime.md) |
+| 앱 재접속 값 (Flutter) | [runtime.md](../../docs/msa/running-session-server/runtime.md) 「앱 재접속 정책」 |
 
 > 주소·키·비밀값은 적지 않는다. JWT 비밀값은 파일에서 읽고 출력하지 않는다.
 
@@ -56,7 +56,7 @@
 | 끝낼 때 | 남은 점을 먼저 보내고 `RUNNING_FINISH`. `FINISH_ACK_TIMEOUT_MS` 안에 ack가 없으면 `FINISH_RETRY_BACKOFF_MS`대로 다시 보내고, `FINISH_GIVE_UP_MS`까지 성공으로 센다. 목표 도달로 먼저 온 `RUNNING_FINISHED`도 ack로 받는다 |
 | 예상 못 한 끊김 | `RECONNECT_BACKOFF_MS` 목록대로 다시 붙고 첫 줄로 간다 |
 
-- **앱 값은 환경 변수로만 받는다** — `HEALTH_CHECK_SECONDS` · `RECONNECT_BACKOFF_MS` · `FINISH_ACK_TIMEOUT_MS` · `FINISH_RETRY_BACKOFF_MS` · `FINISH_GIVE_UP_MS` · `RESEND_CHUNK_POINTS`. 앱 값은 정하지 않음 — 노션 프론트 가이드에 있고, [runtime.md](../../docs/msa/running-session-server/runtime.md)의 앱 재접속 표로 옮겨 적는다. 그 전에는 같은 표의 하네스 임시값을 쓰고 회차 색인에 `임시값`이라 적는다. SC1 · SC2 · SC3 측정 회차는 앱 값이 올 때까지 돌리지 않는다(verification 「정하지 않은 것」). 어떤 클라이언트 제한도 서버 제한과 같게 두지 않는다 — PREREG 「실행 규칙」.
+- **앱 값은 환경 변수로만 받는다** — `HEALTH_CHECK_SECONDS` · `RECONNECT_BACKOFF_MS` · `FINISH_ACK_TIMEOUT_MS` · `FINISH_RETRY_BACKOFF_MS` · `FINISH_GIVE_UP_MS` · `RESEND_CHUNK_POINTS`. 앱 값은 정하지 않음 — 노션 프론트 가이드에 있고, [runtime.md](../../docs/msa/running-session-server/runtime.md)의 앱 재접속 표로 옮겨 적는다. 그 전에는 같은 표의 하네스 임시값을 쓰고 회차 색인에 `임시값`이라 적는다. SC1 · SC2 · SC3 측정 회차는 앱 값이 올 때까지 돌리지 않는다(verification 「정하지 않은 것」 3). 어떤 클라이언트 제한도 서버 제한과 같게 두지 않는다 — PREREG 「실행 규칙」.
 - **앱 버전 헤더** — `APP_PLATFORM` · `APP_VERSION`을 환경 변수로 받는다. 대상 DB `app_versions`의 최소 버전 이상이어야 한다.
 - **닫힘 분류** — 모든 닫힘을 셋 중 하나로 센다. 서버 코드는 태그로 그대로 남긴다(api-spec 5-C).
 
@@ -66,7 +66,7 @@
 | intended | 자리 3의 재연결처럼 하네스가 계획대로 닫음 | 정상 |
 | unexpected | 그 밖의 전부 — `1001` · `1006` · `1009` · `1011` · `4001` · `4500` … | `ws_unexpected_close{code}` |
 
-- **`4500`은 둘로 가른다** — 지금은 전송 한도 초과뿐이지만, A′부터는 계획 종료(F9, D-65)도 `4500`으로 닫는다 (D-42). 닫힘 이유 문자열로 가르고 `reason` 태그를 단다.
+- **`4500`은 둘로 가른다** — 모놀리스 이미지(A · A′ · B0)에서는 전송 한도 초과뿐이고, EKS에서는 계획 종료(D-85)도 `4500`으로 닫는다 (D-42). 닫힘 이유 문자열로 가르고 `reason` 태그를 단다.
 - **RUNNER_DONE** — 러너가 끝나면 JSON 한 줄을 남긴다: run_id · 방 · 자리 · 보낸 마지막 sequence · ack 여부 · 재연결 수 · 다시 보낸 점 수 · 닫힘 분류별 수. 무결성 검사와 트랙 검사가 이 줄을 DB · S3와 맞춘다. 사용자는 시드가 만든 합성 사용자뿐이다.
 - **REST · SSE** — 같은 회차에 REST를 도착률 고정(열린 모델)으로 보낸다. 요청마다 `api_group` 태그를 달고, 섞는 비율은 0단계에서 뽑은 18~23시 비율(`profiles/rest-mix.json`)이다. 부하 L30 · L60 · L100은 SC0에서 잰 REST_CAP(A)의 배수로 한 번 얼리고 모든 비교군에 같은 절대값을 넣는다 (verification 「번호」). SSE는 앱 스트림(`/app/stream`)을 잡고만 있는 연결을 `SSE_HOLDERS`개 둔다 — 수는 시나리오마다 verification의 SSE 수.
 - **결과 조회 탐침** — ack 직후 6-1을 한 번 GET하고, 기록이 7-1에 보일 때까지 짧게 다시 묻는다 — 끝낸 직후 결과는 세션이, 7-1은 메인이 반영한 뒤 보인다 (D-58).
@@ -91,7 +91,7 @@
 | 시나리오 | k6 파일 | 같이 도는 스크립트 |
 |---|---|---|
 | SC0 보정 · 빈 실험 | `sc0-calibrate.js` | `gate.sh` |
-| SC1 러닝 중 메인 배포 · SC2 세션 배포 | `sc1-main-deploy.js` · `sc2-session-deploy.js` | `deploy-sim.sh` — 운영과 같은 instance refresh(`backend-cd-prod.yml`의 설정), ASG가 없으면 같은 순서(새 인스턴스 → 대상 등록 → 옛 인스턴스 종료) |
+| SC1 러닝 중 메인 배포 · SC2 세션 배포 | `sc1-main-deploy.js` · `sc2-session-deploy.js` | `deploy-sim.sh` — 운영과 같은 instance refresh(`backend-cd-prod.yml`의 설정), ASG가 없으면 같은 순서(새 인스턴스 → 대상 등록 · 검사 통과 → 워밍업 → 옛 인스턴스 등록 해제 → 등록 취소 지연 끝에 ALB가 WS를 끊음 → SIGTERM, D-85) |
 | SC3 메인 장애 | `sc3-main-fault.js` | `chaos/toxiproxy.sh`(C1 블랙홀 · C2 지연), `chaos/kafka-throwaway.sh`(C3), `chaos/ai-stop.sh`(C4), `weather-mode.sh`(C5), `chaos/s3-deny.sh`(C6), `chaos/main-kill.sh`(C7) |
 | SC4 Redis 장애 | `sc4-redis-fault.js` | `chaos/redis-kill.sh`(kill -9) · `chaos/redis-stop.sh`(60초 정지) — Redis마다 따로 |
 | SC5 슬롯 시작 폭주 | `sc5-start-storm.js` | `arm-jobs.sh` |
@@ -135,7 +135,7 @@
 | `replication_lag_ms` · `reconcile_missing` (B2) | `sql/reconcile-results.sql` | 러닝 DB · 메인 사본 |
 | 커밋 → 브로커 → 받기 지연 (B2 전) | `lag-prober` | 전용 커넥터 · 슬롯 |
 | 회차 유효성 — k6 CPU · 시계 차 · CPU 크레딧 · `dropped_iterations` | `scripts/gate.sh` | 호스트 · CloudWatch · k6 |
-| 서버 지표(연결 게이지 · 닫힘 코드 · 끝내기 단계 · 잠금 대기 · 커넥션 대기 …) | 앱 `/actuator/prometheus` · redis_exporter · node_exporter · CloudWatch | 대시보드 v2 |
+| 서버 지표(연결 게이지 · 닫힘 코드 · 끝내기 단계 · 잠금 대기 · 커넥션 대기 …) — 연결 게이지 · 닫힘 코드 · 끝내기 단계는 아직 예정이다(migration 「선행 조건」 지표 행) | 앱 `/actuator/prometheus` · redis_exporter · node_exporter · CloudWatch | 대시보드 v2 |
 
 ## 옛 하네스와 다른 점
 
@@ -147,7 +147,7 @@
 | VU | 러너 한 명 | 방 하나(소켓 넷) |
 | 재연결 뒤 재전송 | 마지막 배치만 | 로컬 트랙 전체, 64KB 안 묶음 |
 | `HEALTH_CHECK` | 보내지 않음 | 앱 주기대로 |
-| 끝내기 제한 시간 | 30초(`FINISH_TIMEOUT_MS`) — 앱 Hikari 기본 `connectionTimeout`(30초)과 같아 실패와 늦은 확정을 가를 수 없었다 ([../RESULTS.md](../RESULTS.md) 「정정 (11-24)」) | 서버 제한과 다른 값 + 재시도 (PREREG 「실행 규칙」) |
+| 끝내기 제한 시간 | 30초(`FINISH_TIMEOUT_MS`) — 그때 앱의 Hikari 기본 `connectionTimeout`(30초)과 같아 실패와 늦은 확정을 가를 수 없었다 ([../RESULTS.md](../RESULTS.md) 「정정 (11-24)」) | 서버 제한과 다른 값 + 재시도 (PREREG 「실행 규칙」) |
 | 날씨 스텁 | 지연 기본 0 (`WEATHER_STUB_DELAY_MS`) | 고정 2초(기본) · SC8 분포 (PREREG 규칙 9) |
 | 앱 버전 헤더 | `ANDROID 1.1.0` 고정 — 지금 운영 최소 버전 1.2.0보다 낮다 | 환경 변수 |
 | k6 이미지 | `grafana/k6:latest` | digest 고정 |
@@ -160,12 +160,12 @@
 ## 로컬 smoke
 
 - **보는 것** — 스크립트가 끝까지 돌고, 무결성 검사 · 태그 · 닫힘 분류가 맞는지뿐이다. 로컬 숫자는 쓰지 않는다.
-- **스택** — `e2e_test/compose.yml` 위에 앱 한 대를 더 띄우고(스키마를 만들지 않게 `JPA_DDL=none`), 그 앞에 ALB 대역 프록시(nginx 또는 haproxy)와 toxiproxy, v2 날씨 스텁을 둔다. 옛 `smoke-local.sh`처럼 compose 파일을 겹쳐 쓴다. B2 smoke는 루트 compose(D-78)를 쓰고, 그 경로 프록시가 ALB 대역이다.
-- **같이 돌리는 것** — 같은 스택에서 `MultiInstanceE2eTest`를 `E2E_SECOND_BASE_URL`과 함께 돌린다.
+- **스택** — `e2e_test/compose.yml`의 두 인스턴스(`app`과 `--profile multi`의 `app2` — 8081, `JPA_DDL=none`이라 첫 인스턴스가 스키마를 만든 뒤 띄운다) 앞에 ALB 대역 프록시(nginx 또는 haproxy)와 toxiproxy, v2 날씨 스텁을 둔다. 옛 `smoke-local.sh`처럼 compose 파일을 겹쳐 쓴다. B2 smoke는 루트 compose(D-78)를 쓰고, 그 경로 프록시가 ALB 대역이다.
+- **같이 돌리는 것** — 같은 두 인스턴스로 `MultiInstanceE2eTest`를 돌린다 (D-86, 실행법은 [architecture.md](../../docs/architecture.md) 「다중 인스턴스」).
 - **명령** — 하네스를 만드는 PR에서 여기에 적는다.
 
 ## 정하지 않은 것
 
-1. **앱 재접속 값** — [runtime.md](../../docs/msa/running-session-server/runtime.md).
+1. **앱 재접속 값** — [runtime.md](../../docs/msa/running-session-server/runtime.md) 「앱 재접속 정책」.
 2. **원시 자료 자리** — verification 「정하지 않은 것」 2.
 3. **SC9 트랙을 Redis에 바로 넣을지** — 「시드 · 스텁」 미리 채운 트랙, 제안.

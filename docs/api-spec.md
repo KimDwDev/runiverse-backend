@@ -1827,7 +1827,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **보낼 메시지가 밀려 한도(운영값)를 넘으면 서버가 close code `4500`으로 닫는다** — 네트워크가 끊긴 것에 가까운 상태라 연결을 정리하고 재연결로 복구한다. `4001`이 아니므로 클라는 평소대로 재연결한다
 - **클라가 보내는 텍스트 메시지 한 건은 운영값(현재 64KB) 이하여야 한다** — 넘으면 서버(WebSocket 컨테이너)가 close code `1009`로 닫는다. 재연결 뒤 로컬 트랙을 다시 보낼 때도 한 번에 몰아 보내지 말고 이 크기 안으로 나눠 보낸다 — 한 번에 보내면 다시 `1009`로 끊겨 재연결·재전송이 되풀이된다
 - **keep-alive**: 클라가 주기적으로 `HEALTH_CHECK`(C→S)를 보내고 서버가 `HEALTH_CHECKED`(S→C)로 응답한다. 둘 다 `data`는 비운다. **유휴 상태가 서버 설정 시간(운영값)을 넘으면 서버가 연결을 닫는다** — 좌표를 계속 보내는 러닝 중에는 별도 신호가 필요 없고, 시작 전 대기 구간에서 의미가 있다. 프록시 유휴 타임아웃을 막는 목적은 SSE와 같다
-- **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 서버의 강제 종료(매칭 방에만 건다)는 **`start_at`부터 잰 유예**(운영값) 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
+- **연결이 끊겨도 러닝은 끝나지 않는다** — 방·참가자 상태는 그대로 두고 재연결을 기다린다. 서버의 강제 종료(솔로 방에는 걸지 않는다)는 **`start_at`부터 잰 유예**(운영값) 기준이라 연결 상태와 축이 다르다(`running_room_sessions.is_connected`도 방 배정 여부이지 접속 여부가 아니다)
 - **메시지 공통 형식**
 
 ```json
@@ -1867,7 +1867,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   | `RUNNING_NOT_STARTED` | `RUNNING_START` 없이 러닝 중 메시지를 보냄 — 형식은 맞지만 서버에 정해진 방이 없다 |
   | `PAUSE_SEGMENT_DECREASED` | `RUNNING_LOCATION_UPDATE`의 `pauseSegment`가 `sequence` 순서를 거슬러 줄었다 — 검증 실패 계열(REST의 400에 해당)이다. 클라 로컬 트랙이 깨졌다는 뜻이라 같은 배치를 다시 보내도 계속 거부된다. 클라는 좌표 전송을 멈추고 사용자에게 알린 뒤 `RUNNING_FINISH`(`forced=true`)로 받은 데까지 기록을 확정한다 |
   | `RUNNING_SESSION_UNAVAILABLE` | 외부 저장소 장애로 세션을 등록하지 못함 — 이 연결로는 러닝 메시지를 처리할 수 없다(참가자 상태는 이미 `RUNNING`일 수 있다). 잠시 뒤 `RUNNING_START`를 다시 보낸다 — 멱등이다 |
-  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때는 종료가 확정되지 않았으니 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다. `sourceType`으로 갈린다 — `RUNNING_LOCATION_UPDATE`면 다음 배치 차례에 로컬 트랙 전체를 다시 보내고, `RUNNING_FINISH`면 좌표가 아니라 `RUNNING_FINISH`를 다시 보낸다. 다른 연결(다시 붙기 전 소켓 등)이 같은 러닝의 종료를 처리하는 중일 때도 `RUNNING_FINISH`에 이 코드가 나간다 — 처리 방법은 같다 |
+  | `RUNNING_TRACK_UNAVAILABLE` | 외부 저장소 장애로 좌표를 저장하지 못함 — 러닝은 계속된다. 종료(`RUNNING_FINISH`·목표 도달 자동 종료) 중 트랙을 읽지 못한 경우에도 나가며, 이때 종료는 확정되지 않았다. `sourceType`으로 갈린다 — `RUNNING_LOCATION_UPDATE`면 다음 배치 차례에 로컬 트랙 전체를 다시 보내고, `RUNNING_FINISH`면 좌표가 아니라 잠시 뒤 `RUNNING_FINISH`를 다시 보낸다. 다른 종료(다시 붙기 전 소켓·강제 종료 등)가 같은 러닝을 처리하는 중일 때도 `RUNNING_FINISH`에 이 코드가 나간다 — 처리 방법은 같다. 이때 목표 도달 자동 종료는 `ERROR` 없이 건너뛰고 다음 배치가 다시 판정한다 |
   | `ROOM_NOT_FOUND` | 방 없음 |
   | `NOT_ROOM_PLAYER` | 이 방 참가자가 아님 |
   | `INVALID_ROOM_STATE` | 현재 상태에서 불가한 요청 |
@@ -3307,7 +3307,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 > 1. ~~AI가 음악을 어느 S3 key에 올리는가~~ — **정했다(11-13): AI 서버가 정하고 완료 이벤트로 알려 준다. running-service는 받은 key를 그대로 저장한다**
 > 2. ~~완료 이벤트가 어느 음악(기본곡·어느 사진)의 결과인지 어떻게 알리는가~~ — **정했다: 기본곡은 `result.base_music`, 사진은 `result.photo_music[].record_card_image_id`로 알린다(아래 완료 이벤트)**
 > 3. ~~수정(9-3)으로 새 사진만 보낼 때 기본곡을 다시 만들지 말라는 것을 어떻게 알리는가~~ — **정했다: 알리지 않는다. AI 서버는 생성·수정·재생성을 구분하지 않고 요청마다 기본곡을 다시 만든다(key 경로에 활동유형이 들어가 경로가 바뀔 수 있다).** 구분은 running-service가 한다 — 기본곡 재료(회고 글·활동유형)나 사진 재료가 바뀌지 않은 수정은 요청을 보내지 않는다. 보낼 때는 대상 사진만 `GENERATING`으로 되돌리고 기본곡은 되돌리지 않는다. 완료를 받으면 사진은 `GENERATING`인 것만, 기본곡은 끝난 곡에도 온 결과(성공·실패)를 따른다(9-3)
-> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가 — **제안(11-16): Kafka 헤더 `id`(아웃박스 `outbox_event_id`, UUIDv7)로 거른다.** 이벤트마다 다르고 같은 이벤트를 다시 보내도 같다. 본문 JSON은 바꾸지 않는다. AI 서버 확인은 완료 구독(generated)을 배포한 뒤에 한다. 완료 이벤트도 같은 방식(헤더 `id` = `inference_id`)으로 맞췄다
+> 4. 같은 이벤트가 두 번 왔을 때 AI 서버 inbox가 무엇으로 거르는가 — **제안(11-16): Kafka 헤더 `id`(아웃박스 `outbox_event_id`, UUIDv7)로 거른다.** 이벤트마다 다르고 같은 이벤트를 다시 보내도 같다. 본문 JSON은 바꾸지 않는다. AI 쪽 확인 전이다([msa/decisions.md](msa/decisions.md) D-09). 완료 이벤트도 같은 방식(헤더 `id` = `inference_id`)으로 맞췄다
 
 **`{env}.record-card.music.generated`** (AI → running-service)
 
@@ -3434,7 +3434,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
 - **`FAILED`는 완료 이벤트로 바뀌지 않는다** — 다시 만들려면 running-service가 새 요청을 보낸다(9-6): `FAILED`인 음악만 `GENERATING`으로 되돌리고 같은 요청 토픽으로 보낸다. AI 서버는 새 `inference_id`로 결과를 준다
 
 > **아직 정하지 않은 것**
-> - 음악 S3 key가 든 **버킷**(test·prod) — 음악 재생 URL을 줄 때 필요하다. AI 서버에 확인 중
+> - 음악 **버킷 이름**(test·prod) — 음악을 별도 버킷(`S3_MUSIC_BUCKET`)에서 읽는 것은 정했다([msa/decisions.md](msa/decisions.md) D-14). 이름은 AI 서버에 확인 중이다 — 배포 전 준비는 [msa/ai-server/README.md](msa/ai-server/README.md) 「정하지 않은 것」
 > - `failed_stage`에 올 수 있는 값 전체 — 지금 확인한 값은 `INVOKE`·`INFERENCE`
 > - 음악 파일 형식(AI 서버는 wav로 만든다)
 > - ~~처리하지 못한 메시지를 따로 모을지(DLT)~~ — **정했다(11-24): 다음 서비스 사이 이벤트(러닝 결과)를 받기 전에 만든다([msa/decisions.md](msa/decisions.md) D-51).** DLT 토픽인지 보관 테이블인지는 정하지 않았다([msa/outbox-inbox.md](msa/outbox-inbox.md) 「받는 쪽 — Inbox」 「정하지 않은 것」). 만들기 전까지는 지금처럼 ERROR 로그를 남기고 건너뛴다 — 이 이벤트의 계약은 바뀌지 않는다
@@ -4451,7 +4451,7 @@ data: {"runningRoomId":125,"status":"MATCHED", ...}
   - **DB 밖**: 리프레시 토큰 삭제 + 액세스 토큰 블랙리스트 등록, S3 프로필·배경 사진과 기록 카드 사진·음악(`record-cards/{userId}/`) 90일 뒤 삭제, GPS 원본 유지, 카카오 unlink(`provider_id` 선확보).
   - `delete_users`의 `email`·`nickname`은 90일 뒤 `NULL`로 갱신한다(행은 유지).
 - **Response**: `204 No Content` (토큰 즉시 무효화)
-- **에러 (503 Service Unavailable — 진행 중인 러닝을 정리하다 저장소 장애)** — 탈퇴는 통째로 되돌려진다. 클라는 잠시 후 다시 시도하게 한다
+- **에러 (503 Service Unavailable — 진행 중인 러닝을 정리하다 저장소 장애, 또는 다른 연결이 그 러닝을 끝내는 중)** — 탈퇴는 통째로 되돌려진다. 클라는 잠시 후 다시 시도하게 한다
 
 ```json
 {

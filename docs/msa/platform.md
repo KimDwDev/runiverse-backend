@@ -2,7 +2,7 @@
 
 러닝 세션 서버를 나눈 뒤 데이터 저장소·이벤트 파이프라인·설정·관측이 어디서 돌고, 지금과 무엇이 달라지는지 적는다. 예산 절약 배치(D-48)를 따른다 — Kafka·Redis는 EC2, RDS는 서비스 DB·러닝 DB 둘, EKS는 앱만. 앱 워크로드는 [eks.md](eks.md), 지금 돌고 있는 Kafka·CDC는 [kafka.md](kafka.md)·[cdc.md](cdc.md)가 정본이다. 왜 그렇게 정했는지는 다시 쓰지 않고 [decisions.md](decisions.md) 항목으로 링크한다.
 
-> 상태: 계획 — 「지금 (11-24 기준)」만 운영 사실이다. 나머지 절과 행은 `운영 중` / `정함 (D-xx)` / `제안` / `정하지 않음`을 단다. 만들고 검증한 것은 그 PR에서 kafka.md·cdc.md로 옮기고, 이 문서의 절은 한 줄 링크로 줄인다.
+> 상태: 계획 — 「지금 (11-25 기준)」만 운영 사실이다. 나머지 절과 행은 `운영 중` / `정함 (D-xx)` / `제안` / `정하지 않음`을 단다. 만들고 검증한 것은 그 PR에서 kafka.md·cdc.md로 옮기고, 이 문서의 절은 한 줄 링크로 줄인다.
 
 | 무엇 | 어디 |
 |---|---|
@@ -34,18 +34,18 @@
 
 - **데이터·인프라는 클러스터 밖에 둔다** — 이미 운영으로 검증한 자리이고, 노드 교체가 기록·실시간 상태를 건드리지 않는다.
 
-## 지금 (11-24 기준)
+## 지금 (11-25 기준)
 
-**상태** — 운영 중. 2026-11-24에 저장소(워크플로·Dockerfile·설정·코드)로 확인한 사실이다. 파이프라인이 바뀌면 날짜를 바꿔 다시 쓴다.
+**상태** — 운영 중. 2026-11-25에 저장소(워크플로·Dockerfile·설정·코드)로 확인한 사실이다 — 11-25의 선행 수정(F1 · F3 · F5–F9)과 test 배포 정지 방식은 아직 test·prod에 배포하지 않았다. 파이프라인이 바뀌면 날짜를 바꿔 다시 쓴다.
 
 | 무엇 | 지금 | 설계에 준 영향 |
 |---|---|---|
-| test 배포 | `dev` push → 단위 테스트 → 이미지 → E2E → SSM으로 **EC2 한 대**에서 `docker rm -f` 뒤 `docker run --network host`, health 확인(5초 × 30회), 실패하면 앞 이미지로 (`backend-ci-cd.yml`) | 배포마다 test의 WS가 SIGKILL로 끊긴다 — 부하 시험 대상으로 쓰지 않는다 |
+| test 배포 | `dev` push → 단위 테스트 → 이미지 → E2E(앱 한 대 — 다중 인스턴스 E2E는 로컬, D-86) → SSM으로 **EC2 한 대**에서 `docker stop -t 30`(SIGTERM, 30초 뒤 SIGKILL) · `docker rm` 뒤 `docker run --stop-timeout 30 --network host`, health 확인(`/actuator/health`, 5초 × 30회), 실패하면 앞 이미지로 (`backend-ci-cd.yml`) | dev 머지마다 컨테이너가 바뀌어 test의 WS가 끊긴다(graceful 끝에 `1001`, F9) — 부하 시험 대상으로 쓰지 않는다 |
 | prod 배포 | `main` push → `bootJar -x test`(테스트 안 돌림) → ECR → Parameter Store `DEPLOY_IMAGE_URI` → 인스턴스 새로 고침(Rolling, 최소 정상 100%, 최대 200%, 워밍업 600초), 자동 롤백 설정 없음 (`backend-cd-prod.yml`). 시작 템플릿 사용자 데이터는 저장소 밖 | 배포마다 인스턴스가 모두 바뀌어 살아 있는 WS가 한 번씩 끊긴다 — [rationale](running-session-server/rationale.md) 「G1 배포 결합」 |
-| 이미지 | Dockerfile 하나, 기반 `eclipse-temurin:21-jre`(태그), `sh -c "exec java -XX:MaxRAMPercentage=${JVM_MAX_RAM_PERCENTAGE} -jar"` — 힙 비율만 환경변수(기본 50, F8), HEALTHCHECK 없음. CI는 `linux/amd64`로만 빌드한다(두 배포 워크플로의 `platforms`) | 힙 비율은 [migration](running-session-server/migration.md) 「선행 수정 F1–F9」 F8 |
+| 이미지 | Dockerfile 하나, 기반 `eclipse-temurin:21-jre`(태그), `sh -c "exec java -XX:MaxRAMPercentage=${JVM_MAX_RAM_PERCENTAGE} -jar"` — 힙 비율만 환경변수(기본 50, F8), `exec`라 java가 PID 1이다. HEALTHCHECK 없음. CI는 `linux/amd64`로만 빌드한다(두 배포 워크플로의 `platforms`) | SIGTERM이 java에 닿아 graceful 종료(F9)가 돈다. `--memory` 제한이 없어 힙 비율은 서버 전체 메모리 기준이다 — 값은 [migration](running-session-server/migration.md) 「정하지 않은 것」 4 |
 | 설정 · 비밀값 | 접속값 · 비밀값은 `application.properties`에 `${VAR}`로만 둔다. test 배포는 `/runiverse/test` 아래를 **재귀로 전부** 읽어 이름 끝만 키로 env 파일을 만든다(여러 줄 값 거부 — PEM은 `/runiverse/files/{test\|deploy}/`). prod는 시작 템플릿 사용자 데이터가 `/runiverse/deploy`로 같은 일을 하는 것으로 본다 — 저장소 밖이라 「확인할 운영 값」 | 컨테이너가 그 경로의 비밀값을 모두 받는다 — 「설정 · 비밀값」 |
-| 종료 | WS를 미리 닫는 종료 처리(드레이너·종료 훅)가 없다 | [runtime.md](running-session-server/runtime.md), 선행 수정 F9 |
-| health | `/actuator/health` 기본 집계 — DB·Redis 포함(진단용). F6로 `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`) 그룹을 연다 — 둘 다 DB·Redis를 보지 않는다. 관리 포트는 없다. 세 경로 모두 공개 포트에서 인증 없이 열리고(`SecurityConfig`), ALB 리스너 규칙은 `/actuator/health`만 통과시킨다(그룹 경로는 규칙 2에 403) | 대상 그룹 검사 경로를 readiness로 바꿔야 DB·Redis 장애가 인스턴스 교체로 번지지 않고, 계획 종료(F9)가 readiness를 내리면 ALB가 새 요청을 보내지 않는다 — 코드 배포 뒤에 바꾼다(먼저 바꾸면 없는 경로를 검사한다). ASG(ELB 방식)도 같은 검사를 보지만 readiness가 DOWN인 때는 기동 중(유예 600초)과 계획 종료 중(내리는 인스턴스)뿐이다. ASG는 경로를 따로 고를 수 없어(ELB 방식은 대상 그룹 판정을 따른다) EC2에서는 이 하나로 트래픽 · 교체를 같이 판단한다 — 트래픽은 readiness · 재시작은 liveness로 나누는 것은 EKS에서 한다(livenessProbe). Redis가 멈추면 기존 health는 15초 넘게 답하지 않는다(E2E 11-25) |
+| 종료 | `server.shutdown=graceful`, 대기 상한 `SHUTDOWN_TIMEOUT`(기본 20초) — SIGTERM 뒤 받은 REST 요청 · 강제 종료 워커를 마치고 내려간다. WS는 기다리지 않고 끝에 `1001`로 닫고, 열린 SSE는 끝나길 기다린다. WS를 미리 나눠 닫는 드레이너는 없다(F9) | ASG는 등록 해제가 SIGTERM보다 먼저라 나눠 닫기 · SSE 먼저 완료는 EKS에서 한다 — D-85, [runtime.md](running-session-server/runtime.md) 「계획 종료」 |
+| health | `/actuator/health` 기본 집계 — DB·Redis 포함(진단용). `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`) — 둘 다 DB·Redis를 보지 않는다(F6). 관리 포트는 없다. 세 경로 모두 공개 포트에서 인증 없이 열리고(`SecurityConfig`), ALB 리스너 규칙은 `/actuator/health`만 통과시킨다(그룹 경로는 규칙 2에 403) | 대상 그룹 검사 경로를 readiness로 바꿔야 DB·Redis 장애가 인스턴스 교체로 번지지 않는다 — 코드 배포 뒤에 바꾼다(먼저 바꾸면 없는 경로를 검사한다, 「확인할 운영 값」). ASG(ELB 방식)는 대상 그룹 판정을 따라 경로를 따로 고를 수 없어 EC2에서는 이 하나로 트래픽 · 교체를 같이 판단한다 — readiness가 DOWN인 때는 기동 중(유예 600초)과 종료 중뿐이다. 재시작 판단을 liveness로 나누는 것은 EKS에서 한다(livenessProbe). Redis가 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP이다(11-25 확인) |
 | 메트릭 | Micrometer → `/actuator/prometheus`, 공통 태그 `application=running-service`. Gauge 0개 — WS·SSE 연결 수가 없다 | 연결 게이지는 검증·자동 확장 전에 만든다 |
 | 추적 · 로그 상관 | 추적 없음. `RequestIdFilter`가 요청마다 UUID를 새로 만든다(들어온 ID를 읽지 않음). MDC(`requestId`·`userId`)는 HTTP 필터에서만 넣어 WS 메시지·Redis 구독·Kafka 수신 로그에는 없다 | D-55, 「관측」 |
 | 로그 수집 | ECS JSON 파일 → Filebeat → 모니터링 서버 ES. test `docker run`에는 로그 디렉터리 마운트가 없다 | EKS에서는 stdout — 「관측」 |
@@ -65,7 +65,7 @@
 | 파라미터 그룹 | `runiverse-backend-deploy-postgres18` (논리 복제 켬) | 새 사용자 정의 그룹 — 논리 복제, `rds.force_ssl=1` |
 | Multi-AZ | 정하지 않음 — [cdc.md](cdc.md) 「정하지 않은 것」 6 | 같음 |
 
-- **연결 예산** — 세션 인스턴스 수 × Hikari 풀 + Debezium 1 + Flyway·관리 몇 개가 `max_connections` 아래여야 한다. `micro`가 아니라 `small`을 제안하는 이유다. 실제 `max_connections`는 만든 뒤 읽어 「확인할 운영 값」에 적고, 풀 크기는 선행 수정 F5에서 명시한다.
+- **연결 예산** — 세션 인스턴스 수 × Hikari 풀 + Debezium 1 + Flyway·관리 몇 개가 `max_connections` 아래여야 한다. `micro`가 아니라 `small`을 제안하는 이유다. 실제 `max_connections`는 만든 뒤 읽어 「확인할 운영 값」에 적는다. 풀 크기는 메인처럼 환경변수로 명시한다 — 메인은 F5의 `DB_POOL_MAX_SIZE`(기본 10)다.
 - **세션 계정을 서비스 DB에 만들지 않는다** — 세션이 메인 테이블을 읽는 길을 처음부터 막는다.
 
 ## Redis
@@ -81,12 +81,13 @@
 
 ### 키 · 채널 주인
 
-키·채널의 주인은 여기 한 곳에 둔다. 지금은 모두 한 Redis, 한 리스너 컨테이너(`runningChannelContainer`)다.
+키·채널의 주인은 여기 한 곳에 둔다. 지금은 모두 한 Redis다. 리스너 컨테이너는 둘이다 — `running:room:*`는 전용 `runningRoomChannelContainer`(상한 있는 실행기, F7), 나머지 채널은 `runningChannelContainer`.
 
 | 키 · 채널 (지금 이름) | 지금 쓰는 곳 | 목표 주인 | 상태 |
 |---|---|---|---|
 | `running:track:{방}:{사용자}`(stream) · `:seen` · `:dist` · `:status` | `RunningTrackRedisAdapter` · `RunningDistanceRedisAdapter` · `LiveRunningStatusRedisAdapter` | 세션 | 정함 (D-49) |
 | `running:combo:{방}:dist` · `:pair` · `:seg` | `RunningComboRedisAdapter` | 세션 | 정함 (D-49) |
+| `running:finish-lease:{방}:{사용자}` (끝내기 임대, TTL 30초) | `FinishLeaseRedisAdapter` | 세션 | 정함 (D-49, D-82) |
 | 채널 `running:room:{방}` (진행률·콤보·SUPERSEDE) | `RunningProgressRedisAdapter` · `RunningComboUpdateRedisAdapter` · `RunningSupersedeRedisAdapter` → `RunningRoomSubscriber` | 세션 | 정함 (D-49) |
 | (새) 연결 닫기 채널 — 사용자 삭제 때 모든 세션 인스턴스가 그 사용자 소켓을 닫는다 | 없음 — 지금 `RunningConnectionCloseListener`는 같은 인스턴스만 닫는다 | 세션 | 제안 |
 | 채널 `schedule:job` | `ScheduledJobRedisAdapter` → `ScheduledJobListener` | 메인 — `MATCH_CLOSE`·`RUNNING_READY`·`RUNNING_REMINDER` | 제안 (D-29) |
@@ -100,7 +101,7 @@
 - **pub/sub은 서비스를 넘지 않는다** — 채널은 그 서비스 Redis에만 있다. 서비스 사이는 Kafka다([README.md](README.md) 「통신 — 어디로 무엇이 지나가는가」). 새 채널도 같은 인스턴스 갈아타기·다른 인스턴스 재연결·늦은 종료를 따진다 — 레이어 규칙 ([docs/architecture.md](../architecture.md)) 「다중 인스턴스」.
 - **세션 키·채널에는 접두어를 붙인다**(이름은 「새 이름」) — 세션 Redis는 dev compose부터 따로 두지만(D-78) 옛 엔진의 `running:*`와 이름이 겹치지 않게 한다. 세션은 자기 연결 팩토리와 리스너 컨테이너를 쓴다 — [migration](running-session-server/migration.md) 「원격처럼」.
 - **키를 옮기지 않는다** — 전환은 진행 중 방이 0인 조용한 시간에 하고(D-78) 새 엔진 방은 처음부터 세션 Redis에 쓴다. 옛 엔진 방의 `running:*`는 방과 함께 끝나고 TTL(`running-track.ttl=7h`)로 사라진다. 옛 엔진을 지우기 전(M8)에 메인 Redis에 `running:*`가 남지 않았는지 본다.
-- **Redis 서버를 바꿔 끼울 때는 SQL로 활성 방 0을 확인한 때에만 한다** — 매칭 마지막 슬롯(22:00)의 강제 종료는 04:00(`match.force-finish-offset=6h`)이지만 초대 방은 23:59까지 시작해 05:59까지 갈 수 있다(`OpenInviteRoomHandler`) — 시간대로 정하지 않는다. 메인 Redis는 데이터를 옮긴다(AOF·RDB 복사) — 비우면 리프레시 토큰이 사라져 다시 로그인해야 하고, 블랙리스트가 사라져 폐기한 토큰이 만료까지 통한다.
+- **Redis 서버를 바꿔 끼울 때는 SQL로 활성 방 0을 확인한 때에만 한다** — 매칭 마지막 슬롯(22:00)의 강제 종료는 04:00(`match.force-finish-offset=6h`)이지만 초대 방은 23:59까지 시작해 05:59까지 갈 수 있고(`OpenInviteRoomHandler`), 강제 종료도 남은 러너가 있으면 1분 뒤로 다시 걸린다(F3, D-83) — 시간대로 정하지 않는다. 메인 Redis는 데이터를 옮긴다(AOF·RDB 복사) — 비우면 리프레시 토큰이 사라져 다시 로그인해야 하고, 블랙리스트가 사라져 폐기한 토큰이 만료까지 통한다.
 - **해시 태그는 붙이지 않는다** — 클러스터 모드로 갈 때만 필요하다(트랙 Lua가 키 둘을 쓴다, D-49).
 
 ## 러닝 DB CDC
@@ -133,7 +134,7 @@
 
 | 버킷 (설정 키 `storage.s3.*`) | 지금 앱이 하는 일 | 목표 — 쓰는 쪽 | 목표 — 읽는 쪽 |
 |---|---|---|---|
-| user-assets (`user-asset-bucket`) | 프로필·배경 업로드 서명, 보기 URL | 메인 | 메인. 세션이 참가자 프로필 URL을 직접 서명할지는 정하지 않음 ([runtime.md](running-session-server/runtime.md)) |
+| user-assets (`user-asset-bucket`) | 프로필·배경 업로드 서명, 보기 URL | 메인 | 메인. 세션이 참가자 프로필 URL을 직접 서명할지는 정하지 않음 ([runtime.md](running-session-server/runtime.md) 「정하지 않은 것」 4) |
 | gps-tracks (`gps-track-bucket`) | 끝낼 때 원본 트랙 저장만(`GpsTrackS3Adapter.save`) — 읽는 코드 없음 | 세션만 | 없음 |
 | record-cards (`record-card-bucket`) | 사진 업로드 서명·보기 URL | 앱(메인이 서명) | 메인, AI(`image_key`) |
 | 음악 (`music-bucket` = `S3_MUSIC_BUCKET`) | 보기 URL 서명만 | AI | 메인 (8-1 보기 URL) |
@@ -141,7 +142,7 @@
 - **음악 버킷은 이름이 아직 없다** (D-14) — 기본값이 없어 Parameter Store에 없으면 앱이 뜨지 않는다. 배포 전에 test·deploy에 넣고 앱 역할에 읽기 권한을 준다 — [ai-server/README.md](ai-server/README.md) 「정하지 않은 것」.
 - **자격 증명은 코드를 바꾸지 않는다** — `S3ClientConfig`는 정적 키(`S3_ACCESS_KEY_ID`)가 없으면 `DefaultCredentialsProvider`를 쓴다. EC2 역할이든 Pod Identity든 그대로 붙는다. 정적 키는 로컬만.
 - **IAM은 서비스 × 버킷마다 준다** — 버킷별 정책(`runiverse-{env}-{버킷 용도}-s3-…-policy`)을 지금처럼 두고, 세션 역할에는 gps-tracks 쓰기만 준다. 메인 역할의 gps-tracks 쓰기는 옛 엔진을 지울 때(M8) 뺀다. EKS에서 역할을 붙이는 법은 [eks.md](eks.md) 「IaC · 비밀값 · 신원 · 네트워크 · 관측」.
-- 원본 트랙 key를 고정할지 버전으로 지킬지는 정하지 않음 ([runtime.md](running-session-server/runtime.md)).
+- **원본 트랙 key는 지금처럼 고정이다** — 겹쳐 올라가면 나중 원본이 덮는다. 정함 (D-82).
 
 ## 설정 · 비밀값
 
@@ -211,14 +212,14 @@
 
 | 무엇 | 읽는 법 | 쓰는 곳 | 값 (날짜) |
 |---|---|---|---|
-| ALB 유휴 시간 제한 | `aws elbv2 describe-load-balancer-attributes` | [runtime.md](running-session-server/runtime.md) (연결 시간 제한) | — |
-| 대상 그룹 등록 취소 지연 · health 검사 경로·주기·임계 · 분산 방식 | `describe-target-groups` · `describe-target-group-attributes` | 선행 수정 F6·F9, [eks.md](eks.md) 「계획 종료」 | — |
+| ALB 유휴 시간 제한 | `aws elbv2 describe-load-balancer-attributes` | [runtime.md](running-session-server/runtime.md) 「연결 시간 제한 사슬」 | — |
+| 대상 그룹 등록 취소 지연 · health 검사 경로·주기·임계 · 분산 방식 | `describe-target-groups` · `describe-target-group-attributes` | 선행 수정 F6(코드 배포 뒤 test · prod 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾼다) · F9, [eks.md](eks.md) 「계획 종료」 | — |
 | 리스너 규칙 (health 허용·actuator 403·옛 경로 404) | `describe-rules` | [architecture](running-session-server/architecture.md) 「공개 경로」 | — |
 | ASG health 종류(ELB·EC2)·유예·최소/원하는/최대·조정 정책 | `aws autoscaling describe-auto-scaling-groups` · `describe-policies` | F9, 비교군 A | EC2 + ELB, 유예 600초, 원하는 1 · 최소–최대 1–2, 조정 정책은 읽지 않음 (11-25) |
 | 배포 기록 (약 6주 보관) | `describe-scaling-activities` | RUNBOOK 「0. 운영 증거」 | [RESULTS](../../load_test/msa/RESULTS.md) 「0. 운영 증거」 (11-25) |
-| 시작 템플릿 — `docker run` 정지 시간(`--stop-timeout`, 앱 `SHUTDOWN_TIMEOUT` 20초보다 길게 — 30초 권장)·로그 마운트, env 파일을 만드는 방식 | `describe-launch-template-versions` | F9(D-85), 「설정 · 비밀값」 | — |
+| 시작 템플릿 — `docker run` 정지 시간(`--stop-timeout`, 앱 `SHUTDOWN_TIMEOUT` 20초보다 길게 — test 배포와 같은 30초)·로그 마운트, env 파일을 만드는 방식 | `describe-launch-template-versions` | F9(D-85), 「설정 · 비밀값」 | — |
 | 서비스 DB 클래스 · `max_connections` · `rds.force_ssl` | `aws rds describe-db-instances` · `describe-db-parameters` | 「RDS」 연결 예산, cdc.md 「정하지 않은 것」 8 | — |
-| prod Hikari·Tomcat을 덮어쓴 변수가 있는지 (이름만) | Parameter Store 이름 목록 | F5, 비교군 A | — |
+| prod Hikari·Tomcat을 덮어쓴 변수와 선행 수정 변수(`DB_POOL_*` · `RUNNING_ROOM_LISTENER_*` · `JVM_MAX_RAM_PERCENTAGE` · `SHUTDOWN_TIMEOUT`)가 있는지 (이름만) — 없으면 코드 기본값이다 | Parameter Store 이름 목록 | F5 · F7 · F8 · F9, 비교군 A · A′ | — |
 | Redis 버전·인스턴스 유형·`maxmemory`·`maxmemory-policy`·AOF 상태 | `CONFIG GET` · `INFO persistence` | 「Redis」 | — |
 | test Redis가 어느 EC2에 있는지 (10-15 측정 때는 DB와 같은 EC2) | 콘솔 | 「test 환경」 | — |
 | Kafka·Connect EC2 남은 메모리·디스크 (test·prod) | `free` · `df` | 「러닝 DB CDC」 3, 「test 환경」 | — |

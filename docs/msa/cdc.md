@@ -23,7 +23,7 @@ running-service ──INSERT──▶ Postgres
 ```
 
 - **환경마다 DB 하나에 커넥터 하나, 슬롯 하나다.** 커넥터 하나가 여러 환경의 DB를 읽지 않는다.
-- **전달은 최소 한 번이다.** Connect는 어디까지 보냈는지를 주기적으로(60초) 기록하고, 그 뒤에야 슬롯 위치를 앞으로 민다. 재시작하면 마지막 기록 뒤의 행을 다시 보낸다 — 받는 쪽 inbox가 거른다([outbox-inbox.md](outbox-inbox.md)).
+- **전달은 최소 한 번이다.** Connect는 어디까지 보냈는지를 주기적으로(60초) 기록하고, 그 뒤에야 슬롯 위치를 앞으로 민다. 재시작하면 마지막 기록 뒤의 행을 다시 보낸다 — 받는 쪽 inbox가 거른다([outbox-inbox.md](outbox-inbox.md)). 요청을 받는 AI 서버 inbox는 아직 확인 전이다(아래 「검증 — 테스트가 못 보는 것」).
 - **Connect·Kafka가 멈춰도 이벤트를 잃지 않는다.** 앱은 DB에만 쓰므로 카드 저장은 계속 성공하고, 슬롯이 WAL을 붙잡고 있다가 Connect가 돌아오면 이어서 보낸다. 대신 그동안 WAL이 쌓인다(아래 「복제 슬롯 — 가장 조심할 것」).
 
 ### 환경
@@ -31,7 +31,7 @@ running-service ──INSERT──▶ Postgres
 | | `test` | `prod` | `dev` |
 |---|---|---|---|
 | DB | EC2에 직접 설치한 PostgreSQL 17 — **Kafka와 같은 EC2** | RDS PostgreSQL 18 (단일 AZ) | 로컬 Postgres |
-| Kafka | dev·test 공유 클러스터 | 운영 클러스터 | 공유 클러스터 |
+| Kafka | 개발 클러스터 (dev와 같이 쓴다) | 운영 클러스터 | 개발 클러스터 |
 | Connect 위치 | Kafka·DB EC2 (`t3.medium`) — DB에 `localhost`로 붙는다 | prod Kafka EC2 (`t3.medium`) — RDS에 VPC 안에서 붙는다. RDS 보안 그룹이 Kafka EC2 보안 그룹의 5432를 허용한다. `sslmode=require` | **없다** — VPC 안의 Connect가 로컬에 닿지 않는다 |
 | 커넥터 | `test-outbox` | `prod-outbox` | — |
 | 복제 슬롯 | `debezium_outbox_test` | `debezium_outbox_prod` | — |
@@ -41,6 +41,7 @@ running-service ──INSERT──▶ Postgres
 
 - **test와 prod는 DB 종류가 달라 준비 방법이 다르다** — 아래 「Postgres 쪽」의 표를 환경별로 따른다.
 - **test는 Kafka·DB·Connect가 한 EC2다** — WAL이 디스크를 채우면 Kafka도 같이 멈춘다.
+- **계획 중인 것은 이 표에 없다** — dev 루트 compose의 Kafka · Debezium(D-78)과 러닝 DB 커넥터(D-24)는 [platform.md](platform.md) 「test 환경」 · 「러닝 DB CDC」에 있고, 만들어 확인한 뒤 이 표에 더한다.
 
 ### `KAFKA_ENV`는 기계가 아니라 DB를 따른다
 
@@ -156,7 +157,7 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 | 카드가 없어도 슬롯 지연이 늘지 않는다(heartbeat) | ✅ | ✅ |
 | DB `DELETE`가 Kafka로 나가지 않는다 | — | ✅ |
 | 배포된 앱으로 만든 첫 카드 | ✅ test 서버 앱 → 9-2 → 메시지 | ✅ prod 앱 → 9-2 → 메시지 |
-| AI 서버가 자기 계정·그룹으로 받아 음악을 만든다 | ✅ 실제 카드(로컬 앱 → test DB) | AI 쪽 |
+| AI 서버가 자기 계정·그룹으로 받는다 | ✅ 실제 카드(로컬 앱 → test DB) — 음악 생성은 [ai-server/README.md](ai-server/README.md) 「지금 상태」 | AI 쪽 |
 | AI 서버 inbox가 헤더 `id`로 중복을 거른다 | AI 서버와 확인 전 | AI 서버와 확인 전 |
 
 - 검증 메시지를 실제 토픽에 남기지 않는다 — 확인 뒤 `kafka-delete-records`로 지운다([kafka.md](kafka.md)).
@@ -176,8 +177,8 @@ E2E에는 Kafka·Debezium이 없다. 새 환경에 붙이거나 설정을 바꾸
 1. **지난 아웃박스 행 정리** — 언제 지울지(지워도 publication이 INSERT만 내보내 Kafka로 나가지 않는다).
 2. **상한을 넘어 버려진 구간 다시 보내기** — 행은 DB에 남지만 다시 보내는 절차가 없다.
 3. **test 슬롯 지연 알람** — CloudWatch가 없어 `pg_replication_slots`를 조회해 내보내야 한다([metrics-convention.md](../metrics-convention.md)와 맞춘다).
-4. ~~로컬에서 완료 이벤트 받기~~ — **정했다**: 로컬 루프백에 브로커의 VPC 주소를 별칭으로 붙이고 그 주소로 SSH 터널을 열어 개발 클러스터에 붙는다([kafka.md](kafka.md) 「로컬 앱으로 붙기」).
-5. **로컬 dev에서 음악 요청을 보내지 않기** — 메일·푸시는 `local` 프로필이면 로그만 남긴다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 아웃박스는 로컬 앱을 test DB에 붙여 CDC를 확인할 때 실제로 써야 해서, 끄는 기준을 프로필이 아니라 `KAFKA_ENV`에 둘지 함께 정한다.
+4. ~~로컬에서 완료 이벤트 받기~~ — **정했다**: [kafka.md](kafka.md) 「로컬 앱으로 붙기」.
+5. **로컬 dev에서 음악 요청을 보내지 않기** — 메일·푸시는 `local` 프로필이면 로그만 남긴다(`LoggingEmailAdapter`·`LoggingPushAdapter`). 아웃박스는 `local`에서도 그대로 쓴다 — 가짜 AI가 아웃박스 어댑터를 감싼다([decisions.md](decisions.md) D-13). 로컬 앱을 test DB에 붙여 CDC를 확인할 때도 실제로 써야 해서, 끄는 기준을 프로필이 아니라 `KAFKA_ENV`에 둘지 함께 정한다.
 6. **RDS를 Multi-AZ로 바꿀 때 (서비스 DB · 러닝 DB)** — 장애 조치 뒤 복제 슬롯이 남는지 켜기 전에 확인한다. test DB는 EC2에 직접 설치한 PostgreSQL이라 test에서는 볼 수 없다 — 임시 RDS(Multi-AZ)에 커넥터를 붙여 강제 장애 조치로 본다. 슬롯이 사라지면 같은 이름으로 다시 만들고, 그 사이 행을 다시 보내는 방법은 2(아직 없다)와 함께 정한다 — 받는 쪽 inbox가 중복을 거른다. 러닝 DB 커넥터는 [platform.md](platform.md) 「러닝 DB CDC」.
 7. **prod Debezium → RDS 인증서 확인** — 지금 `sslmode=require`라 암호화만 하고 RDS 서버 인증서·호스트 이름은 확인하지 않는다. Connect의 트러스트스토어는 Connect → Kafka 연결에만 쓰여 여기에 해당하지 않는다. prod Kafka EC2에 RDS CA 번들을 두고 `database.sslmode=verify-full`, `database.sslrootcert`로 바꾼다 — 접속 주소가 인증서 이름과 같아야 해서 RDS 엔드포인트 이름으로 붙는다. test는 같은 EC2의 `localhost` 연결이라 해당이 없다.
 8. **앱(running-service) → RDS 연결의 `sslmode`** — 7과 같은 기준으로 점검한다.

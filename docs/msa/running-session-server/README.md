@@ -2,14 +2,14 @@
 
 명단이 정해진 뒤부터 결과까지 러닝을 맡을 서버다. 지금은 메인 서버(running-service) 안에서 도는 러닝 세션을 떼어 낸다. 이 문서는 입구다: 무엇을 왜 나누는지 한 줄씩 적고, 단계가 어디까지 왔는지, 다음 작업, 지금 막힌 것을 둔다. 단계 진행 상태는 이 문서에만 둔다.
 
-> 상태: 계획 — 설계는 11-24에 정하고 11-25에 다듬었다(D-82까지). 0단계 운영 증거는 11-25에 ASG · Kibana · Grafana 몫을 모았고 나머지는 「지금 막힌 것」에 있다. 만든 코드와 k6 회차는 아직 없다.
+> 상태: M0 진행 중 — 설계는 11-24에 정하고 11-25에 다듬었다(D-86까지). M0 선행 수정(F1 · F3 · F5–F9)은 11-25에 코드 · 테스트를 마쳤다 — 머지 · test 배포, 배포 뒤 AWS 설정, 효과 측정이 남았다(「다음 작업」). 0단계 운영 증거는 11-25에 ASG · Kibana · Grafana 몫을 모았고 나머지는 「지금 막힌 것」에 있다. 새 앱(`running-session-server/`) 코드와 k6 회차는 아직 없다.
 
 | 무엇 | 어디 |
 |---|---|
 | 왜 나누는가 — 근거 · 반대 근거 · 깨지는 조건 | [rationale.md](rationale.md) |
 | 메인과의 구조 — 경계 · 데이터 주인 · 넘기기 · 이벤트 · 동기 호출 · 공개 경로 | [architecture.md](architecture.md) |
 | 일관성 — 불변식 · 계정 탈퇴 saga · 대조 | [consistency.md](consistency.md) |
-| 러닝 중 동작 — 시작 · 끝내기 · 계획 종료 · 연결 시간 제한 · 앱 재접속 | [runtime.md](runtime.md) |
+| 러닝 중 동작 — 시작 · 끝내기 · 강제 종료 · 계획 종료 · 연결 시간 제한 · 앱 재접속 | [runtime.md](runtime.md) |
 | 검증 — 비교군 · 시나리오 · 지표 · 판정 | [verification.md](verification.md) |
 | 옮기기 — 지금 얽힌 곳 · 선행 수정 · 단계 · 지울 기준 | [migration.md](migration.md) |
 | 결정 기록 (범위 `세션` · `메인` · `공통`) | [../decisions.md](../decisions.md) |
@@ -27,25 +27,24 @@
 - **경계** — 모집은 메인이 맡는다. 모집 마감 커밋에 메인이 매칭 방을 닫고 방 확정 이벤트로 러닝 방을 넘기고, 그 뒤 대기 · 이탈 · 카운트다운 · 러닝은 세션이 맡는다 — 이탈도 앱이 세션에 직접 보낸다. 메인은 사본으로 7-1 · 기록 카드를 보인다 — 정함 (D-24, D-26, D-71, D-73) → [architecture.md](architecture.md) 「경계 — 생애 단계」 「넘기기」.
 - **이벤트** — 서버 사이 이벤트는 방 확정 · 사용자 변경 · 참가자 결과 셋이다 — 정함 (D-72) → [architecture.md](architecture.md) 「이벤트 (후보)」.
 - **saga** — 러닝 중 계정 탈퇴 하나뿐이다 — 정함 (D-43), 메인이 지휘하는 오케스트레이션 · 단계 · 세션 호출 3초도 정함 (D-44, D-70) → [consistency.md](consistency.md) 「계정 탈퇴 saga」.
-- **끝내기** — 판정(잠금 안: 필터 · 목표 판정 · 임대) → 봉인(잠금 밖, Redis 임대: 분석 · S3 원본 · 날씨) → 확정(잠금 안: 다시 확인 · 저장). 모놀리스(M0의 F1)와 새 엔진이 같다. 목표 도달 판정은 매번 잠금 안이다(F2 버림) — 정함 (D-63, D-79, D-80, D-82) → [runtime.md](runtime.md).
+- **끝내기** — 임대(판정 앞, 쥔 것 없이 Redis `SET NX`) → 판정(잠금 안: 필터 · 목표 판정) → 봉인(잠금 밖, 임대만: 분석 · S3 원본 · 날씨) → 확정(잠금 안: 다시 확인 · 저장). 모놀리스(M0의 F1)와 새 엔진이 같다. 목표 도달 판정은 매번 잠금 안이다(F2 버림). 강제 종료는 알람이 잠금 없이 확인하고 러너마다 워커가 같은 끝내기를 부른다(F3) — 정함 (D-63, D-79, D-80, D-82, D-83) → [runtime.md](runtime.md) 「끝내기」 「강제 종료 · 청소기」.
 - **검증** — 나눈 효과는 속도가 아니라 격리로 잰다(SC1 · SC9 · SC10). 비교군은 A · A′ · B0 · B2다 — 정함 (D-57, D-64). 기준 숫자는 PREREG 동결 전 초안이다 → [verification.md](verification.md).
 - **옮기는 방식** — 지금 코드를 지우지 않고 같은 저장소에 별도 앱 `running-session-server/`를 만들어 → compose · test에서 검증하고 → 별도 저장소로 옮기고 → 진행 중 방이 0인 조용한 시간에 운영 ALB 경로를 돌리고 → 옛 코드를 지운다. 운영 카나리는 없다 — 정함 (D-22, D-47, D-62, D-78) → [migration.md](migration.md) 「방식」.
 - **플랫폼** — EKS는 prod 클러스터 하나 · Auto Mode, test는 docker compose다. Kubernetes에만 있는 동작은 필요한 날 띄우는 임시 EKS에서 확인한다 — 정함 (D-75, D-76, D-77) → [../eks.md](../eks.md).
-- **지금** — 러닝 세션은 메인 서버 안에서 돈다([../README.md](../README.md) 「구성 — 지금」). 다음은 M0 선행 수정 PR(F1 · F3 · F5–F9, F4는 버림)이다(「다음 작업」).
+- **지금** — 러닝 세션은 메인 서버 안에서 돈다([../README.md](../README.md) 「구성 — 지금」). M0 선행 수정(F1 · F3 · F5–F9)은 11-25에 코드 · 테스트를 마쳤고, 다음 코드 단계는 M1이다(「다음 작업」).
 
 ## 다음 작업
 
 > 11-25 기준. 단계가 바뀌는 PR이 이 절을 같이 고친다.
 
-**M0 선행 수정 PR — F1 · F3 · F5–F9** (D-65, D-66, D-79, D-82, D-83 — F4는 버림, D-84). 고칠 것과 지금 코드는 [migration.md](migration.md) 「선행 수정 F1–F9」, 체크 목록은 「단계 M0–M9」 M0.
+**M0 선행 수정 PR — F1 · F3 · F5–F9는 코드 · 테스트가 끝났다** (11-25, D-66, D-79, D-82, D-83, D-85 — F2 · F4는 버림, D-80 · D-84). 고친 것은 [migration.md](migration.md) 「선행 수정 F1–F9」, 체크 목록과 테스트 결과는 「단계 M0–M9」 M0.
 
-1. **브랜치** — `dev`에서 딴다(예: `refactor/pre-split-finish-and-drain`, [git-convention](../../git-convention.md) 「브랜치 규칙」). PR 대상은 `dev`.
-2. **순서** — M0 목록 순서: F1 → F3 → F5 · F6 · F7 · F8 → F9 (F4는 버림, D-84). F 하나씩, 운영 코드는 파일 하나씩 바꾼다 (D-66).
-3. **F1** — **코드 됨 (11-25, `chore/build-msa`)**: `RunningFinisher`(지휘자 · 봉인) + `RunningFinishSteps`(판정 · 확정 트랜잭션) + `FinishLeaseRedisAdapter`. E2E 통과, 효과 측정(SC9 A vs A′)은 아직. `RunningFinisher`를 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금)으로 나눈다. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 재전송을 받는다 (D-79, D-80, D-82). 모양은 migration F1 행, 지킬 순서는 [runtime.md](runtime.md)의 끝내기 표.
-   - **F3 코드 됨 (11-25)**: `ForceFinishRunningRoomHandler`(알람 확인) + `ForceFinishSteps`(잠금 안 정리) + `ForceFinishRunnerDispatcher`(`forceFinishExecutor` 워커) + 예약 다시 걸기(`ScheduledJob.reschedule`, D-83). 다음은 F5–F9 (F4는 버림, D-84)
-4. **F9** — 소켓은 `4500`으로 나눠 닫는다(D-42 · D-65). 드레이너 · SSE 완료는 migration 「선행 조건」 M0 행, 닫는 순서와 시간은 [runtime.md](runtime.md).
-5. **같은 PR의 문서** — migration 「단계마다 고칠 문서」 M0 행.
-6. **M0 안 다른 일** — 운영 Grafana HikariCP 패널, metrics-convention 예정 지표, 「선행 조건」의 나머지 M0 행, 하네스 v2 → PREREG 동결 → 비교군 A(수정 전 이미지) · A′ 측정. 어느 것을 이 PR에 넣을지는 정하지 않음.
+1. **머지 · test 배포 (개발자)** — 선행 수정 PR(브랜치 `chore/build-msa`)을 push해 `dev`에 머지하고 test에 한 번 배포한다. 두 인스턴스 E2E는 CI가 돌리지 않으므로 로컬 결과(176 통과)를 PR 테스트 내용에 적는다(D-86).
+2. **배포 뒤 AWS (개발자)** — test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸고(F6 — 코드보다 먼저 바꾸면 없는 경로를 검사한다), prod 시작 템플릿의 `docker run --stop-timeout`이 30초인지 확인한다(F9). 기본값을 바꿀 때만 Parameter Store에 `DB_POOL_*` · `RUNNING_ROOM_LISTENER_*` · `JVM_MAX_RAM_PERCENTAGE` · `SHUTDOWN_TIMEOUT`을 넣는다. 운영 Grafana에 HikariCP 패널을 더한다(migration 「단계마다 고칠 문서」 M0). 읽을 운영 값은 「지금 막힌 것」.
+3. **다음 코드 단계 — M1** — 별도 앱 폴더 `running-session-server/` + 루트 compose (D-78). 할 일은 migration 「단계 M0–M9」 M1.
+4. **병행 — 측정** — k6 하네스 v2 → PREREG 동결 → 비교군 A(선행 수정 전 이미지) · A′(선행 수정 이미지). 이미지로 재므로 M1과 순서가 묶이지 않는다. 그 전까지 선행 수정의 효과(SC9 A vs A′ 등)는 재지 않은 것이다.
+5. **앱 일정 협의 (프론트 · 팀)** — D-73(확정 뒤 이탈을 세션으로) · D-74(최소 버전 상향). 정하지 않은 형식 · 값은 「지금 막힌 것」.
+6. **M0의 나머지 (인프라 쪽)** — migration 「선행 조건」에서 `언제`에 M0이 든 행(JVM 옵션 나머지 · 빈틈 감지 · 인스턴스를 넘는 수정 · 끝내기에서 정책 빼기 · 끝내기 칸막이 · 지표 · 로그 · CI 경로 필터와 prod 빌드 테스트)은 선행 수정 PR 밖이라 따로 한다. 드레이너 · main-api SSE 종료 행은 EKS에서 한다(D-85).
 
 ## 진행 단계
 
@@ -53,10 +52,10 @@
 
 | 계획 단계 | 단계 | 하는 일 | 판정 | 상태 |
 |---|---|---|---|---|
-| 전체 | 설계 | 이유 · 구조 · 일관성 · 검증 · 옮기기 · 플랫폼 문서와 결정 기록 | — | 됨 (11-25, D-82까지) |
+| 전체 | 설계 | 이유 · 구조 · 일관성 · 검증 · 옮기기 · 플랫폼 문서와 결정 기록 | — | 됨 (11-25, D-86까지) |
 | 1 측정 | 0단계 운영 증거 | 운영 배포 때 진행 중이던 러닝과 끊긴 연결을 센다 — ASG · Kibana · Grafana 몫은 11-25에 모았고, 운영 DB 집계 · 대조일 · REST 비율 · CPU 크레딧이 남았다 | G1의 크기 — [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」 | 진행 중 |
 | 1 측정 | 하네스 · PREREG | k6 하네스 v2를 만들고 기준을 얼린다 | SC0 관문 | 대기 |
-| 1 측정 | M0 기준선 · 선행 수정 (= E0 · E1) | 지금 모놀리스(A)를 잰다. F1 · F3 · F5–F9를 넣는다(D-65, D-66, D-79 — F2 · F4는 버림, D-80 · D-84). metrics-convention의 예정 지표를 코드로 만든다 | SC0 관문, A의 SC1 · SC3 · SC9 · SC10, '지금 (A)' 장 ([verification.md](verification.md) 「판정과 결과」) | 대기 |
+| 1 측정 | M0 기준선 · 선행 수정 (= E0 · E1) | 지금 모놀리스(A)를 잰다. F1 · F3 · F5–F9를 넣는다(D-66, D-79, D-82, D-83, D-85 — F2 · F4는 버림, D-80 · D-84) — 코드 · 테스트는 11-25에 끝났다. metrics-convention의 예정 지표를 코드로 만든다 | SC0 관문, A의 SC1 · SC3 · SC4 · SC9 · SC10, '지금 (A)' 장, A′의 `K-SC9-5` · 'A vs A′' 장 ([verification.md](verification.md) 「판정과 결과」) | 진행 중 |
 | 2 경계 · 새 앱 | M1 별도 앱 뼈대 + 루트 compose (D-78) | 같은 저장소에 `running-session-server/`, compose로 두 앱 + 경로 프록시 | 기존 E2E가 프록시로 통과 | 대기 |
 | 2 경계 · 새 앱 | M2 계약 (아웃박스 · CDC · inbox, DLT) | 서비스 사이 이벤트, 러닝 DB 커넥터, DLT · 건너뜀 알람 · 대조 | SC6 · I5 | 대기 |
 | 2 경계 · 새 앱 | M3 새 엔진 + 동등성 | 새 엔진을 옛 엔진과 같은 결과로 맞춘다 | 골든 트랙 차이 0 · 두 엔진 E2E | 대기 |
@@ -80,12 +79,11 @@
 
 ## 지금 막힌 것
 
-M0 PR은 F8 값 하나 말고는 바로 시작할 수 있다. 아래는 그 PR을 마무리해 운영에 내거나, 측정 · M2 · M3 · M4를 열기 전에 풀 것이다. 답은 링크한 문서에서 기다린다.
+아래는 M0 선행 수정을 운영에 내거나, 측정 · M2 · M3 · M4를 열기 전에 풀 것이다. 답은 링크한 문서에서 기다린다.
 
 | 막힌 것 | 막는 단계 | 누가 | 어디 |
 |---|---|---|---|
-| **F8 힙 비율 값** — 75 / 70 / 65. SC11(J1–J4) 결과로 정하는데 F8은 M0에 들어가, 그 전까지 쓸 값이 필요하다 | M0 PR (F8) | 개발자 | [migration.md](migration.md) 「정하지 않은 것」 4 |
-| **운영에서 F9를 거는 방법과 운영 값** — 인스턴스 새로 고침이 컨테이너에 종료 신호를 주고 기다리게 하는 연결, ALB 유휴 시간 제한, 대상 그룹 검사 경로 · 등록 해제 지연 | M0 운영 배포 (F6 · F9) | 개발자 (콘솔 · 시작 템플릿) | [migration.md](migration.md) 「정하지 않은 것」 7, [../platform.md](../platform.md) 「확인할 운영 값」 |
+| **운영 값** — prod 시작 템플릿 `docker run --stop-timeout`(앱 `SHUTDOWN_TIMEOUT` 20초보다 길게 — 30초, F9), ALB 유휴 시간 제한, 대상 그룹 등록 취소 지연. F9 정지 대기와 연결 시간 제한 사슬([runtime.md](runtime.md))이 쓴다 | M0 운영 배포 (F9) · PREREG 동결 | 개발자 (콘솔 · 시작 템플릿) | [../platform.md](../platform.md) 「확인할 운영 값」 |
 | **앱 재접속 값** — 재연결 간격, 끝내기 재시도, 재전송 묶음, `HEALTH_CHECK` 주기, 1006 처리. 하네스의 클라이언트 모델과 연결 시간 제한 사슬이 쓴다 | PREREG 동결 · SC1–SC3 | 개발자 (노션 프론트 가이드에서 옮겨 적는다) | [runtime.md](runtime.md) |
 | **0단계 남은 집계** — 배포 종료 순간 진행 중이던 러닝 · 슬롯 시간 · 대조 기준선 SQL(0-4), 대조일 끊김 · 재연결(0-3), 18–23시 REST 비율 · CPU 크레딧(0-5). 하네스 프로필과 대조 기준선이 쓴다 | PREREG 동결 | 개발자 (SQL · Kibana · Prometheus · CloudWatch) | [RUNBOOK](../../../load_test/msa/RUNBOOK.md) 「0. 운영 증거」 → [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」 |
 | **PREREG 동결** — 기준 숫자 · 비교군별 예측 · 「후보 기준」 채택. AG4 기준은 멘토와 정한다 | 첫 측정 회차 | 개발자 (초안 → 리뷰) · 멘토 | [PREREG](../../../load_test/msa/PREREG.md) 「상태」 |
