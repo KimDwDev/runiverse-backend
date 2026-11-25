@@ -12,11 +12,32 @@ export E2E_IMAGE="${E2E_IMAGE:-runiverse-backend:e2e}"
 # 테스트 코드가 읽을 값 — 여기서 한 번만 정하고 아래 헬스체크와 공유한다
 export E2E_BASE_URL="${E2E_BASE_URL:-http://localhost:8080/api/v1}"
 export E2E_APP_CONTAINER="${E2E_APP_CONTAINER:-runiverse-e2e-app}"
-readonly HEALTH_URL="${E2E_BASE_URL}/actuator/health"
+# true면 두 번째 인스턴스(8081)를 띄워 MultiInstanceE2eTest까지 돌린다 — 기본은 한 대
+readonly MULTI_INSTANCE="${E2E_MULTI_INSTANCE:-false}"
+readonly SECOND_BASE_URL="http://localhost:8081/api/v1"
 readonly STARTUP_RETRIES=60
 readonly STARTUP_INTERVAL=2
 compose() {
   docker compose --file "${COMPOSE_FILE}" "$@"
+}
+
+# 앱의 health가 응답할 때까지 기다린다 — 컨테이너가 이미 죽었으면 더 기다리지 않는다
+wait_for_app() {
+  local health_url="$1/actuator/health" container="$2"
+  echo "===== 앱 기동 대기 (${health_url}) ====="
+  for attempt in $(seq 1 "${STARTUP_RETRIES}"); do
+    if curl --fail --silent --output /dev/null "${health_url}"; then
+      echo "앱이 응답합니다. (${attempt}회차)"
+      return 0
+    fi
+    if [ "$(docker inspect --format '{{.State.Running}}' "${container}" 2>/dev/null)" != "true" ]; then
+      echo "앱 컨테이너가 실행 중이 아닙니다. (${container})" >&2
+      exit 1
+    fi
+    sleep "${STARTUP_INTERVAL}"
+  done
+  echo "앱이 ${STARTUP_RETRIES}회 시도 안에 기동되지 않았습니다. (${container})" >&2
+  exit 1
 }
 # 실패해도 컨테이너를 남기지 않되, 지우기 전에 원인 파악용 로그를 뽑는다
 cleanup() {
@@ -24,8 +45,12 @@ cleanup() {
   if [ "${status}" -ne 0 ]; then
     echo "===== 실패 — 앱 로그 (마지막 200줄) =====" >&2
     compose logs --tail 200 app >&2 || true
+    if [ "${MULTI_INSTANCE}" = "true" ]; then
+      echo "===== 실패 — 두 번째 인스턴스 로그 (마지막 200줄) =====" >&2
+      compose --profile multi logs --tail 200 app2 >&2 || true
+    fi
   fi
-  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  compose --profile multi down --volumes --remove-orphans >/dev/null 2>&1 || true
   # 정리 결과가 아니라 원래 실패 원인의 종료 코드를 돌려줘야 CI가 빨간불이 된다
   exit "${status}"
 }
@@ -34,23 +59,14 @@ echo "===== E2E 스택 기동 (${E2E_IMAGE}) ====="
 # --wait: postgres·redis의 healthcheck가 통과할 때까지 블로킹한다
 compose up --detach --wait
 # 앱 이미지(temurin jre)에 curl이 있다고 보장할 수 없어 준비 확인은 호스트에서 한다
-echo "===== 앱 기동 대기 (${HEALTH_URL}) ====="
-for attempt in $(seq 1 "${STARTUP_RETRIES}"); do
-  if curl --fail --silent --output /dev/null "${HEALTH_URL}"; then
-    echo "앱이 응답합니다. (${attempt}회차)"
-    break
-  fi
-  # 컨테이너가 이미 죽었다면 더 기다릴 이유가 없다
-  if [ "$(docker inspect --format '{{.State.Running}}' "${E2E_APP_CONTAINER}" 2>/dev/null)" != "true" ]; then
-    echo "앱 컨테이너가 실행 중이 아닙니다." >&2
-    exit 1
-  fi
-  if [ "${attempt}" -eq "${STARTUP_RETRIES}" ]; then
-    echo "앱이 ${STARTUP_RETRIES}회 시도 안에 기동되지 않았습니다." >&2
-    exit 1
-  fi
-  sleep "${STARTUP_INTERVAL}"
-done
+wait_for_app "${E2E_BASE_URL}" "${E2E_APP_CONTAINER}"
+# 두 번째 인스턴스는 첫 인스턴스가 스키마를 만든 뒤에 띄운다 — 기동 때 예약 복구가 테이블을 읽는다
+if [ "${MULTI_INSTANCE}" = "true" ]; then
+  echo "===== 두 번째 인스턴스 기동 ====="
+  compose --profile multi up --detach --no-deps app2
+  wait_for_app "${SECOND_BASE_URL}" "runiverse-e2e-app2"
+  export E2E_SECOND_BASE_URL="${SECOND_BASE_URL}"
+fi
 # 운영처럼 앱 버전 행은 SQL로 넣는다 — 테이블은 앱이 기동하며 만든다.
 # 실패를 삼키면 테스트가 엉뚱한 500으로 깨지므로 SQL 오류에서 바로 멈춘다
 echo "===== 앱 버전 시드 ====="
