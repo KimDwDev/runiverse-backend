@@ -190,7 +190,7 @@ class ScheduledJobPersistenceAdapterTest {
         ScheduledJobJpaEntity entity = ScheduledJobJpaEntity.create(
                 ScheduledJobType.MATCH_CLOSE, String.valueOf(ROOM_ID), EXECUTE_AT);
         ReflectionTestUtils.setField(entity, "scheduledJobId", JOB_ID);
-        entity.changeSent(sent, sentAt);
+        entity.changeSchedule(EXECUTE_AT, sent, sentAt);
         return entity;
     }
 }

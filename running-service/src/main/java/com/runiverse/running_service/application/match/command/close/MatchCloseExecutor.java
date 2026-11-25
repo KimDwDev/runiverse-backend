@@ -7,6 +7,9 @@ import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 // 예약 기전과 매칭 유스케이스를 잇는 얇은 껍데기 —
 // CloseMatchingHandler가 예약을 알지 않게 해서 트리거가 바뀌어도 그대로 남는다
 @Component
@@ -21,7 +24,8 @@ public class MatchCloseExecutor implements ScheduledJobExecutor {
     }
 
     @Override
-    public void execute(JobTarget target) {
+    public Optional<LocalDateTime> execute(JobTarget target) {
         closeMatchingUsecase.handle(new CloseMatchingCommand(target.idAsLong()));
+        return Optional.empty();
     }
 }

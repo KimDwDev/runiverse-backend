@@ -7,6 +7,9 @@ import com.runiverse.running_service.domain.scheduling.vo.ScheduledJobType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
 public class RunningForceFinishExecutor implements ScheduledJobExecutor {
@@ -19,8 +22,9 @@ public class RunningForceFinishExecutor implements ScheduledJobExecutor {
     }
 
     @Override
-    public void execute(JobTarget target) {
+    public Optional<LocalDateTime> execute(JobTarget target) {
         forceFinishRunningRoomUsecase.handle(
                 new ForceFinishRunningRoomCommand(target.idAsLong()));
+        return Optional.empty();
     }
 }

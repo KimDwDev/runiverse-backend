@@ -82,7 +82,8 @@ class RunningReadyIntegrationTest {
         RunningReadyExecutor runningReadyExecutor = new RunningReadyExecutor(
                 new NotifyRunningReadyHandler(runningStore, eventPublisher));
         runScheduledJobHandler = new RunScheduledJobHandler(
-                scheduledJobStore, scheduledJobStore, List.of(runningReadyExecutor));
+                scheduledJobStore, scheduledJobStore, event -> {
+                }, List.of(runningReadyExecutor));
         // 타이머 등록과 전파는 이 테스트의 주제가 아니다 — 발화는 아래에서 직접 부른다
         scheduleJobHandler = new ScheduleJobHandler(scheduledJobStore, event -> {
         });

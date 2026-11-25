@@ -43,13 +43,15 @@ class RunScheduledJobHandlerTest {
     private UpdateScheduledJobPort updateScheduledJobPort;
 
     private RecordingExecutor matchCloseExecutor;
+    private List<Object> events;
     private RunScheduledJobHandler runScheduledJobHandler;
 
     @BeforeEach
     void setUp() {
         matchCloseExecutor = new RecordingExecutor(ScheduledJobType.MATCH_CLOSE);
+        events = new ArrayList<>();
         runScheduledJobHandler = new RunScheduledJobHandler(
-                lockScheduledJobPort, updateScheduledJobPort, List.of(matchCloseExecutor));
+                lockScheduledJobPort, updateScheduledJobPort, events::add, List.of(matchCloseExecutor));
     }
 
     @Test
@@ -117,7 +119,7 @@ class RunScheduledJobHandlerTest {
     void failsWhenExecutorIsMissing() {
         // given -> 타입을 추가하고 실행기를 빠뜨린 경우. 컴파일러가 못 잡는 자리다
         RunScheduledJobHandler handlerWithoutExecutor = new RunScheduledJobHandler(
-                lockScheduledJobPort, updateScheduledJobPort, List.of());
+                lockScheduledJobPort, updateScheduledJobPort, events::add, List.of());
         givenLocked(pendingJob());
 
         // when & then -> 조용히 넘기면 그 예약은 발화만 되고 아무 일도 일어나지 않는다
@@ -154,6 +156,7 @@ class RunScheduledJobHandlerTest {
 
         private final ScheduledJobType type;
         private final List<JobTarget> executed = new ArrayList<>();
+        private Optional<LocalDateTime> retryAt = Optional.empty();
 
         private RecordingExecutor(ScheduledJobType type) {
             this.type = type;
@@ -165,8 +168,9 @@ class RunScheduledJobHandlerTest {
         }
 
         @Override
-        public void execute(JobTarget target) {
+        public Optional<LocalDateTime> execute(JobTarget target) {
             executed.add(target);
+            return retryAt;
         }
     }
 }

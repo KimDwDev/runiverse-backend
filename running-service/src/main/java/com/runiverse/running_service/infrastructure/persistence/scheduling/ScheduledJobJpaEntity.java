@@ -68,8 +68,10 @@ public class ScheduledJobJpaEntity extends BaseCreatedAtEntity {
         return new ScheduledJobJpaEntity(jobType, targetId, executeAt);
     }
 
-    // 선점 결과를 되받는다 — 도메인이 짝을 검증했으므로 여기서는 다시 보지 않는다
-    public void changeSent(boolean sent, LocalDateTime sentAt) {
+    // 선점 결과를 되받는다 — 도메인이 짝을 검증했으므로 여기서는 다시 보지 않는다.
+    // 다시 건 예약(reschedule)은 실행 시각도 함께 바뀐다
+    public void changeSchedule(LocalDateTime executeAt, boolean sent, LocalDateTime sentAt) {
+        this.executeAt = executeAt;
         this.sent = sent;
         this.sentAt = sentAt;
     }

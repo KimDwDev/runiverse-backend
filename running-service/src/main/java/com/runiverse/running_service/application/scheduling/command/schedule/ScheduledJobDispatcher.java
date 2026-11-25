@@ -21,4 +21,11 @@ public class ScheduledJobDispatcher {
         registerJobTimerPort.register(event.job());
         publishScheduledJobPort.publish(event.job());
     }
+
+    // 다시 건 예약도 같다 — 이 인스턴스의 옛 타이머는 발화 때 지워졌으므로 새 시각으로 다시 걸린다
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void dispatch(ScheduledJobRescheduledEvent event) {
+        registerJobTimerPort.register(event.job());
+        publishScheduledJobPort.publish(event.job());
+    }
 }

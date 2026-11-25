@@ -68,7 +68,7 @@ public class ScheduledJobPersistenceAdapter implements SaveScheduledJobPort,
                 .value();
         // 영속 상태로 올려두면 더티 체킹이 UPDATE를 만든다
         ScheduledJobJpaEntity entity = entityManager.find(ScheduledJobJpaEntity.class, jobId);
-        entity.changeSent(job.isSent(), job.getSentAt().orElse(null));
+        entity.changeSchedule(job.getExecuteAt(), job.isSent(), job.getSentAt().orElse(null));
     }
 
     private Optional<ScheduledJob> findBy(JobTarget target) {

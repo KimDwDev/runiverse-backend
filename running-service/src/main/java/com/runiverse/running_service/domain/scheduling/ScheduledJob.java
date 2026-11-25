@@ -22,7 +22,7 @@ public class ScheduledJob {
 
     private final Long scheduledJobId;
     private final JobTarget target;
-    private final LocalDateTime executeAt;
+    private LocalDateTime executeAt;
     private boolean sent;
     private LocalDateTime sentAt;
 
@@ -60,6 +60,17 @@ public class ScheduledJob {
         validateSentAt(true, sentAt);
         this.sent = true;
         this.sentAt = sentAt;
+    }
+
+    // 끝나지 않은 작업을 다른 시각에 다시 건다 — 선점한 실행 안에서만 부른다.
+    // 새 행이 아니라 같은 행을 되살린다: (job_type, target_id)가 UNIQUE라 같은 대상의 예약은 하나다
+    public void reschedule(LocalDateTime executeAt) {
+        if (executeAt == null) {
+            throw new ExecuteAtRequiredException();
+        }
+        this.executeAt = executeAt;
+        this.sent = false;
+        this.sentAt = null;
     }
 
     // 부팅 복구가 쓴다 — 이미 지난 예약은 타이머를 걸지 않고 즉시 실행한다

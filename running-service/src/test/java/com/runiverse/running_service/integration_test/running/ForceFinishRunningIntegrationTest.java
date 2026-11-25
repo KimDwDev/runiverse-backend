@@ -165,7 +165,8 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 );
         forceFinishListener = new RunningForceFinishListener(forceFinishRunningRoomHandler);
         runScheduledJobHandler = new RunScheduledJobHandler(
-                scheduledJobStore, scheduledJobStore,
+                scheduledJobStore, scheduledJobStore, event -> {
+                },
                 List.of(new RunningForceFinishExecutor(forceFinishRunningRoomHandler)));
         // 타이머 등록과 전파는 이 테스트의 주제가 아니다 — 발화는 아래에서 직접 부른다
         scheduleJobHandler = new ScheduleJobHandler(scheduledJobStore, event -> {
