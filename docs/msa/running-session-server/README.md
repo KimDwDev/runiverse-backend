@@ -31,18 +31,18 @@
 - **검증** — 나눈 효과는 속도가 아니라 격리로 잰다(SC1 · SC9 · SC10). 비교군은 A · A′ · B0 · B2다 — 정함 (D-57, D-64). 기준 숫자는 PREREG 동결 전 초안이다 → [verification.md](verification.md).
 - **옮기는 방식** — 지금 코드를 지우지 않고 같은 저장소에 별도 앱 `running-session-server/`를 만들어 → compose · test에서 검증하고 → 별도 저장소로 옮기고 → 진행 중 방이 0인 조용한 시간에 운영 ALB 경로를 돌리고 → 옛 코드를 지운다. 운영 카나리는 없다 — 정함 (D-22, D-47, D-62, D-78) → [migration.md](migration.md) 「방식」.
 - **플랫폼** — EKS는 prod 클러스터 하나 · Auto Mode, test는 docker compose다. Kubernetes에만 있는 동작은 필요한 날 띄우는 임시 EKS에서 확인한다 — 정함 (D-75, D-76, D-77) → [../eks.md](../eks.md).
-- **지금** — 러닝 세션은 메인 서버 안에서 돈다([../README.md](../README.md) 「구성 — 지금」). 다음은 M0 선행 수정 PR(F1 · F3–F9)이다(「다음 작업」).
+- **지금** — 러닝 세션은 메인 서버 안에서 돈다([../README.md](../README.md) 「구성 — 지금」). 다음은 M0 선행 수정 PR(F1 · F3 · F5–F9, F4는 버림)이다(「다음 작업」).
 
 ## 다음 작업
 
 > 11-25 기준. 단계가 바뀌는 PR이 이 절을 같이 고친다.
 
-**M0 선행 수정 PR — F1 · F3–F9** (D-65, D-66, D-67, D-79, D-82). 고칠 것과 지금 코드는 [migration.md](migration.md) 「선행 수정 F1–F9」, 체크 목록은 「단계 M0–M9」 M0.
+**M0 선행 수정 PR — F1 · F3 · F5–F9** (D-65, D-66, D-79, D-82, D-83 — F4는 버림, D-84). 고칠 것과 지금 코드는 [migration.md](migration.md) 「선행 수정 F1–F9」, 체크 목록은 「단계 M0–M9」 M0.
 
 1. **브랜치** — `dev`에서 딴다(예: `refactor/pre-split-finish-and-drain`, [git-convention](../../git-convention.md) 「브랜치 규칙」). PR 대상은 `dev`.
-2. **순서** — M0 목록 순서: F1 → F9 → F3 · F5 · F6 · F7 · F8 → F4. F 하나씩, 운영 코드는 파일 하나씩 바꾼다 (D-66).
+2. **순서** — M0 목록 순서: F1 → F3 → F5 · F6 · F7 · F8 → F9 (F4는 버림, D-84). F 하나씩, 운영 코드는 파일 하나씩 바꾼다 (D-66).
 3. **F1** — **코드 됨 (11-25, `chore/build-msa`)**: `RunningFinisher`(지휘자 · 봉인) + `RunningFinishSteps`(판정 · 확정 트랜잭션) + `FinishLeaseRedisAdapter`. E2E 통과, 효과 측정(SC9 A vs A′)은 아직. `RunningFinisher`를 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금)으로 나눈다. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 재전송을 받는다 (D-79, D-80, D-82). 모양은 migration F1 행, 지킬 순서는 [runtime.md](runtime.md)의 끝내기 표.
-   - **F3 코드 됨 (11-25)**: `ForceFinishRunningRoomHandler`(알람 확인) + `ForceFinishSteps`(잠금 안 정리) + `ForceFinishRunnerDispatcher`(`forceFinishExecutor` 워커) + 예약 다시 걸기(`ScheduledJob.reschedule`, D-83). 다음은 F4 · F5–F9
+   - **F3 코드 됨 (11-25)**: `ForceFinishRunningRoomHandler`(알람 확인) + `ForceFinishSteps`(잠금 안 정리) + `ForceFinishRunnerDispatcher`(`forceFinishExecutor` 워커) + 예약 다시 걸기(`ScheduledJob.reschedule`, D-83). 다음은 F5–F9 (F4는 버림, D-84)
 4. **F9** — 소켓은 `4500`으로 나눠 닫는다(D-42 · D-65). 드레이너 · SSE 완료는 migration 「선행 조건」 M0 행, 닫는 순서와 시간은 [runtime.md](runtime.md).
 5. **같은 PR의 문서** — migration 「단계마다 고칠 문서」 M0 행.
 6. **M0 안 다른 일** — 운영 Grafana HikariCP 패널, metrics-convention 예정 지표, 「선행 조건」의 나머지 M0 행, 하네스 v2 → PREREG 동결 → 비교군 A(수정 전 이미지) · A′ 측정. 어느 것을 이 PR에 넣을지는 정하지 않음.
@@ -56,7 +56,7 @@
 | 전체 | 설계 | 이유 · 구조 · 일관성 · 검증 · 옮기기 · 플랫폼 문서와 결정 기록 | — | 됨 (11-25, D-82까지) |
 | 1 측정 | 0단계 운영 증거 | 운영 배포 때 진행 중이던 러닝과 끊긴 연결을 센다 — ASG · Kibana · Grafana 몫은 11-25에 모았고, 운영 DB 집계 · 대조일 · REST 비율 · CPU 크레딧이 남았다 | G1의 크기 — [RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」 | 진행 중 |
 | 1 측정 | 하네스 · PREREG | k6 하네스 v2를 만들고 기준을 얼린다 | SC0 관문 | 대기 |
-| 1 측정 | M0 기준선 · 선행 수정 (= E0 · E1) | 지금 모놀리스(A)를 잰다. F1 · F3–F9를 넣는다(D-65, D-66, D-67, D-79 — F2는 버림, D-80). metrics-convention의 예정 지표를 코드로 만든다 | SC0 관문, A의 SC1 · SC3 · SC9 · SC10, '지금 (A)' 장 ([verification.md](verification.md) 「판정과 결과」) | 대기 |
+| 1 측정 | M0 기준선 · 선행 수정 (= E0 · E1) | 지금 모놀리스(A)를 잰다. F1 · F3 · F5–F9를 넣는다(D-65, D-66, D-79 — F2 · F4는 버림, D-80 · D-84). metrics-convention의 예정 지표를 코드로 만든다 | SC0 관문, A의 SC1 · SC3 · SC9 · SC10, '지금 (A)' 장 ([verification.md](verification.md) 「판정과 결과」) | 대기 |
 | 2 경계 · 새 앱 | M1 별도 앱 뼈대 + 루트 compose (D-78) | 같은 저장소에 `running-session-server/`, compose로 두 앱 + 경로 프록시 | 기존 E2E가 프록시로 통과 | 대기 |
 | 2 경계 · 새 앱 | M2 계약 (아웃박스 · CDC · inbox, DLT) | 서비스 사이 이벤트, 러닝 DB 커넥터, DLT · 건너뜀 알람 · 대조 | SC6 · I5 | 대기 |
 | 2 경계 · 새 앱 | M3 새 엔진 + 동등성 | 새 엔진을 옛 엔진과 같은 결과로 맞춘다 | 골든 트랙 차이 0 · 두 엔진 E2E | 대기 |

@@ -10,7 +10,7 @@
 | 하네스 — 클라이언트 모델 · 시드 · 스크립트 · 지표 계산 | [load_test/msa/README.md](../../../load_test/msa/README.md) |
 | 옛 기준선 (run 13 · 14 · 16 · 17 · 18) | [load_test/RESULTS.md](../../../load_test/RESULTS.md) (+ 「정정 (11-24)」) |
 | 근거 G · AG · X | [rationale.md](rationale.md) 「근거 순위」 |
-| 선행 수정 F1–F9 (모놀리스에 넣는 F1 · F3–F9 = 비교군 A′, F2는 버림) | [migration.md](migration.md) 「선행 수정 F1–F9」 |
+| 선행 수정 F1–F9 (모놀리스에 넣는 F1 · F3 · F5–F9 = 비교군 A′, F2 · F4는 버림) | [migration.md](migration.md) 「선행 수정 F1–F9」 |
 | 서버 지표 이름 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」 |
 
 > 상태: 설계 — 돌린 k6 회차가 없다. 0단계 운영 증거는 11-25에 모았다([RESULTS](../../../load_test/msa/RESULTS.md) 「0. 운영 증거」). 방향(러닝 연속성)과 '새 k6로 반증, 옛 결과는 기준선만'은 정함 (D-45 · D-25). 비교군 · 시나리오도 정함 (D-57). 기준 숫자만 PREREG를 얼릴 때 확정된다.
@@ -55,7 +55,7 @@
 | 비교군 | 무엇 | 쓰는 곳 | 비고 |
 |---|---|---|---|
 | **A** | 지금 모놀리스 ×2 — 운영 설정 그대로: `t3.small`, `MaxRAMPercentage` 없음(`Dockerfile`은 `java -jar`), Hikari 기본(10개 · 30초), Tomcat 기본, health에 db · redis 포함, 계획 종료 없음. 운영은 한 대지만(load_test/msa/RESULTS 「0. 운영 증거」) B0 · B2와 비용을 맞추고 다른 인스턴스 경우(SC7)를 보려고 둘로 돈다 — SC1에서 운영은 러너 전부, A는 바뀌는 인스턴스의 러너만 끊긴다. 배포는 운영과 같은 인스턴스 새로 고침(`backend-cd-prod.yml` 설정) 또는 같은 순서를 흉내 낸 스크립트 | SC2 · SC11–SC14 밖 모두 | '지금' 장 |
-| **A′** | A + F1 · F3–F9(D-65, D-66, D-67, D-79) — 같은 하드웨어, 같은 DB 커넥션 총량. F2는 버렸다(D-80) | SC2 · SC4 · SC14 밖 모두 | 정함 |
+| **A′** | A + F1 · F3 · F5–F9(D-65, D-66, D-79, F4는 버림 — D-84) — 같은 하드웨어, 같은 DB 커넥션 총량. F2는 버렸다(D-80) | SC2 · SC4 · SC14 밖 모두 | 정함 |
 | **B0** | A′ 이미지를 두 함대로 — 메인 1 + 세션 1, ALB 경로 규칙은 목표의 세션 경로(러닝 WS · 6-1 · 6-2, [architecture.md](architecture.md) 「공개 경로」)를 세션 함대로 — 같은 DB를 읽으므로 결과 조회도 세션 함대가 답한다, 역할은 env(migration 「선행 조건」의 역할 플래그). RDS · Redis · S3는 같이 쓴다 — 프로세스 격리만 잰다. 목표 모양이 아니다 | SC1–SC3 · SC5–SC11 · SC13 | AG6 |
 | **B2** | 실제 분리 — 러닝 DB, 결과 이벤트 · DLT, ES256, 결과 조회는 세션(D-58), Redis 서비스마다 하나(D-49). DB 예산 합은 A′와 같다 | SC1–SC7 · SC9 · SC10 · SC14 (M5) | 핵심 비교 |
 | A′c | A′ + `running:*` 키 · 채널 전용 Redis 연결 팩토리 하나 더(같은 Redis 서버) | SC4 · SC5 | G2 연결 절반 |

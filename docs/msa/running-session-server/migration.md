@@ -30,7 +30,7 @@
 - **지우지 않고 옆에 새로 만든다** — 지금 러닝 세션 코드(이하 옛 엔진)는 M7까지 운영을 맡고 M8에 지운다.
 - **처음부터 따로 띄운다** — 새 코드는 루트의 `running-session-server/`에 별도 Spring Boot 앱으로 만든다. 모놀리스 안에서 호스팅하지 않는다(D-78).
 - **애그리거트를 쪼개지 않고 새로 만든다** — 매칭과 러닝은 한 애그리거트다(「지금 얽힌 곳 (11-24 기준)」). 메인 쪽은 넘기기 이벤트를 쓰고 결과를 받는 일만 더한다.
-- **선행 수정은 모놀리스에 먼저** — F1(끝내기 구조) · F3 · F4 · F5–F9 — `정함 (D-65, D-66, D-67, D-79)`. F2는 버림(D-80). 새 엔진의 끝내기도 같은 구조다(D-63, D-82).
+- **선행 수정은 모놀리스에 먼저** — F1(끝내기 구조) · F3 · F5–F9 — `정함 (D-65, D-66, D-79)`. F2는 버림(D-80), F4는 버림(D-84). 새 엔진의 끝내기도 같은 구조다(D-63, D-82).
 
 ## 지금 얽힌 곳 (11-24 기준)
 
@@ -128,14 +128,14 @@ runiverse-backend/
 
 ## 선행 수정 F1–F9
 
-M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D-66, D-67, D-79)`. F2는 버림(D-80), F4도 모놀리스에(D-67). 모놀리스에 넣은 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
+M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D-65, D-66, D-79)`. F2는 버림(D-80), F4도 버림(D-84). 모놀리스에 넣은 묶음이 비교군 A′다([verification.md](verification.md) 「비교군」). 앱은 바꾸지 않는다 — 다시 붙을 때 전체 트랙 대신 `nextSequence`부터 보내기는 앱 동작이 바뀌는 일이라 넣지 않는다.
 
 | F | 고칠 것 | 지금 코드 |
 |---|---|---|
 | F1 | **M0 모놀리스 — 이번 PR (D-79)** — 끝내기를 판정 → 봉인 → 확정으로 나눈다 (D-82). 임대(판정 앞, Redis `SET NX` TTL 30초) → 판정(잠금 안): 다시 확인 · 트랙 스냅숏 · `TrackFilter` · 목표 판정. 봉인(잠금 밖, 임대만): `TrackAnalyzer` · S3 원본 업로드 · 날씨. 확정(잠금 안): 다시 확인 → 기록 · 구간 · 상태 저장. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`, 자동 종료는 무응답. 원본 트랙 업로드 요청에만 `apiCallTimeout` 10초. 새 엔진도 같은 구조로 짠다 | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
 | F2 | **버림 (D-80)** — 계산마다 잠근 채 판정한다. 아래는 버린 안: 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
 | F3 | **M0 모놀리스 (D-66, D-83)** — 강제 종료를 알람(잠금 없이 확인 → 할 일 있을 때만 잠금 → 남으면 1분 뒤 다시 걸기) + 러너마다 워커(`RunningFinisher.finish`)로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
-| F4 | **M0 모놀리스 (D-67)** — `app_versions` 30초 캐시. 대가: 최소 버전 상향이 최대 30초 늦게 걸린다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 캐시 없이 읽는다 |
+| F4 | **버림 (D-84)** — `app_versions` 30초 캐시. 버전 확인은 쿼리 하나 동안만 커넥션을 빌리고, 풀을 바닥내던 원인은 F1 · F3가 없앴다. 커넥션 대기는 F5 지표로 본다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 잠금 없이 읽는다 — 그대로 둔다 |
 | F5 | **M0 모놀리스 (D-66)** — Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `reWriteBatchedInserts`만 설정돼 있다 |
 | F6 | **M0 모놀리스 (D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
 | F7 | **M0 모놀리스 (D-66)** — `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`에 실행기 지정이 없다 |
@@ -239,7 +239,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 - [ ] F9 계획 종료 (D-65)
 - [x] F3 강제 종료 — 알람 확인 + 러너별 워커 + 1분 뒤 다시 걸기 (D-83) — 코드 · 단위 · 통합 테스트 · E2E 11-25
 - [ ] F5 · F6 · F7 · F8 (D-66) — 하나씩, 파일 단위로
-- [ ] F4 `app_versions` 30초 캐시 (D-67)
+- [x] ~~F4 `app_versions` 30초 캐시~~ — 버림 (D-84)
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
@@ -375,7 +375,7 @@ test만. 겹치는 EKS 단계: E5.
 | 단계 | 문서 | 고칠 것 |
 |---|---|---|
 | M0 | [metrics-convention.md](../../metrics-convention.md) 「기본 제공과 직접 만드는 것」, load_test/msa PREREG · RESULTS, platform 「확인할 운영 값」 | 새 서버 지표 예정 행(코드가 들어가면 사용 중), 운영 Grafana에 HikariCP(활성 · 대기) 패널 추가 — 0단계에서 풀 기준선을 못 뽑았다, PREREG 동결 · 결과, 관리 포트와 종료 값 |
-| M0 | [api-spec.md](../../api-spec.md) 0 · 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42 · D-65). F4(D-67)로 최소 버전이 최대 30초 늦게 걸린다는 메모 — 0 공통 규칙의 '다음 요청부터 바로' 문구 |
+| M0 | [api-spec.md](../../api-spec.md) 0 · 5 · 2-3 | `4500`이 계획 종료에도 온다는 메모(계약 그대로, D-42 · D-65). F4는 버려(D-84) 0 공통 규칙의 '다음 요청부터 바로' 문구는 그대로다 |
 | M1 | 레이어 규칙 ([docs/architecture.md](../../architecture.md)) 「패키지 구조」 「의존 방향」, spec-check 스킬 | 별도 앱 폴더 `running-session-server/` · base package · 옛 엔진 목록 규칙, 검사 규칙 |
 | M1 | CLAUDE.md | 빌드 · 테스트 명령, 문서 색인 |
 | M2 | api-spec 14장 `서비스 사이 계약 — 메인 ↔ 러닝 세션` (새로) | 이벤트 · 내부 API 본문. architecture 「이벤트 (후보)」 「동기 호출 허용 목록」에는 행과 링크만 남긴다 |

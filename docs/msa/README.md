@@ -197,7 +197,7 @@ Runiverse는 지금 메인 서버(running-service)와 AI 전용 서버로 돌고
 | R1–R9 | 플랫폼 검증 | [running-session-server/verification.md](running-session-server/verification.md) 「플랫폼 검증 R1–R9」 |
 | `K-SCn-m` · `K-Rn-m` | 판정 기준 · 단계 나가는 기준 후보 | [load_test/msa/PREREG.md](../../load_test/msa/PREREG.md) 「시나리오별 기준」 「후보 기준」 |
 | I1–I7 | 불변식 | [running-session-server/consistency.md](running-session-server/consistency.md) 「불변식 I1–I7」 |
-| F1–F9 · M0–M9 · 지울 기준 A · B | 분리 전 모놀리스 안 수정 (F1 · F3–F9를 합치면 비교군 A′, F2는 버림 — D-80) · 옮기기 단계 (M9는 버림 — D-78) · 옛 엔진을 지우는 기준 (B는 버림 — D-78) | [running-session-server/migration.md](running-session-server/migration.md) 「선행 수정 F1–F9」 「단계 M0–M9」 「지울 기준 A · B」 |
+| F1–F9 · M0–M9 · 지울 기준 A · B | 분리 전 모놀리스 안 수정 (F1 · F3 · F5–F9를 합치면 비교군 A′, F2 · F4는 버림 — D-80 · D-84) · 옮기기 단계 (M9는 버림 — D-78) · 옛 엔진을 지우는 기준 (B는 버림 — D-78) | [running-session-server/migration.md](running-session-server/migration.md) 「선행 수정 F1–F9」 「단계 M0–M9」 「지울 기준 A · B」 |
 | E0–E7 | EKS 도입 단계 | [eks.md](eks.md) 「도입 단계 E0–E7」 |
 | 넘기기-동기 · 넘기기-사본 | B2의 넘기기 변형 (SC5) | [running-session-server/verification.md](running-session-server/verification.md) 「비교군」 |
 | run n | 측정 회차 | [load_test/RESULTS.md](../../load_test/RESULTS.md) (첫 측정) · [load_test/msa/RESULTS.md](../../load_test/msa/RESULTS.md) 「회차 색인」 |
