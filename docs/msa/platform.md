@@ -45,7 +45,7 @@
 | 이미지 | Dockerfile 하나, 기반 `eclipse-temurin:21-jre`(태그), `java -jar` — JVM 옵션·HEALTHCHECK 없음. CI는 `linux/amd64`로만 빌드한다(두 배포 워크플로의 `platforms`) | 힙 비율은 [migration](running-session-server/migration.md) 「선행 수정 F1–F9」 F8 |
 | 설정 · 비밀값 | 접속값 · 비밀값은 `application.properties`에 `${VAR}`로만 둔다. test 배포는 `/runiverse/test` 아래를 **재귀로 전부** 읽어 이름 끝만 키로 env 파일을 만든다(여러 줄 값 거부 — PEM은 `/runiverse/files/{test\|deploy}/`). prod는 시작 템플릿 사용자 데이터가 `/runiverse/deploy`로 같은 일을 하는 것으로 본다 — 저장소 밖이라 「확인할 운영 값」 | 컨테이너가 그 경로의 비밀값을 모두 받는다 — 「설정 · 비밀값」 |
 | 종료 | WS를 미리 닫는 종료 처리(드레이너·종료 훅)가 없다 | [runtime.md](running-session-server/runtime.md), 선행 수정 F9 |
-| health | `/actuator/health` 기본 집계 — DB·Redis 포함, 그룹·관리 포트 없음. health·prometheus는 공개 포트에서 인증 없이 열리고(`SecurityConfig`), ALB 규칙이 health만 통과시킨다 | 대상 그룹 검사가 이 경로면 DB·Redis 장애가 인스턴스 교체로 번진다 — F6, 관리 포트는 migration 「선행 조건」 |
+| health | `/actuator/health` 기본 집계 — DB·Redis 포함(진단용). F6로 `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`) 그룹을 연다 — 둘 다 DB·Redis를 보지 않는다. 관리 포트는 없다. 세 경로 모두 공개 포트에서 인증 없이 열리고(`SecurityConfig`), ALB 리스너 규칙은 `/actuator/health`만 통과시킨다(그룹 경로는 규칙 2에 403) | 대상 그룹 검사 경로를 readiness로 바꿔야 DB·Redis 장애가 인스턴스 교체로 번지지 않는다 — 코드 배포 뒤에 바꾼다(먼저 바꾸면 없는 경로를 검사한다). Redis가 멈추면 기존 health는 15초 넘게 답하지 않는다(E2E 11-25) |
 | 메트릭 | Micrometer → `/actuator/prometheus`, 공통 태그 `application=running-service`. Gauge 0개 — WS·SSE 연결 수가 없다 | 연결 게이지는 검증·자동 확장 전에 만든다 |
 | 추적 · 로그 상관 | 추적 없음. `RequestIdFilter`가 요청마다 UUID를 새로 만든다(들어온 ID를 읽지 않음). MDC(`requestId`·`userId`)는 HTTP 필터에서만 넣어 WS 메시지·Redis 구독·Kafka 수신 로그에는 없다 | D-55, 「관측」 |
 | 로그 수집 | ECS JSON 파일 → Filebeat → 모니터링 서버 ES. test `docker run`에는 로그 디렉터리 마운트가 없다 | EKS에서는 stdout — 「관측」 |
