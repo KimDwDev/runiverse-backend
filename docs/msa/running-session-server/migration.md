@@ -241,7 +241,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 - [x] F5 Hikari 명시 — `pool-name=main` · 나머지는 환경변수(기본값): 최대 `DB_POOL_MAX_SIZE`(10) · 최소 `DB_POOL_MIN_IDLE`(10) · 대기 상한 `DB_POOL_CONNECTION_TIMEOUT_MS`(5000) · 누수 감지 `DB_POOL_LEAK_DETECTION_MS`(10000) (D-66) — E2E 11-25: 누수 경고 0 · 대기 시간 초과 0 · 최장 사용 0.33초
 - [x] F6 health 그룹 — `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`), 둘 다 DB · Redis를 보지 않는다. 기존 `/actuator/health`는 진단용으로 그대로 (D-66) — E2E 11-25. Redis를 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP. **남은 것: 배포 뒤 test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸기(사용자)**
 - [x] F7 러닝 방 채널 전용 컨테이너(`runningRoomChannelContainer`) + 상한 있는 실행기 — 스레드 `RUNNING_ROOM_LISTENER_THREADS`(8) · 대기 줄 `RUNNING_ROOM_LISTENER_QUEUE_CAPACITY`(5000), 넘치면 버리고 10초에 한 줄 WARN + `runiverse.running.room.dropped`. 매칭 · 알림 · 예약은 기존 컨테이너 (D-66) — E2E 11-25
-- [ ] F8 (D-66)
+- [x] F8 힙 비율 — Dockerfile `JVM_MAX_RAM_PERCENTAGE`(기본 50.0)를 `exec java -XX:MaxRAMPercentage=…`로 넘긴다(`exec`라 java가 PID 1 — SIGTERM이 닿는다). `--memory` 제한이 없어 서버 전체 메모리 기준이다 (D-66) — 11-25 이미지에서 기본 50 · 덮어쓰기 40 확인, E2E는 F9와 함께
 - [x] ~~F4 `app_versions` 30초 캐시~~ — 버림 (D-84)
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
@@ -398,7 +398,7 @@ test만. 겹치는 EKS 단계: E5.
 1. ~~모놀리스 안 영속성~~ — **정했다 → D-78**: 별도 앱이라 자기 DataSource를 쓰고 메인 영속성 설정과 겹치지 않는다.
 2. ~~호스팅 동안 러닝 DB vs 메인 DB 안 스키마~~ — **정했다 → D-78**: 모놀리스 안 호스팅이 없어 처음부터 자기 러닝 DB(dev는 compose의 두 번째 Postgres)를 쓰고, 두 번째 커넥터는 M2에 만든다. test의 러닝 DB 자리는 [../platform.md](../platform.md) 「test 환경」.
 3. **Flyway를 들이는 때** — M1 vs 저장소를 나눌 때(M6) (D-56).
-4. **힙 `MaxRAMPercentage` 값** — 75 / 70 / 65 (F8). SC11(J1–J4) 결과로 정한다.
+4. **힙 `MaxRAMPercentage` 값** — EC2는 50으로 시작했다(F8, 11-25 — `--memory` 제한이 없어 서버 전체 메모리 기준이라 75 · 70 · 65는 t3.small 2GB에서 힙 밖 · OS와 합쳐 넘칠 수 있다). EKS에서 파드 메모리 제한을 둔 뒤의 값(75 / 70 / 65)은 SC11(J1–J4) 결과로 정한다.
 5. **분리 전 방의 결과 다시 보기** — 앱이 기록 목록에서 6-1 · 6-2를 다시 여는지 확인한다. 열면 M7 전에 옛 방 결과를 러닝 DB로 복사한다(「옛 기록」, D-69).
 6. ~~엔진을 적는 자리~~ — **정했다 → D-78**: 방마다 엔진을 적지 않고 메인의 전체 엔진 스위치 하나다(「라우팅」).
 7. **운영에서 F9를 거는 방법** — ASG 인스턴스 새로 고침이 컨테이너에 정상 종료 신호를 주고 기다리게 하는 연결.
