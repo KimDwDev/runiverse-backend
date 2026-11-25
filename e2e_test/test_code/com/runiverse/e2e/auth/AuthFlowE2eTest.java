@@ -109,6 +109,19 @@ class AuthFlowE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("대상 그룹 검사·프로브용 liveness·readiness는 토큰 없이 UP으로 답한다")
+    void probesArePublicAndUp() {
+        // when -> 대상 그룹 검사는 토큰을 싣지 못한다. 그룹이 꺼져 있으면 404, 공개 경로에서 빠지면 401이다
+        Response liveness = get("/actuator/health/liveness", null);
+        Response readiness = get("/actuator/health/readiness", null);
+        // then -> DB·Redis를 보지 않는 그룹이라 앱이 떠 있으면 UP이다(F6)
+        assertThat(liveness.status()).isEqualTo(200);
+        assertThat(liveness.text("status")).isEqualTo("UP");
+        assertThat(readiness.status()).isEqualTo(200);
+        assertThat(readiness.text("status")).isEqualTo("UP");
+    }
+
+    @Test
     @DisplayName("인증을 마쳐도 비밀번호 규칙을 어기면 400으로 걸러지고 가입되지 않는다")
     void signUpRejectsInvalidPassword() {
         // given
