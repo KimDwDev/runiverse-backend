@@ -41,7 +41,8 @@
 
 1. **브랜치** — `dev`에서 딴다(예: `refactor/pre-split-finish-and-drain`, [git-convention](../../git-convention.md) 「브랜치 규칙」). PR 대상은 `dev`.
 2. **순서** — M0 목록 순서: F1 → F9 → F3 · F5 · F6 · F7 · F8 → F4. F 하나씩, 운영 코드는 파일 하나씩 바꾼다 (D-66).
-3. **F1** — **코드 됨 (11-25, `chore/build-msa`)**: `RunningFinisher`(지휘자 · 봉인) + `RunningFinishSteps`(판정 · 확정 트랜잭션) + `FinishLeaseRedisAdapter`. E2E와 효과 측정(SC9 A vs A′)은 아직. `RunningFinisher`를 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금)으로 나눈다. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 재전송을 받는다 (D-79, D-80, D-82). 모양은 migration F1 행, 지킬 순서는 [runtime.md](runtime.md)의 끝내기 표.
+3. **F1** — **코드 됨 (11-25, `chore/build-msa`)**: `RunningFinisher`(지휘자 · 봉인) + `RunningFinishSteps`(판정 · 확정 트랜잭션) + `FinishLeaseRedisAdapter`. E2E 통과, 효과 측정(SC9 A vs A′)은 아직. `RunningFinisher`를 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금)으로 나눈다. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`로 재전송을 받는다 (D-79, D-80, D-82). 모양은 migration F1 행, 지킬 순서는 [runtime.md](runtime.md)의 끝내기 표.
+   - **F3 코드 됨 (11-25)**: `ForceFinishRunningRoomHandler`(알람 확인) + `ForceFinishSteps`(잠금 안 정리) + `ForceFinishRunnerDispatcher`(`forceFinishExecutor` 워커) + 예약 다시 걸기(`ScheduledJob.reschedule`, D-83). 다음은 F4 · F5–F9
 4. **F9** — 소켓은 `4500`으로 나눠 닫는다(D-42 · D-65). 드레이너 · SSE 완료는 migration 「선행 조건」 M0 행, 닫는 순서와 시간은 [runtime.md](runtime.md).
 5. **같은 PR의 문서** — migration 「단계마다 고칠 문서」 M0 행.
 6. **M0 안 다른 일** — 운영 Grafana HikariCP 패널, metrics-convention 예정 지표, 「선행 조건」의 나머지 M0 행, 하네스 v2 → PREREG 동결 → 비교군 A(수정 전 이미지) · A′ 측정. 어느 것을 이 PR에 넣을지는 정하지 않음.
