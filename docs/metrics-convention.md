@@ -140,7 +140,7 @@ runiverse.<도메인>.<기능 폴더>.<동작>
 |---|---|
 | `http.server.requests` | 엔드포인트별 **응답 시간**·상태 코드 |
 | `jvm.*`, `process.*` | 메모리·GC·스레드·CPU |
-| `hikaricp.*` | DB 커넥션 풀 |
+| `hikaricp.*` | DB 커넥션 풀 — `pool=main`(메인 서버 풀, `spring.datasource.hikari.pool-name`). 풀이 바닥났는지는 `pending` · `timeout`, 오래 쥐는지는 `usage`(누수 감지 10초는 로그로) |
 | `lettuce.*` | Redis 명령 |
 | `logback.events` | 레벨별 로그 수 — ERROR 증가 알림에 쓴다 |
 
