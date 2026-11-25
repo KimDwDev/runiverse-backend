@@ -323,8 +323,11 @@ jobs:
           fi
 
           # 기존 컨테이너 제거
-          echo "Removing existing container..."
-          docker rm -f "${CONTAINER_NAME}" || true
+          # rm -f는 SIGTERM 없이 바로 SIGKILL이라 graceful 종료(F9)가 돌지 않는다 — 먼저 stop으로 SIGTERM을 보내고
+          # 앱의 종료 대기(SHUTDOWN_TIMEOUT, 기본 20초)보다 길게 기다린 뒤 지운다
+          echo "Stopping existing container..."
+          docker stop -t 30 "${CONTAINER_NAME}" || true
+          docker rm "${CONTAINER_NAME}" || true
 
           # 새 컨테이너 실행
           echo "Starting new container..."
@@ -332,6 +335,7 @@ jobs:
           docker run -d \
             --name "${CONTAINER_NAME}" \
             --restart unless-stopped \
+            --stop-timeout 30 \
             --network host \
             --env-file "${ENV_FILE}" \
             -v "${KAFKA_CA_FILE}:${KAFKA_CA_MOUNT}:ro" \
@@ -388,6 +392,7 @@ jobs:
               docker run -d \
                 --name "${CONTAINER_NAME}" \
                 --restart unless-stopped \
+                --stop-timeout 30 \
                 --network host \
                 --env-file "${ENV_FILE}" \
                 -v "${KAFKA_CA_FILE}:${KAFKA_CA_MOUNT}:ro" \
