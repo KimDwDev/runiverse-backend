@@ -29,7 +29,7 @@ class RunningRoomSubscriberTest {
     private static final Long ROOM_ID = 42L;
 
     @Mock
-    private RedisMessageListenerContainer runningChannelContainer;
+    private RedisMessageListenerContainer runningRoomChannelContainer;
 
     @Mock
     private RunningRoomListener runningRoomListener;
@@ -39,7 +39,7 @@ class RunningRoomSubscriberTest {
 
     @BeforeEach
     void setUp() {
-        subscriber = new RunningRoomSubscriber(runningChannelContainer, runningRoomListener);
+        subscriber = new RunningRoomSubscriber(runningRoomChannelContainer, runningRoomListener);
         log = LogCapture.of(RunningRoomSubscriber.class);
     }
 
@@ -53,7 +53,7 @@ class RunningRoomSubscriberTest {
     void logsRedisFailureOnSubscribe() {
         // given
         willThrow(new RedisConnectionFailureException("redis down"))
-                .given(runningChannelContainer).addMessageListener(eq(runningRoomListener), any(Topic.class));
+                .given(runningRoomChannelContainer).addMessageListener(eq(runningRoomListener), any(Topic.class));
 
         // when
         assertThatThrownBy(() -> subscriber.subscribe(ROOM_ID))

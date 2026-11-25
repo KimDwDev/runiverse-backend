@@ -7,18 +7,18 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.stereotype.Component;
 
-// 이 인스턴스가 참가자를 들고 있는 방만 구독한다
+// 이 인스턴스가 참가자를 들고 있는 방만 구독한다 — 러닝 방 전용 컨테이너(상한 있는 실행기)에 붙는다(F7)
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RunningRoomSubscriber {
 
-    private final RedisMessageListenerContainer runningChannelContainer;
+    private final RedisMessageListenerContainer runningRoomChannelContainer;
     private final RunningRoomListener runningRoomListener;
 
     public void subscribe(Long runningRoomId) {
         try {
-            runningChannelContainer.addMessageListener(
+            runningRoomChannelContainer.addMessageListener(
                     runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
         } catch (RuntimeException e) {
             log.error("[러닝] 방 채널 구독 실패: Redis 오류 - roomId={}", runningRoomId, e);
@@ -28,7 +28,7 @@ public class RunningRoomSubscriber {
     }
 
     public void unsubscribe(Long runningRoomId) {
-        runningChannelContainer.removeMessageListener(
+        runningRoomChannelContainer.removeMessageListener(
                 runningRoomListener, new ChannelTopic(RunningChannel.room(runningRoomId)));
         log.debug("[러닝] 방 채널 구독 해제 성공 - roomId={}", runningRoomId);
     }
