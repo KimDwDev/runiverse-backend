@@ -3,6 +3,7 @@ package com.runiverse.running_service.unit_test.scheduling.application;
 import com.runiverse.running_service.application.scheduling.ScheduledJobExecutor;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobCommand;
 import com.runiverse.running_service.application.scheduling.command.run.RunScheduledJobHandler;
+import com.runiverse.running_service.application.scheduling.command.schedule.ScheduledJobRescheduledEvent;
 import com.runiverse.running_service.application.scheduling.port.out.LockScheduledJobPort;
 import com.runiverse.running_service.application.scheduling.port.out.UpdateScheduledJobPort;
 import com.runiverse.running_service.domain.scheduling.ScheduledJob;
@@ -126,6 +127,58 @@ class RunScheduledJobHandlerTest {
         assertThatThrownBy(() ->
                 handlerWithoutExecutor.handle(new RunScheduledJobCommand(JOB_ID)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("실행기가 끝나지 않았다고 답하면 완료로 적지 않고 같은 예약을 그 시각으로 다시 건다")
+    void reschedulesUnfinishedJob() {
+        // given -> 강제 종료에서 뛰는 사람이 남았다
+        LocalDateTime retryAt = LocalDateTime.now().plusMinutes(1);
+        matchCloseExecutor.retryAt = Optional.of(retryAt);
+        givenLocked(pendingJob());
+
+        // when
+        runScheduledJobHandler.handle(new RunScheduledJobCommand(JOB_ID));
+
+        // then -> 실행 전에 걸어 둔 것과 같다 — 뒷일이 도중에 죽어도 그 시각에 누군가 다시 깬다
+        ArgumentCaptor<ScheduledJob> captor = ArgumentCaptor.forClass(ScheduledJob.class);
+        verify(updateScheduledJobPort).update(captor.capture());
+        assertThat(captor.getValue().isSent()).isFalse();
+        assertThat(captor.getValue().getSentAt()).isEmpty();
+        assertThat(captor.getValue().getExecuteAt()).isEqualTo(retryAt);
+        // 커밋 뒤 타이머를 다시 건다 — 이 인스턴스의 옛 타이머는 발화 때 지워졌다
+        assertThat(events).singleElement().isInstanceOf(ScheduledJobRescheduledEvent.class);
+    }
+
+    @Test
+    @DisplayName("끝났으면 다시 걸지 않고 타이머 이벤트도 내지 않는다")
+    void doesNotRescheduleFinishedJob() {
+        // given
+        givenLocked(pendingJob());
+
+        // when
+        runScheduledJobHandler.handle(new RunScheduledJobCommand(JOB_ID));
+
+        // then
+        assertThat(events).isEmpty();
+    }
+
+    @Test
+    @DisplayName("다시 건 시각이 아직이면 옛 타이머가 깨워도 실행하지 않는다")
+    void skipsJobNotYetDue() {
+        // given -> 잠금을 기다리던 다른 인스턴스가, 앞 실행이 1분 뒤로 다시 걸어 둔 행을 본다
+        givenLocked(ScheduledJob.builder()
+                .scheduledJobId(JOB_ID)
+                .target(JobTarget.of(ScheduledJobType.MATCH_CLOSE, ROOM_ID))
+                .executeAt(LocalDateTime.now().plusMinutes(1))
+                .build());
+
+        // when
+        runScheduledJobHandler.handle(new RunScheduledJobCommand(JOB_ID));
+
+        // then -> 지금 실행하면 1분 간격이 무너진다. 새 시각의 타이머가 다시 깨운다
+        assertThat(matchCloseExecutor.executed).isEmpty();
+        verifyNoInteractions(updateScheduledJobPort);
     }
 
     private void givenLocked(ScheduledJob job) {

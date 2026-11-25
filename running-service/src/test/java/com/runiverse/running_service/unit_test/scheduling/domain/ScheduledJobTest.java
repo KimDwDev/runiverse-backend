@@ -120,6 +120,38 @@ class ScheduledJobTest {
     }
 
     @Nested
+    @DisplayName("다시 걸기")
+    class Reschedule {
+
+        @Test
+        @DisplayName("선점한 예약을 새 시각의 미실행 예약으로 되살린다")
+        void revivesClaimedJob() {
+            // given -> 강제 종료가 뛰는 사람이 남아 1분 뒤로 다시 건다
+            ScheduledJob job = ScheduledJob.reserve(ScheduledJobType.RUNNING_FORCE_FINISH, ROOM_ID, EXECUTE_AT);
+            job.markSent(EXECUTE_AT.plusSeconds(1));
+
+            // when
+            job.reschedule(EXECUTE_AT.plusMinutes(1));
+
+            // then -> 발화 여부와 시각은 짝이라 함께 비운다 — 한쪽만 남으면 복원 때 걸러진다
+            assertThat(job.isSent()).isFalse();
+            assertThat(job.getSentAt()).isEmpty();
+            assertThat(job.getExecuteAt()).isEqualTo(EXECUTE_AT.plusMinutes(1));
+            assertThat(job.isDue(EXECUTE_AT.plusSeconds(30))).isFalse();
+        }
+
+        @Test
+        @DisplayName("시각 없이는 다시 걸 수 없다")
+        void rejectsNullExecuteAt() {
+            // given
+            ScheduledJob job = ScheduledJob.reserve(ScheduledJobType.RUNNING_FORCE_FINISH, ROOM_ID, EXECUTE_AT);
+
+            // when & then
+            assertThatThrownBy(() -> job.reschedule(null)).isInstanceOf(ExecuteAtRequiredException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("복원")
     class Restore {
 
