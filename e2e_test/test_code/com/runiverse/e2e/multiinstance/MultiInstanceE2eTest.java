@@ -426,4 +426,187 @@ class MultiInstanceE2eTest extends E2eTestSupport {
             return points;
         }
     }
+
+    @Nested
+    @DisplayName("분리 전 선행 수정(M0) — 두 인스턴스에서")
+    class PreSplitFixesTest {
+
+        private static final Duration FINISH_TIMEOUT = Duration.ofSeconds(20);
+        private static final Duration SETTLE_TIMEOUT = Duration.ofSeconds(30);
+
+        private long openSolo(String baseUrl, TestUser user) {
+            Response opened = postOn(baseUrl, "/running-rooms/solo", Map.of(), user.accessToken());
+            assertThat(opened.status()).as("솔로 방 %s", opened.body()).isEqualTo(201);
+            return opened.number("runningRoomId");
+        }
+
+        private RunningWebSocket startOn(String baseUrl, TestUser user, long room) {
+            RunningWebSocket socket = connectRunningWebSocketOn(baseUrl, user.accessToken());
+            socket.send("RUNNING_START", Map.of("runningRoomId", room));
+            socket.await("RUNNING_STARTED");
+            return socket;
+        }
+
+        private int recordCount(long room, TestUser user) {
+            return Integer.parseInt(querySql("SELECT count(*) FROM running_records WHERE running_room_id = "
+                    + room + " AND user_id = '" + user.userId() + "'").get(0).trim());
+        }
+
+        private String playerStatus(long room, TestUser user) {
+            return querySql("SELECT p.status FROM running_players p JOIN running_room_sessions s "
+                    + "ON s.running_player_id = p.running_player_id WHERE s.running_room_id = " + room
+                    + " AND s.user_id = '" + user.userId() + "'").get(0).trim();
+        }
+
+        // 정북으로 5m씩 2초 간격 — 40점이면 약 195m · 78초라 기록이 남는다(최소 100m · 60초)
+        private List<Map<String, Object>> track(int count) {
+            LocalDateTime start = LocalDateTime.now(APP_ZONE).minusSeconds(count * 2L);
+            List<Map<String, Object>> points = new ArrayList<>();
+            for (int sequence = 0; sequence < count; sequence++) {
+                Map<String, Object> point = new HashMap<>();
+                point.put("sequence", sequence);
+                point.put("latitude", 37.5665 + sequence * 5.0 / 111_320.0);
+                point.put("longitude", 126.9780);
+                point.put("altitudeMeters", 30.0);
+                point.put("accuracyMeters", 5.0);
+                point.put("speedMetersPerSecond", 2.5);
+                point.put("headingDegrees", 0.0);
+                point.put("cadenceSpm", 170);
+                point.put("currentPaceSecondsPerKm", 400);
+                point.put("pauseSegment", 0);
+                point.put("recordedAt", start.plusSeconds(sequence * 2L).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                points.add(point);
+            }
+            return points;
+        }
+
+        private static String leaseKey(long room, TestUser user) {
+            return "running:finish-lease:" + room + ":" + user.userId();
+        }
+
+        // 워커 · 예약은 다른 스레드에서 끝난다 — DB가 바뀔 때까지 본다
+        private void awaitSql(String sql, String expected, Duration timeout) {
+            long deadline = System.nanoTime() + timeout.toNanos();
+            List<String> rows = List.of();
+            while (System.nanoTime() < deadline) {
+                rows = querySql(sql);
+                if (!rows.isEmpty() && rows.get(0).trim().equals(expected)) {
+                    return;
+                }
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }
+            throw new AssertionError("%s 안에 '%s'가 되지 않았습니다 — 마지막 값 %s · %s"
+                    .formatted(timeout, expected, rows, sql));
+        }
+
+        @Test
+        @DisplayName("[F6] 두 인스턴스 모두 liveness · readiness가 토큰 없이 UP이다")
+        void probesUpOnBothInstances() {
+            for (String baseUrl : List.of(one(), two())) {
+                assertThat(getOn(baseUrl, "/actuator/health/liveness", null).text("status")).isEqualTo("UP");
+                assertThat(getOn(baseUrl, "/actuator/health/readiness", null).text("status")).isEqualTo("UP");
+            }
+        }
+
+        @Test
+        @DisplayName("[F1] 끝내기 임대는 인스턴스를 넘어 보인다 — 다른 인스턴스가 끝내는 중이면 재전송을 받고, 풀리면 한 번만 확정한다")
+        void finishLeaseIsSharedAcrossInstances() {
+            // given - 인스턴스 2에서 뛰는 중, 인스턴스 1(다시 붙기 전 소켓)이 같은 러닝을 끝내는 중이다
+            TestUser runner = signUpAndOnboard();
+            long room = openSolo(two(), runner);
+            try (RunningWebSocket socket = startOn(two(), runner, room)) {
+                socket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", track(40)));
+                socket.await("RUNNING_PROGRESS_UPDATED", FINISH_TIMEOUT);
+                redisCommand("SET", leaseKey(room, runner), "held-by-instance-one", "PX", "30000");
+
+                // when
+                socket.send("RUNNING_FINISH", Map.of("forced", true));
+
+                // then - 기다리지 않고 '확정되지 않았으니 다시 보내라'로 돌려보낸다(D-82). 상태는 그대로다
+                assertThat(socket.awaitErrorPayload())
+                        .containsEntry("code", "RUNNING_TRACK_UNAVAILABLE")
+                        .containsEntry("sourceType", "RUNNING_FINISH");
+                assertThat(playerStatus(room, runner)).isEqualTo("RUNNING");
+                assertThat(recordCount(room, runner)).isZero();
+
+                // when - 앞 요청이 끝나 임대가 풀린 뒤 앱이 다시 보낸다
+                redisCommand("DEL", leaseKey(room, runner));
+                socket.send("RUNNING_FINISH", Map.of("forced", true));
+
+                // then - 한 번만 확정되고 임대도 남지 않는다
+                socket.await("RUNNING_FINISHED", FINISH_TIMEOUT);
+                assertThat(recordCount(room, runner)).isOne();
+                assertThat(redisCommand("EXISTS", leaseKey(room, runner)).trim()).isEqualTo("0");
+            }
+        }
+
+        @Test
+        @DisplayName("[F1] 다른 인스턴스로 다시 붙어 끝내고 재전송해도 기록은 하나다")
+        void finishAfterReconnectOnOtherInstance() {
+            // given - 인스턴스 1에서 뛰다 인스턴스 2로 다시 붙었다(옛 소켓은 대체 통지로 닫힌다)
+            TestUser runner = signUpAndOnboard();
+            long room = openSolo(one(), runner);
+            try (RunningWebSocket oldSocket = startOn(one(), runner, room)) {
+                oldSocket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", track(40)));
+                oldSocket.await("RUNNING_PROGRESS_UPDATED", FINISH_TIMEOUT);
+                try (RunningWebSocket newSocket = startOn(two(), runner, room)) {
+                    oldSocket.awaitClosed(Duration.ofSeconds(10));
+
+                    // when - 끝내고, ack를 놓친 앱이 한 번 더 보낸다
+                    newSocket.send("RUNNING_FINISH", Map.of("forced", true));
+                    newSocket.await("RUNNING_FINISHED", FINISH_TIMEOUT);
+                    newSocket.send("RUNNING_FINISH", Map.of("forced", true));
+                    newSocket.await("RUNNING_FINISHED", FINISH_TIMEOUT);
+                }
+            }
+
+            // then - 판정 → 봉인 → 확정이 한 번만 저장했다
+            assertThat(recordCount(room, runner)).isOne();
+            assertThat(redisCommand("EXISTS", leaseKey(room, runner)).trim()).isEqualTo("0");
+        }
+
+        @Test
+        @DisplayName("[F3 · F9] 다른 인스턴스를 정지 신호로 내렸다 올리면 graceful로 내려가고, 기동 복구가 강제 종료를 돌려 미출석 이탈 · 러너 확정 · 다시 걸기를 한다")
+        void forceFinishRunsOnRestartedInstance() {
+            // given - 2인 매칭 방: 철수는 인스턴스 1에서 뛰는 중, 영희는 한 번도 붙지 않았다
+            TestUser chulsu = signUpAndOnboard();
+            TestUser younghee = signUpAndOnboard();
+            int room = apply(one(), chulsu, TOMORROW.atTime(22, 0), 10000).number("runningRoomId");
+            assertThat(apply(one(), younghee, TOMORROW.atTime(22, 0), 10000).number("runningRoomId")).isEqualTo(room);
+            executeSql("UPDATE running_rooms SET status = 'MATCHED', start_at = (now() AT TIME ZONE 'Asia/Seoul') "
+                    + "- interval '1 minute' WHERE running_room_id = " + room);
+            try (RunningWebSocket chulsuSocket = startOn(one(), chulsu, room)) {
+                chulsuSocket.send("RUNNING_LOCATION_UPDATE", Map.of("locations", track(40)));
+                chulsuSocket.await("RUNNING_PROGRESS_UPDATED", FINISH_TIMEOUT);
+                // 6시간을 기다리지 않는다 — 강제 종료 예약을 지난 시각으로 돌려 기동 복구가 바로 돌게 한다
+                executeSql("UPDATE scheduled_jobs SET execute_at = (now() AT TIME ZONE 'Asia/Seoul') - interval '1 minute' "
+                        + "WHERE job_type = 'RUNNING_FORCE_FINISH' AND target_id = '" + room + "'");
+
+                // when - 인스턴스 2를 SIGTERM으로 내렸다 올린다(배포와 같은 길)
+                restartSecondInstance(Duration.ofSeconds(120));
+
+                // then - 내려갈 때 graceful 종료를 탔다(F9)
+                assertThat(secondContainerLogs()).contains("Graceful shutdown complete");
+                // 영희는 확정 후 이탈, 철수는 워커가 일반 종료로 확정했다(F3)
+                awaitSql("SELECT p.status FROM running_players p JOIN running_room_sessions s "
+                        + "ON s.running_player_id = p.running_player_id WHERE s.running_room_id = " + room
+                        + " AND s.user_id = '" + younghee.userId() + "'", "MATCHED_LEFT_PENALTY", SETTLE_TIMEOUT);
+                awaitSql("SELECT (p.deleted_at IS NOT NULL) FROM running_players p JOIN running_room_sessions s "
+                        + "ON s.running_player_id = p.running_player_id WHERE s.running_room_id = " + room
+                        + " AND s.user_id = '" + chulsu.userId() + "'", "t", SETTLE_TIMEOUT);
+                // 마지막 러너의 확정이 방을 닫았다
+                awaitSql("SELECT status IN ('FINISHED', 'CANCELLED') FROM running_rooms WHERE running_room_id = " + room,
+                        "t", SETTLE_TIMEOUT);
+                // 뛰던 사람이 있었으니 완료로 적지 않고 1분 뒤로 다시 걸었다 — 다음 알람이 다 끝난 것을 보고 완료로 적는다(D-83)
+                assertThat(querySql("SELECT is_sent, execute_at > (now() AT TIME ZONE 'Asia/Seoul') FROM scheduled_jobs "
+                        + "WHERE job_type = 'RUNNING_FORCE_FINISH' AND target_id = '" + room + "'").get(0).trim())
+                        .isEqualTo("f|t");
+            }
+        }
+    }
 }

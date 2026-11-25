@@ -36,6 +36,11 @@ public abstract class E2eTestSupport {
             System.getenv().getOrDefault("E2E_S3_CONTAINER", "runiverse-e2e-localstack-1");
     private static final String POSTGRES_CONTAINER =
             System.getenv().getOrDefault("E2E_POSTGRES_CONTAINER", "runiverse-e2e-postgres-1");
+    private static final String REDIS_CONTAINER =
+            System.getenv().getOrDefault("E2E_REDIS_CONTAINER", "runiverse-e2e-redis-1");
+    // 두 번째 인스턴스 — compose.yml의 app2 container_name과 같아야 한다
+    private static final String SECOND_APP_CONTAINER =
+            System.getenv().getOrDefault("E2E_SECOND_APP_CONTAINER", "runiverse-e2e-app2");
     // 핸들러가 등록된 경로(application.properties의 websocket.running-endpoint)를 컨텍스트 경로 뒤에 붙인다
     private static final String RUNNING_WEBSOCKET_URL =
             BASE_URL.replaceFirst("^http", "ws") + "/ws/running";
@@ -378,6 +383,68 @@ public abstract class E2eTestSupport {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("SQL 실행이 중단되었습니다", e);
+        }
+    }
+
+    /**
+     * Redis에 명령 하나를 보낸다 — 인스턴스 사이에 나누는 상태(끝내기 임대 등)를 심거나 지울 때 쓴다.
+     * 비밀번호는 컨테이너 안의 환경변수로만 넘겨 명령줄에 남기지 않는다
+     */
+    protected String redisCommand(String... arguments) {
+        List<String> command = new ArrayList<>(List.of("docker", "exec", REDIS_CONTAINER, "sh", "-c",
+                "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" \"$@\"", "sh"));
+        command.addAll(List.of(arguments));
+        return run(command, "Redis 명령");
+    }
+
+    /**
+     * 두 번째 인스턴스를 정지 신호(SIGTERM)로 내렸다 다시 띄우고 health가 응답할 때까지 기다린다.
+     * 계획 종료(graceful)와 기동 때 예약 복구를 E2E에서 일으키는 유일한 방법이다
+     */
+    protected void restartSecondInstance(Duration startupTimeout) {
+        run(List.of("docker", "restart", "--time", "30", SECOND_APP_CONTAINER), "두 번째 인스턴스 재시작");
+        long deadline = System.nanoTime() + startupTimeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            try {
+                if (getOn(secondBaseUrl(), "/actuator/health", null).status() == 200) {
+                    return;
+                }
+            } catch (RuntimeException ignored) {
+                // 아직 포트가 열리지 않았다 — 다시 본다
+            }
+            sleepQuietly(Duration.ofSeconds(1));
+        }
+        throw new IllegalStateException("두 번째 인스턴스가 %s 안에 다시 뜨지 않았습니다".formatted(startupTimeout));
+    }
+
+    protected static String secondContainerLogs() {
+        return run(List.of("docker", "logs", SECOND_APP_CONTAINER), "두 번째 인스턴스 로그");
+    }
+
+    private static void sleepQuietly(Duration duration) {
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("대기가 중단되었습니다", e);
+        }
+    }
+
+    private static String run(List<String> command, String what) {
+        try {
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (process.waitFor() != 0) {
+                throw new IllegalStateException(what + "에 실패했습니다: " + output);
+            }
+            return output;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(what + "가 중단되었습니다", e);
         }
     }
 
