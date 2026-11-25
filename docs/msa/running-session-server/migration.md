@@ -240,7 +240,8 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 - [x] F3 강제 종료 — 알람 확인 + 러너별 워커 + 1분 뒤 다시 걸기 (D-83) — 코드 · 단위 · 통합 테스트 · E2E 11-25
 - [x] F5 Hikari 명시 — `pool-name=main` · 나머지는 환경변수(기본값): 최대 `DB_POOL_MAX_SIZE`(10) · 최소 `DB_POOL_MIN_IDLE`(10) · 대기 상한 `DB_POOL_CONNECTION_TIMEOUT_MS`(5000) · 누수 감지 `DB_POOL_LEAK_DETECTION_MS`(10000) (D-66) — E2E 11-25: 누수 경고 0 · 대기 시간 초과 0 · 최장 사용 0.33초
 - [x] F6 health 그룹 — `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`), 둘 다 DB · Redis를 보지 않는다. 기존 `/actuator/health`는 진단용으로 그대로 (D-66) — E2E 11-25. Redis를 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP. **남은 것: 배포 뒤 test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸기(사용자)**
-- [ ] F7 · F8 (D-66) — 하나씩, 파일 단위로
+- [x] F7 러닝 방 채널 전용 컨테이너(`runningRoomChannelContainer`) + 상한 있는 실행기 — 스레드 `RUNNING_ROOM_LISTENER_THREADS`(8) · 대기 줄 `RUNNING_ROOM_LISTENER_QUEUE_CAPACITY`(5000), 넘치면 버리고 10초에 한 줄 WARN + `runiverse.running.room.dropped`. 매칭 · 알림 · 예약은 기존 컨테이너 (D-66) — E2E 11-25
+- [ ] F8 (D-66)
 - [x] ~~F4 `app_versions` 30초 캐시~~ — 버림 (D-84)
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
