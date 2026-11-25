@@ -50,7 +50,9 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
+                        // 대상 그룹 검사·쿠버네티스 프로브는 토큰을 싣지 못한다. 밖에서는 ALB 규칙이 health만 통과시킨다
+                        .requestMatchers("/actuator/health", "/actuator/health/liveness",
+                                "/actuator/health/readiness", "/actuator/prometheus").permitAll()
                         .requestMatchers(RegexRequestMatcher.regexMatcher(
                                 HttpMethod.GET,
                                 "/users/[0-9a-fA-F-]{36}/(profile|background)-image")).permitAll() // uuid일때만 jwt 검증 생략
