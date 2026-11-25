@@ -5,6 +5,7 @@ import com.runiverse.running_service.application.auth.port.out.DeleteRefreshToke
 import com.runiverse.running_service.application.common.port.out.LockUserPort;
 import com.runiverse.running_service.application.device.port.out.DeleteUserDevicesPort;
 import com.runiverse.running_service.application.running.command.accountdeletion.SettleRunningForAccountDeletionCommand;
+import com.runiverse.running_service.application.running.exception.RunningFinishInProgressException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.in.SettleRunningForAccountDeletionUsecase;
 import com.runiverse.running_service.application.user.exception.AccountDeletionUnavailableException;
@@ -47,11 +48,12 @@ public class DeleteAccountHandler implements DeleteAccountUsecase {
         // 1. 지우기 전에 한 번에 읽는다 — 소셜 연동을 지운 뒤에는 login_type을 판정할 수 없다
         AccountSnapshot snapshot = loadAccountSnapshotPort.loadAccountSnapshot(userId)
                 .orElseThrow(UserNotFoundException::new);
-        // 2. 진행 중인 러닝·매칭을 먼저 정리한다. 트랙을 못 읽은 장애는 WS용 코드라 탈퇴용으로 바꿔 던진다
+        // 2. 진행 중인 러닝·매칭을 먼저 정리한다. 트랙을 못 읽은 장애와, 다른 연결이 그 러닝을 끝내는 중(끝내기 임대, D-82)인 경우는
+        //    WS용 코드(RUNNING_TRACK_UNAVAILABLE)라 탈퇴용 일시 장애로 바꿔 던진다 — 그대로 흘리면 REST에서 500으로 가려진다
         try {
             settleRunningForAccountDeletionUsecase.handle(
                     new SettleRunningForAccountDeletionCommand(command.userId()));
-        } catch (RunningTrackUnavailableException e) {
+        } catch (RunningTrackUnavailableException | RunningFinishInProgressException e) {
             throw new AccountDeletionUnavailableException();
         }
         // 3. 스냅샷을 남긴 뒤 계정을 지운다. 기기는 FK CASCADE에 기대지 않고 먼저 지운다

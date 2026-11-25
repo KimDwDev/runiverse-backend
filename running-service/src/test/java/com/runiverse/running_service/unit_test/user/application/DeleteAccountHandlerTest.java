@@ -6,6 +6,7 @@ import com.runiverse.running_service.application.auth.port.out.DeleteRefreshToke
 import com.runiverse.running_service.application.common.port.out.LockUserPort;
 import com.runiverse.running_service.application.device.port.out.DeleteUserDevicesPort;
 import com.runiverse.running_service.application.running.command.accountdeletion.SettleRunningForAccountDeletionCommand;
+import com.runiverse.running_service.application.running.exception.RunningFinishInProgressException;
 import com.runiverse.running_service.application.running.exception.RunningTrackUnavailableException;
 import com.runiverse.running_service.application.running.port.in.SettleRunningForAccountDeletionUsecase;
 import com.runiverse.running_service.application.user.command.accountdeletion.DeleteAccountCommand;
@@ -262,6 +263,22 @@ public class DeleteAccountHandlerTest {
                 .when(settleRunningForAccountDeletionUsecase).handle(any());
 
         // when & then - WS용 코드·문구가 탈퇴 응답으로 새어 나가지 않는다
+        assertThatThrownBy(() -> handler.handle(new DeleteAccountCommand(userId, ACCESS_TOKEN_ID)))
+                .isInstanceOf(AccountDeletionUnavailableException.class);
+        verify(deleteUserPort, never()).deleteUser(any());
+    }
+
+    @Test
+    @DisplayName("다른 연결이 그 러닝을 끝내는 중이면(끝내기 임대) 탈퇴를 잠시 뒤 다시 하라고 돌려보낸다")
+    void rejectsWhenRunningFinishIsInProgress() {
+        // given - 탈퇴 정리가 부르는 끝내기가 임대에 막혔다(D-82). 코드는 WS용 RUNNING_TRACK_UNAVAILABLE이다
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        when(loadAccountSnapshotPort.loadAccountSnapshot(new UserId(userId)))
+                .thenReturn(Optional.of(onboardedSnapshot(userId)));
+        doThrow(new RunningFinishInProgressException())
+                .when(settleRunningForAccountDeletionUsecase).handle(any());
+
+        // when & then - 그대로 흘리면 REST 노출 목록에 없는 코드라 500으로 가려진다. 계정은 지우지 않는다
         assertThatThrownBy(() -> handler.handle(new DeleteAccountCommand(userId, ACCESS_TOKEN_ID)))
                 .isInstanceOf(AccountDeletionUnavailableException.class);
         verify(deleteUserPort, never()).deleteUser(any());
