@@ -4,7 +4,10 @@ import com.github.f4b6a3.uuid.UuidCreator;
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningCommand;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomCommand;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishProperties;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunnerDispatcher;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishSteps;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
@@ -38,10 +41,12 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import com.runiverse.running_service.application.running.common.RunningComboArchiver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
@@ -55,11 +60,15 @@ class ForceFinishRunningRoomHandlerTest {
     private static final int AVG_PACE = 360;
     private static final int TARGET_DISTANCE = 5_000;
     private static final Duration MATCH_COOLDOWN = Duration.ofMinutes(20);
-    // 강제 종료는 예약이 시각을 이미 판단했다 — 핸들러는 오프셋을 보지 않는다
+    // 오프셋(6시간)은 다시 걸기를 멈출 시각을 낸다 — 시작 + 6시간 + 보관 기간
     private static final MatchProperties PROPERTIES = new MatchProperties(
             Duration.ofMinutes(10), Duration.ofMinutes(5), Duration.ofSeconds(10), Duration.ofHours(6),
             10, MATCH_COOLDOWN,
             LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(30), List.of(3_000, 5_000, 10_000));
+
+    private static final Duration RETRY_INTERVAL = Duration.ofMinutes(1);
+    private static final ForceFinishProperties FORCE_FINISH_PROPERTIES =
+            new ForceFinishProperties(RETRY_INTERVAL, Duration.ofHours(7));
 
     private static final UserId RUNNER = new UserId(UuidCreator.getTimeOrderedEpoch());
     private static final UserId NO_SHOW = new UserId(UuidCreator.getTimeOrderedEpoch());
@@ -96,22 +105,26 @@ class ForceFinishRunningRoomHandlerTest {
 
     private ForceFinishRunningRoomHandler forceFinishRunningRoomHandler;
 
+    // 잠금 안 단계와 워커는 실물을 쓴다 — 무엇을 잠그고 언제 넘기는지가 이 테스트의 주제다.
+    // 워커는 그 자리에서 돈다(스레드를 띄우면 단언 시점에 끝났는지 알 수 없다)
     @BeforeEach
     void setUp() {
+        ForceFinishSteps steps = new ForceFinishSteps(lockRunningPlayerPort, lockRunningRoomPort,
+                loadRoomPlayerPort, updateRunningRoomPort, updateRunningPlayerPort, startMatchCooldownPort,
+                existsRunningRecordPort, PROPERTIES, runningComboArchiver);
         forceFinishRunningRoomHandler = new ForceFinishRunningRoomHandler(
-                lockRunningPlayerPort, lockRunningRoomPort, loadRunningRoomPort, loadRoomPlayerPort,
-                updateRunningRoomPort, updateRunningPlayerPort, startMatchCooldownPort,
-                existsRunningRecordPort, finishRunningUsecase, PROPERTIES, runningComboArchiver);
+                loadRunningRoomPort, loadRoomPlayerPort, steps,
+                new ForceFinishRunnerDispatcher(Runnable::run, finishRunningUsecase),
+                PROPERTIES, FORCE_FINISH_PROPERTIES);
     }
 
     @Test
     @DisplayName("뛰던 참가자는 평소 러닝 종료 경로로 넘긴다")
     void delegatesRunnerToFinishRunning() {
         // given -> 트랙 분석·기록 생성·거리 비율 판정을 여기서 다시 만들지 않는다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -125,10 +138,9 @@ class ForceFinishRunningRoomHandlerTest {
     @DisplayName("참가자를 방보다 먼저 잠근다")
     void locksPlayersBeforeRoom() {
         // given -> 시작·취소·탈퇴 정산이 모두 참가자 → 방 순이라, 반대로 잡으면 교착에 빠진다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -143,10 +155,9 @@ class ForceFinishRunningRoomHandlerTest {
     @DisplayName("한 번도 붙지 않은 참가자는 확정 후 이탈로 닫는다")
     void closesNoShowAsMatchedLeft() {
         // given -> 2인 확정 방이라 안 나타난 것이 곧 상대를 곤란하게 만든 것이다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(finishedRoom(RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -162,9 +173,8 @@ class ForceFinishRunningRoomHandlerTest {
     @DisplayName("1인 확정 방의 미출석은 제재하지 않는다")
     void doesNotPenalizeNoShowInSinglePlayerRoom() {
         // given -> 안 나타나도 곤란해지는 상대가 없다. 시작 전 이탈 면제와 같은 기준이다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, NO_SHOW));
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(room(RunningRoomStatus.STARTED, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -180,10 +190,9 @@ class ForceFinishRunningRoomHandlerTest {
     void freezesPenaltyBaseBeforeLoop() {
         // given -> 2인 방에서 둘 다 안 나타났다. 처리하면서 인원을 세면
         //          뒤에 처리된 사람만 1인 방으로 보여 면제받는다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.JOINED);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -200,10 +209,9 @@ class ForceFinishRunningRoomHandlerTest {
     @DisplayName("초대 방의 미출석은 제재하지 않는다")
     void doesNotPenalizeNoShowInInviteRoom() {
         // given -> 매칭 방이었으면 둘 다 제재 대상이다(2인 확정 방에서 아무도 안 나타났다)
-        givenLockedRoom(inviteRoom(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> inviteRoom(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.JOINED);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(inviteRoom(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -216,16 +224,16 @@ class ForceFinishRunningRoomHandlerTest {
     }
 
     @Test
-    @DisplayName("아무도 뛰지 않은 방은 남길 기록이 없어 취소로 닫는다")
+    @DisplayName("아무도 뛰지 않은 방은 남길 기록이 없어 취소로 닫고 완료로 답한다")
     void cancelsRoomNobodyRanIn() {
         // given -> 전원이 채널에 붙지 않았다. 방을 닫아 줄 러닝 종료가 하나도 없다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
         givenPlayer(RUNNER, RunningPlayerStatus.JOINED);
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(room(RunningRoomStatus.STARTED, RUNNER, NO_SHOW));
 
         // when
-        forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
 
         // then
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.CANCELLED);
@@ -233,35 +241,34 @@ class ForceFinishRunningRoomHandlerTest {
         verifyNoInteractions(finishRunningUsecase);
         // 남길 기록이 없어 콤보 상태만 지운다
         verify(runningComboArchiver).discardAfterCommit(ROOM_ID);
+        // 남은 러너가 없다 — 예약을 완료로 적는다
+        assertThat(retryAt).isEmpty();
     }
 
     @Test
-    @DisplayName("러닝 종료가 이미 닫은 방은 다시 닫지 않는다")
-    void leavesRoomClosedByFinishRunning() {
-        // given -> 마지막 참가자가 끝나는 순간 러닝 종료 안에서 방이 FINISHED가 된다.
-        //          여기서 또 닫으면 그 전이를 덮어써 기록 있는 방이 취소로 남는다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER));
-        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
-        givenReloadedRoom(finishedRoom(RUNNER));
+    @DisplayName("러닝 종료가 이미 닫고 자리도 비운 방은 잠그지 않고 완료로 답한다")
+    void finishesWithoutLockWhenAllDone() {
+        // given -> 마지막 참가자가 끝나는 순간 러닝 종료 안에서 방이 FINISHED가 되고 자리도 비었다.
+        //          흔한 마지막 알람이다 — 다 끝난 것을 확인만 한다
+        givenSnapshot(finishedRoomWithoutSessions());
 
         // when
-        forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
 
-        // then -> 다시 읽어 이미 닫힌 것을 보고 손을 뗀다. 기록을 세어볼 것도 없다
-        assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.STARTED);
-        verifyNoInteractions(existsRunningRecordPort);
-        // 콤보 정리는 방을 닫은 러닝 종료가 이미 걸었다 — 두 번 걸면 같은 방을 두 번 저장한다
-        verifyNoInteractions(runningComboArchiver);
+        // then -> 다시 닫으면 그 전이를 덮어써 기록 있는 방이 취소로 남는다
+        assertThat(retryAt).isEmpty();
+        verifyNoInteractions(lockRunningPlayerPort, lockRunningRoomPort, updateRunningRoomPort,
+                existsRunningRecordPort, runningComboArchiver, finishRunningUsecase);
     }
 
     @Test
     @DisplayName("러닝 종료가 방을 닫지 못했으면 기록 유무로 닫는다")
     void closesRoomLeftOpenByRecordExistence() {
-        // given -> 뛴 사람은 확정됐는데 방이 열린 채로 남았다.
+        // given -> 뛴 사람은 확정됐는데 방이 열린 채로 남았다(확정 뒤 방 닫기가 롤백된 경우 등).
         //          남길 기록이 있으니 취소가 아니라 완료로 닫아야 결과 조회가 이어진다
-        givenLockedRoom(room(RunningRoomStatus.STARTED, RUNNER));
-        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
-        givenReloadedRoom(room(RunningRoomStatus.STARTED, RUNNER));
+        givenRoom(() -> room(RunningRoomStatus.STARTED, RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.COMPLETED);
         given(existsRunningRecordPort.existsInRoom(new RunningRoomId(ROOM_ID)))
                 .willReturn(true);
 
@@ -280,9 +287,8 @@ class ForceFinishRunningRoomHandlerTest {
         // given -> 뛴 사람이 정상 종료해 방은 이미 FINISHED다. 그런데 안 나타난 사람은
         //          RUNNING이 아니라 종료 판정에 세어지지 않아 활성 신청으로 남는다.
         //          여기서 닫지 않으면 그 사람은 다음 러닝을 영영 못 한다
-        givenLockedRoom(finishedRoom(NO_SHOW));
+        givenRoom(() -> finishedRoom(NO_SHOW));
         givenPlayer(NO_SHOW, RunningPlayerStatus.JOINED);
-        givenReloadedRoom(finishedRoom(NO_SHOW));
 
         // when
         forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
@@ -291,38 +297,41 @@ class ForceFinishRunningRoomHandlerTest {
         assertThat(updatedPlayer().getStatus())
                 .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_NO_PENALTY);
         assertThat(lastUpdatedRoom().getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        verifyNoInteractions(existsRunningRecordPort);
     }
 
     @Test
-    @DisplayName("방이 없으면 아무것도 하지 않는다")
+    @DisplayName("방이 없으면 아무것도 하지 않고 완료로 답한다")
     void skipsWhenRoomIsGone() {
         // given -> 예약만 남고 방이 사라진 경우. 예약을 소비한 것으로 보고 끝낸다
-        given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID)))
+        given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID)))
                 .willReturn(Optional.empty());
 
         // when
-        forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
 
         // then
-        verifyNoInteractions(updateRunningRoomPort, updateRunningPlayerPort,
-                startMatchCooldownPort, finishRunningUsecase);
+        assertThat(retryAt).isEmpty();
+        verifyNoInteractions(lockRunningPlayerPort, lockRunningRoomPort, updateRunningRoomPort,
+                updateRunningPlayerPort, startMatchCooldownPort, finishRunningUsecase);
     }
 
-    private void givenLockedRoom(RunningRoom room) {
-        given(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID)))
-                .willReturn(Optional.of(room));
+    // 잠금 없이 본 방과 잠그고 다시 읽은 방은 다른 인스턴스다 — 잠금 안 단계가 고친 것이 스냅숏에 새면 안 된다
+    private void givenRoom(Supplier<RunningRoom> room) {
+        givenSnapshot(room.get());
+        lenient().when(lockRunningRoomPort.lockById(new RunningRoomId(ROOM_ID)))
+                .thenReturn(Optional.of(room.get()));
     }
 
-    // 러닝 종료가 방을 다시 읽어 고쳤을 수 있어 마지막 정리는 새로 읽는다 —
-    // 그래서 잠글 때와 다른 인스턴스를 돌려준다
-    private void givenReloadedRoom(RunningRoom room) {
+    private void givenSnapshot(RunningRoom room) {
         given(loadRunningRoomPort.loadById(new RunningRoomId(ROOM_ID)))
                 .willReturn(Optional.of(room));
     }
 
     private void givenPlayer(UserId userId, RunningPlayerStatus status) {
         given(loadRoomPlayerPort.load(new RunningRoomId(ROOM_ID), userId))
-                .willReturn(Optional.of(player(userId, status)));
+                .willAnswer(invocation -> Optional.of(player(userId, status)));
     }
 
     private RunningPlayer updatedPlayer() {
@@ -344,6 +353,7 @@ class ForceFinishRunningRoomHandlerTest {
     }
 
     private static RunningPlayer player(UserId userId, RunningPlayerStatus status) {
+        boolean finished = status == RunningPlayerStatus.COMPLETED;
         return RunningPlayer.builder()
                 .runningPlayerId(7L)
                 .userId(userId.value())
@@ -351,28 +361,37 @@ class ForceFinishRunningRoomHandlerTest {
                 .avgPace(AVG_PACE)
                 .targetDistance(TARGET_DISTANCE)
                 .startAt(LocalDateTime.now().minusHours(6))
+                // 종료 시각이 찍힌 참가자 = 이미 확정이 끝난 참가자다
+                .deletedAt(finished ? LocalDateTime.now().minusMinutes(5) : null)
                 .build();
     }
 
     private static RunningRoom room(RunningRoomStatus status, UserId... members) {
-        return buildRoom(RunningRoomType.MATCH, status, null, members);
+        return buildRoom(RunningRoomType.MATCH, status, null, true, LocalDateTime.now().minusHours(6), members);
     }
 
     private static RunningRoom inviteRoom(RunningRoomStatus status, UserId... members) {
-        return buildRoom(RunningRoomType.INVITE, status, null, members);
+        return buildRoom(RunningRoomType.INVITE, status, null, true, LocalDateTime.now().minusHours(6), members);
     }
 
     // 뛴 사람이 정상 종료해 이미 닫힌 방 — 미출석자의 세션만 아직 붙어 있다
     private static RunningRoom finishedRoom(UserId... members) {
-        return buildRoom(RunningRoomType.MATCH, RunningRoomStatus.FINISHED, LocalDateTime.now(), members);
+        return buildRoom(RunningRoomType.MATCH, RunningRoomStatus.FINISHED, LocalDateTime.now(), true,
+                LocalDateTime.now().minusHours(6), members);
     }
 
-    private static RunningRoom buildRoom(RunningRoomType type, RunningRoomStatus status, LocalDateTime closeAt,
-                                         UserId... members) {
+    // 모두 끝나 자리까지 비운 방
+    private static RunningRoom finishedRoomWithoutSessions() {
+        return buildRoom(RunningRoomType.MATCH, RunningRoomStatus.FINISHED, LocalDateTime.now(), false,
+                LocalDateTime.now().minusHours(6), RUNNER, NO_SHOW);
+    }
+
+    static RunningRoom buildRoom(RunningRoomType type, RunningRoomStatus status, LocalDateTime closeAt,
+                                 boolean connected, LocalDateTime startAt, UserId... members) {
         List<SessionDraft> sessions = new ArrayList<>();
         long playerId = 7L;
         for (UserId member : members) {
-            sessions.add(new SessionDraft(member, new RunningPlayerId(playerId++), 0, true));
+            sessions.add(new SessionDraft(member, new RunningPlayerId(playerId++), 0, connected));
         }
         return RunningRoom.builder()
                 .runningRoomId(ROOM_ID)
@@ -381,7 +400,7 @@ class ForceFinishRunningRoomHandlerTest {
                 // 아무도 취소·탈퇴하지 않은 방이라 확정 인원 그대로다 — 제재 판정이 이 값을 본다
                 .currentPlayerCount(members.length)
                 .maxPlayerCount(4)
-                .startAt(LocalDateTime.now().minusHours(6))
+                .startAt(startAt)
                 .targetDistance(TARGET_DISTANCE)
                 .avgPace(AVG_PACE)
                 .sessions(sessions)

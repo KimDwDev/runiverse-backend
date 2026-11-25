@@ -5,6 +5,9 @@ import com.runiverse.running_service.application.auth.command.signup.SignUpHandl
 import com.runiverse.running_service.application.match.common.MatchProperties;
 import com.runiverse.running_service.application.running.command.finish.FinishRunningHandler;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishProperties;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunnerDispatcher;
+import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishSteps;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishExecutor;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishListener;
 import com.runiverse.running_service.application.running.command.forcefinish.RunningForceFinishRequestedEvent;
@@ -86,6 +89,9 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
             LocalTime.of(18, 0), LocalTime.of(22, 0), Duration.ofMinutes(60), List.of(3_000, 5_000, 10_000));
     private static final RunningFinishProperties FINISH_PROPERTIES = new RunningFinishProperties(
             0.8, 10, 100, 60, 3.0, RUNNING_COOLDOWN);
+    // 고정 시각(TRACK_START)의 방이라 운영 값(7시간)이면 이미 포기 기간이다 — 포기는 따로 본다
+    private static final ForceFinishProperties FORCE_FINISH_PROPERTIES = new ForceFinishProperties(
+            Duration.ofMinutes(1), Duration.ofDays(3_650));
 
     private InMemoryScheduledJobStore scheduledJobStore;
     private SignUpHandler signUpHandler;
@@ -151,17 +157,22 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
         FinishRunningHandler finishRunningHandler = new FinishRunningHandler(runningFinisher);
         ForceFinishRunningRoomHandler forceFinishRunningRoomHandler =
                 new ForceFinishRunningRoomHandler(
-                        runningStore,         // LockRunningPlayerPort
-                        runningStore,         // LockRunningRoomPort
                         runningStore,         // LoadRunningRoomPort
                         runningStore,         // LoadRoomPlayerPort
-                        runningStore,         // UpdateRunningRoomPort
-                        runningStore,         // UpdateRunningPlayerPort
-                        this::recordCooldown, // StartMatchCooldownPort
-                        runningRecordStore,   // ExistsRunningRecordPort
-                        finishRunningHandler, // FinishRunningUsecase
+                        new ForceFinishSteps(
+                                runningStore,         // LockRunningPlayerPort
+                                runningStore,         // LockRunningRoomPort
+                                runningStore,         // LoadRoomPlayerPort
+                                runningStore,         // UpdateRunningRoomPort
+                                runningStore,         // UpdateRunningPlayerPort
+                                this::recordCooldown, // StartMatchCooldownPort
+                                runningRecordStore,   // ExistsRunningRecordPort
+                                MATCH_PROPERTIES,
+                                newRunningComboArchiver()),
+                        // 워커는 그 자리에서 돈다 — 스레드를 띄우면 단언 시점에 끝났는지 알 수 없다
+                        new ForceFinishRunnerDispatcher(Runnable::run, finishRunningHandler),
                         MATCH_PROPERTIES,
-                        newRunningComboArchiver()
+                        FORCE_FINISH_PROPERTIES
                 );
         forceFinishListener = new RunningForceFinishListener(forceFinishRunningRoomHandler);
         runScheduledJobHandler = new RunScheduledJobHandler(

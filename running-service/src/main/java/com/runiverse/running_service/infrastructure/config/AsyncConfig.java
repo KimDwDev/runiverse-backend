@@ -17,6 +17,9 @@ public class AsyncConfig {
     private static final int PUSH_SHUTDOWN_WAIT_SECONDS = 10;
     private static final int PUSH_CAMPAIGN_THREADS = 1;
     private static final int PUSH_CAMPAIGN_SHUTDOWN_WAIT_SECONDS = 10;
+    private static final int FORCE_FINISH_THREADS = 4;
+    private static final int FORCE_FINISH_QUEUE_CAPACITY = 100;
+    private static final int FORCE_FINISH_SHUTDOWN_WAIT_SECONDS = 20;
 
     // FCM 응답을 요청·예약 스레드가 기다리지 않게 푸시는 이 스레드들이 보낸다.
     // 발송이 DB·Redis를 읽으므로 그 둘보다 먼저 닫혀야 종료 때 대기 줄을 마저 보낼 수 있다.
@@ -96,6 +99,32 @@ public class AsyncConfig {
         // 이 값이 false여야 위의 조기 종료가 불린다. 끊긴 발송은 남은 인원을 남기고 멈춘다
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setAwaitTerminationSeconds(PUSH_CAMPAIGN_SHUTDOWN_WAIT_SECONDS);
+        return executor;
+    }
+
+    // 강제 종료에서 뛰던 사람을 한 명씩 끝낸다(D-83) — 봉인(S3·날씨)을 예약 스레드가 기다리지 않게 하고,
+    // 예약 트랜잭션이 커밋된 뒤 깨끗한 스레드에서 판정·확정 트랜잭션을 연다.
+    // 방 하나는 최대 4명이라 스레드 수가 곧 동시에 끝내는 러너 수의 상한이다. 종료 순서와 이름으로만 쓰는 이유는 pushExecutor와 같다
+    @Bean(defaultCandidate = false)
+    @DependsOn({"entityManagerFactory", "redisConnectionFactory"})
+    public ThreadPoolTaskExecutor forceFinishExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(FORCE_FINISH_THREADS);
+        executor.setMaxPoolSize(FORCE_FINISH_THREADS);
+        executor.setQueueCapacity(FORCE_FINISH_QUEUE_CAPACITY);
+        executor.setThreadNamePrefix("force-finish-");
+        // 넘치면 버린다 — 강제 종료 예약이 1분 뒤로 다시 걸려 있어 다음 알람이 다시 넣는다
+        executor.setRejectedExecutionHandler((task, pool) -> {
+            if (pool.isShutdown()) {
+                log.warn("[러닝] 강제 종료 러너 처리 건너뜀: 종료 중");
+                return;
+            }
+            log.warn("[러닝] 강제 종료 러너 처리 건너뜀: 대기 줄 가득 참 - queueCapacity={}",
+                    FORCE_FINISH_QUEUE_CAPACITY);
+        });
+        // 배포 때 진행 중인 끝내기는 마치고 내린다 — 못 마친 러너는 다음 알람이 다른 인스턴스에서 다시 한다
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(FORCE_FINISH_SHUTDOWN_WAIT_SECONDS);
         return executor;
     }
 }

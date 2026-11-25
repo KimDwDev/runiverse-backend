@@ -23,8 +23,8 @@ public class RunningForceFinishExecutor implements ScheduledJobExecutor {
 
     @Override
     public Optional<LocalDateTime> execute(JobTarget target) {
-        forceFinishRunningRoomUsecase.handle(
+        // 뛰던 사람이 남았으면 그 시각으로 다시 건다 — 다 끝난 것을 본 알람만 완료로 적는다(D-83)
+        return forceFinishRunningRoomUsecase.handle(
                 new ForceFinishRunningRoomCommand(target.idAsLong()));
-        return Optional.empty();
     }
 }
