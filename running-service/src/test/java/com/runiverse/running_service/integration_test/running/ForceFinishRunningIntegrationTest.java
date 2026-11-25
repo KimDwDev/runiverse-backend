@@ -185,6 +185,66 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("뛰던 사람이 있었으면 예약을 1분 뒤로 다시 걸고, 다음 알람이 다 끝난 것을 보고 완료로 적는다 (D-83)")
+    void reschedulesThenCompletesOnNextAlarm() {
+        // given
+        UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
+        UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
+        long roomId = givenStartedMatchRoom(runner, noShow);
+        runFor(runner, roomId, RUNNING_POINTS);
+        schedule(roomId);
+
+        // when -> 첫 알람: 미출석 이탈 + 러너는 워커가 끝낸다
+        fire(roomId);
+
+        // then -> 워커가 끝냈는지 알람은 모른다 — 완료로 적지 않고 1분 뒤로 다시 건다
+        assertThat(storedRoom(roomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        assertThat(storedJob(roomId).isSent()).isFalse();
+        assertThat(storedJob(roomId).getExecuteAt()).isAfter(LocalDateTime.now());
+
+        // when -> 1분 뒤 알람
+        makeDue(roomId);
+        fire(roomId);
+
+        // then -> 다 끝난 것을 보고 완료로 적는다. 기록은 하나다
+        assertThat(storedJob(roomId).isSent()).isTrue();
+        assertThat(runningRecordStore.size()).isOne();
+    }
+
+    @Test
+    @DisplayName("러너가 직접 끝내는 중이면 그 러너만 남기고, 다음 알람이 끝낸다")
+    void leavesRunnerFinishingThemselvesToNextAlarm() {
+        // given -> 6시간 정각에 러너가 직접 종료를 눌러 끝내기 임대를 쥐고 봉인 중이다
+        UUID runner = onboardedUser("runner@runiverse.com", "러너킴");
+        UUID noShow = onboardedUser("noshow@runiverse.com", "안온사람");
+        long roomId = givenStartedMatchRoom(runner, noShow);
+        runFor(runner, roomId, RUNNING_POINTS);
+        schedule(roomId);
+        finishLeaseStore.hold(roomId, new UserId(runner));
+
+        // when
+        fire(roomId);
+
+        // then -> 방 전체가 되돌아가지 않는다 — 미출석 처리는 남고 러너만 그대로다
+        assertThat(storedPlayer(roomId, noShow).getStatus())
+                .isEqualTo(RunningPlayerStatus.MATCHED_LEFT_PENALTY);
+        assertThat(storedPlayer(roomId, runner).getStatus()).isEqualTo(RunningPlayerStatus.RUNNING);
+        assertThat(storedJob(roomId).isSent()).isFalse();
+
+        // when -> 본인 종료가 실패해 임대를 놓았고, 1분 뒤 알람이 다시 넘긴다
+        finishLeaseStore.release(roomId, new UserId(runner), "held-by-other");
+        makeDue(roomId);
+        fire(roomId);
+        makeDue(roomId);
+        fire(roomId);
+
+        // then
+        assertThat(storedPlayer(roomId, runner).isActive()).isFalse();
+        assertThat(storedRoom(roomId).getStatus()).isEqualTo(RunningRoomStatus.FINISHED);
+        assertThat(storedJob(roomId).isSent()).isTrue();
+    }
+
+    @Test
     @DisplayName("뛴 사람은 러닝 종료로, 안 나타난 사람은 확정 후 이탈로 함께 닫는다")
     void closesRunnerAndNoShowInOneRoom() {
         // given -> 2인 확정 방에서 A만 붙어 목표 직전까지 뛰었고 B는 한 번도 오지 않았다
@@ -467,6 +527,17 @@ public class ForceFinishRunningIntegrationTest extends IntegrationTestSupport {
                 .orElseThrow();
         runScheduledJobHandler.handle(new RunScheduledJobCommand(
                 job.getScheduledJobId().map(ScheduledJobId::value).orElseThrow()));
+    }
+
+    private ScheduledJob storedJob(long roomId) {
+        return scheduledJobStore.findBy(ScheduledJobType.RUNNING_FORCE_FINISH, roomId).orElseThrow();
+    }
+
+    // 1분을 기다리지 않는다 — 다시 건 시각을 지난 것으로 돌려 다음 알람을 흉내 낸다
+    private void makeDue(long roomId) {
+        ScheduledJob job = storedJob(roomId);
+        job.reschedule(LocalDateTime.now().minusSeconds(1));
+        scheduledJobStore.update(job);
     }
 
     private RunningRoom storedRoom(long roomId) {

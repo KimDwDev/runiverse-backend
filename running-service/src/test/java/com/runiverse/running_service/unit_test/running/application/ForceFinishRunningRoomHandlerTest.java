@@ -9,6 +9,7 @@ import com.runiverse.running_service.application.running.command.forcefinish.For
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishRunningRoomHandler;
 import com.runiverse.running_service.application.running.command.forcefinish.ForceFinishSteps;
 import com.runiverse.running_service.application.running.port.in.FinishRunningUsecase;
+import com.runiverse.running_service.application.running.exception.RunningFinishInProgressException;
 import com.runiverse.running_service.application.running.port.out.ExistsRunningRecordPort;
 import com.runiverse.running_service.application.running.port.out.LoadRoomPlayerPort;
 import com.runiverse.running_service.application.running.port.out.LoadRunningRoomPort;
@@ -38,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +47,10 @@ import java.util.function.Supplier;
 import com.runiverse.running_service.application.running.common.RunningComboArchiver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.atLeastOnce;
@@ -315,6 +321,93 @@ class ForceFinishRunningRoomHandlerTest {
         assertThat(retryAt).isEmpty();
         verifyNoInteractions(lockRunningPlayerPort, lockRunningRoomPort, updateRunningRoomPort,
                 updateRunningPlayerPort, startMatchCooldownPort, finishRunningUsecase);
+    }
+
+    @Test
+    @DisplayName("뛰는 사람만 남았으면 잠그지 않고 워커로 넘긴 뒤 1분 뒤로 다시 걸어 달라고 답한다 (D-83)")
+    void dispatchesRunnersWithoutLock() {
+        // given -> 미출석자도 없고 방도 고칠 것이 없다
+        givenSnapshot(room(RunningRoomStatus.STARTED, RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+
+        // when
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then -> 확정은 워커가 일반 종료로 한다. 끝났는지는 다음 알람이 DB로 본다
+        verifyNoInteractions(lockRunningPlayerPort, lockRunningRoomPort);
+        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, RUNNER.value(), true));
+        assertThat(retryAt).hasValueSatisfying(at -> assertThat(at)
+                .isCloseTo(LocalDateTime.now().plus(RETRY_INTERVAL), within(5, ChronoUnit.SECONDS)));
+    }
+
+    @Test
+    @DisplayName("다시 걸기 기간을 넘기면 러너가 남아도 포기하고 완료로 답한다")
+    void givesUpAfterRetryWindow() {
+        // given -> 시작 + 6시간 + 7시간을 넘었다. 트랙도 없어 상태만 확정될 러너도 못 끝냈다
+        givenSnapshot(buildRoom(RunningRoomType.MATCH, RunningRoomStatus.STARTED, null, true,
+                LocalDateTime.now().minusHours(14), RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+
+        // when
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then -> 1분마다 영원히 돌지 않는다
+        assertThat(retryAt).isEmpty();
+        verifyNoInteractions(finishRunningUsecase);
+    }
+
+    @Test
+    @DisplayName("러너 확정이 실패해도 던지지 않고 다음 알람에 맡긴다")
+    void keepsRetryWhenRunnerFails() {
+        // given -> S3 장애 등으로 이 러너를 끝내지 못했다
+        givenSnapshot(room(RunningRoomStatus.STARTED, RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+        willThrow(new IllegalStateException("S3 down")).given(finishRunningUsecase).handle(any());
+
+        // when
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then -> 던지면 워커 스레드에서 사라진다. 예약은 다시 걸려 있다
+        assertThat(retryAt).isPresent();
+    }
+
+    @Test
+    @DisplayName("본인 종료가 같은 러너를 끝내는 중이면 건너뛰고 다음 알람에 맡긴다")
+    void skipsRunnerFinishingThemselves() {
+        // given -> 6시간 정각에 러너가 직접 종료를 눌러 끝내기 임대를 쥐고 있다
+        givenSnapshot(room(RunningRoomStatus.STARTED, RUNNER));
+        givenPlayer(RUNNER, RunningPlayerStatus.RUNNING);
+        willThrow(new RunningFinishInProgressException()).given(finishRunningUsecase).handle(any());
+
+        // when
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then -> 방 전체가 롤백되지 않는다. 본인 확정이 끝내거나 다음 알람이 다시 본다
+        assertThat(retryAt).isPresent();
+    }
+
+    @Test
+    @DisplayName("잠금 없이 본 미출석자가 잠그기 전에 뛰기 시작했으면 이탈시키지 않는다")
+    void doesNotLeavePlayerWhoStartedBetween() {
+        // given -> 스냅숏에서는 JOINED, 잠그고 다시 읽으니 RUNNING_START가 먼저 들어와 RUNNING이다
+        givenRoom(() -> room(RunningRoomStatus.STARTED, NO_SHOW));
+        given(loadRoomPlayerPort.load(new RunningRoomId(ROOM_ID), NO_SHOW))
+                .willReturn(Optional.of(player(NO_SHOW, RunningPlayerStatus.JOINED)),
+                        Optional.of(player(NO_SHOW, RunningPlayerStatus.RUNNING)));
+
+        // when
+        Optional<LocalDateTime> retryAt =
+                forceFinishRunningRoomHandler.handle(new ForceFinishRunningRoomCommand(ROOM_ID));
+
+        // then -> 잠금 없이 읽은 값으로 고치지 않는다 — 뛰는 사람으로 워커에 넘긴다
+        verify(updateRunningPlayerPort, never()).update(any());
+        verifyNoInteractions(startMatchCooldownPort);
+        verify(finishRunningUsecase).handle(new FinishRunningCommand(ROOM_ID, NO_SHOW.value(), true));
+        assertThat(retryAt).isPresent();
     }
 
     // 잠금 없이 본 방과 잠그고 다시 읽은 방은 다른 인스턴스다 — 잠금 안 단계가 고친 것이 스냅숏에 새면 안 된다
