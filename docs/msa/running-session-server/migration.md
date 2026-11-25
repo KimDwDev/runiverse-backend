@@ -134,7 +134,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3–F9 — `정함 (D-65, D
 |---|---|---|
 | F1 | **M0 모놀리스 — 이번 PR (D-79)** — 끝내기를 판정 → 봉인 → 확정으로 나눈다 (D-82). 임대(판정 앞, Redis `SET NX` TTL 30초) → 판정(잠금 안): 다시 확인 · 트랙 스냅숏 · `TrackFilter` · 목표 판정. 봉인(잠금 밖, 임대만): `TrackAnalyzer` · S3 원본 업로드 · 날씨. 확정(잠금 안): 다시 확인 → 기록 · 구간 · 상태 저장. 임대를 본 `RUNNING_FINISH`는 `RUNNING_TRACK_UNAVAILABLE`, 자동 종료는 무응답. 원본 트랙 업로드 요청에만 `apiCallTimeout` 10초. 새 엔진도 같은 구조로 짠다 | `RunningFinisher.confirm`이 잠금을 쥔 채 `createRecord`에서 S3 업로드 · 날씨 조회를 기다린다(코드의 TODO) |
 | F2 | **버림 (D-80)** — 계산마다 잠근 채 판정한다. 아래는 버린 안: 목표 도달 사전 검사 — 필터 거리를 트랜잭션 밖에서 먼저 보고, 닿았을 때만 확정 트랜잭션을 연다 | `UpdateRunningFinishJudge` → `RunningFinisher.finishOnGoal`이 목표를 넘긴 배치마다 `FOR UPDATE` 트랜잭션을 연다 |
-| F3 | **M0 모놀리스 (D-66)** — 강제 종료를 러너마다 짧은 트랜잭션 하나로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
+| F3 | **M0 모놀리스 (D-66, D-83)** — 강제 종료를 알람(잠금 없이 확인 → 할 일 있을 때만 잠금 → 남으면 1분 뒤 다시 걸기) + 러너마다 워커(`RunningFinisher.finish`)로 | `ForceFinishRunningRoomHandler`가 방 전체를 트랜잭션 하나로 닫는다 |
 | F4 | **M0 모놀리스 (D-67)** — `app_versions` 30초 캐시. 대가: 최소 버전 상향이 최대 30초 늦게 걸린다 | `AppVersionFilter`가 WS 핸드셰이크를 포함한 요청마다 캐시 없이 읽는다 |
 | F5 | **M0 모놀리스 (D-66)** — Hikari를 명시한다 — 풀 크기(비교군 사이 DB 연결 총량을 같게), `connectionTimeout`은 앱의 끝내기 대기보다 짧게, 누수 감지 | `reWriteBatchedInserts`만 설정돼 있다 |
 | F6 | **M0 모놀리스 (D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
