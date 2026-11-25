@@ -216,7 +216,7 @@
 | 리스너 규칙 (health 허용·actuator 403·옛 경로 404) | `describe-rules` | [architecture](running-session-server/architecture.md) 「공개 경로」 | — |
 | ASG health 종류(ELB·EC2)·유예·최소/원하는/최대·조정 정책 | `aws autoscaling describe-auto-scaling-groups` · `describe-policies` | F9, 비교군 A | EC2 + ELB, 유예 600초, 원하는 1 · 최소–최대 1–2, 조정 정책은 읽지 않음 (11-25) |
 | 배포 기록 (약 6주 보관) | `describe-scaling-activities` | RUNBOOK 「0. 운영 증거」 | [RESULTS](../../load_test/msa/RESULTS.md) 「0. 운영 증거」 (11-25) |
-| 시작 템플릿 — `docker run` 정지 시간·로그 마운트, env 파일을 만드는 방식 | `describe-launch-template-versions` | F9, 「설정 · 비밀값」 | — |
+| 시작 템플릿 — `docker run` 정지 시간(`--stop-timeout`, 앱 `SHUTDOWN_TIMEOUT` 20초보다 길게 — 30초 권장)·로그 마운트, env 파일을 만드는 방식 | `describe-launch-template-versions` | F9(D-85), 「설정 · 비밀값」 | — |
 | 서비스 DB 클래스 · `max_connections` · `rds.force_ssl` | `aws rds describe-db-instances` · `describe-db-parameters` | 「RDS」 연결 예산, cdc.md 「정하지 않은 것」 8 | — |
 | prod Hikari·Tomcat을 덮어쓴 변수가 있는지 (이름만) | Parameter Store 이름 목록 | F5, 비교군 A | — |
 | Redis 버전·인스턴스 유형·`maxmemory`·`maxmemory-policy`·AOF 상태 | `CONFIG GET` · `INFO persistence` | 「Redis」 | — |

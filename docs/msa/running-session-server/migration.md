@@ -140,10 +140,10 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 | F6 | **M0 모놀리스 (D-66)** — liveness = `livenessState`, readiness = `readinessState`(db · redis 뺌), 대상 그룹 검사는 readiness | 기본 health 집계에 db · redis가 들고, `SecurityConfig`는 `/actuator/health` · `/actuator/prometheus` 정확한 경로만 인증 없이 연다(ALB 규칙이 health만 통과시킨다) — `/actuator/health/liveness` · `/readiness` 그룹 경로는 열려 있지 않다 |
 | F7 | **M0 모놀리스 (D-66)** — `running:room:*` 전용 리스너 컨테이너와 상한 있는 실행기 | `RunningChannelConfig`에 실행기 지정이 없다 |
 | F8 | **M0 모놀리스 (D-66)** — `JAVA_TOOL_OPTIONS`로 `MaxRAMPercentage` — 값은 「정하지 않은 것」 4 | Dockerfile `ENTRYPOINT`에 JVM 옵션이 없다 |
-| F9 | **M0 모놀리스에 먼저 (D-65)** — WS 계획 종료(ASG) — readiness 내림 → 새 `RUNNING_START` 거절 → SSE 완료 → 소켓을 `4500`으로 나눠 닫기(시간은 [runtime.md](runtime.md)) → graceful 종료. ASG 쪽 값: `docker stop -t 60`, 대상 그룹 등록 해제 지연 60초 | `server.shutdown` 설정도, 소켓을 닫는 종료 코드도 없다 |
+| F9 | **M0 모놀리스 — graceful 종료만 (D-85)** — `server.shutdown=graceful` · 대기 상한 `SHUTDOWN_TIMEOUT`(20초), test 배포는 `docker stop -t 30` · `--stop-timeout 30`. EC2는 등록 해제가 SIGTERM보다 먼저라 readiness 내림 · `RUNNING_START` 거절 · 4500 나눠 닫기 · SSE 완료는 EKS에서 한다(D-65의 순서). prod 시작 템플릿의 정지 대기는 확인할 운영 값 | `server.shutdown` 설정이 없고 test 배포가 `docker rm -f`(SIGKILL)였다 |
 
 - **앱 쪽 순서와 시간**은 [runtime.md](runtime.md), EKS 파드 값은 [../eks.md](../eks.md) 「계획 종료」. 닫기 코드는 `4500`을 다시 쓴다 — `정함 (D-42)`.
-- **나가는 조건** — A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`(ASG 계획 종료)를 넘는다(채택한 행만). 끝내기 수정(F1)의 효과는 SC9의 A vs A′로 보고(D-79), 끝내기 기준 `K-SC9-5`는 A′(M0)와 새 엔진(M3 · M5)에서 본다(채택한 행만). A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
+- **나가는 조건** — A′(F9 포함)의 ASG 배포는 graceful 종료만이라 `K-SC1-5`(나눠 닫기)는 EKS(B2)에서 본다(D-85). 끝내기 수정(F1)의 효과는 SC9의 A vs A′로 보고(D-79), 끝내기 기준 `K-SC9-5`는 A′(M0)와 새 엔진(M3 · M5)에서 본다(채택한 행만). A′만으로 풀린 근거는 분리 근거에서 뺀다([verification.md](verification.md) 「판정과 결과」).
 
 ## 선행 조건
 
@@ -236,7 +236,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 - [ ] 하네스 v2([load_test/msa/README.md](../../../load_test/msa/README.md))와 PREREG 동결 — ack 없는 기록 검사와 불변식 SQL(I1 · I2 · I4)을 「무결성 검사」에 둔다
 - [ ] 비교군 A 기준선 — SC0 관문, 그다음 SC1 · SC3 · SC4 · SC9 · SC10
 - [x] F1 끝내기 구조 — 판정(잠금) → 봉인(임대: 분석 · S3 · 날씨) → 확정(잠금) (D-79, D-82) — 코드 · 단위 · 통합 테스트 11-25. E2E · 효과(SC9 A vs A′)는 아직
-- [ ] F9 계획 종료 (D-65)
+- [x] F9 graceful 종료 (D-85) — 11-25 컨테이너 `docker stop`에 'Graceful shutdown complete'(남은 요청 없을 때 0.4초), E2E 161 · 단위 4117 통과. 나눠 닫기는 EKS
 - [x] F3 강제 종료 — 알람 확인 + 러너별 워커 + 1분 뒤 다시 걸기 (D-83) — 코드 · 단위 · 통합 테스트 · E2E 11-25
 - [x] F5 Hikari 명시 — `pool-name=main` · 나머지는 환경변수(기본값): 최대 `DB_POOL_MAX_SIZE`(10) · 최소 `DB_POOL_MIN_IDLE`(10) · 대기 상한 `DB_POOL_CONNECTION_TIMEOUT_MS`(5000) · 누수 감지 `DB_POOL_LEAK_DETECTION_MS`(10000) (D-66) — E2E 11-25: 누수 경고 0 · 대기 시간 초과 0 · 최장 사용 0.33초
 - [x] F6 health 그룹 — `/actuator/health/liveness`(`livenessState`) · `/readiness`(`readinessState`), 둘 다 DB · Redis를 보지 않는다. 기존 `/actuator/health`는 진단용으로 그대로 (D-66) — E2E 11-25. Redis를 멈추면 기존 health는 15초 넘게 답하지 않고 readiness는 바로 UP. **남은 것: 배포 뒤 test · prod 대상 그룹 검사 경로를 `/api/v1/actuator/health/readiness`로 바꾸기(사용자)**
@@ -246,7 +246,7 @@ M0에서 모놀리스에 먼저 넣는 것은 F1 · F3 · F5–F9 — `정함 (D
 - [ ] 「선행 조건」의 M0 행
 - [ ] 비교군 A′로 다시 잰다 — 'A vs A′' 장
 
-**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′(F9 포함)가 PREREG 「후보 기준」의 `K-SC1-5`와 `K-SC9-5`(F1)를 넘는다(채택한 행만). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
+**나가는 조건** — `K-SC0-*` 관문 통과. 0단계 증거와 A 기준선이 RESULTS에 있다. A′가 PREREG 「후보 기준」의 `K-SC9-5`(F1)를 넘는다(채택한 행만) — `K-SC1-5`는 EKS(B2)에서 본다(D-85). `MultiInstanceE2eTest`가 CI에서 돌고 prod 빌드가 테스트를 돈다. 새 지표가 metrics-convention에서 사용 중이다.
 
 ### M1 별도 앱 뼈대 + 루트 compose (D-78)
 
